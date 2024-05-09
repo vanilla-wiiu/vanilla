@@ -4,43 +4,101 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/prctl.h>
 #include <sys/types.h>
 #include <unistd.h>
 #include <wpa_ctrl.h>
+
+#include "status.h"
 
 int start_wpa_supplicant(const char *wireless_interface, const char *config_file, pid_t *pid)
 {
     int pipes[2];
     pipe(pipes);
 
+    pid_t ppid_before_fork = getpid();
+
     (*pid) = fork();
 
     if ((*pid) == 0) {
+        int r = prctl(PR_SET_PDEATHSIG, SIGHUP);
+        if (r == -1) {
+            perror(0);
+            exit(1);
+        }
+
+        if (getppid() != ppid_before_fork) {
+            exit(1);
+        }
+
         dup2(pipes[1], STDOUT_FILENO);
         dup2(pipes[1], STDERR_FILENO);
         close(pipes[0]);
         close(pipes[1]);
 
         // Currently in the child
-        // char *app = "/home/matt/src/hostap/wpa_supplicant/wpa_supplicant";
-        char *app = "/usr/local/bin/wpa_supplicant_drc";
-        if (execl(app, app, "-Dnl80211", "-i", wireless_interface, "-c", config_file, NULL) < 0) {
+        long path_size = pathconf(".", _PC_PATH_MAX);
+        char *path_buf = malloc(path_size);
+        char *wpa_buf = malloc(path_size);
+        if (!path_buf) {
+            // Failed to allocate buffer
+            _exit(1);
+        }
+
+        if (!getcwd(path_buf, path_size)) {
+            // Failed to get current working directory
+            _exit(1);
+        }
+
+        snprintf(wpa_buf, path_size, "%s/%s", path_buf, "wpa_supplicant_drc");
+        free(path_buf);
+
+        r = execl(wpa_buf, wpa_buf, "-Dnl80211", "-i", wireless_interface, "-c", config_file, NULL);
+        free(wpa_buf);
+        if (r < 0) {
             _exit(1);
         }
     } else if ((*pid) < 0) {
         // Fork error
-        return VANILLA_ERROR_BAD_FORK;
+
+        return VANILLA_ERROR;
     } else {
         // Continuation of parent
         close(pipes[1]);
 
-        // Give WPA supplicant some time to start (TODO: probably should wait for success message)
-        sleep(1);
+        // Wait for WPA supplicant to start
+        static const int max_attempts = 5;
+        int nbytes, attempts = 0, success = 0, total_nbytes = 0;
+        static const char *expected = "Successfully initialized wpa_supplicant";
+        static const int expected_len = 39; //strlen(expected)
+        char buf[expected_len];
+        do {
+            // Read string from child process
+            do {
+                nbytes = read(pipes[0], buf + total_nbytes, expected_len - total_nbytes);
+                total_nbytes += nbytes;
+            } while (total_nbytes < expected_len);
 
-        /*char buf[4096];
-        int nbytes = read(pipes[0], buf, sizeof(buf));
-        printf("Output: (%.*s)\n", nbytes, buf);*/
-        return VANILLA_ERROR_SUCCESS;
+            attempts++;
+
+            // We got success message!
+            if (!strncmp(buf, expected, expected_len)) {
+                success = 1;
+                break;
+            }
+
+            // Haven't gotten success message (yet), wait and try again
+            sleep(1);
+        } while (attempts < max_attempts);
+
+        if (success) {
+            // WPA initialized correctly! Continue with action...
+            return VANILLA_SUCCESS;
+        } else {
+            // Give up
+            kill((*pid), SIGINT);
+            return VANILLA_ERROR;
+        }
     }
 }
 
@@ -56,10 +114,11 @@ void wpa_ctrl_command(struct wpa_ctrl *ctrl, const char *cmd, char *buf, size_t 
 
 int vanilla_sync_with_console(const char *wireless_interface, uint16_t code)
 {
-    static const char *wireless_conf_file = "/tmp/wireless.conf";
+    static const char *wireless_conf_file = "/tmp/vanilla_wpa.conf";
     FILE *config = fopen(wireless_conf_file, "wb");
     if (!config) {
-        return VANILLA_ERROR_CONFIG_FILE;
+        print_info("FAILED TO WRITE TEMP CONFIG");
+        return VANILLA_ERROR;
     }
 
     static const char *ctrl_interface = "/var/run/wpa_supplicant_drc";
@@ -69,18 +128,25 @@ int vanilla_sync_with_console(const char *wireless_interface, uint16_t code)
     // Start modified WPA supplicant
     pid_t pid;
     int err = start_wpa_supplicant(wireless_interface, wireless_conf_file, &pid);
-    if (err != VANILLA_ERROR_SUCCESS) {
-        return err;
+    if (err != VANILLA_SUCCESS) {
+        print_info("FAILED TO START WPA SUPPLICANT");
+        return VANILLA_ERROR;
     }
 
     // Get control interface
-    int ret;
+    int ret = VANILLA_ERROR;
     char buf[16384];
-    sprintf(buf, "%s/%s", ctrl_interface, wireless_interface);
+    snprintf(buf, sizeof(buf), "%s/%s", ctrl_interface, wireless_interface);
+    printf("%s\n", buf);
     struct wpa_ctrl *ctrl = wpa_ctrl_open(buf);
-    if (!ctrl) {
-        ret = VANILLA_ERROR_UNKNOWN;
+    while (!ctrl) {
+        print_info("FAILED TO ATTACH TO WPA");
         goto die;
+    }
+
+    if (wpa_ctrl_attach(ctrl) < 0) {
+        print_info("FAILED TO ATTACH TO WPA");
+        goto die_and_close;
     }
 
     int found_console = 0;
@@ -109,7 +175,7 @@ int vanilla_sync_with_console(const char *wireless_interface, uint16_t code)
                     }
                     
                     char wps_buf[100];
-                    sprintf(wps_buf, "WPS_PIN %.*s %04d5678", 17, line, code);
+                    snprintf(wps_buf, sizeof(wps_buf), "WPS_PIN %.*s %04d5678", 17, line, code);
                     
                     actual_buf_len = sizeof(buf);
                     wpa_ctrl_command(ctrl, wps_buf, buf, &actual_buf_len);
@@ -125,7 +191,7 @@ int vanilla_sync_with_console(const char *wireless_interface, uint16_t code)
                 actual_buf_len = sizeof(buf);
                 wpa_ctrl_command(ctrl, "SAVE_CONFIG", buf, &actual_buf_len);
             }
-            printf("%s\n", line);
+            //printf("%s\n", line);
             line = strtok(NULL, "\n");
         }
     } while (!found_console);
@@ -137,18 +203,15 @@ int vanilla_sync_with_console(const char *wireless_interface, uint16_t code)
     } else {
         ret = VANILLA_ERROR_CANCELLED;
     }*/
-    ret = VANILLA_ERROR_SUCCESS;
+    ret = VANILLA_SUCCESS;
+
+die_and_detach:
+    wpa_ctrl_detach(ctrl);
+
+die_and_close:
+    wpa_ctrl_close(ctrl);
 
 die:
     kill(pid, SIGINT);
     return ret;
-
-
-
-
-    // Scan
-    // Check results for WiiU
-    // Send WPS Pin
-    // Save config
-    // Close
 }
