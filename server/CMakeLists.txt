@@ -1,17 +1,20 @@
-add_library(vanillaserver SHARED
+add_library(vanilla SHARED
+    gamepad.c
     server.c
     status.c
+    sync.c
+    wpa.c
 )
 
-add_executable(vanillaserver_cli
+add_executable(vanilla-server
     main.c
 )
 
-target_link_libraries(vanillaserver_cli PRIVATE
-    vanillaserver
+target_link_libraries(vanilla-server PRIVATE
+    vanilla
 )
 
-target_include_directories(vanillaserver PRIVATE
+target_include_directories(vanilla PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/hostap/src/common
     ${CMAKE_CURRENT_SOURCE_DIR}/hostap/src/utils
 )
@@ -32,16 +35,19 @@ add_custom_target(
 )
 
 # Make vanillaserver depend on client library
-add_dependencies(vanillaserver wpa_client_lib)
+add_dependencies(vanilla wpa_client_lib)
 
 # Link wpa_client
-target_link_directories(vanillaserver PRIVATE
+target_link_directories(vanilla PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/hostap/wpa_supplicant"
 )
 
-target_link_libraries(vanillaserver PRIVATE
+target_link_libraries(vanilla PRIVATE
     wpa_client
 )
 
 # Copy files into build directory
-configure_file("${CMAKE_CURRENT_SOURCE_DIR}/hostap/wpa_supplicant/wpa_supplicant" "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/wpa_supplicant_drc" COPYONLY)
+add_custom_command(
+    TARGET wpa_supplicant POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_SOURCE_DIR}/hostap/wpa_supplicant/wpa_supplicant" "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/wpa_supplicant_drc"
+)
