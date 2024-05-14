@@ -142,7 +142,8 @@ int start_wpa_supplicant(const char *wireless_interface, const char *config_file
         sleep(1);
     } while (attempts < max_attempts);
 
-    close(pipe);
+    // I'm not sure why, but closing this pipe breaks wpa_supplicant in subtle ways, so just leave it.
+    //close(pipe);
 
     if (success) {
         // WPA initialized correctly! Continue with action...
