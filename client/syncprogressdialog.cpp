@@ -18,6 +18,11 @@ SyncProgressDialog::SyncProgressDialog(QWidget *parent) : QDialog(parent)
 
     QDialogButtonBox *buttons = new QDialogButtonBox(QDialogButtonBox::Cancel, this);
     buttons->setCenterButtons(true);
+    
+    //
+    // TODO: When cancelling, send SIGINT to server so it will re-enable NetworkManager on the device
+    //
+    
     connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::close);
     layout->addWidget(buttons);
 
