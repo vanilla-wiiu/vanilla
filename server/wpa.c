@@ -11,6 +11,7 @@
 #include <wpa_ctrl.h>
 
 #include "status.h"
+#include "util.h"
 
 void wpa_msg(char *msg, size_t len)
 {
@@ -19,7 +20,7 @@ void wpa_msg(char *msg, size_t len)
 
 void wpa_ctrl_command(struct wpa_ctrl *ctrl, const char *cmd, char *buf, size_t *buf_len)
 {
-    wpa_ctrl_request(ctrl, cmd, strlen(cmd), buf, buf_len, wpa_msg);
+    wpa_ctrl_request(ctrl, cmd, strlen(cmd), buf, buf_len, NULL /*wpa_msg*/);
 }
 
 int start_process(const char *path, const char **argv, pid_t *pid_out, int *stdout_pipe)
@@ -53,12 +54,6 @@ int start_process(const char *path, const char **argv, pid_t *pid_out, int *stdo
         close(pipes[0]);
         close(pipes[1]);
 
-        //
-        //
-        //
-        //
-        //
-
         // Execute process (this will replace the running code)
         r = execvp(path, (char * const *) argv);
 
@@ -90,7 +85,7 @@ int start_process(const char *path, const char **argv, pid_t *pid_out, int *stdo
 int start_wpa_supplicant(const char *wireless_interface, const char *config_file, pid_t *pid)
 {
     // Get path to `wpa_supplicant_drc` (assumes it's in the same path as us - presumably /usr/bin/ or equivalent)
-    long path_size = pathconf(".", _PC_PATH_MAX);
+    size_t path_size = get_max_path_length();
     char *path_buf = malloc(path_size);
     char *wpa_buf = malloc(path_size);
     if (!path_buf || !wpa_buf) {
@@ -181,24 +176,15 @@ int is_networkmanager_managing_device(const char *wireless_interface, int *is_ma
         return VANILLA_ERROR;
     }
 
-    char buf[4096];
-    ssize_t total_read = 0;
-    ssize_t this_read;
+    char buf[100];
     int ret = VANILLA_ERROR;
-    do {
-        this_read = read(pipe, buf, sizeof(buf));
-        total_read += this_read;
-
-        const char *line = strtok(buf, "\n");
-        while (line) {
-            if (memcmp(line, "GENERAL.STATE", 13) == 0) {
-                *is_managed = !strstr(line, "unmanaged");
-                ret = VANILLA_SUCCESS;
-                goto exit;
-            }
-            line = strtok(NULL, "\n");
+    while (read_line_from_fd(pipe, buf, sizeof(buf))) {
+        if (memcmp(buf, "GENERAL.STATE", 13) == 0) {
+            *is_managed = !strstr(buf, "unmanaged");
+            ret = VANILLA_SUCCESS;
+            goto exit;
         }
-    } while(this_read == sizeof(buf));
+    }
 
 exit:
     close(pipe);

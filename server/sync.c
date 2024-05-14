@@ -7,19 +7,60 @@
 #include <unistd.h>
 #include <wpa_ctrl.h>
 
+#include "gamepad.h"
 #include "status.h"
+#include "util.h"
 #include "wpa.h"
 
-/*void ensure_device_is_reenabled(int signum)
-{
+// TODO: Static variable should probably be avoided
+char using_wireless_interface[16];
 
+void ensure_device_is_reenabled(int signum)
+{
+    print_info("SETTING %s BACK TO MANAGED", using_wireless_interface);
+    enable_networkmanager_on_device(using_wireless_interface);
+    exit(1);
 }
-*/
+
+int create_connect_config(const char *input_config, const char *bssid)
+{
+    FILE *in_file = fopen(input_config, "r");
+    if (!in_file) {
+        print_info("FAILED TO OPEN INPUT CONFIG FILE");
+        return VANILLA_ERROR;
+    }
+    
+    FILE *out_file = fopen(get_wireless_connect_config_filename(), "w");
+    if (!out_file) {
+        print_info("FAILED TO OPEN OUTPUT CONFIG FILE");
+        return VANILLA_ERROR;
+    }
+
+    int len;
+    char buf[150];
+    while (len = read_line_from_file(in_file, buf, sizeof(buf))) {
+        if (memcmp("\tssid=", buf, 6) == 0) {
+            fprintf(out_file, "\tscan_ssid=1\n\tbssid=%s\n", bssid);
+        }
+
+        fwrite(buf, len, 1, out_file);
+
+        if (memcmp(buf, "update_config=1", 15) == 0) {
+            static const char *ap_scan_line = "ap_scan=1\n";
+            fwrite(ap_scan_line, strlen(ap_scan_line), 1, out_file);
+        }
+    }
+
+    fclose(in_file);
+    fclose(out_file);
+
+    return VANILLA_SUCCESS;
+}
 
 int sync_with_console_internal(const char *wireless_interface, uint16_t code)
 {
     int ret = VANILLA_ERROR;
-    static const char *wireless_conf_file = "/tmp/vanilla_wpa.conf";
+    static const char *wireless_conf_file = "/tmp/vanilla_wpa_key.conf";
     FILE *config = fopen(wireless_conf_file, "wb");
     if (!config) {
         print_info("FAILED TO WRITE TEMP CONFIG");
@@ -35,6 +76,8 @@ int sync_with_console_internal(const char *wireless_interface, uint16_t code)
 
     // If NetworkManager is managing this device, temporarily stop it from doing so
     if (is_managed) {
+        strncpy(using_wireless_interface, wireless_interface, sizeof(using_wireless_interface));
+        signal(SIGINT, ensure_device_is_reenabled);
         if (disable_networkmanager_on_device(wireless_interface) != VANILLA_SUCCESS) {
             print_info("FAILED TO SET %s TO UNMANAGED, RESULTS MAY BE UNPREDICTABLE");
         } else {
@@ -71,6 +114,7 @@ int sync_with_console_internal(const char *wireless_interface, uint16_t code)
     }
 
     int found_console = 0;
+    char bssid[18];
     do {
         size_t actual_buf_len;
 
@@ -100,22 +144,24 @@ int sync_with_console_internal(const char *wireless_interface, uint16_t code)
             if (strstr(line, "WiiU")) {
                 print_info("FOUND WII U, TESTING WPS PIN");
 
-                char wps_buf[100];
-                snprintf(wps_buf, sizeof(wps_buf), "WPS_PIN %.*s %04d5678", 17, "9c:e6:35:89:f8:13", code);
+                // Make copy of bssid for later
+                strncpy(bssid, line, sizeof(bssid));
+                bssid[17] = '\0';
 
-                print_info("SENDING COMMAND: %s", wps_buf);
-                
+                char wps_buf[100];
+                snprintf(wps_buf, sizeof(wps_buf), "WPS_PIN %.*s %04d5678", 17, bssid, code);
+
                 size_t actual_buf_len = buf_len;
                 wpa_ctrl_command(ctrl, wps_buf, buf, &actual_buf_len);
 
-                static const int max_wait = 20;
+                static const int max_wait = 6;
                 int wait_count = 0;
                 int cred_received = 0;
 
                 while (1) {
                     while (wait_count < max_wait && !wpa_ctrl_pending(ctrl)) {
                         print_info("STILL WAITING FOR RESPONSE");
-                        sleep(1);
+                        sleep(5);
                         wait_count++;
                     }
 
@@ -140,6 +186,9 @@ int sync_with_console_internal(const char *wireless_interface, uint16_t code)
                     actual_buf_len = buf_len;
                     print_info("SAVING CONFIG", actual_buf_len, buf);
                     wpa_ctrl_command(ctrl, "SAVE_CONFIG", buf, &actual_buf_len);
+
+                    // Create connect config which needs a couple more parameters
+                    create_connect_config(wireless_conf_file, bssid);
 
                     found_console = 1;
                 }
@@ -166,7 +215,11 @@ unlock:
 
 reenable_managed:
     if (is_managed) {
+        print_info("SETTING %s BACK TO MANAGED", wireless_interface);
         enable_networkmanager_on_device(wireless_interface);
+
+        // Remove our custom sigint signal handler
+        signal(SIGINT, SIG_DFL);
     }
 
 die:

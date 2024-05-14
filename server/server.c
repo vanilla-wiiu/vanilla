@@ -3,6 +3,7 @@
 #include "gamepad.h"
 #include "status.h"
 #include "sync.h"
+#include "util.h"
 
 int vanilla_sync_with_console(const char *wireless_interface, uint16_t code)
 {

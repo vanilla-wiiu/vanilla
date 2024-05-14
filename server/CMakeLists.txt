@@ -3,6 +3,7 @@ add_library(vanilla SHARED
     server.c
     status.c
     sync.c
+    util.c
     wpa.c
 )
 

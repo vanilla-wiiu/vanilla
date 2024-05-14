@@ -6,6 +6,7 @@
 //#include <sys/socket.h>
 
 #include "status.h"
+#include "util.h"
 
 static const uint16_t PORT_MSG = 50110;
 static const uint16_t PORT_VID = 50120;
@@ -15,8 +16,19 @@ static const uint16_t PORT_CMD = 50123;
 
 static int socket_video;
 
+char wireless_connect_config_filename[1024] = {0};
+const char *get_wireless_connect_config_filename()
+{
+    if (wireless_connect_config_filename[0] == 0) {
+        // Not initialized yet, do this now
+        get_home_directory_file("vanilla_wpa_connect.conf", wireless_connect_config_filename, sizeof(wireless_connect_config_filename));
+    }
+    return wireless_connect_config_filename;
+}
+
 int connect_as_gamepad_internal(const char *wireless_interface)
 {
+    /*
     // connect to Wii U with wpa_supplicant
         // kill any existing wpa_supplicant_drc
         // rfkill unblock wlan?
@@ -42,4 +54,6 @@ int connect_as_gamepad_internal(const char *wireless_interface)
         ssize_t size = recv(socket_video, &data, sizeof(data), 0);
         printf("received %li\n", size);
     }
+    */
+   return 0;
 }
