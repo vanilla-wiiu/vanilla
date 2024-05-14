@@ -1,6 +1,8 @@
 #include "gamepad.h"
 
 #include <netinet/in.h>
+#include <stdio.h>
+#include <string.h>
 //#include <sys/socket.h>
 
 #include "status.h"
@@ -29,7 +31,7 @@ int connect_as_gamepad_internal(const char *wireless_interface)
     address.sin_port = htons(PORT_VID);
     socket_video = socket(AF_INET, SOCK_DGRAM, 0);
     // TODO: Limit to one interface...
-    if (bind(socket_video, &address, sizeof(address)) == -1) {
+    if (bind(socket_video, (const struct sockaddr *) &address, sizeof(address)) == -1) {
         return VANILLA_ERROR;
     }
 
