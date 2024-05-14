@@ -10,6 +10,12 @@
 #include "status.h"
 #include "wpa.h"
 
+/*void ensure_device_is_reenabled(int signum)
+{
+
+}
+*/
+
 int sync_with_console_internal(const char *wireless_interface, uint16_t code)
 {
     int ret = VANILLA_ERROR;
@@ -18,6 +24,22 @@ int sync_with_console_internal(const char *wireless_interface, uint16_t code)
     if (!config) {
         print_info("FAILED TO WRITE TEMP CONFIG");
         goto die;
+    }
+
+    // Check status of interface with NetworkManager
+    int is_managed;
+    if (is_networkmanager_managing_device(wireless_interface, &is_managed) != VANILLA_SUCCESS) {
+        print_info("FAILED TO DETERMINE MANAGED STATE OF WIRELESS INTERFACE");
+        goto die;
+    }
+
+    // If NetworkManager is managing this device, temporarily stop it from doing so
+    if (is_managed) {
+        if (disable_networkmanager_on_device(wireless_interface) != VANILLA_SUCCESS) {
+            print_info("FAILED TO SET %s TO UNMANAGED, RESULTS MAY BE UNPREDICTABLE");
+        } else {
+            print_info("TEMPORARILY SET %s TO UNMANAGED", wireless_interface);
+        }
     }
 
     static const char *ctrl_interface = "/var/run/wpa_supplicant_drc";
@@ -50,10 +72,11 @@ int sync_with_console_internal(const char *wireless_interface, uint16_t code)
 
     int found_console = 0;
     do {
-        size_t actual_buf_len = buf_len;
+        size_t actual_buf_len;
 
         while (1) {
             //print_info("SCANNING");
+            actual_buf_len = buf_len;
             wpa_ctrl_command(ctrl, "SCAN", buf, &actual_buf_len);
 
             if (!memcmp(buf, "FAIL-BUSY", 9)) {
@@ -85,29 +108,42 @@ int sync_with_console_internal(const char *wireless_interface, uint16_t code)
                 size_t actual_buf_len = buf_len;
                 wpa_ctrl_command(ctrl, wps_buf, buf, &actual_buf_len);
 
+                static const int max_wait = 20;
+                int wait_count = 0;
+                int cred_received = 0;
+
                 while (1) {
-                    while (!wpa_ctrl_pending(ctrl)) {
+                    while (wait_count < max_wait && !wpa_ctrl_pending(ctrl)) {
+                        print_info("STILL WAITING FOR RESPONSE");
                         sleep(1);
+                        wait_count++;
+                    }
+
+                    if (wait_count == max_wait) {
+                        print_info("GIVING UP, RETURNING TO SCANNING");
+                        break;
                     }
 
                     actual_buf_len = buf_len;
                     wpa_ctrl_recv(ctrl, buf, &actual_buf_len);
-                    //printf("CRED RECV: %.*s\n", buf_len, buf);
+                    print_info("CRED RECV: %.*s", buf_len, buf);
 
                     if (!memcmp("<3>WPS-CRED-RECEIVED", buf, 20)) {
                         print_info("RECEIVED AUTHENTICATION FROM CONSOLE");
+                        cred_received = 1;
                         break;
                     }
                 }
 
-                // Tell wpa_supplicant to save config
-                actual_buf_len = buf_len;
-                print_info("SAVING CONFIG", actual_buf_len, buf);
-                wpa_ctrl_command(ctrl, "SAVE_CONFIG", buf, &actual_buf_len);
+                if (cred_received) {
+                    // Tell wpa_supplicant to save config
+                    actual_buf_len = buf_len;
+                    print_info("SAVING CONFIG", actual_buf_len, buf);
+                    wpa_ctrl_command(ctrl, "SAVE_CONFIG", buf, &actual_buf_len);
 
-                found_console = 1;
+                    found_console = 1;
+                }
             }
-            // printf("%s\n", line);
             line = strtok(NULL, "\n");
         }
     } while (!found_console);
@@ -127,6 +163,11 @@ die_and_kill:
 
 unlock:
     //pthread_mutex_unlock(&wpa_response_mtx);
+
+reenable_managed:
+    if (is_managed) {
+        enable_networkmanager_on_device(wireless_interface);
+    }
 
 die:
     return ret;
