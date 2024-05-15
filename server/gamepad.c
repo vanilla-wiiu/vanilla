@@ -7,6 +7,7 @@
 #include <signal.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/wait.h>
 #include <unistd.h>
 #include <wpa_ctrl.h>
 
@@ -479,18 +480,30 @@ int connect_as_gamepad_internal(struct wpa_ctrl *ctrl, const char *wireless_inte
     print_info("CONNECTED TO CONSOLE");
 
     // Use DHCP on interface
-    /*sleep(5);
     int r = call_dhcp(wireless_interface);
     if (r != VANILLA_SUCCESS) {
         print_info("FAILED TO RUN DHCP ON %s", wireless_interface);
         return r;
     } else {
-        print_info("DHCP SEEMS TO HAVE WORKED?");
-    }*/
+        print_info("DHCP ESTABLISHED");
+    }
 
-    // Remove as default
-    
-    // ip route del default via 192.168.1.1 dev wlp4s0
+    {
+        // Destroy default route that dhclient will have created
+        pid_t ip_pid;
+        const char *ip_args[] = {"ip", "route", "del", "default", "via", "192.168.1.1", "dev", wireless_interface, NULL};
+        r = start_process(ip_args, &ip_pid, NULL);
+        if (r != VANILLA_SUCCESS) {
+            print_info("FAILED TO REMOVE CONSOLE ROUTE FROM SYSTEM");
+        }
+
+        int ip_status;
+        waitpid(ip_pid, &ip_status, 0);
+
+        if (!WIFEXITED(ip_status)) {
+            print_info("FAILED TO REMOVE CONSOLE ROUTE FROM SYSTEM");
+        }
+    }
 
     // Set region
 

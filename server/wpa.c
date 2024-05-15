@@ -97,7 +97,7 @@ int start_wpa_supplicant(const char *wireless_interface, const char *config_file
 
 int call_dhcp(const char *network_interface)
 {
-    const char *argv[] = {"dhclient", network_interface};
+    const char *argv[] = {"dhclient", network_interface, NULL};
     pid_t dhclient_pid;
     int r = start_process(argv, &dhclient_pid, NULL);
     if (r != VANILLA_SUCCESS) {
