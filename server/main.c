@@ -3,8 +3,20 @@
 #include <string.h>
 #include <sys/types.h>
 
-#include "server.h"
 #include "status.h"
+#include "vanilla.h"
+
+void console_event_handler(void *context, int type, const char *data, size_t data_size)
+{
+    switch (type) {
+    case VANILLA_EVENT_VIDEO:
+        print_info("RECEIVED VIDEO PACKET OF SIZE %llu", data_size);
+        break;
+    case VANILLA_EVENT_AUDIO:
+        print_info("RECEIVED AUDIO PACKET OF SIZE %llu", data_size);
+        break;
+    }
+}
 
 int main(int argc, char **argv)
 {
@@ -48,6 +60,20 @@ int main(int argc, char **argv)
 
             int sync_status = vanilla_sync_with_console(wireless_interface, atoi(code));
             if (sync_status == VANILLA_SUCCESS) {
+                print_status(VANILLA_SUCCESS);
+            } else {
+                print_status(VANILLA_ERROR);
+            }
+        } else if (!strcmp("CONNECT", cmd_args[0])) {
+            if (cmd_nb_arg != 2) {
+                print_status(VANILLA_INVALID_ARGUMENT);
+                continue;
+            }
+
+            const char *wireless_interface = cmd_args[1];
+
+            int status = vanilla_connect_to_console(wireless_interface, console_event_handler, NULL);
+            if (status == VANILLA_SUCCESS) {
                 print_status(VANILLA_SUCCESS);
             } else {
                 print_status(VANILLA_ERROR);

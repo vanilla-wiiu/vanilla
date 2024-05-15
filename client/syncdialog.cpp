@@ -7,8 +7,8 @@
 
 QString SyncDialog::g_symbols[g_symbolCount] = {
     QString::fromUtf8("\xE2\x99\xA0"),     // Spade = 0
-    QString::fromUtf8("\xE2\x99\xA6"),     // Diamond = 1
-    QString::fromUtf8("\xE2\x99\xA5"),     // Heart = 2
+    QString::fromUtf8("\xE2\x99\xA5"),     // Heart = 1
+    QString::fromUtf8("\xE2\x99\xA6"),     // Diamond = 2
     QString::fromUtf8("\xE2\x99\xA3")      // Club = 3
 };
 
@@ -48,9 +48,12 @@ SyncDialog::SyncDialog(QWidget *parent) : QDialog(parent)
     m_buttonLayout = new QHBoxLayout();
     m_buttonLayout->addStretch();
     QPushButton *b;
-    for (int i = 0; i < g_symbolCount; i++) {
-        b = createButton(g_symbols[i], i);
-    }
+
+    // Heart and Diamond (1 and 2 respectively) are switched on the real gamepad sync interface
+    b = createButton(g_symbols[0], 0);
+    b = createButton(g_symbols[2], 2);
+    b = createButton(g_symbols[1], 1);
+    b = createButton(g_symbols[3], 3);
 
     QFrame *vline = new QFrame();
     vline->setFixedSize(3, b->height());
@@ -131,15 +134,13 @@ int intPow(int x, unsigned int p)
 
 void SyncDialog::launchSync()
 {
-    SyncProgressDialog *progressDialog = new SyncProgressDialog(this->parentWidget());
-    progressDialog->open();
-
     uint16_t code = 0;
     for (int i = 0; i < g_symbolCount; i++) {
         code += m_code[i] * intPow(10, g_symbolCount - 1 - i);
     }
 
-    progressDialog->start(m_wirelessInterface, code);
+    SyncProgressDialog *progressDialog = new SyncProgressDialog(m_wirelessInterface, code, this->parentWidget());
+    progressDialog->open();
     this->close();
 }
 

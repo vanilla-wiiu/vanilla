@@ -1,17 +1,17 @@
 add_library(vanilla SHARED
     gamepad.c
-    server.c
     status.c
     sync.c
     util.c
+    vanilla.c
     wpa.c
 )
 
-add_executable(vanilla-server
+add_executable(vanilla-cli
     main.c
 )
 
-target_link_libraries(vanilla-server PRIVATE
+target_link_libraries(vanilla-cli PRIVATE
     vanilla
 )
 

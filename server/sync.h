@@ -3,6 +3,8 @@
 
 #include <stdint.h>
 
-int sync_with_console_internal(const char *wireless_interface, uint16_t code);
+struct wpa_ctrl;
+
+int sync_with_console_internal(struct wpa_ctrl *ctrl, const char *wireless_interface, uint16_t code);
 
 #endif // VANILLA_SYNC_H

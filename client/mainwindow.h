@@ -1,0 +1,55 @@
+#ifndef MAINWINDOW_H
+#define MAINWINDOW_H
+
+#include <QComboBox>
+#include <QProcess>
+#include <QPushButton>
+#include <QWidget>
+#include <SDL2/SDL_gamecontroller.h>
+
+#include "backend.h"
+#include "gamepadhandler.h"
+#include "videodecoder.h"
+#include "viewer.h"
+
+class MainWindow : public QWidget
+{
+    Q_OBJECT
+public:
+    MainWindow(QWidget *parent = nullptr);
+    virtual ~MainWindow() override;
+
+private:
+    void populateWirelessInterfaces();
+    void populateMicrophones();
+    void populateControllers();
+
+    Viewer *m_viewer;
+
+    QComboBox *m_wirelessInterfaceComboBox;
+    QComboBox *m_microphoneComboBox;
+    QComboBox *m_controllerComboBox;
+    QProcess *m_process;
+
+    QPushButton *m_syncBtn;
+    QPushButton *m_connectBtn;
+
+    Backend *m_backend;
+    VideoDecoder *m_videoDecoder;
+
+    QThread *m_backendThread;
+    QThread *m_videoDecoderThread;
+
+    GamepadHandler *m_gamepadHandler;
+    QThread *m_gamepadHandlerThread;
+
+private slots:
+    void showSyncDialog();
+
+    void setConnectedState(bool on);
+
+    void setJoystick(int index);
+
+};
+
+#endif // MAINWINDOW_H

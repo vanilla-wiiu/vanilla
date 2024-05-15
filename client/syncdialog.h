@@ -7,6 +7,7 @@
 
 class SyncDialog : public QDialog
 {
+    Q_OBJECT
 public:
     SyncDialog(QWidget *parent = nullptr);
 

@@ -3,6 +3,8 @@
 #include <stdio.h>
 #include <stdarg.h>
 
+#include "vanilla.h"
+
 static const char *VANILLA_STATUS_STRINGS[] = {
     "SUCCESS",
     "ERROR",
@@ -11,8 +13,6 @@ static const char *VANILLA_STATUS_STRINGS[] = {
     "UNKNOWN_COMMAND",
     "INVALID_ARGUMENT"
 };
-
-//static const char *VANILL
 
 void print_status(int errno)
 {
