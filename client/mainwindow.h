@@ -8,6 +8,7 @@
 #include <QWidget>
 #include <SDL2/SDL_gamecontroller.h>
 
+#include "audiohandler.h"
 #include "backend.h"
 #include "gamepadhandler.h"
 #include "videodecoder.h"
@@ -45,6 +46,9 @@ private:
 
     GamepadHandler *m_gamepadHandler;
     QThread *m_gamepadHandlerThread;
+
+    AudioHandler *m_audioHandler;
+    QThread *m_audioHandlerThread;
 
 private slots:
     void showSyncDialog();

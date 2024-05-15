@@ -25,6 +25,9 @@ void Backend::handleEvent(int type, const char *data, size_t dataLength)
     case VANILLA_EVENT_VIDEO:
         emit videoAvailable(QByteArray(data, dataLength));
         break;
+    case VANILLA_EVENT_AUDIO:
+        emit audioAvailable(QByteArray(data, dataLength));
+        break;
     }
 }
 

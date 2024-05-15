@@ -7,6 +7,7 @@ set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTORCC ON)
 
 add_executable(vanilla-gui
+    audiohandler.cpp
     backend.cpp
     gamepadhandler.cpp
     syncdialog.cpp

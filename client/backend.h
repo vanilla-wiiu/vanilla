@@ -15,6 +15,7 @@ public:
 
 signals:
     void videoAvailable(const QByteArray &packet);
+    void audioAvailable(const QByteArray &packet);
     void errorOccurred();
 
 public slots:

@@ -131,6 +131,12 @@ MainWindow::MainWindow(QWidget *parent) : QWidget(parent)
     connect(m_gamepadHandler, &GamepadHandler::gamepadsChanged, this, &MainWindow::populateControllers);
     QMetaObject::invokeMethod(m_gamepadHandler, &GamepadHandler::run, Qt::QueuedConnection);
 
+    m_audioHandler = new AudioHandler();
+    m_audioHandlerThread = new QThread(this);
+    m_audioHandler->moveToThread(m_audioHandlerThread);
+    m_audioHandlerThread->start();
+    QMetaObject::invokeMethod(m_audioHandler, &AudioHandler::run, Qt::QueuedConnection);
+
     populateWirelessInterfaces();
     populateMicrophones();
     populateControllers();
@@ -140,6 +146,12 @@ MainWindow::MainWindow(QWidget *parent) : QWidget(parent)
 
 MainWindow::~MainWindow()
 {
+    QMetaObject::invokeMethod(m_audioHandler, &AudioHandler::close, Qt::QueuedConnection);
+    m_audioHandler->deleteLater();
+    m_audioHandlerThread->quit();
+    m_audioHandlerThread->wait();
+    delete m_audioHandlerThread;
+
     m_gamepadHandler->close();
     m_gamepadHandlerThread->quit();
     m_gamepadHandlerThread->wait();
@@ -244,6 +256,7 @@ void MainWindow::setConnectedState(bool on)
 
         connect(m_backend, &Backend::videoAvailable, m_videoDecoder, &VideoDecoder::sendPacket);
         connect(m_videoDecoder, &VideoDecoder::frameReady, m_viewer, &Viewer::setImage);
+        connect(m_backend, &Backend::audioAvailable, m_audioHandler, &AudioHandler::write);
 
         m_backend->moveToThread(m_backendThread);
         m_videoDecoder->moveToThread(m_videoDecoderThread);
