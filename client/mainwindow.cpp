@@ -231,6 +231,8 @@ void MainWindow::showSyncDialog()
 
 void MainWindow::setConnectedState(bool on)
 {
+    m_wirelessInterfaceComboBox->setEnabled(!on);
+    m_syncBtn->setEnabled(!on);
     if (on) {
         m_connectBtn->setText(tr("Disconnect"));
 
