@@ -4,6 +4,7 @@
 #include <QComboBox>
 #include <QProcess>
 #include <QPushButton>
+#include <QSplitter>
 #include <QWidget>
 #include <SDL2/SDL_gamecontroller.h>
 
@@ -34,6 +35,8 @@ private:
     QPushButton *m_syncBtn;
     QPushButton *m_connectBtn;
 
+    QSplitter *m_splitter;
+
     Backend *m_backend;
     VideoDecoder *m_videoDecoder;
 
@@ -49,6 +52,9 @@ private slots:
     void setConnectedState(bool on);
 
     void setJoystick(int index);
+
+    void setFullScreen();
+    void exitFullScreen();
 
 };
 

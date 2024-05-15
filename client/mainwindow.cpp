@@ -33,11 +33,11 @@ MainWindow::MainWindow(QWidget *parent) : QWidget(parent)
     QHBoxLayout *layout = new QHBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
 
-    QSplitter *splitter = new QSplitter(this);
-    layout->addWidget(splitter);
+    m_splitter = new QSplitter(this);
+    layout->addWidget(m_splitter);
 
     QWidget *configSection = new QWidget(this);
-    splitter->addWidget(configSection);
+    m_splitter->addWidget(configSection);
 
     QVBoxLayout *configOuterLayout = new QVBoxLayout(configSection);
 
@@ -78,7 +78,9 @@ MainWindow::MainWindow(QWidget *parent) : QWidget(parent)
 
         int row = 0;
 
-        configLayout->addWidget(new QPushButton(tr("Full Screen"), configSection), row, 0, 1, 2);
+        QPushButton *fullScreenBtn = new QPushButton(tr("Full Screen"), configSection);
+        connect(fullScreenBtn, &QPushButton::clicked, this, &MainWindow::setFullScreen);
+        configLayout->addWidget(fullScreenBtn, row, 0, 1, 2);
     }
 
     {
@@ -118,8 +120,9 @@ MainWindow::MainWindow(QWidget *parent) : QWidget(parent)
     configOuterLayout->addStretch();
 
     m_viewer = new Viewer(this);
-    m_viewer->setMinimumSize(848, 480);
-    splitter->addWidget(m_viewer);
+    m_viewer->setMinimumSize(854, 480);
+    connect(m_viewer, &Viewer::requestExitFullScreen, this, &MainWindow::exitFullScreen);
+    m_splitter->addWidget(m_viewer);
 
     m_gamepadHandler = new GamepadHandler();
     m_gamepadHandlerThread = new QThread(this);
@@ -142,6 +145,8 @@ MainWindow::~MainWindow()
     m_gamepadHandlerThread->wait();
     delete m_gamepadHandler;
     delete m_gamepadHandlerThread;
+
+    delete m_viewer;
 
     SDL_Quit();
 
@@ -277,4 +282,15 @@ void MainWindow::setJoystick(int index)
     }
 
     m_gamepadHandler->setController(index - 1);
+}
+
+void MainWindow::setFullScreen()
+{
+    m_viewer->setParent(nullptr);
+    m_viewer->showFullScreen();
+}
+
+void MainWindow::exitFullScreen()
+{
+    m_splitter->addWidget(m_viewer);
 }

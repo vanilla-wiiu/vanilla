@@ -12,8 +12,12 @@ public:
 public slots:
     void setImage(const QImage &image);
 
+signals:
+    void requestExitFullScreen();
+
 protected:
     virtual void paintGL() override;
+    virtual void keyPressEvent(QKeyEvent *key) override;
 
 private:
     QImage m_image;

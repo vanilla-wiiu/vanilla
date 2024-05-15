@@ -1,5 +1,6 @@
 #include "viewer.h"
 
+#include <QKeyEvent>
 #include <QPainter>
 
 Viewer::Viewer(QWidget *parent) : QOpenGLWidget(parent)
@@ -32,4 +33,13 @@ void Viewer::paintGL()
     p.setTransform(transform);
 
     p.drawImage(-m_image.width()/2, -m_image.height()/2, m_image);
+}
+
+void Viewer::keyPressEvent(QKeyEvent *key)
+{
+    QOpenGLWidget::keyPressEvent(key);
+
+    if (key->key() == Qt::Key_Escape) {
+        emit requestExitFullScreen();
+    }
 }
