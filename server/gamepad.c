@@ -348,11 +348,7 @@ void set_axis_state(int axis_id, float value)
 
 uint16_t transform_axis_value(float real)
 {
-    static const uint16_t min = 900;
-    static const uint16_t max = 3200;
-    static const uint16_t center = (max - min) / 2;
-
-    return ((int) (real * (max - min))) + center;
+    return ((int) (real * 1024)) + 2048;
 }
 
 void send_input(int socket_hid)
@@ -367,11 +363,10 @@ void send_input(int socket_hid)
     // Range appears to be:
     // 
 
-    // print_info("sending X axis: %f -> %i", current_stick_left_x, transform_axis_value(current_stick_left_x));
-    // global_input_packet.stick_left_x = htons(transform_axis_value(current_stick_left_x));
-    // global_input_packet.stick_left_y = htons(transform_axis_value(-current_stick_left_y));
-    // global_input_packet.stick_right_x = htons(transform_axis_value(current_stick_right_x));
-    // global_input_packet.stick_right_y = htons(transform_axis_value(-current_stick_right_y));
+    global_input_packet.stick_left_x = transform_axis_value(current_stick_left_x);
+    global_input_packet.stick_left_y = transform_axis_value(-current_stick_left_y);
+    global_input_packet.stick_right_x = transform_axis_value(current_stick_right_x);
+    global_input_packet.stick_right_y = transform_axis_value(-current_stick_right_y);
 
     pthread_mutex_unlock(&button_mtx);
 
