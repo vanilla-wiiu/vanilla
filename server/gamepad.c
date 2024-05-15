@@ -378,6 +378,59 @@ void send_input(int socket_hid)
     send_to_console(socket_hid, &global_input_packet, sizeof(global_input_packet), PORT_HID);
 }
 
+#pragma pack(push, 1)
+typedef struct {
+    unsigned format : 3;
+    unsigned mono : 1;
+    unsigned vibrate : 1;
+    unsigned type : 1;
+    unsigned seq_id : 10;
+    unsigned payload_size : 16;
+    unsigned timestamp : 32;
+    unsigned char payload[2048];
+} AudioPacket;
+const static unsigned int TYPE_AUDIO = 0;
+const static unsigned int TYPE_VIDEO = 1;
+#pragma pack(pop)
+
+typedef struct {
+    uint32_t timestamp;
+    uint32_t unknown_freq_0[2];
+    uint32_t unknown_freq_1[2];
+    uint32_t video_format;
+} AudioPacketVideoFormat;
+
+void handle_audio_packet(vanilla_event_handler_t event_handler, void *context, char *data, size_t len)
+{
+    for (int byte = 0; byte < len; byte++) {
+        data[byte] = (unsigned char) reverse_bits(data[byte], 8);
+    }
+
+    AudioPacket *ap = (AudioPacket *) data;
+
+    ap->format = reverse_bits(ap->format, 3);
+    ap->seq_id = reverse_bits(ap->seq_id, 10);
+    ap->payload_size = reverse_bits(ap->payload_size, 16);
+    ap->timestamp = reverse_bits(ap->timestamp, 32);
+    for (int byte = 0; byte < ap->payload_size; ++byte) {
+        ap->payload[byte] = (unsigned char) reverse_bits(ap->payload[byte], 8);
+    }
+
+    if (ap->type == TYPE_VIDEO) {
+        AudioPacketVideoFormat *avp = (AudioPacketVideoFormat *) ap->payload;
+        avp->timestamp = ntohl(avp->timestamp);
+        avp->video_format = ntohl(avp->video_format);
+
+        // TODO: Implement
+        return;
+    }
+
+    // TODO: Implement
+    //ap->vibrate
+    
+    event_handler(context, VANILLA_EVENT_AUDIO, ap->payload, ap->payload_size);
+}
+
 int main_loop(vanilla_event_handler_t event_handler, void *context)
 {
     int socket_msg, socket_cmd, socket_aud, socket_vid, socket_hid;
@@ -416,18 +469,40 @@ int main_loop(vanilla_event_handler_t event_handler, void *context)
         goto exit_msg;
     }
 
+    // Audio feed
+    address.sin_port = htons(PORT_AUD);
+    socket_aud = socket(AF_INET, SOCK_DGRAM, 0);
+    if (bind(socket_aud, (const struct sockaddr *) &address, sizeof(address)) == -1) {
+        print_info("FAILED TO BIND AUD PORT: %i", errno);
+        goto exit_hid;
+    }
+
+    // Command feed
+    address.sin_port = htons(PORT_CMD);
+    socket_cmd = socket(AF_INET, SOCK_DGRAM, 0);
+    if (bind(socket_cmd, (const struct sockaddr *) &address, sizeof(address)) == -1) {
+        print_info("FAILED TO BIND CMD PORT: %i", errno);
+        goto exit_aud;
+    }
+
     pthread_mutex_init(&button_mtx, NULL);
 
     unsigned char data[2048];
-    uint32_t size;
+    ssize_t size;
 
     // TODO: Perhaps these should be on separate threads?
     while (!is_interrupted()) {
         // Receive video
-        size = recv(socket_vid, &data, sizeof(data), 0);
+        size = recv(socket_vid, data, sizeof(data), 0);
         if (size > 0) {
             handle_video_packet(event_handler, context, data, size, socket_msg);
         }
+
+        // Receive audio
+        /*size = recv(socket_aud, data, sizeof(data), 0);
+        if (size > 0) {
+            handle_audio_packet(event_handler, context, data, size);
+        }*/
 
         // Receive message
         /*size = recv(socket_msg, &data, sizeof(data), 0);
@@ -440,6 +515,15 @@ int main_loop(vanilla_event_handler_t event_handler, void *context)
     ret = VANILLA_SUCCESS;
 
     pthread_mutex_destroy(&button_mtx);
+
+exit_cmd:
+    close(socket_cmd);
+
+exit_aud:
+    close(socket_aud);
+
+exit_hid:
+    close(socket_hid);
 
 exit_msg:
     close(socket_msg);
