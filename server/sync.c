@@ -7,7 +7,7 @@
 #include <unistd.h>
 #include <wpa_ctrl.h>
 
-#include "gamepad.h"
+#include "gamepad/gamepad.h"
 #include "status.h"
 #include "util.h"
 #include "wpa.h"

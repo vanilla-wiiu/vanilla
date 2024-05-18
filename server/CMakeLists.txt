@@ -1,5 +1,8 @@
 add_library(vanilla SHARED
-    gamepad.c
+    gamepad/audio.c
+    gamepad/gamepad.c
+    gamepad/input.c
+    gamepad/video.c
     status.c
     sync.c
     util.c
@@ -18,6 +21,7 @@ target_link_libraries(vanilla-cli PRIVATE
 target_include_directories(vanilla PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/hostap/src/common
     ${CMAKE_CURRENT_SOURCE_DIR}/hostap/src/utils
+    ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
 # Build WPA supplicant

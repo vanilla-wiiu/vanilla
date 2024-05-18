@@ -60,6 +60,8 @@ private slots:
     void setFullScreen();
     void exitFullScreen();
 
+    void volumeChanged(int val);
+
 };
 
 #endif // MAINWINDOW_H

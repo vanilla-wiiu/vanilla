@@ -39,3 +39,10 @@ void AudioHandler::write(const QByteArray &data)
         m_sinkDevice->write(data);
     }
 }
+
+void AudioHandler::setVolume(qreal vol)
+{
+    if (m_sink) {
+        m_sink->setVolume(vol);
+    }
+}

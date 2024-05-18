@@ -18,6 +18,8 @@ public slots:
 
     void write(const QByteArray &data);
 
+    void setVolume(qreal vol);
+
 private:
     //QMediaDevices *m_mediaDevices;
     QAudioSink *m_sink;

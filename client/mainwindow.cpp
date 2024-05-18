@@ -8,6 +8,7 @@
 #include <QMediaDevices>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QSlider>
 #include <QSplitter>
 #include <QThread>
 #include <SDL2/SDL.h>
@@ -38,6 +39,11 @@ MainWindow::MainWindow(QWidget *parent) : QWidget(parent)
 
     QWidget *configSection = new QWidget(this);
     m_splitter->addWidget(configSection);
+
+    m_viewer = new Viewer(this);
+    m_viewer->setMinimumSize(854, 480);
+    connect(m_viewer, &Viewer::requestExitFullScreen, this, &MainWindow::exitFullScreen);
+    m_splitter->addWidget(m_viewer);
 
     QVBoxLayout *configOuterLayout = new QVBoxLayout(configSection);
 
@@ -91,6 +97,17 @@ MainWindow::MainWindow(QWidget *parent) : QWidget(parent)
 
         int row = 0;
 
+        configLayout->addWidget(new QLabel(tr("Volume: "), soundConfigGroupBox), row, 0);
+        
+        QSlider *volumeSlider = new QSlider(Qt::Horizontal, soundConfigGroupBox);
+        volumeSlider->setMinimum(0);
+        volumeSlider->setMaximum(100);
+        volumeSlider->setValue(100);
+        connect(volumeSlider, &QSlider::valueChanged, this, &MainWindow::volumeChanged);
+        configLayout->addWidget(volumeSlider, row, 1);
+
+        row++;
+
         configLayout->addWidget(new QLabel(tr("Microphone: "), soundConfigGroupBox), row, 0);
 
         m_microphoneComboBox = new QComboBox(soundConfigGroupBox);
@@ -118,11 +135,6 @@ MainWindow::MainWindow(QWidget *parent) : QWidget(parent)
     }
 
     configOuterLayout->addStretch();
-
-    m_viewer = new Viewer(this);
-    m_viewer->setMinimumSize(854, 480);
-    connect(m_viewer, &Viewer::requestExitFullScreen, this, &MainWindow::exitFullScreen);
-    m_splitter->addWidget(m_viewer);
 
     m_gamepadHandler = new GamepadHandler();
     m_gamepadHandlerThread = new QThread(this);
@@ -158,11 +170,11 @@ MainWindow::~MainWindow()
     delete m_gamepadHandler;
     delete m_gamepadHandlerThread;
 
-    delete m_viewer;
-
     SDL_Quit();
 
     setConnectedState(false);
+
+    delete m_viewer;
 }
 
 int isWireless(const char* ifname, char* protocol)
@@ -257,6 +269,7 @@ void MainWindow::setConnectedState(bool on)
         connect(m_backend, &Backend::videoAvailable, m_videoDecoder, &VideoDecoder::sendPacket);
         connect(m_videoDecoder, &VideoDecoder::frameReady, m_viewer, &Viewer::setImage);
         connect(m_backend, &Backend::audioAvailable, m_audioHandler, &AudioHandler::write);
+        connect(m_backend, &Backend::vibrate, m_gamepadHandler, &GamepadHandler::vibrate, Qt::DirectConnection);
 
         m_backend->moveToThread(m_backendThread);
         m_videoDecoder->moveToThread(m_videoDecoderThread);
@@ -286,6 +299,8 @@ void MainWindow::setConnectedState(bool on)
             m_backendThread->deleteLater();
             m_videoDecoderThread->deleteLater();
         }
+
+        m_viewer->setImage(QImage());
     }
 }
 
@@ -308,4 +323,11 @@ void MainWindow::setFullScreen()
 void MainWindow::exitFullScreen()
 {
     m_splitter->addWidget(m_viewer);
+}
+
+void MainWindow::volumeChanged(int v)
+{
+    qreal vol = v * 0.01;
+    vol = QtAudio::convertVolume(vol, QtAudio::LinearVolumeScale, QtAudio::LogarithmicVolumeScale);
+    QMetaObject::invokeMethod(m_audioHandler, &AudioHandler::setVolume, vol);
 }

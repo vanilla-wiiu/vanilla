@@ -1,5 +1,6 @@
 #include "gamepadhandler.h"
 
+#include <QDateTime>
 #include <vanilla.h>
 
 static int g_buttonMap[SDL_CONTROLLER_BUTTON_MAX] = {0};
@@ -10,6 +11,7 @@ GamepadHandler::GamepadHandler(QObject *parent) : QObject(parent)
     m_closed = false;
     m_controller = nullptr;
     m_nextGamepad = -1;
+    m_rumbleEnd = 0;
 
     g_buttonMap[SDL_CONTROLLER_BUTTON_A] = VANILLA_BTN_A;
     g_buttonMap[SDL_CONTROLLER_BUTTON_B] = VANILLA_BTN_B;
@@ -35,12 +37,16 @@ GamepadHandler::GamepadHandler(QObject *parent) : QObject(parent)
 
 void GamepadHandler::close()
 {
+    m_mutex.lock();
     m_closed = true;
+    m_mutex.unlock();
 }
 
 void GamepadHandler::setController(int index)
 {
+    m_mutex.lock();
     m_nextGamepad = index;
+    m_mutex.unlock();
 }
 
 float transformAxisValue(int16_t val)
@@ -54,7 +60,9 @@ float transformAxisValue(int16_t val)
 
 void GamepadHandler::run()
 {
-    while (!m_closed) {
+    m_mutex.lock();
+
+    while (!m_closed) {// See status of rumble
         if (m_nextGamepad != -1) {
             if (m_controller) {
                 SDL_GameControllerClose(m_controller);
@@ -62,6 +70,13 @@ void GamepadHandler::run()
             m_controller = SDL_GameControllerOpen(m_nextGamepad);
             m_nextGamepad = -1;
         }
+    
+        qint64 now = QDateTime::currentMSecsSinceEpoch();
+        if (m_rumbleEnd > now && m_controller) {
+            SDL_GameControllerRumble(m_controller, 0xFFFF, 0xFFFF, m_rumbleEnd - now);
+        }
+
+        m_mutex.unlock();
 
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
@@ -103,5 +118,19 @@ void GamepadHandler::run()
                 break;
             }
         }
+
+
+        m_mutex.lock();
     }
+
+    m_mutex.unlock();
+}
+
+void GamepadHandler::vibrate(qint64 duration)
+{
+    qint64 rumbleEnd = QDateTime::currentMSecsSinceEpoch() + duration;
+
+    m_mutex.lock();
+    m_rumbleEnd = rumbleEnd;
+    m_mutex.unlock();
 }

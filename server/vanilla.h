@@ -45,7 +45,8 @@ enum VanillaGamepadAxes {
 enum VanillaEvent
 {
     VANILLA_EVENT_VIDEO,
-    VANILLA_EVENT_AUDIO
+    VANILLA_EVENT_AUDIO,
+    VANILLA_EVENT_VIBRATE
 };
 
 /**

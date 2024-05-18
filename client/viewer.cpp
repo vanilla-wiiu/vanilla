@@ -15,11 +15,12 @@ void Viewer::setImage(const QImage &image)
 
 void Viewer::paintGL()
 {
+    QPainter p(this);
+    
     if (m_image.isNull()) {
+        p.fillRect(this->rect(), Qt::black);
         return;
     }
-
-    QPainter p(this);
 
     p.setRenderHint(QPainter::SmoothPixmapTransform);
 

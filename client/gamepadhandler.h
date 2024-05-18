@@ -1,6 +1,7 @@
 #ifndef GAMEPAD_HANDLER_H
 #define GAMEPAD_HANDLER_H
 
+#include <QMutex>
 #include <QObject>
 #include <SDL2/SDL.h>
 
@@ -20,9 +21,14 @@ signals:
 public slots:
     void run();
 
+    void vibrate(qint64 duration);
+
 private:
-    QAtomicInt m_closed;
-    QAtomicInt m_nextGamepad;
+    QMutex m_mutex;
+
+    bool m_closed;
+    int m_nextGamepad;
+    qint64 m_rumbleEnd;
 
     SDL_GameController *m_controller;
 

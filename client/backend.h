@@ -9,13 +9,12 @@ class Backend : public QObject
 public:
     Backend(QObject *parent = nullptr);
 
-    void handleEvent(int type, const char *data, size_t dataLength);
-
     void interrupt();
 
 signals:
     void videoAvailable(const QByteArray &packet);
     void audioAvailable(const QByteArray &packet);
+    void vibrate(qint64 duration);
     void errorOccurred();
 
 public slots:
