@@ -271,6 +271,7 @@ void MainWindow::setConnectedState(bool on)
         connect(m_videoDecoder, &VideoDecoder::frameReady, m_viewer, &Viewer::setImage);
         connect(m_backend, &Backend::audioAvailable, m_audioHandler, &AudioHandler::write);
         connect(m_backend, &Backend::vibrate, m_gamepadHandler, &GamepadHandler::vibrate, Qt::DirectConnection);
+        connect(m_viewer, &Viewer::touch, m_backend, &Backend::updateTouch, Qt::DirectConnection);
 
         m_backend->moveToThread(m_backendThread);
         m_videoDecoder->moveToThread(m_videoDecoderThread);

@@ -10,6 +10,10 @@
 #include "vanilla.h"
 #include "util.h"
 
+#define MIN(a,b) (((a)<(b))?(a):(b))
+#define MAX(a,b) (((a)>(b))?(a):(b))
+#define CLAMP(x, min, max) (MIN(MAX(x, min), max))
+
 #pragma pack(push, 1)
 
 typedef struct {
@@ -31,15 +35,20 @@ typedef struct {
 } InputPacketMagnetWiiU;
 
 typedef struct {
+    unsigned pad : 1;
+    unsigned extra : 3;
+    unsigned value : 12;
+} TouchCoord;
+
+typedef struct {
+    TouchCoord x;
+    TouchCoord y;
+} TouchPoint;
+
+typedef struct {
     // Big endian
-    struct {
-        struct {
-            unsigned pad : 1;
-            unsigned extra : 3;
-            unsigned value : 12;
-        } coords[2];
-    } points[10];
-} InputPacketTouchscreenWiiU;
+    TouchPoint points[10];
+} TouchScreenState;
 
 pthread_mutex_t button_mtx;
 uint16_t current_buttons = 0;
@@ -48,6 +57,8 @@ float current_stick_left_x = 0;
 float current_stick_left_y = 0;
 float current_stick_right_x = 0;
 float current_stick_right_y = 0;
+int current_touch_x = -1;
+int current_touch_y = -1;
 
 typedef struct {
     // Big endian
@@ -63,7 +74,7 @@ typedef struct {
     InputPacketAccelerometerWiiU accelerometer;
     InputPacketGyroscopeWiiU gyroscope;
     InputPacketMagnetWiiU magnet;
-    InputPacketTouchscreenWiiU touchscreen; // byte 36 - 76
+    TouchScreenState touchscreen; // byte 36 - 76
     unsigned char unknown_0[4];
     uint8_t extra_buttons;
     unsigned char unknown_1[46];
@@ -173,9 +184,50 @@ void set_axis_state(int axis_id, float value)
     pthread_mutex_unlock(&button_mtx);
 }
 
+void set_touch_state(int x, int y)
+{
+    pthread_mutex_lock(&button_mtx);
+    current_touch_x = x;
+    current_touch_y = y;
+    pthread_mutex_unlock(&button_mtx);
+}
+
 uint16_t transform_axis_value(float real)
 {
     return ((int) (real * 1024)) + 2048;
+}
+
+int64_t scale_x_touch_value(uint16_t val)
+{
+    int64_t v = val;
+
+    // Scales 0-854 to 0-4096 with a 2.5% margin on each side
+    const int scale_percent = 95;
+
+    v *= 4096;
+    v *= scale_percent;
+    v /= 854;
+    v /= 100;
+    v += (4096 * (100 - scale_percent) / 200);
+
+    return v;
+}
+
+int64_t scale_y_touch_value(uint16_t val)
+{
+    int64_t v = val;
+
+    // Scales 0-854 to 0-4096 with a 5% margin on the bottom and 3% margin on the top (I don't know why, but these values worked best)
+    const int scale_percent = 92;
+
+    v *= 4096;
+    v *= scale_percent;
+    v /= 480;
+    v /= 100;
+    v += (4096 * (100 - 90) / 200);
+    v = 4096 - v;
+
+    return v;
 }
 
 void send_input(int socket_hid)
@@ -186,6 +238,25 @@ void send_input(int socket_hid)
     static uint16_t seq_id = 0;
 
     pthread_mutex_lock(&button_mtx);
+
+    if (current_touch_x >= 0 && current_touch_y >= 0) {
+        for (int i = 0; i < 10; i++) {
+            ip.touchscreen.points[i].x.pad = 1;
+            ip.touchscreen.points[i].y.pad = 1;
+            ip.touchscreen.points[i].x.value = reverse_bits(scale_x_touch_value(current_touch_x), 12);
+            ip.touchscreen.points[i].y.value = reverse_bits(scale_y_touch_value(current_touch_y), 12);
+        }
+        ip.touchscreen.points[0].x.extra = 0;
+        ip.touchscreen.points[0].y.extra = reverse_bits(2, 3);
+        ip.touchscreen.points[1].x.extra = reverse_bits(7, 3);
+        ip.touchscreen.points[1].y.extra = reverse_bits(3, 3);
+        for (int byte = 0; byte < sizeof(ip.touchscreen); byte += 2) {
+            unsigned char *touchscreen_bytes = (unsigned char *) (&ip.touchscreen);
+            unsigned char first = (unsigned char) reverse_bits(touchscreen_bytes[byte], 8);
+            touchscreen_bytes[byte] = (unsigned char) reverse_bits(touchscreen_bytes[byte + 1], 8);
+            touchscreen_bytes[byte + 1] = first;
+        }
+    }
 
     ip.buttons = htons(current_buttons);
     ip.extra_buttons = current_extra_buttons;

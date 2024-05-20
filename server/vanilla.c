@@ -5,6 +5,7 @@
 #include <wpa_ctrl.h>
 
 #include "gamepad/gamepad.h"
+#include "gamepad/input.h"
 #include "status.h"
 #include "sync.h"
 #include "util.h"
@@ -128,4 +129,9 @@ void vanilla_set_button(int button_id, int pressed)
 void vanilla_set_axis(int axis_id, float value)
 {
     set_axis_state(axis_id, value);
+}
+
+void vanilla_set_touch(int x, int y)
+{
+    set_touch_state(x, y);
 }

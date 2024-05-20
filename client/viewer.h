@@ -14,12 +14,20 @@ public slots:
 
 signals:
     void requestExitFullScreen();
+    void touch(int x, int y);
 
 protected:
     virtual void paintGL() override;
     virtual void keyPressEvent(QKeyEvent *key) override;
+    virtual void mousePressEvent(QMouseEvent *ev) override;
+    virtual void mouseMoveEvent(QMouseEvent *ev) override;
+    virtual void mouseReleaseEvent(QMouseEvent *ev) override;
 
 private:
+    QTransform generateTransform();
+
+    void emitTouchSignal(const QPointF &position);
+
     QImage m_image;
 
 };

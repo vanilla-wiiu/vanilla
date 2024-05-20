@@ -81,6 +81,14 @@ void vanilla_set_button(int button_id, int pressed);
  */
 void vanilla_set_axis(int axis_id, float value);
 
+/**
+ * Set touch screen coordinates to `x` and `y`
+ * 
+ * `x` and `y` are expected to be in gamepad screen coordinates (0x0 to 853x479).
+ * If either `x` or `y` are -1, this point will be disabled.
+ */
+void vanilla_set_touch(int x, int y);
+
 #if defined(__cplusplus)
 }
 #endif
