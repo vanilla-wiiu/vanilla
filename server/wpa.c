@@ -45,12 +45,14 @@ int start_wpa_supplicant(const char *wireless_interface, const char *config_file
     //     return VANILLA_ERROR;
     // }
     // TODO: This is Linux only and will require changes on other platforms
-    if (readlink("/proc/self/exe", path_buf, path_size) < 0) {
+    ssize_t link_len = readlink("/proc/self/exe", path_buf, path_size);
+    if (link_len < 0) {
         print_info("READLINK ERROR: %i", errno);
         return VANILLA_ERROR;
     }
 
     // Merge current working directory with wpa_supplicant name
+    path_buf[link_len] = 0;
     dirname(path_buf);
     snprintf(wpa_buf, path_size, "%s/%s", path_buf, "wpa_supplicant_drc");
     print_info(wpa_buf);
