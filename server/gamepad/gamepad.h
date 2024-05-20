@@ -28,5 +28,6 @@ void set_button_state(int button_id, int pressed);
 void set_axis_state(int axis_id, float value);
 unsigned int reverse_bits(unsigned int b, int bit_count);
 void send_to_console(int fd, const void *data, size_t data_size, int port);
+int is_stop_code(const char *data, size_t data_length);
 
 #endif // VANILLA_GAMEPAD_H

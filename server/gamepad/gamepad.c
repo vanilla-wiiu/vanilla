@@ -19,6 +19,8 @@
 #include "util.h"
 #include "wpa.h"
 
+static const uint32_t STOP_CODE = 0xCAFEBABE;
+
 unsigned int reverse_bits(unsigned int b, int bit_count)
 {
     unsigned int result = 0;
@@ -86,15 +88,16 @@ int main_loop(vanilla_event_handler_t event_handler, void *context)
     while (1) {
         usleep(250 * 1000);
         if (is_interrupted()) {
+            // Wake up any threads that might be blocked on `recv`
             struct sockaddr_in address;
             address.sin_family = AF_INET;
             address.sin_addr.s_addr = inet_addr("127.0.0.1");
+
             address.sin_port = htons(PORT_VID);
-            uint32_t stop_code = 0xCAFEBABE;
-            sendto(STDIN_FILENO, &stop_code, sizeof(stop_code), 0, (struct sockaddr *) &address, sizeof(address));
+            sendto(info.socket_msg, &STOP_CODE, sizeof(STOP_CODE), 0, (struct sockaddr *) &address, sizeof(address));
 
             address.sin_port = htons(PORT_AUD);
-            sendto(STDIN_FILENO, &stop_code, sizeof(stop_code), 0, (struct sockaddr *) &address, sizeof(address));
+            sendto(info.socket_msg, &STOP_CODE, sizeof(STOP_CODE), 0, (struct sockaddr *) &address, sizeof(address));
             break;
         }
     }
@@ -176,4 +179,9 @@ int connect_as_gamepad_internal(struct wpa_ctrl *ctrl, const char *wireless_inte
     // Set region
 
     return main_loop(event_handler, context);
+}
+
+int is_stop_code(const char *data, size_t data_length)
+{
+    return (data_length == sizeof(STOP_CODE) && !memcmp(data, &STOP_CODE, sizeof(STOP_CODE)));
 }

@@ -158,7 +158,7 @@ void *listen_video(void *x)
     do {
         size = recv(info->socket_vid, data, sizeof(data), 0);
         if (size > 0) {
-            if (size == 4 && *(uint32_t *)data == 0xCAFEBABE) break;
+            if (is_stop_code(data, size)) break;
             handle_video_packet(info->event_handler, info->context, data, size, info->socket_msg);
         }
     } while (!is_interrupted());
