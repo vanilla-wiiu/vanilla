@@ -131,6 +131,7 @@ MainWindow::MainWindow(QWidget *parent) : QWidget(parent)
         row++;
 
         QPushButton *controllerMappingButton = new QPushButton(tr("Configure"), m_controllerComboBox);
+        controllerMappingButton->setEnabled(false); // TODO: Implement
         configLayout->addWidget(controllerMappingButton, row, 0, 1, 2);
     }
 
