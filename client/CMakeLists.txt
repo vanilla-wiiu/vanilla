@@ -34,3 +34,5 @@ target_link_libraries(vanilla-gui PRIVATE
 target_include_directories(vanilla-gui PRIVATE
     "${CMAKE_SOURCE_DIR}/server"
 )
+
+install(TARGETS vanilla-gui)
