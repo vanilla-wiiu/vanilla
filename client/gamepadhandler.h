@@ -21,14 +21,14 @@ signals:
 public slots:
     void run();
 
-    void vibrate(qint64 duration);
+    void vibrate(bool on);
 
 private:
     QMutex m_mutex;
 
     bool m_closed;
     int m_nextGamepad;
-    qint64 m_rumbleEnd;
+    bool m_vibrate;
 
     SDL_GameController *m_controller;
 

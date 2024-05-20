@@ -14,11 +14,12 @@ public:
 signals:
     void videoAvailable(const QByteArray &packet);
     void audioAvailable(const QByteArray &packet);
-    void vibrate(qint64 duration);
+    void vibrate(bool on);
     void errorOccurred();
 
 public slots:
     void connectToConsole(const QString &wirelessInterface);
+    void updateTouch(int x, int y);
 
 };
 

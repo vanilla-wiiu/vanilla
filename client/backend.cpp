@@ -14,14 +14,8 @@ void vanillaEventHandler(void *context, int type, const char *data, size_t dataL
         emit backend->audioAvailable(QByteArray(data, dataLength));
         break;
     case VANILLA_EVENT_VIBRATE:
-    {
-        // Convert audio byte length into time
-        //qint64 f = dataLength * 1000 / (48000 * (16 / 8) * 2);
-        //printf("rumbling for %lu bytes or %li ms\n", dataLength, f);
-        // TODO: Not sure what the correct amount of time to vibrate for is, will need to do more research
-        emit backend->vibrate(1000);
+        emit backend->vibrate(data != nullptr);
         break;
-    }
     }
 }
 
@@ -39,4 +33,9 @@ void Backend::connectToConsole(const QString &wirelessInterface)
 {
     QByteArray wirelessInterfaceC = wirelessInterface.toUtf8();
     vanilla_connect_to_console(wirelessInterfaceC.constData(), vanillaEventHandler, this);
+}
+
+void Backend::updateTouch(int x, int y)
+{
+    vanilla_set_touch(x, y);
 }

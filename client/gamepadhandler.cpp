@@ -11,7 +11,7 @@ GamepadHandler::GamepadHandler(QObject *parent) : QObject(parent)
     m_closed = false;
     m_controller = nullptr;
     m_nextGamepad = -1;
-    m_rumbleEnd = 0;
+    m_vibrate = false;
 
     g_buttonMap[SDL_CONTROLLER_BUTTON_A] = VANILLA_BTN_A;
     g_buttonMap[SDL_CONTROLLER_BUTTON_B] = VANILLA_BTN_B;
@@ -71,9 +71,9 @@ void GamepadHandler::run()
             m_nextGamepad = -1;
         }
     
-        qint64 now = QDateTime::currentMSecsSinceEpoch();
-        if (m_rumbleEnd > now && m_controller) {
-            SDL_GameControllerRumble(m_controller, 0xFFFF, 0xFFFF, m_rumbleEnd - now);
+        if (m_controller) {
+            uint16_t amount = m_vibrate ? 0xFFFF : 0;
+            SDL_GameControllerRumble(m_controller, amount, amount, 0);
         }
 
         m_mutex.unlock();
@@ -119,18 +119,15 @@ void GamepadHandler::run()
             }
         }
 
-
         m_mutex.lock();
     }
 
     m_mutex.unlock();
 }
 
-void GamepadHandler::vibrate(qint64 duration)
+void GamepadHandler::vibrate(bool on)
 {
-    qint64 rumbleEnd = QDateTime::currentMSecsSinceEpoch() + duration;
-
     m_mutex.lock();
-    m_rumbleEnd = rumbleEnd;
+    m_vibrate = on;
     m_mutex.unlock();
 }
