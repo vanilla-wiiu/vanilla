@@ -45,6 +45,7 @@ int start_wpa_supplicant(const char *wireless_interface, const char *config_file
 
     // Merge current working directory with wpa_supplicant name
     snprintf(wpa_buf, path_size, "%s/%s", path_buf, "wpa_supplicant_drc");
+    print_info(wpa_buf);
     free(path_buf);
 
     const char *argv[] = {wpa_buf, "-Dnl80211", "-i", wireless_interface, "-c", config_file, NULL};
@@ -68,6 +69,8 @@ int start_wpa_supplicant(const char *wireless_interface, const char *config_file
         do {
             nbytes = read(pipe, buf + total_nbytes, expected_len - total_nbytes);
             total_nbytes += nbytes;
+            sleep(1);
+            if (is_interrupted()) goto give_up;
         } while (total_nbytes < expected_len);
 
         attempts++;
@@ -80,6 +83,7 @@ int start_wpa_supplicant(const char *wireless_interface, const char *config_file
 
         // Haven't gotten success message (yet), wait and try again
         sleep(1);
+        if (is_interrupted()) goto give_up;
     } while (attempts < max_attempts);
 
     // I'm not sure why, but closing this pipe breaks wpa_supplicant in subtle ways, so just leave it.
@@ -90,6 +94,7 @@ int start_wpa_supplicant(const char *wireless_interface, const char *config_file
         return VANILLA_SUCCESS;
     } else {
         // Give up
+give_up:
         kill((*pid), SIGINT);
         return VANILLA_ERROR;
     }
