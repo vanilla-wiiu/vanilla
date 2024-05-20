@@ -1,5 +1,7 @@
 #include "wpa.h"
 
+#include <errno.h>
+#include <libgen.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -39,11 +41,17 @@ int start_wpa_supplicant(const char *wireless_interface, const char *config_file
     }
 
     // Get current working directory
-    if (!getcwd(path_buf, path_size)) {
+    // if (!getcwd(path_buf, path_size)) {
+    //     return VANILLA_ERROR;
+    // }
+    // TODO: This is Linux only and will require changes on other platforms
+    if (readlink("/proc/self/exe", path_buf, path_size) < 0) {
+        print_info("READLINK ERROR: %i", errno);
         return VANILLA_ERROR;
     }
 
     // Merge current working directory with wpa_supplicant name
+    dirname(path_buf);
     snprintf(wpa_buf, path_size, "%s/%s", path_buf, "wpa_supplicant_drc");
     print_info(wpa_buf);
     free(path_buf);
