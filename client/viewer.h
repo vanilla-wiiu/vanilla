@@ -15,10 +15,13 @@ public slots:
 signals:
     void requestExitFullScreen();
     void touch(int x, int y);
+    void keyPressed(Qt::Key key);
+    void keyReleased(Qt::Key key);
 
 protected:
     virtual void paintGL() override;
     virtual void keyPressEvent(QKeyEvent *key) override;
+    virtual void keyReleaseEvent(QKeyEvent *key) override;
     virtual void mousePressEvent(QMouseEvent *ev) override;
     virtual void mouseMoveEvent(QMouseEvent *ev) override;
     virtual void mouseReleaseEvent(QMouseEvent *ev) override;

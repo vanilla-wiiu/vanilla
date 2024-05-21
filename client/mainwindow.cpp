@@ -23,6 +23,8 @@
 #include <linux/wireless.h>
 #include <vanilla.h>
 
+#include "inputconfigdialog.h"
+#include "keymap.h"
 #include "syncdialog.h"
 
 MainWindow::MainWindow(QWidget *parent) : QWidget(parent)
@@ -130,9 +132,9 @@ MainWindow::MainWindow(QWidget *parent) : QWidget(parent)
 
         row++;
 
-        QPushButton *controllerMappingButton = new QPushButton(tr("Configure"), m_controllerComboBox);
-        controllerMappingButton->setEnabled(false); // TODO: Implement
-        configLayout->addWidget(controllerMappingButton, row, 0, 1, 2);
+        m_controllerMappingButton = new QPushButton(tr("Configure"), m_controllerComboBox);
+        connect(m_controllerMappingButton, &QPushButton::clicked, this, &MainWindow::showInputConfigDialog);
+        configLayout->addWidget(m_controllerMappingButton, row, 0, 1, 2);
     }
 
     configOuterLayout->addStretch();
@@ -150,9 +152,14 @@ MainWindow::MainWindow(QWidget *parent) : QWidget(parent)
     m_audioHandlerThread->start();
     QMetaObject::invokeMethod(m_audioHandler, &AudioHandler::run, Qt::QueuedConnection);
 
+    connect(m_viewer, &Viewer::keyPressed, m_gamepadHandler, &GamepadHandler::keyPressed, Qt::DirectConnection);
+    connect(m_viewer, &Viewer::keyReleased, m_gamepadHandler, &GamepadHandler::keyReleased, Qt::DirectConnection);
+
     populateWirelessInterfaces();
     populateMicrophones();
     populateControllers();
+
+    KeyMap::instance.load(KeyMap::getConfigFilename());
 
     setWindowTitle(tr("Vanilla"));
 }
@@ -308,11 +315,7 @@ void MainWindow::setConnectedState(bool on)
 
 void MainWindow::setJoystick(int index)
 {
-    if (index == 0) {
-        // Keyboard
-        return;
-    }
-
+    m_controllerMappingButton->setEnabled(index == 0); // Currently we only allow configuring keyboard controls
     m_gamepadHandler->setController(index - 1);
 }
 
@@ -332,4 +335,10 @@ void MainWindow::volumeChanged(int v)
     qreal vol = v * 0.01;
     vol = QtAudio::convertVolume(vol, QtAudio::LinearVolumeScale, QtAudio::LogarithmicVolumeScale);
     QMetaObject::invokeMethod(m_audioHandler, &AudioHandler::setVolume, vol);
+}
+
+void MainWindow::showInputConfigDialog()
+{
+    InputConfigDialog *d = new InputConfigDialog(this);
+    d->open();
 }

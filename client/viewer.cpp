@@ -5,6 +5,7 @@
 
 Viewer::Viewer(QWidget *parent) : QOpenGLWidget(parent)
 {
+    setFocusPolicy(Qt::StrongFocus);
 }
 
 void Viewer::setImage(const QImage &image)
@@ -35,6 +36,17 @@ void Viewer::keyPressEvent(QKeyEvent *key)
 
     if (key->key() == Qt::Key_Escape) {
         emit requestExitFullScreen();
+    } else {
+        emit keyPressed(static_cast<Qt::Key>(key->key()));
+    }
+}
+
+void Viewer::keyReleaseEvent(QKeyEvent *key)
+{
+    QOpenGLWidget::keyPressEvent(key);
+
+    if (key->key() != Qt::Key_Escape) {
+        emit keyReleased(static_cast<Qt::Key>(key->key()));
     }
 }
 

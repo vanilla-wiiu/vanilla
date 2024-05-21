@@ -3,6 +3,7 @@
 #include <arpa/inet.h>
 #include <pthread.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
@@ -51,12 +52,7 @@ typedef struct {
 } TouchScreenState;
 
 pthread_mutex_t button_mtx;
-uint16_t current_buttons = 0;
-uint8_t current_extra_buttons = 0;
-float current_stick_left_x = 0;
-float current_stick_left_y = 0;
-float current_stick_right_x = 0;
-float current_stick_right_y = 0;
+int16_t current_buttons[VANILLA_BTN_COUNT] = {0};
 int current_touch_x = -1;
 int current_touch_y = -1;
 
@@ -83,104 +79,10 @@ typedef struct {
 
 #pragma pack(pop)
 
-void set_button_state_bit(uint16_t bit_flag, int pressed)
+void set_button_state(int button, int16_t value)
 {
     pthread_mutex_lock(&button_mtx);
-    if (pressed) {
-        current_buttons |= bit_flag;
-    } else {
-        current_buttons &= ~bit_flag;
-    }
-    pthread_mutex_unlock(&button_mtx);
-}
-
-void set_extra_button_state_bit(uint8_t bit_flag, int pressed)
-{
-    pthread_mutex_lock(&button_mtx);
-    if (pressed) {
-        current_extra_buttons |= bit_flag;
-    } else {
-        current_extra_buttons &= ~bit_flag;
-    }
-    pthread_mutex_unlock(&button_mtx);
-}
-
-void set_button_state(int button_id, int pressed)
-{
-    switch (button_id) {
-    case VANILLA_BTN_A:
-        set_button_state_bit(0x8000, pressed);
-        break;
-    case VANILLA_BTN_B:
-        set_button_state_bit(0x4000, pressed);
-        break;
-    case VANILLA_BTN_X:
-        set_button_state_bit(0x2000, pressed);
-        break;
-    case VANILLA_BTN_Y:
-        set_button_state_bit(0x1000, pressed);
-        break;
-    case VANILLA_BTN_L:
-        set_button_state_bit(0x0020, pressed);
-        break;
-    case VANILLA_BTN_R:
-        set_button_state_bit(0x0010, pressed);
-        break;
-    case VANILLA_BTN_ZL:
-        set_button_state_bit(0x0080, pressed);
-        break;
-    case VANILLA_BTN_ZR:
-        set_button_state_bit(0x0040, pressed);
-        break;
-    case VANILLA_BTN_MINUS:
-        set_button_state_bit(0x0004, pressed);
-        break;
-    case VANILLA_BTN_PLUS:
-        set_button_state_bit(0x0008, pressed);
-        break;
-    case VANILLA_BTN_HOME:
-        set_button_state_bit(0x0002, pressed);
-        break;
-    case VANILLA_BTN_LEFT:
-        set_button_state_bit(0x800, pressed);
-        break;
-    case VANILLA_BTN_RIGHT:
-        set_button_state_bit(0x400, pressed);
-        break;
-    case VANILLA_BTN_DOWN:
-        set_button_state_bit(0x100, pressed);
-        break;
-    case VANILLA_BTN_UP:
-        set_button_state_bit(0x200, pressed);
-        break;
-
-    // "Extra" buttons
-    case VANILLA_BTN_L3:
-        set_extra_button_state_bit(0x80, pressed);
-        break;
-    case VANILLA_BTN_R3:
-        set_extra_button_state_bit(0x40, pressed);
-        break;
-    }
-}
-
-void set_axis_state(int axis_id, float value)
-{
-    pthread_mutex_lock(&button_mtx);
-    switch (axis_id) {
-    case VANILLA_AXIS_L_X:
-        current_stick_left_x = value;
-        break;
-    case VANILLA_AXIS_L_Y:
-        current_stick_left_y = value;
-        break;
-    case VANILLA_AXIS_R_X:
-        current_stick_right_x = value;
-        break;
-    case VANILLA_AXIS_R_Y:
-        current_stick_right_y = value;
-        break;
-    }
+    current_buttons[button] = value;
     pthread_mutex_unlock(&button_mtx);
 }
 
@@ -192,9 +94,24 @@ void set_touch_state(int x, int y)
     pthread_mutex_unlock(&button_mtx);
 }
 
-uint16_t transform_axis_value(float real)
+uint16_t resolve_axis_value(float axis, float neg, float pos, int flip)
 {
-    return ((int) (real * 1024)) + 2048;
+    float val = axis < 0 ? axis / 32768.0f : axis / 32767.0f;
+
+    neg = abs(neg);
+    pos = abs(pos);
+
+    neg /= 32767.0f;
+    pos /= 32767.0f;
+
+    val -= neg;
+    val += pos;
+
+    if (flip) {
+        val = -val;
+    }
+    
+    return ((int) (val * 1024)) + 2048;
 }
 
 int64_t scale_x_touch_value(uint16_t val)
@@ -258,13 +175,37 @@ void send_input(int socket_hid)
         }
     }
 
-    ip.buttons = htons(current_buttons);
-    ip.extra_buttons = current_extra_buttons;
+    uint16_t button_mask = 0;
 
-    ip.stick_left_x = transform_axis_value(current_stick_left_x);
-    ip.stick_left_y = transform_axis_value(-current_stick_left_y);
-    ip.stick_right_x = transform_axis_value(current_stick_right_x);
-    ip.stick_right_y = transform_axis_value(-current_stick_right_y);
+    if (current_buttons[VANILLA_BTN_A]) button_mask |= 0x8000;
+    if (current_buttons[VANILLA_BTN_B]) button_mask |= 0x4000;
+    if (current_buttons[VANILLA_BTN_X]) button_mask |= 0x2000;
+    if (current_buttons[VANILLA_BTN_Y]) button_mask |= 0x1000;
+    if (current_buttons[VANILLA_BTN_L]) button_mask |= 0x0020;
+    if (current_buttons[VANILLA_BTN_R]) button_mask |= 0x0010;
+    if (current_buttons[VANILLA_BTN_ZL]) button_mask |= 0x0080;
+    if (current_buttons[VANILLA_BTN_ZR]) button_mask |= 0x0040;
+    if (current_buttons[VANILLA_BTN_MINUS]) button_mask |= 0x0004;
+    if (current_buttons[VANILLA_BTN_PLUS]) button_mask |= 0x0008;
+    if (current_buttons[VANILLA_BTN_HOME]) button_mask |= 0x0002;
+    if (current_buttons[VANILLA_BTN_LEFT]) button_mask |= 0x800;
+    if (current_buttons[VANILLA_BTN_RIGHT]) button_mask |= 0x400;
+    if (current_buttons[VANILLA_BTN_DOWN]) button_mask |= 0x100;
+    if (current_buttons[VANILLA_BTN_UP]) button_mask |= 0x200;
+
+    ip.buttons = htons(button_mask);
+
+    button_mask = 0;
+    
+    if (current_buttons[VANILLA_BTN_L3]) button_mask |= 0x80;
+    if (current_buttons[VANILLA_BTN_R3]) button_mask |= 0x40;
+
+    ip.extra_buttons = button_mask;
+
+    ip.stick_left_x = resolve_axis_value(current_buttons[VANILLA_AXIS_L_X], current_buttons[VANILLA_AXIS_L_LEFT], current_buttons[VANILLA_AXIS_L_RIGHT], 0);
+    ip.stick_left_y = resolve_axis_value(current_buttons[VANILLA_AXIS_L_Y], current_buttons[VANILLA_AXIS_L_UP], current_buttons[VANILLA_AXIS_L_DOWN], 1);
+    ip.stick_right_x = resolve_axis_value(current_buttons[VANILLA_AXIS_R_X], current_buttons[VANILLA_AXIS_R_LEFT], current_buttons[VANILLA_AXIS_R_RIGHT], 0);
+    ip.stick_right_y = resolve_axis_value(current_buttons[VANILLA_AXIS_R_Y], current_buttons[VANILLA_AXIS_R_UP], current_buttons[VANILLA_AXIS_R_DOWN], 1);
 
     pthread_mutex_unlock(&button_mtx);
 

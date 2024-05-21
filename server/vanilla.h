@@ -16,7 +16,7 @@ extern "C" {
 #define VANILLA_INVALID_ARGUMENT    -5
 
 enum VanillaGamepadButtons {
-    VANILLA_BTN_A = 1,
+    VANILLA_BTN_A,
     VANILLA_BTN_B,
     VANILLA_BTN_X,
     VANILLA_BTN_Y,
@@ -32,14 +32,20 @@ enum VanillaGamepadButtons {
     VANILLA_BTN_LEFT,
     VANILLA_BTN_RIGHT,
     VANILLA_BTN_DOWN,
-    VANILLA_BTN_UP
-};
-
-enum VanillaGamepadAxes {
-    VANILLA_AXIS_L_X = 1,
+    VANILLA_BTN_UP,
+    VANILLA_AXIS_L_X,
     VANILLA_AXIS_L_Y,
     VANILLA_AXIS_R_X,
-    VANILLA_AXIS_R_Y
+    VANILLA_AXIS_R_Y,
+    VANILLA_AXIS_L_LEFT,
+    VANILLA_AXIS_L_UP,
+    VANILLA_AXIS_L_RIGHT,
+    VANILLA_AXIS_L_DOWN,
+    VANILLA_AXIS_R_LEFT,
+    VANILLA_AXIS_R_UP,
+    VANILLA_AXIS_R_RIGHT,
+    VANILLA_AXIS_R_DOWN,
+    VANILLA_BTN_COUNT
 };
 
 enum VanillaEvent
@@ -72,14 +78,12 @@ int vanilla_connect_to_console(const char *wireless_interface, vanilla_event_han
 void vanilla_stop();
 
 /**
- * Set digital button state
+ * Set button/axis state
+ * 
+ * For buttons, anything non-zero will be considered a press.
+ * For axes, the range is -32,768 - 32,767.
  */
-void vanilla_set_button(int button_id, int pressed);
-
-/**
- * Set analog axis state
- */
-void vanilla_set_axis(int axis_id, float value);
+void vanilla_set_button(int button, int16_t value);
 
 /**
  * Set touch screen coordinates to `x` and `y`

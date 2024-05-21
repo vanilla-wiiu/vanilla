@@ -50,6 +50,8 @@ private:
     AudioHandler *m_audioHandler;
     QThread *m_audioHandlerThread;
 
+    QPushButton *m_controllerMappingButton;
+
 private slots:
     void showSyncDialog();
 
@@ -61,6 +63,8 @@ private slots:
     void exitFullScreen();
 
     void volumeChanged(int val);
+
+    void showInputConfigDialog();
 
 };
 

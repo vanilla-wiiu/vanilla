@@ -23,6 +23,9 @@ public slots:
 
     void vibrate(bool on);
 
+    void keyPressed(Qt::Key key);
+    void keyReleased(Qt::Key key);
+
 private:
     QMutex m_mutex;
 

@@ -3,14 +3,16 @@
 #include <QDateTime>
 #include <vanilla.h>
 
-static int g_buttonMap[SDL_CONTROLLER_BUTTON_MAX] = {0};
-static int g_axisMap[SDL_CONTROLLER_AXIS_MAX] = {0};
+#include "keymap.h"
+
+static int g_buttonMap[SDL_CONTROLLER_BUTTON_MAX] = {-1};
+static int g_axisMap[SDL_CONTROLLER_AXIS_MAX] = {-1};
 
 GamepadHandler::GamepadHandler(QObject *parent) : QObject(parent)
 {
     m_closed = false;
     m_controller = nullptr;
-    m_nextGamepad = -1;
+    m_nextGamepad = -2;
     m_vibrate = false;
 
     g_buttonMap[SDL_CONTROLLER_BUTTON_A] = VANILLA_BTN_A;
@@ -28,11 +30,12 @@ GamepadHandler::GamepadHandler(QObject *parent) : QObject(parent)
     g_buttonMap[SDL_CONTROLLER_BUTTON_DPAD_DOWN] = VANILLA_BTN_DOWN;
     g_buttonMap[SDL_CONTROLLER_BUTTON_DPAD_LEFT] = VANILLA_BTN_LEFT;
     g_buttonMap[SDL_CONTROLLER_BUTTON_DPAD_RIGHT] = VANILLA_BTN_RIGHT;
-
     g_axisMap[SDL_CONTROLLER_AXIS_LEFTX] = VANILLA_AXIS_L_X;
     g_axisMap[SDL_CONTROLLER_AXIS_LEFTY] = VANILLA_AXIS_L_Y;
     g_axisMap[SDL_CONTROLLER_AXIS_RIGHTX] = VANILLA_AXIS_R_X;
     g_axisMap[SDL_CONTROLLER_AXIS_RIGHTY] = VANILLA_AXIS_R_Y;
+    g_axisMap[SDL_CONTROLLER_AXIS_TRIGGERLEFT] = VANILLA_BTN_ZL;
+    g_axisMap[SDL_CONTROLLER_AXIS_TRIGGERRIGHT] = VANILLA_BTN_ZR;
 }
 
 void GamepadHandler::close()
@@ -49,26 +52,21 @@ void GamepadHandler::setController(int index)
     m_mutex.unlock();
 }
 
-float transformAxisValue(int16_t val)
-{
-    if (val < 0) {
-        return val / 32768.0f;
-    } else {
-        return val / 32767.0f;
-    }
-}
-
 void GamepadHandler::run()
 {
     m_mutex.lock();
 
     while (!m_closed) {// See status of rumble
-        if (m_nextGamepad != -1) {
+        if (m_nextGamepad != -2) {
             if (m_controller) {
                 SDL_GameControllerClose(m_controller);
             }
-            m_controller = SDL_GameControllerOpen(m_nextGamepad);
-            m_nextGamepad = -1;
+            if (m_nextGamepad != -1) {
+                m_controller = SDL_GameControllerOpen(m_nextGamepad);
+            } else {
+                m_controller = nullptr;
+            }
+            m_nextGamepad = -2;
         }
     
         if (m_controller) {
@@ -98,7 +96,7 @@ void GamepadHandler::run()
             case SDL_CONTROLLERBUTTONUP:
                 if (m_controller && event.cdevice.which == SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(m_controller))) {
                     int vanilla_btn = g_buttonMap[event.cbutton.button];
-                    if (vanilla_btn) {
+                    if (vanilla_btn != -1) {
                         vanilla_set_button(vanilla_btn, event.type == SDL_CONTROLLERBUTTONDOWN);
                     }
                 }
@@ -107,12 +105,8 @@ void GamepadHandler::run()
                 if (m_controller && event.cdevice.which == SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(m_controller))) {
                     int vanilla_axis = g_axisMap[event.caxis.axis];
                     Sint16 axis_value = event.caxis.value;
-                    if (vanilla_axis) {
-                        vanilla_set_axis(vanilla_axis, transformAxisValue(axis_value));
-                    } else if (event.caxis.axis == SDL_CONTROLLER_AXIS_TRIGGERLEFT) {
-                        vanilla_set_button(VANILLA_BTN_ZL, axis_value > 0);
-                    } else if (event.caxis.axis == SDL_CONTROLLER_AXIS_TRIGGERRIGHT) {
-                        vanilla_set_button(VANILLA_BTN_ZR, axis_value > 0);
+                    if (vanilla_axis != -1) {
+                        vanilla_set_button(vanilla_axis, axis_value);
                     }
                 }
                 break;
@@ -130,4 +124,24 @@ void GamepadHandler::vibrate(bool on)
     m_mutex.lock();
     m_vibrate = on;
     m_mutex.unlock();
+}
+
+void GamepadHandler::keyPressed(Qt::Key key)
+{
+    if (!m_controller) {
+        auto it = KeyMap::instance.find(key);
+        if (it != KeyMap::instance.end()) {
+            vanilla_set_button(it->second, INT16_MAX);
+        }
+    }
+}
+
+void GamepadHandler::keyReleased(Qt::Key key)
+{
+    if (!m_controller) {
+        auto it = KeyMap::instance.find(key);
+        if (it != KeyMap::instance.end()) {
+            vanilla_set_button(it->second, 0);
+        }
+    }
 }

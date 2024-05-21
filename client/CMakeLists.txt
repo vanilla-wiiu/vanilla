@@ -10,10 +10,13 @@ add_executable(vanilla-gui
     audiohandler.cpp
     backend.cpp
     gamepadhandler.cpp
+    keymap.cpp
+    inputconfigdialog.cpp
     syncdialog.cpp
     syncprogressdialog.cpp
     main.cpp
     mainwindow.cpp
+    resource.qrc
     videodecoder.cpp
     viewer.cpp
 )

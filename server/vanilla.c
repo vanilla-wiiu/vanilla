@@ -121,14 +121,9 @@ void vanilla_stop()
     force_interrupt();
 }
 
-void vanilla_set_button(int button_id, int pressed)
+void vanilla_set_button(int button, int16_t value)
 {
-    set_button_state(button_id, pressed);
-}
-
-void vanilla_set_axis(int axis_id, float value)
-{
-    set_axis_state(axis_id, value);
+    set_button_state(button, value);
 }
 
 void vanilla_set_touch(int x, int y)
