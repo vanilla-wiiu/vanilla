@@ -62,11 +62,15 @@ typedef void (*vanilla_event_handler_t)(void *context, int event_type, const cha
 
 /**
  * Attempt to sync with the console
+ * 
+ * This will block until the task is over or vanilla_stop() is called from another thread.
  */
 int vanilla_sync_with_console(const char *wireless_interface, uint16_t code);  
 
 /**
  * Attempt gameplay connection with console
+ * 
+ * This will block until the task is over or vanilla_stop() is called from another thread.
  */
 int vanilla_connect_to_console(const char *wireless_interface, vanilla_event_handler_t event_handler, void *context);
 
@@ -80,6 +84,8 @@ void vanilla_stop();
 /**
  * Set button/axis state
  * 
+ * This can be called from another thread to change the button state while vanilla_connect_to_console() is running.
+ * 
  * For buttons, anything non-zero will be considered a press.
  * For axes, the range is -32,768 - 32,767.
  */
@@ -87,6 +93,8 @@ void vanilla_set_button(int button, int16_t value);
 
 /**
  * Set touch screen coordinates to `x` and `y`
+ * 
+ * This can be called from another thread to change the button state while vanilla_connect_to_console() is running.
  * 
  * `x` and `y` are expected to be in gamepad screen coordinates (0x0 to 853x479).
  * If either `x` or `y` are -1, this point will be disabled.
