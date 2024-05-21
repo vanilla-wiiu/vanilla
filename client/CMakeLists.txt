@@ -1,6 +1,6 @@
 find_package(Qt6 REQUIRED COMPONENTS Core Widgets Multimedia Concurrent OpenGLWidgets)
 find_package(SDL2 REQUIRED)
-find_package(FFmpeg REQUIRED COMPONENTS avcodec avutil swscale)
+find_package(FFmpeg REQUIRED COMPONENTS avcodec avutil avfilter)
 
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOUIC ON)
@@ -28,7 +28,7 @@ target_link_libraries(vanilla-gui PRIVATE
     vanilla
     FFmpeg::avcodec
     FFmpeg::avutil
-    FFmpeg::swscale
+    FFmpeg::avfilter
 )
 
 target_include_directories(vanilla-gui PRIVATE

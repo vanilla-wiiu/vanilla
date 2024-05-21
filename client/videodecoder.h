@@ -5,7 +5,9 @@
 
 extern "C" {
 #include <libavcodec/avcodec.h>
+#include <libavfilter/avfilter.h>
 #include <libswscale/swscale.h>
+#include <libavutil/opt.h>
 }
 
 class VideoDecoder : public QObject
@@ -25,10 +27,10 @@ private:
     AVCodecContext *m_codecCtx;
     AVPacket *m_packet;
     AVFrame *m_frame;
-    SwsContext *m_swsCtx;
-    int m_swsWidth;
-    int m_swsHeight;
-    AVPixelFormat m_swsFormat;
+    
+    AVFilterGraph *m_filterGraph;
+    AVFilterContext *m_buffersrcCtx;
+    AVFilterContext *m_buffersinkCtx;
 
     QByteArray m_currentPacket;
 
