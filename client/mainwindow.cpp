@@ -113,6 +113,7 @@ MainWindow::MainWindow(QWidget *parent) : QWidget(parent)
         configLayout->addWidget(new QLabel(tr("Microphone: "), soundConfigGroupBox), row, 0);
 
         m_microphoneComboBox = new QComboBox(soundConfigGroupBox);
+        m_microphoneComboBox->setMaximumWidth(120);
         configLayout->addWidget(m_microphoneComboBox, row, 1);
     }
 
