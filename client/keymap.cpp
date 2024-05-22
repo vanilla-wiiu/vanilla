@@ -26,10 +26,12 @@ KeyMap::KeyMap()
     ref[Qt::Key_A] = VANILLA_AXIS_L_LEFT;
     ref[Qt::Key_S] = VANILLA_AXIS_L_DOWN;
     ref[Qt::Key_D] = VANILLA_AXIS_L_RIGHT;
+    ref[Qt::Key_E] = VANILLA_BTN_L3;
     ref[Qt::Key_8] = VANILLA_AXIS_R_UP;
     ref[Qt::Key_4] = VANILLA_AXIS_R_LEFT;
     ref[Qt::Key_2] = VANILLA_AXIS_R_DOWN;
     ref[Qt::Key_6] = VANILLA_AXIS_R_RIGHT;
+    ref[Qt::Key_5] = VANILLA_BTN_R3;
     ref[Qt::Key_T] = VANILLA_BTN_L;
     ref[Qt::Key_G] = VANILLA_BTN_ZL;
     ref[Qt::Key_U] = VANILLA_BTN_R;
