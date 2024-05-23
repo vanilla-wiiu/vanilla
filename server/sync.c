@@ -47,7 +47,7 @@ int create_connect_config(const char *input_config, const char *bssid)
     return VANILLA_SUCCESS;
 }
 
-int sync_with_console_internal(struct wpa_ctrl *ctrl, const char *wireless_interface, uint16_t code)
+int sync_with_console_internal(struct wpa_ctrl *ctrl, uint16_t code)
 {
     char buf[16384];
     const size_t buf_len = sizeof(buf);

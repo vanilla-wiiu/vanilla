@@ -58,7 +58,7 @@ int start_wpa_supplicant(const char *wireless_interface, const char *config_file
     print_info(wpa_buf);
     free(path_buf);
 
-    const char *argv[] = {wpa_buf, "-Dnl80211", "-i", wireless_interface, "-c", config_file, NULL};
+    const char *argv[] = {"pkexec", wpa_buf, "-Dnl80211", "-i", wireless_interface, "-c", config_file, NULL};
     int pipe;
 
     int r = start_process(argv, pid, &pipe);
@@ -108,6 +108,78 @@ give_up:
         kill((*pid), SIGINT);
         return VANILLA_ERROR;
     }
+}
+
+int wpa_setup_environment(const char *wireless_interface, const char *wireless_conf_file, ready_callback_t callback, void *callback_data)
+{
+    int ret = VANILLA_ERROR;
+
+    install_interrupt_handler();
+
+    // Check status of interface with NetworkManager
+    int is_managed;
+    if (is_networkmanager_managing_device(wireless_interface, &is_managed) != VANILLA_SUCCESS) {
+        print_info("FAILED TO DETERMINE MANAGED STATE OF WIRELESS INTERFACE");
+        goto die;
+    }
+
+    // If NetworkManager is managing this device, temporarily stop it from doing so
+    if (is_managed) {
+        if (disable_networkmanager_on_device(wireless_interface) != VANILLA_SUCCESS) {
+            print_info("FAILED TO SET %s TO UNMANAGED, RESULTS MAY BE UNPREDICTABLE");
+        } else {
+            print_info("TEMPORARILY SET %s TO UNMANAGED", wireless_interface);
+        }
+    }
+
+    // Start modified WPA supplicant
+    pid_t pid;
+    int err = start_wpa_supplicant(wireless_interface, wireless_conf_file, &pid);
+    if (err != VANILLA_SUCCESS || is_interrupted()) {
+        print_info("FAILED TO START WPA SUPPLICANT");
+        goto die_and_reenable_managed;
+    }
+
+    // Get control interface
+    const size_t buf_len = 1048576;
+    char *buf = malloc(buf_len);
+    snprintf(buf, buf_len, "%s/%s", wpa_ctrl_interface, wireless_interface);
+    struct wpa_ctrl *ctrl;
+    while (!(ctrl = wpa_ctrl_open(buf))) {
+        if (is_interrupted()) goto die_and_kill;
+        print_info("WAITING FOR CTRL INTERFACE");
+        sleep(1);
+    }
+
+    if (is_interrupted() || wpa_ctrl_attach(ctrl) < 0) {
+        print_info("FAILED TO ATTACH TO WPA");
+        goto die_and_close;
+    }
+
+    callback(ctrl, callback_data);
+
+die_and_detach:
+    wpa_ctrl_detach(ctrl);
+
+die_and_close:
+    wpa_ctrl_close(ctrl);
+
+die_and_kill:
+    kill(pid, SIGINT);
+
+    free(buf);
+
+die_and_reenable_managed:
+    if (is_managed) {
+        print_info("SETTING %s BACK TO MANAGED", wireless_interface);
+        enable_networkmanager_on_device(wireless_interface);
+    }
+
+die:
+    // Remove our custom sigint signal handler
+    uninstall_interrupt_handler();
+
+    return ret;
 }
 
 int call_dhcp(const char *network_interface)

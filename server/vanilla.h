@@ -75,6 +75,11 @@ int vanilla_sync_with_console(const char *wireless_interface, uint16_t code);
 int vanilla_connect_to_console(const char *wireless_interface, vanilla_event_handler_t event_handler, void *context);
 
 /**
+ * Determine if we have a configuration file that we can connect with.
+ */
+int vanilla_has_config();
+
+/**
  * Attempt to stop the current action
  * 
  * This can be called from another thread to safely exit a blocking call to vanilla_sync_with_console() or vanilla_connect_to_console().

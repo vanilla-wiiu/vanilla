@@ -12,108 +12,78 @@
 #include "vanilla.h"
 #include "wpa.h"
 
-#define MODE_SYNC 0
-#define MODE_CONNECT 1
+struct sync_args {
+    int ret;
+    uint16_t code;
+};
 
-int setup_environment(const char *wireless_interface, uint16_t code, int mode, vanilla_event_handler_t event_handler, void *context)
+struct connect_args {
+    int ret;
+    const char *wireless_interface;
+    vanilla_event_handler_t event_handler;
+    void *event_handler_context;
+};
+
+void thunk_to_sync(struct wpa_ctrl *ctrl, void *data)
 {
-    int ret = VANILLA_ERROR;
+    struct sync_args *args = (struct sync_args *) data;
+    args->ret = sync_with_console_internal(ctrl, args->code);
+}
 
-    install_interrupt_handler();
-
-    // Check status of interface with NetworkManager
-    int is_managed;
-    if (is_networkmanager_managing_device(wireless_interface, &is_managed) != VANILLA_SUCCESS) {
-        print_info("FAILED TO DETERMINE MANAGED STATE OF WIRELESS INTERFACE");
-        goto die;
-    }
-
-    // If NetworkManager is managing this device, temporarily stop it from doing so
-    if (is_managed) {
-        if (disable_networkmanager_on_device(wireless_interface) != VANILLA_SUCCESS) {
-            print_info("FAILED TO SET %s TO UNMANAGED, RESULTS MAY BE UNPREDICTABLE");
-        } else {
-            print_info("TEMPORARILY SET %s TO UNMANAGED", wireless_interface);
-        }
-    }
-
-    const char *wireless_conf_file;
-    if (mode == MODE_SYNC) {
-        FILE *config;
-        wireless_conf_file = get_wireless_authenticate_config_filename();
-        config = fopen(wireless_conf_file, "w");
-        if (!config) {
-            print_info("FAILED TO WRITE TEMP CONFIG");
-            goto die_and_reenable_managed;
-        }
-        fprintf(config, "ctrl_interface=%s\nupdate_config=1\n", wpa_ctrl_interface);
-        fclose(config);
-    } else {
-        wireless_conf_file = get_wireless_connect_config_filename();
-    }
-
-    // Start modified WPA supplicant
-    pid_t pid;
-    int err = start_wpa_supplicant(wireless_interface, wireless_conf_file, &pid);
-    if (err != VANILLA_SUCCESS || is_interrupted()) {
-        print_info("FAILED TO START WPA SUPPLICANT");
-        goto die_and_reenable_managed;
-    }
-
-    // Get control interface
-    const size_t buf_len = 1048576;
-    char *buf = malloc(buf_len);
-    snprintf(buf, buf_len, "%s/%s", wpa_ctrl_interface, wireless_interface);
-    struct wpa_ctrl *ctrl;
-    while (!(ctrl = wpa_ctrl_open(buf))) {
-        if (is_interrupted()) goto die_and_kill;
-        print_info("WAITING FOR CTRL INTERFACE");
-        sleep(1);
-    }
-
-    if (is_interrupted() || wpa_ctrl_attach(ctrl) < 0) {
-        print_info("FAILED TO ATTACH TO WPA");
-        goto die_and_close;
-    }
-
-    if (mode == MODE_SYNC) {
-        ret = sync_with_console_internal(ctrl, wireless_interface, code);
-    } else if (mode == MODE_CONNECT) {
-        ret = connect_as_gamepad_internal(ctrl, wireless_interface, event_handler, context);
-    }
-
-die_and_detach:
-    wpa_ctrl_detach(ctrl);
-
-die_and_close:
-    wpa_ctrl_close(ctrl);
-
-die_and_kill:
-    kill(pid, SIGINT);
-
-    free(buf);
-
-die_and_reenable_managed:
-    if (is_managed) {
-        print_info("SETTING %s BACK TO MANAGED", wireless_interface);
-        enable_networkmanager_on_device(wireless_interface);
-    }
-
-die:
-    // Remove our custom sigint signal handler
-    uninstall_interrupt_handler();
-
-    return ret;
+void thunk_to_connect(struct wpa_ctrl *ctrl, void *data)
+{
+    struct connect_args *args = (struct connect_args *) data;
+    args->ret = connect_as_gamepad_internal(ctrl, args->wireless_interface, args->event_handler, args->event_handler_context);
 }
 
 int vanilla_sync_with_console(const char *wireless_interface, uint16_t code)
 {
-    return setup_environment(wireless_interface, code, MODE_SYNC, NULL, NULL);
+    const char *wireless_conf_file;
+
+    FILE *config;
+    wireless_conf_file = get_wireless_authenticate_config_filename();
+    config = fopen(wireless_conf_file, "w");
+    if (!config) {
+        print_info("FAILED TO WRITE TEMP CONFIG");
+        return VANILLA_ERROR;
+    }
+
+    // Get username so we can provide the current user with permissions to access the wpa interface
+    char username[128];
+    getlogin_r(username, sizeof(username));
+
+    fprintf(config, "ctrl_interface=%s\nctrl_interface_group=%s\nupdate_config=1\n", wpa_ctrl_interface, username);
+    fclose(config);
+
+    struct sync_args args;
+    args.code = code;
+
+    int ret = wpa_setup_environment(wireless_interface, wireless_conf_file, thunk_to_sync, &args);
+    if (ret != VANILLA_SUCCESS) {
+        return ret;
+    }
+
+    return args.ret;
 }
 
 int vanilla_connect_to_console(const char *wireless_interface, vanilla_event_handler_t event_handler, void *context)
 {
-    return setup_environment(wireless_interface, 0, MODE_CONNECT, event_handler, context);
+    struct connect_args args;
+    args.wireless_interface = wireless_interface;
+    args.event_handler = event_handler;
+    args.event_handler_context = context;
+
+    int ret = wpa_setup_environment(wireless_interface, get_wireless_connect_config_filename(), thunk_to_connect, &args);
+    if (ret != VANILLA_SUCCESS) {
+        return ret;
+    }
+
+    return args.ret;
+}
+
+int vanilla_has_config()
+{
+    return (access(get_wireless_connect_config_filename(), F_OK) == 0);
 }
 
 void vanilla_stop()

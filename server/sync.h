@@ -5,6 +5,6 @@
 
 struct wpa_ctrl;
 
-int sync_with_console_internal(struct wpa_ctrl *ctrl, const char *wireless_interface, uint16_t code);
+int sync_with_console_internal(struct wpa_ctrl *ctrl, uint16_t code);
 
 #endif // VANILLA_SYNC_H
