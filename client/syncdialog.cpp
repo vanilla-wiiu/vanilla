@@ -141,6 +141,7 @@ void SyncDialog::launchSync()
 
     SyncProgressDialog *progressDialog = new SyncProgressDialog(m_wirelessInterface, code, this->parentWidget());
     progressDialog->open();
+    connect(progressDialog, &SyncProgressDialog::finished, this, &SyncProgressDialog::deleteLater);
     this->close();
 }
 

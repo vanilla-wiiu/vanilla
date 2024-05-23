@@ -6,6 +6,8 @@
 #include <QVBoxLayout>
 #include <vanilla.h>
 
+#include "mainwindow.h"
+
 int startVanillaServer(const QString &wirelessInterface, uint16_t code)
 {
     QByteArray wirelessInterfaceC = wirelessInterface.toUtf8();
@@ -19,14 +21,11 @@ SyncProgressDialog::SyncProgressDialog(const QString &wirelessInterface, uint16_
     layout->addWidget(new QLabel(tr("Connecting to the Wii U console...")));
 
     m_statusLabel = new QLabel(this);
+    m_statusLabel->setText(tr("(This may take some time and multiple attempts depending on your hardware...)"));
     layout->addWidget(m_statusLabel);
 
     QDialogButtonBox *buttons = new QDialogButtonBox(QDialogButtonBox::Cancel, this);
     buttons->setCenterButtons(true);
-    
-    //
-    // TODO: When cancelling, send SIGINT to server so it will re-enable NetworkManager on the device
-    //
     
     connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::close);
     layout->addWidget(buttons); 
@@ -38,34 +37,11 @@ SyncProgressDialog::SyncProgressDialog(const QString &wirelessInterface, uint16_
     m_watcher->setFuture(QtConcurrent::run(startVanillaServer, wirelessInterface, code));
 }
 
-void SyncProgressDialog::readFromProcess(QProcess *p)
-{
-    while (p->canReadLine()) {
-        QByteArray line = p->readLine();
-
-        m_statusLabel->setText(line);
-
-        if (line == QByteArrayLiteral("READY\n")) {
-            QMessageBox::information(this, QString(), tr("server is ready :) sending sync command"));
-            p->write(QStringLiteral("SYNC %1 %2\n").arg(m_wirelessInterface, QString::number(m_wpsCode)).toUtf8());
-        } else if (line == QByteArrayLiteral("SUCCESS\n")) {
-            QMessageBox::information(this, QString(), tr("Successfully synced with console"));
-            this->close();
-        }
-    }
-}
-
-void SyncProgressDialog::serverHasOutput()
-{
-    QProcess *p = static_cast<QProcess *>(sender());
-    
-    readFromProcess(p);
-}
-
 void SyncProgressDialog::serverReturned()
 {
     if (m_watcher->result() == VANILLA_SUCCESS) {
         QMessageBox::information(this, QString(), tr("Successfully synced with console"));
+        MainWindow::instance()->enableConnectButton();
     } else {
         QMessageBox::critical(this, QString(), tr("Something went wrong trying to sync"));
     }

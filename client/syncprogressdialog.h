@@ -16,8 +16,6 @@ protected:
     virtual void done(int r) override;
 
 private:
-    void readFromProcess(QProcess *p);
-
     QLabel *m_statusLabel;
     QString m_wirelessInterface;
     uint16_t m_wpsCode;
@@ -25,7 +23,6 @@ private:
     QFutureWatcher<int> *m_watcher;
 
 private slots:
-    void serverHasOutput();
     void serverReturned();
 
 };

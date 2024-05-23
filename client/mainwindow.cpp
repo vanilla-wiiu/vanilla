@@ -27,8 +27,12 @@
 #include "keymap.h"
 #include "syncdialog.h"
 
+MainWindow *g_instance = nullptr;
+
 MainWindow::MainWindow(QWidget *parent) : QWidget(parent)
 {
+    g_instance = this;
+
     if (SDL_Init(SDL_INIT_GAMECONTROLLER) < 0) {
         QMessageBox::critical(this, tr("SDL2 Error"), tr("SDL2 failed to initialize. Controller support will be unavailable."));
     }
@@ -72,6 +76,7 @@ MainWindow::MainWindow(QWidget *parent) : QWidget(parent)
 
         m_connectBtn = new QPushButton(connectionConfigGroupBox);
         m_connectBtn->setCheckable(true);
+        m_connectBtn->setEnabled(vanilla_has_config());
         m_backend = nullptr;
         setConnectedState(false);
         connect(m_connectBtn, &QPushButton::clicked, this, &MainWindow::setConnectedState);
@@ -113,7 +118,7 @@ MainWindow::MainWindow(QWidget *parent) : QWidget(parent)
         configLayout->addWidget(new QLabel(tr("Microphone: "), soundConfigGroupBox), row, 0);
 
         m_microphoneComboBox = new QComboBox(soundConfigGroupBox);
-        m_microphoneComboBox->setMaximumWidth(120);
+        m_microphoneComboBox->setMaximumWidth(m_microphoneComboBox->fontMetrics().horizontalAdvance(QStringLiteral("SOMEAMOUNTOFTEXT")));
         configLayout->addWidget(m_microphoneComboBox, row, 1);
     }
 
@@ -342,4 +347,14 @@ void MainWindow::showInputConfigDialog()
 {
     InputConfigDialog *d = new InputConfigDialog(this);
     d->open();
+}
+
+void MainWindow::enableConnectButton()
+{
+    m_connectBtn->setEnabled(true);
+}
+
+MainWindow *MainWindow::instance()
+{
+    return g_instance;
 }

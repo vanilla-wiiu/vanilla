@@ -21,6 +21,11 @@ public:
     MainWindow(QWidget *parent = nullptr);
     virtual ~MainWindow() override;
 
+    static MainWindow *instance();
+
+public slots:
+    void enableConnectButton();
+
 private:
     void populateWirelessInterfaces();
     void populateMicrophones();
