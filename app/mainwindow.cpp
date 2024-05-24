@@ -156,7 +156,7 @@ MainWindow::MainWindow(QWidget *parent) : QWidget(parent)
     QMetaObject::invokeMethod(m_audioHandler, &AudioHandler::run, Qt::QueuedConnection);
 
     connect(m_backend, &Backend::videoAvailable, m_videoDecoder, &VideoDecoder::sendPacket);
-    connect(m_backend, &Backend::syncCompleted, m_connectBtn, &QPushButton::setEnabled);
+    connect(m_backend, &Backend::syncCompleted, this, [this](bool e){if (e) m_connectBtn->setEnabled(true);});
     connect(m_videoDecoder, &VideoDecoder::frameReady, m_viewer, &Viewer::setImage);
     connect(m_backend, &Backend::audioAvailable, m_audioHandler, &AudioHandler::write);
     connect(m_backend, &Backend::vibrate, m_gamepadHandler, &GamepadHandler::vibrate, Qt::DirectConnection);
@@ -195,8 +195,6 @@ MainWindow::~MainWindow()
     }
 
     SDL_Quit();
-
-    setConnectedState(false);
 
     delete m_viewer;
 }
@@ -286,6 +284,10 @@ void MainWindow::setConnectedState(bool on)
 
         QMetaObject::invokeMethod(m_backend, &Backend::connectToConsole, Qt::QueuedConnection, m_wirelessInterfaceComboBox->currentText());
     } else {
+        if (m_backend) {
+            m_backend->interrupt();
+        }
+
         m_connectBtn->setText(tr("Connect"));
 
         m_viewer->setImage(QImage());

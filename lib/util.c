@@ -74,7 +74,7 @@ size_t get_home_directory_file(const char *filename, char *buf, size_t buf_size)
 
 size_t get_max_path_length()
 {
-    return pathconf(".", _PC_PATH_MAX);;
+    return pathconf(".", _PC_PATH_MAX);
 }
 
 void interrupt_handler(int signum)

@@ -111,11 +111,16 @@ void vanilla_log_no_newline(const char *format, ...)
     va_list va;
     va_start(va, format);
 
-    if (custom_logger) {
-        custom_logger(format, va);
-    }
+    vanilla_log_no_newline_va(format, va);
 
     va_end(va);
+}
+
+void vanilla_log_no_newline_va(const char *format, va_list args)
+{
+    if (custom_logger) {
+        custom_logger(format, args);
+    }
 }
 
 void vanilla_install_logger(void (*logger)(const char *, va_list))

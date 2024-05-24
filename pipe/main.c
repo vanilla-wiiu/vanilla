@@ -246,10 +246,6 @@ int main()
             if (current_action != 0) {
                 void *ret;
                 vanilla_stop();
-                write_control_code(VANILLA_PIPE_ERR_SUCCESS);
-                pthread_join(current_action, &ret);
-            } else {
-                write_control_code(VANILLA_PIPE_ERR_INVALID);
             }
             break;
         }

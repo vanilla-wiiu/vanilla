@@ -81,8 +81,6 @@ void Backend::interrupt()
         uint8_t cc = VANILLA_PIPE_IN_INTERRUPT;
         write(m_pipeOut, &cc, sizeof(cc));
         m_pipeMutex.unlock();
-
-        ignoreByte(m_pipeIn);
     } else {
         vanilla_stop();
     }

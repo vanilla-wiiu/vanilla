@@ -112,6 +112,7 @@ void vanilla_set_touch(int x, int y);
  */
 void vanilla_log(const char *format, ...);
 void vanilla_log_no_newline(const char *format, ...);
+void vanilla_log_no_newline_va(const char *format, va_list args);
 
 /**
  * Install custom logger
