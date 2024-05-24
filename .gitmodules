@@ -1,3 +1,3 @@
-[submodule "server/hostap"]
-	path = server/hostap
+[submodule "lib/hostap"]
+	path = lib/hostap
 	url = https://github.com/rolandoislas/drc-hostap
