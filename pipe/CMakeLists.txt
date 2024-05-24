@@ -1,5 +1,4 @@
 add_executable(vanilla-pipe
-    common.c
     main.c
 )
 

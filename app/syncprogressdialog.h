@@ -26,8 +26,14 @@ private:
     uint16_t m_wpsCode;
     bool m_cancelled;
 
+    QLabel *m_animationLabels[5];
+    int m_progressAnimation;
+    QTimer *m_animationTimer;
+
 private slots:
     void syncReturned(bool success);
+
+    void animationStep();
 
 };
 

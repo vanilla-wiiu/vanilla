@@ -12,11 +12,32 @@ SyncProgressDialog::SyncProgressDialog(Backend *backend, const QString &wireless
 {
     QVBoxLayout *layout = new QVBoxLayout(this);
 
-    m_headerLabel = new QLabel(tr("<html><b>Connecting to the Wii U console...</b></html>"));
+    m_headerLabel = new QLabel(tr("<html><b>Connecting to the Wii U console...</b></html>"), this);
     m_headerLabel->setAlignment(Qt::AlignCenter);
     layout->addWidget(m_headerLabel);
 
+    QHBoxLayout *animationLayout = new QHBoxLayout();
+    layout->addLayout(animationLayout);
+
+    animationLayout->addStretch();
+    for (int i = 0; i < sizeof(m_animationLabels)/sizeof(QLabel *); i++) {
+        QLabel *l = new QLabel(this);
+        l->setFixedWidth(l->sizeHint().height());
+        l->setAlignment(Qt::AlignCenter);
+        animationLayout->addWidget(l);
+        m_animationLabels[i] = l;
+    }
+    animationLayout->addStretch();
+
+    m_animationTimer = new QTimer(this);
+    m_animationTimer->setInterval(250);
+    m_progressAnimation = 0;
+    m_animationTimer->start();
+    connect(m_animationTimer, &QTimer::timeout, this, &SyncProgressDialog::animationStep);
+    animationStep();
+
     m_statusLabel = new QLabel(this);
+    m_statusLabel->setAlignment(Qt::AlignCenter);
     m_statusLabel->setText(tr("(This may take some time and multiple attempts depending on your hardware...)"));
     layout->addWidget(m_statusLabel);
 
@@ -57,4 +78,21 @@ void SyncProgressDialog::reject()
     m_headerLabel->setText(tr("<html><b>Cancelling...</b></html>"));
     m_cancelled = true;
     m_backend->interrupt();
+}
+
+void SyncProgressDialog::animationStep()
+{
+    QString s;
+
+    const int beats = sizeof(m_animationLabels)/sizeof(QLabel *);
+    for (int i = 0; i < beats; i++) {
+        QLabel *l = m_animationLabels[i];
+        if (i == (m_progressAnimation % beats)) {
+            l->setText(QString::fromUtf8("\xE2\xAC\xA4"));
+        } else {
+            l->setText(QString::fromUtf8("\xE2\x80\xA2"));
+        }
+    }
+
+    m_progressAnimation++;
 }

@@ -1,5 +1,6 @@
 #include <errno.h>
 #include <stdio.h>
+#include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
 #include <fcntl.h>
@@ -48,8 +49,8 @@ void event_handler(void *context, int event_type, const char *data, size_t data_
 
     write(fd_out, &control_code, sizeof(control_code));
     write(fd_out, &event_sized, sizeof(event_sized));
-    write(fd_out, data, data_size);
     write(fd_out, &data_size_sized, sizeof(data_size_sized));
+    write(fd_out, data, data_size);
 
     pthread_mutex_unlock(&output_mutex);
 }
@@ -90,6 +91,7 @@ void *connect_command(void *a)
     struct connect_args *args = (struct connect_args *) a;
     int r = vanilla_connect_to_console(args->wireless_interface, event_handler, NULL);
     free(args);
+    write_control_code(VANILLA_PIPE_OUT_EOF);
     pthread_exit((void *) (size_t) r);
 }
 
@@ -103,19 +105,44 @@ void read_string(int fd, char *buf, size_t max)
     }
 }
 
+void vapipelog(const char *str, ...)
+{
+    va_list va;
+    va_start(va, str);
+    FILE *fff = fopen("/home/matt/Desktop/temp.log", "a");
+    vfprintf(fff, str, va);
+    fprintf(fff, "\n");
+    fclose(fff);
+    va_end(va);
+}
+
 int main()
-{\
+{
     int fd_in;
 
-    if (create_fifo(VANILLA_PIPE_IN_FILENAME) == -1) return 1;
-    if (create_fifo(VANILLA_PIPE_OUT_FILENAME) == -1) return 1;
-    if ((fd_in = open_fifo(VANILLA_PIPE_IN_FILENAME, O_RDONLY)) == -1) return 1;
-    if ((fd_out = open_fifo(VANILLA_PIPE_OUT_FILENAME, O_WRONLY)) == -1) return 1;
+    time_t now = time(0);
+    char pipe_in_filename[256];
+    char pipe_out_filename[256];
+    snprintf(pipe_in_filename, sizeof(pipe_in_filename), "%s-%li", "/home/matt/Desktop/vanilla-fifo-in", now);
+    snprintf(pipe_out_filename, sizeof(pipe_out_filename), "%s-%li", "/home/matt/Desktop/vanilla-fifo-out", now);
+
+    umask(0000);
+    dup2(STDERR_FILENO, STDOUT_FILENO);
+
+    if (create_fifo(pipe_in_filename) == -1) return 1;
+    if (create_fifo(pipe_out_filename) == -1) return 1;
+
+    fprintf(stderr, "%s\n", pipe_in_filename);
+    fprintf(stderr, "%s\n", pipe_out_filename);
+
+    if ((fd_out = open_fifo(pipe_out_filename, O_WRONLY)) == -1) return 1;
+    if ((fd_in = open_fifo(pipe_in_filename, O_RDONLY)) == -1) return 1;
 
     uint8_t control_code;
     ssize_t read_size;
     pthread_t current_action = 0;
-    while (1) {
+    int m_quit = 0;
+    while (!m_quit) {
         read_size = read(fd_in, &control_code, 1);
         if (read_size == 0) {
             continue;
@@ -161,7 +188,21 @@ int main()
             }
             break;
         }
-        case VANILLA_PIPE_IN_QUIT:
+        case VANILLA_PIPE_IN_TOUCH:
+        {
+            if (current_action == 0) {
+                write_control_code(VANILLA_PIPE_ERR_INVALID);
+            } else {
+                int32_t touch_x;
+                int32_t touch_y;
+                read(fd_in, &touch_x, sizeof(touch_x));
+                read(fd_in, &touch_y, sizeof(touch_y));
+                vanilla_set_touch(touch_x, touch_y);
+                write_control_code(VANILLA_PIPE_ERR_SUCCESS);
+            }
+            break;
+        }
+        case VANILLA_PIPE_IN_INTERRUPT:
         {
             if (current_action != 0) {
                 void *ret;
@@ -173,14 +214,17 @@ int main()
             }
             break;
         }
+        case VANILLA_PIPE_IN_QUIT:
+            m_quit = 1;
+            break;
         }
     }
 
     close(fd_in);
     close(fd_out);
 
-    unlink(VANILLA_PIPE_IN_FILENAME);
-    unlink(VANILLA_PIPE_OUT_FILENAME);
+    unlink(pipe_in_filename);
+    unlink(pipe_out_filename);
 
     return 0;
 }

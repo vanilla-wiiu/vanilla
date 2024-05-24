@@ -11,6 +11,8 @@ class Backend : public QObject
 public:
     Backend(QObject *parent = nullptr);
 
+    virtual ~Backend() override;
+
     void interrupt();
 
 signals:
@@ -27,15 +29,17 @@ public slots:
     void setButton(int button, int16_t value);
 
 private:
-    int getInPipe();
-    int getOutPipe();
-    bool ensurePipes();
-
     bool m_usePipe;
     QProcess *m_pipe;
     int m_pipeIn;
     int m_pipeOut;
     QMutex m_pipeMutex;
+    QAtomicInt m_interrupt;
+
+    QByteArray m_pipeOutFilename;
+
+private slots:
+    void readFromPipe();
 
 };
 
