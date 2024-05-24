@@ -10,7 +10,7 @@
 #include "vanilla.h"
 
 // TODO: Static variables are undesirable
-const char *wireless_authenticate_config_filename = "/tmp/vanilla_wpa_key.conf";
+char wireless_authenticate_config_filename[1024] = {0};
 char wireless_connect_config_filename[1024] = {0};
 int interrupted = 0;
 
@@ -25,6 +25,10 @@ const char *get_wireless_connect_config_filename()
 
 const char *get_wireless_authenticate_config_filename()
 {
+    if (wireless_authenticate_config_filename[0] == 0) {
+        // Not initialized yet, do this now
+        get_home_directory_file("vanilla_wpa_key.conf", wireless_authenticate_config_filename, sizeof(wireless_authenticate_config_filename));
+    }
     return wireless_authenticate_config_filename;
 }
 
@@ -52,7 +56,7 @@ size_t get_home_directory(char *buf, size_t buf_size)
 {
     size_t ret = snprintf(buf, buf_size, "%s/%s", getenv("HOME"), ".vanilla");
     if (ret <= buf_size) {
-        mkdir(buf, 0600);
+        mkdir(buf, 0755);
     }
     return ret;
 }

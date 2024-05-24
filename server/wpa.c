@@ -156,7 +156,7 @@ int wpa_setup_environment(const char *wireless_interface, const char *wireless_c
         goto die_and_close;
     }
 
-    callback(ctrl, callback_data);
+    ret = callback(ctrl, callback_data);
 
 die_and_detach:
     wpa_ctrl_detach(ctrl);
@@ -184,7 +184,7 @@ die:
 
 int call_dhcp(const char *network_interface)
 {
-    const char *argv[] = {"dhclient", network_interface, NULL};
+    const char *argv[] = {"pkexec", "dhclient", network_interface, NULL};
     pid_t dhclient_pid;
     int r = start_process(argv, &dhclient_pid, NULL);
     if (r != VANILLA_SUCCESS) {

@@ -162,7 +162,7 @@ int connect_as_gamepad_internal(struct wpa_ctrl *ctrl, const char *wireless_inte
     {
         // Destroy default route that dhclient will have created
         pid_t ip_pid;
-        const char *ip_args[] = {"ip", "route", "del", "default", "via", "192.168.1.1", "dev", wireless_interface, NULL};
+        const char *ip_args[] = {"pkexec", "ip", "route", "del", "default", "via", "192.168.1.1", "dev", wireless_interface, NULL};
         r = start_process(ip_args, &ip_pid, NULL);
         if (r != VANILLA_SUCCESS) {
             print_info("FAILED TO REMOVE CONSOLE ROUTE FROM SYSTEM");

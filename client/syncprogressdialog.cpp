@@ -18,7 +18,9 @@ SyncProgressDialog::SyncProgressDialog(const QString &wirelessInterface, uint16_
 {
     QVBoxLayout *layout = new QVBoxLayout(this);
 
-    layout->addWidget(new QLabel(tr("Connecting to the Wii U console...")));
+    QLabel *headerLabel = new QLabel(tr("<html><b>Connecting to the Wii U console...</b></html>"));
+    headerLabel->setAlignment(Qt::AlignCenter);
+    layout->addWidget(headerLabel);
 
     m_statusLabel = new QLabel(this);
     m_statusLabel->setText(tr("(This may take some time and multiple attempts depending on your hardware...)"));
