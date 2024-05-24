@@ -46,11 +46,7 @@ int vanilla_sync_with_console(const char *wireless_interface, uint16_t code)
         return VANILLA_ERROR;
     }
 
-    // Get username so we can provide the current user with permissions to access the wpa interface
-    char username[128];
-    getlogin_r(username, sizeof(username));
-
-    fprintf(config, "ctrl_interface=%s\nctrl_interface_group=%s\nupdate_config=1\n", wpa_ctrl_interface, username);
+    fprintf(config, "ctrl_interface=%s\nupdate_config=1\n", wpa_ctrl_interface);
     fclose(config);
 
     struct sync_args args;

@@ -97,7 +97,7 @@ void GamepadHandler::run()
                 if (m_controller && event.cdevice.which == SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(m_controller))) {
                     int vanilla_btn = g_buttonMap[event.cbutton.button];
                     if (vanilla_btn != -1) {
-                        vanilla_set_button(vanilla_btn, event.type == SDL_CONTROLLERBUTTONDOWN);
+                        emit buttonStateChanged(vanilla_btn, event.type == SDL_CONTROLLERBUTTONDOWN ? INT16_MAX : 0);
                     }
                 }
                 break;
@@ -106,7 +106,7 @@ void GamepadHandler::run()
                     int vanilla_axis = g_axisMap[event.caxis.axis];
                     Sint16 axis_value = event.caxis.value;
                     if (vanilla_axis != -1) {
-                        vanilla_set_button(vanilla_axis, axis_value);
+                        emit buttonStateChanged(vanilla_axis, axis_value);
                     }
                 }
                 break;
@@ -131,7 +131,7 @@ void GamepadHandler::keyPressed(Qt::Key key)
     if (!m_controller) {
         auto it = KeyMap::instance.find(key);
         if (it != KeyMap::instance.end()) {
-            vanilla_set_button(it->second, INT16_MAX);
+            emit buttonStateChanged(it->second, INT16_MAX);
         }
     }
 }
@@ -141,7 +141,7 @@ void GamepadHandler::keyReleased(Qt::Key key)
     if (!m_controller) {
         auto it = KeyMap::instance.find(key);
         if (it != KeyMap::instance.end()) {
-            vanilla_set_button(it->second, 0);
+            emit buttonStateChanged(it->second, 0);
         }
     }
 }

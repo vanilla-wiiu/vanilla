@@ -7,5 +7,6 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 SET(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib")
 
-add_subdirectory(server)
-add_subdirectory(client)
+add_subdirectory(lib)
+add_subdirectory(pipe)
+add_subdirectory(app)

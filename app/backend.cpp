@@ -39,3 +39,15 @@ void Backend::updateTouch(int x, int y)
 {
     vanilla_set_touch(x, y);
 }
+
+void Backend::setButton(int button, int16_t value)
+{
+    vanilla_set_button(button, value);
+}
+
+void Backend::sync(const QString &wirelessInterface, uint16_t code)
+{
+    QByteArray wirelessInterfaceC = wirelessInterface.toUtf8();
+    int r = vanilla_sync_with_console(wirelessInterfaceC.constData(), code);
+    emit syncCompleted(r == VANILLA_SUCCESS);
+}

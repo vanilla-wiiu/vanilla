@@ -16,10 +16,13 @@ signals:
     void audioAvailable(const QByteArray &packet);
     void vibrate(bool on);
     void errorOccurred();
+    void syncCompleted(bool success);
 
 public slots:
+    void sync(const QString &wirelessInterface, uint16_t code);
     void connectToConsole(const QString &wirelessInterface);
     void updateTouch(int x, int y);
+    void setButton(int button, int16_t value);
 
 };
 

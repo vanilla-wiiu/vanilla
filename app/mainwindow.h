@@ -31,6 +31,8 @@ private:
     void populateMicrophones();
     void populateControllers();
 
+    void startObjectOnThread(QObject *object);
+
     Viewer *m_viewer;
 
     QComboBox *m_wirelessInterfaceComboBox;
@@ -45,15 +47,10 @@ private:
 
     Backend *m_backend;
     VideoDecoder *m_videoDecoder;
-
-    QThread *m_backendThread;
-    QThread *m_videoDecoderThread;
-
     GamepadHandler *m_gamepadHandler;
-    QThread *m_gamepadHandlerThread;
-
     AudioHandler *m_audioHandler;
-    QThread *m_audioHandlerThread;
+
+    QMap<QObject *, QThread *> m_threadMap;
 
     QPushButton *m_controllerMappingButton;
 

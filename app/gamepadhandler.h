@@ -18,6 +18,8 @@ public:
 signals:
     void gamepadsChanged();
 
+    void buttonStateChanged(int button, int16_t value);
+
 public slots:
     void run();
 

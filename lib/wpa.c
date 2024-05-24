@@ -58,7 +58,7 @@ int start_wpa_supplicant(const char *wireless_interface, const char *config_file
     print_info(wpa_buf);
     free(path_buf);
 
-    const char *argv[] = {"pkexec", wpa_buf, "-Dnl80211", "-i", wireless_interface, "-c", config_file, NULL};
+    const char *argv[] = {wpa_buf, "-Dnl80211", "-i", wireless_interface, "-c", config_file, NULL};
     int pipe;
 
     int r = start_process(argv, pid, &pipe);
@@ -184,7 +184,7 @@ die:
 
 int call_dhcp(const char *network_interface)
 {
-    const char *argv[] = {"pkexec", "dhclient", network_interface, NULL};
+    const char *argv[] = {"dhclient", network_interface, NULL};
     pid_t dhclient_pid;
     int r = start_process(argv, &dhclient_pid, NULL);
     if (r != VANILLA_SUCCESS) {

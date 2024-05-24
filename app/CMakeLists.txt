@@ -1,4 +1,4 @@
-find_package(Qt6 REQUIRED COMPONENTS Core Widgets Multimedia Concurrent OpenGLWidgets)
+find_package(Qt6 REQUIRED COMPONENTS Core Widgets Multimedia OpenGLWidgets)
 find_package(SDL2 REQUIRED)
 find_package(FFmpeg REQUIRED COMPONENTS avcodec avutil avfilter)
 
@@ -25,7 +25,6 @@ target_link_libraries(vanilla-gui PRIVATE
     Qt6::Core
     Qt6::Widgets
     Qt6::Multimedia
-    Qt6::Concurrent
     Qt6::OpenGLWidgets
     SDL2
     vanilla
@@ -35,7 +34,7 @@ target_link_libraries(vanilla-gui PRIVATE
 )
 
 target_include_directories(vanilla-gui PRIVATE
-    "${CMAKE_SOURCE_DIR}/server"
+    "${CMAKE_SOURCE_DIR}/lib"
 )
 
 install(TARGETS vanilla-gui)
