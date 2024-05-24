@@ -27,12 +27,8 @@
 #include "keymap.h"
 #include "syncdialog.h"
 
-MainWindow *g_instance = nullptr;
-
 MainWindow::MainWindow(QWidget *parent) : QWidget(parent)
 {
-    g_instance = this;
-
     if (SDL_Init(SDL_INIT_GAMECONTROLLER) < 0) {
         QMessageBox::critical(this, tr("SDL2 Error"), tr("SDL2 failed to initialize. Controller support will be unavailable."));
     }
@@ -151,22 +147,22 @@ MainWindow::MainWindow(QWidget *parent) : QWidget(parent)
     m_videoDecoder = new VideoDecoder();
     startObjectOnThread(m_videoDecoder);
 
-    connect(m_backend, &Backend::videoAvailable, m_videoDecoder, &VideoDecoder::sendPacket);
-    connect(m_videoDecoder, &VideoDecoder::frameReady, m_viewer, &Viewer::setImage);
-    connect(m_backend, &Backend::audioAvailable, m_audioHandler, &AudioHandler::write);
-    connect(m_backend, &Backend::vibrate, m_gamepadHandler, &GamepadHandler::vibrate, Qt::DirectConnection);
-    connect(m_viewer, &Viewer::touch, m_backend, &Backend::updateTouch, Qt::DirectConnection);
-
     m_gamepadHandler = new GamepadHandler();
     startObjectOnThread(m_gamepadHandler);
-    connect(m_gamepadHandler, &GamepadHandler::gamepadsChanged, this, &MainWindow::populateControllers);
-    connect(m_gamepadHandler, &GamepadHandler::buttonStateChanged, m_backend, &Backend::setButton);
     QMetaObject::invokeMethod(m_gamepadHandler, &GamepadHandler::run, Qt::QueuedConnection);
 
     m_audioHandler = new AudioHandler();
     startObjectOnThread(m_audioHandler);
     QMetaObject::invokeMethod(m_audioHandler, &AudioHandler::run, Qt::QueuedConnection);
 
+    connect(m_backend, &Backend::videoAvailable, m_videoDecoder, &VideoDecoder::sendPacket);
+    connect(m_backend, &Backend::syncCompleted, m_connectBtn, &QPushButton::setEnabled);
+    connect(m_videoDecoder, &VideoDecoder::frameReady, m_viewer, &Viewer::setImage);
+    connect(m_backend, &Backend::audioAvailable, m_audioHandler, &AudioHandler::write);
+    connect(m_backend, &Backend::vibrate, m_gamepadHandler, &GamepadHandler::vibrate, Qt::DirectConnection);
+    connect(m_viewer, &Viewer::touch, m_backend, &Backend::updateTouch, Qt::DirectConnection);
+    connect(m_gamepadHandler, &GamepadHandler::gamepadsChanged, this, &MainWindow::populateControllers);
+    connect(m_gamepadHandler, &GamepadHandler::buttonStateChanged, m_backend, &Backend::setButton, Qt::DirectConnection);
     connect(m_viewer, &Viewer::keyPressed, m_gamepadHandler, &GamepadHandler::keyPressed, Qt::DirectConnection);
     connect(m_viewer, &Viewer::keyReleased, m_gamepadHandler, &GamepadHandler::keyReleased, Qt::DirectConnection);
 
@@ -276,7 +272,7 @@ void MainWindow::populateControllers()
 void MainWindow::showSyncDialog()
 {
     SyncDialog *d = new SyncDialog(this);
-    d->setup(m_wirelessInterfaceComboBox->currentText());
+    d->setup(m_backend, m_wirelessInterfaceComboBox->currentText());
     connect(d, &SyncDialog::finished, d, &SyncDialog::deleteLater);
     d->open();
 }
@@ -326,20 +322,10 @@ void MainWindow::showInputConfigDialog()
     d->open();
 }
 
-void MainWindow::enableConnectButton()
-{
-    m_connectBtn->setEnabled(true);
-}
-
 void MainWindow::startObjectOnThread(QObject *object)
 {
     QThread *thread = new QThread(this);
     object->moveToThread(thread);
     thread->start();
     m_threadMap.insert(object, thread);
-}
-
-MainWindow *MainWindow::instance()
-{
-    return g_instance;
 }

@@ -8,19 +8,13 @@
 
 #include "mainwindow.h"
 
-int startVanillaServer(const QString &wirelessInterface, uint16_t code)
-{
-    QByteArray wirelessInterfaceC = wirelessInterface.toUtf8();
-    return vanilla_sync_with_console(wirelessInterfaceC.constData(), code);
-}
-
-SyncProgressDialog::SyncProgressDialog(const QString &wirelessInterface, uint16_t code, QWidget *parent) : QDialog(parent)
+SyncProgressDialog::SyncProgressDialog(Backend *backend, const QString &wirelessInterface, uint16_t code, QWidget *parent) : QDialog(parent)
 {
     QVBoxLayout *layout = new QVBoxLayout(this);
 
-    QLabel *headerLabel = new QLabel(tr("<html><b>Connecting to the Wii U console...</b></html>"));
-    headerLabel->setAlignment(Qt::AlignCenter);
-    layout->addWidget(headerLabel);
+    m_headerLabel = new QLabel(tr("<html><b>Connecting to the Wii U console...</b></html>"));
+    m_headerLabel->setAlignment(Qt::AlignCenter);
+    layout->addWidget(m_headerLabel);
 
     m_statusLabel = new QLabel(this);
     m_statusLabel->setText(tr("(This may take some time and multiple attempts depending on your hardware...)"));
@@ -34,33 +28,33 @@ SyncProgressDialog::SyncProgressDialog(const QString &wirelessInterface, uint16_
 
     setWindowTitle(tr("Syncing..."));
 
-    m_watcher = new QFutureWatcher<int>(this);
-    connect(m_watcher, &QFutureWatcher<int>::finished, this, &SyncProgressDialog::serverReturned);
-    m_watcher->setFuture(QtConcurrent::run(startVanillaServer, wirelessInterface, code));
+    m_cancelled = false;
+
+    m_backend = backend;
+    connect(m_backend, &Backend::syncCompleted, this, &SyncProgressDialog::syncReturned);
+    QMetaObject::invokeMethod(m_backend, &Backend::sync, wirelessInterface, code);
 }
 
-void SyncProgressDialog::serverReturned()
+void SyncProgressDialog::syncReturned(bool success)
 {
-    if (m_watcher->result() == VANILLA_SUCCESS) {
+    if (success) {
         QMessageBox::information(this, QString(), tr("Successfully synced with console"));
-        MainWindow::instance()->enableConnectButton();
     } else {
-        QMessageBox::critical(this, QString(), tr("Something went wrong trying to sync"));
+        if (!m_cancelled) {
+            QMessageBox::critical(this, QString(), tr("Something went wrong trying to sync"));
+        }
     }
-    m_watcher->deleteLater();
-    m_watcher = nullptr;
-    this->close();
+    this->accept();
 }
 
 void SyncProgressDialog::done(int r)
 {
-    if (m_watcher) {
-        disconnect(m_watcher, &QFutureWatcher<int>::finished, this, &SyncProgressDialog::serverReturned);
-        vanilla_stop();
-        m_watcher->waitForFinished();
-        m_watcher->deleteLater();
-        m_watcher = nullptr;
-    }
-    
     return QDialog::done(r);
+}
+
+void SyncProgressDialog::reject()
+{
+    m_headerLabel->setText(tr("<html><b>Cancelling...</b></html>"));
+    m_cancelled = true;
+    m_backend->interrupt();
 }

@@ -5,13 +5,15 @@
 #include <QHBoxLayout>
 #include <QLabel>
 
+#include "backend.h"
+
 class SyncDialog : public QDialog
 {
     Q_OBJECT
 public:
     SyncDialog(QWidget *parent = nullptr);
 
-    void setup(const QString &wirelessInterface);
+    void setup(Backend *backend, const QString &wirelessInterface);
 
 private:
     void updateLabels();
@@ -24,6 +26,8 @@ private:
     QLabel *m_labels[g_symbolCount];
     int8_t m_code[g_symbolCount];
     QHBoxLayout *m_buttonLayout;
+
+    Backend *m_backend;
     QString m_wirelessInterface;
 
 private slots:

@@ -6,24 +6,28 @@
 #include <QProcess>
 #include <QtConcurrent/QtConcurrent>
 
+#include "backend.h"
+
 class SyncProgressDialog : public QDialog
 {
     Q_OBJECT
 public:
-    SyncProgressDialog(const QString &wirelessInterface, uint16_t code, QWidget *parent = nullptr);
+    SyncProgressDialog(Backend *backend, const QString &wirelessInterface, uint16_t code, QWidget *parent = nullptr);
 
 protected:
     virtual void done(int r) override;
+    virtual void reject() override;
 
 private:
+    Backend *m_backend;
+    QLabel *m_headerLabel;
     QLabel *m_statusLabel;
     QString m_wirelessInterface;
     uint16_t m_wpsCode;
-
-    QFutureWatcher<int> *m_watcher;
+    bool m_cancelled;
 
 private slots:
-    void serverReturned();
+    void syncReturned(bool success);
 
 };
 
