@@ -2,6 +2,7 @@
 
 #include <QCoreApplication>
 #include <QDir>
+#include <QMessageBox>
 
 #include <fcntl.h>
 #include <stdio.h>
@@ -29,20 +30,22 @@ void vanillaEventHandler(void *context, int type, const char *data, size_t dataL
 
 Backend::Backend(QObject *parent) : QObject(parent)
 {
-    // If not running as root, use pipe
-    m_usePipe = (geteuid() != 0);
     m_pipe = nullptr;
     m_pipeIn = -1;
     m_pipeOut = -1;
     m_interrupt = 0;
 
-    if (m_usePipe) {
-        const QString pipe_bin = QDir(QCoreApplication::applicationDirPath()).filePath(QStringLiteral("vanilla-pipe"));
-        m_pipe = new QProcess(this);
-        m_pipe->setReadChannel(QProcess::StandardError);
-        connect(m_pipe, &QProcess::readyReadStandardError, this, &Backend::readFromPipe, Qt::DirectConnection);
-        //connect(m_pipe, &QProcess::finished, this, [this](int code){printf("closed??? %i\n", code);});
-        m_pipe->start(QStringLiteral("pkexec"), {pipe_bin});
+    // If not running as root, use pipe
+    if ((geteuid() != 0)) {
+        m_pipeThread = new QThread(this);
+        m_pipeThread->start();
+
+        m_pipe = new BackendPipe();
+        m_pipe->moveToThread(m_pipeThread);
+
+        connect(m_pipe, &BackendPipe::pipesAvailable, this, &Backend::setUpPipes);
+
+        QMetaObject::invokeMethod(m_pipe, &BackendPipe::start, Qt::QueuedConnection);
     }
 }
 
@@ -53,7 +56,10 @@ Backend::~Backend()
         uint8_t cc = VANILLA_PIPE_IN_QUIT;
         write(m_pipeOut, &cc, sizeof(cc));
         m_pipeMutex.unlock();
-        m_pipe->waitForFinished();
+
+        m_pipe->deleteLater();
+        m_pipeThread->quit();
+        m_pipeThread->wait();
     }
 }
 
@@ -70,7 +76,7 @@ void writeByte(int pipe, uint8_t byte)
 
 void Backend::interrupt()
 {
-    if (m_usePipe) {
+    if (m_pipe) {
         m_pipeMutex.lock();
         uint8_t cc = VANILLA_PIPE_IN_INTERRUPT;
         write(m_pipeOut, &cc, sizeof(cc));
@@ -91,7 +97,7 @@ void writeNullTermString(int pipe, const QString &s)
 
 void Backend::connectToConsole(const QString &wirelessInterface)
 {
-    if (m_usePipe) {
+    if (m_pipe) {
         // Request pipe to connect
         m_pipeMutex.lock();
         writeByte(m_pipeOut, VANILLA_PIPE_IN_CONNECT);
@@ -130,7 +136,7 @@ void Backend::connectToConsole(const QString &wirelessInterface)
 
 void Backend::updateTouch(int x, int y)
 {
-    if (m_usePipe) {
+    if (m_pipe) {
         m_pipeMutex.lock();
         writeByte(m_pipeOut, VANILLA_PIPE_IN_TOUCH);
         int32_t touchX = x;
@@ -147,7 +153,7 @@ void Backend::updateTouch(int x, int y)
 
 void Backend::setButton(int button, int16_t value)
 {
-    if (m_usePipe) {
+    if (m_pipe) {
         m_pipeMutex.lock();
         writeByte(m_pipeOut, VANILLA_PIPE_IN_BUTTON);
         int32_t buttonSized = button;
@@ -163,7 +169,7 @@ void Backend::setButton(int button, int16_t value)
 
 void Backend::sync(const QString &wirelessInterface, uint16_t code)
 {
-    if (m_usePipe) {
+    if (m_pipe) {
         // Request pipe to sync
         m_pipeMutex.lock();
         
@@ -201,17 +207,59 @@ void Backend::sync(const QString &wirelessInterface, uint16_t code)
     }
 }
 
-void Backend::readFromPipe()
+void Backend::setUpPipes(const QByteArray &in, const QByteArray &out)
 {
-    while (m_pipe->canReadLine()) {
-        QByteArray a = m_pipe->readLine().trimmed();
-        printf("%s\n", a.constData());
-        fflush(stdout);
+    m_pipeIn = open(in.constData(), O_RDONLY);
+    if (m_pipeIn == -1) {
+        QMessageBox::critical(nullptr, tr("Pipe Error"), tr("Failed to create in pipe: %1").arg(strerror(errno)));
+    }
+    m_pipeOut = open(out.constData(), O_WRONLY);
+    if (m_pipeOut == -1) {
+        QMessageBox::critical(nullptr, tr("Pipe Error"), tr("Failed to create out pipe: %1").arg(strerror(errno)));
+    }
+
+    printf("Pipes are good\n");
+}
+
+BackendPipe::BackendPipe(QObject *parent) : QObject(parent)
+{
+    m_process = nullptr;
+}
+
+BackendPipe::~BackendPipe()
+{
+    waitForFinished();
+}
+
+void BackendPipe::waitForFinished()
+{
+    if (m_process) {
+        m_process->waitForFinished();
+    }
+}
+
+void BackendPipe::start()
+{
+    const QString pipe_bin = QDir(QCoreApplication::applicationDirPath()).filePath(QStringLiteral("vanilla-pipe"));
+    m_process = new QProcess(this);
+    m_process->setReadChannel(QProcess::StandardError);
+    connect(m_process, &QProcess::readyReadStandardError, this, &BackendPipe::receivedData);
+    //connect(m_pipe, &QProcess::finished, this, [this](int code){printf("closed??? %i\n", code);});
+    m_process->start(QStringLiteral("pkexec"), {pipe_bin});
+}
+
+void BackendPipe::receivedData()
+{
+    while (m_process->canReadLine()) {
+        QByteArray a = m_process->readLine().trimmed();
+        // Their out is our in which is why these are flipped
         if (m_pipeOutFilename.isEmpty()) {
             m_pipeOutFilename = a;
-        } else if (m_pipeIn == -1) {
-            m_pipeIn = open(a.constData(), O_RDONLY);
-            m_pipeOut = open(m_pipeOutFilename.constData(), O_WRONLY);
+        } else if (m_pipeInFilename.isEmpty()) {
+            m_pipeInFilename = a;
+            emit pipesAvailable(m_pipeInFilename, m_pipeOutFilename);
+        } else {
+            printf("%s\n", a.constData());
         }
     }
 }

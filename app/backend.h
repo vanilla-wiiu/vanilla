@@ -4,6 +4,33 @@
 #include <QMutex>
 #include <QObject>
 #include <QProcess>
+#include <QThread>
+
+class BackendPipe : public QObject
+{
+    Q_OBJECT
+public:
+    BackendPipe(QObject *parent = nullptr);
+    
+    virtual ~BackendPipe() override;
+
+    void waitForFinished();
+
+public slots:
+    void start();
+
+signals:
+    void pipesAvailable(const QByteArray &in, const QByteArray &out);
+
+private slots:
+    void receivedData();
+
+private:
+    QProcess *m_process;
+    QByteArray m_pipeOutFilename;
+    QByteArray m_pipeInFilename;
+
+};
 
 class Backend : public QObject
 {
@@ -29,17 +56,15 @@ public slots:
     void setButton(int button, int16_t value);
 
 private:
-    bool m_usePipe;
-    QProcess *m_pipe;
+    BackendPipe *m_pipe;
+    QThread *m_pipeThread;
     int m_pipeIn;
     int m_pipeOut;
     QMutex m_pipeMutex;
     QAtomicInt m_interrupt;
 
-    QByteArray m_pipeOutFilename;
-
 private slots:
-    void readFromPipe();
+    void setUpPipes(const QByteArray &in, const QByteArray &out);
 
 };
 

@@ -16,7 +16,7 @@ static const char *VANILLA_STATUS_STRINGS[] = {
 
 void print_status(int errno)
 {
-    printf("%s\n", VANILLA_STATUS_STRINGS[-errno]);
+    vanilla_log("%s", VANILLA_STATUS_STRINGS[-errno]);
 }
 
 void print_info(const char *errstr, ...)
@@ -24,10 +24,10 @@ void print_info(const char *errstr, ...)
     va_list args;
     va_start(args, errstr);
 
-    char buf[16384];
-    vsnprintf(buf, sizeof(buf), errstr, args);
-    
-    printf("%s %s\n", VANILLA_STATUS_STRINGS[-VANILLA_INFO], buf);
+    vanilla_log_no_newline(VANILLA_STATUS_STRINGS[-VANILLA_INFO]);
+    vanilla_log_no_newline(" ");
+    vanilla_log_no_newline(errstr, args);
+    vanilla_log_no_newline("\n");
 
     va_end(args);
 }

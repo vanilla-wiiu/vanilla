@@ -86,3 +86,39 @@ void vanilla_set_touch(int x, int y)
 {
     set_touch_state(x, y);
 }
+
+void default_logger(const char *format, va_list args)
+{
+    vprintf(format, args);
+}
+
+void (*custom_logger)(const char *, va_list) = default_logger;
+void vanilla_log(const char *format, ...)
+{
+    va_list va;
+    va_start(va, format);
+
+    if (custom_logger) {
+        custom_logger(format, va);
+        custom_logger("\n", NULL);
+    }
+
+    va_end(va);
+}
+
+void vanilla_log_no_newline(const char *format, ...)
+{
+    va_list va;
+    va_start(va, format);
+
+    if (custom_logger) {
+        custom_logger(format, va);
+    }
+
+    va_end(va);
+}
+
+void vanilla_install_logger(void (*logger)(const char *, va_list))
+{
+    custom_logger = logger;
+}

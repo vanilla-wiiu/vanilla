@@ -31,6 +31,8 @@ int open_fifo(const char *name, int mode)
 }
 
 pthread_mutex_t output_mutex;
+pthread_mutex_t action_mutex;
+int action_ended = 0;
 int fd_out = 0;
 int write_control_code(uint8_t code)
 {
@@ -79,6 +81,11 @@ void *sync_command(void *a)
     int r = vanilla_sync_with_console(args->wireless_interface, args->code);
     free(args);
     write_sync_state(r);
+
+    pthread_mutex_lock(&action_mutex);
+    action_ended = 1;
+    pthread_mutex_unlock(&action_mutex);
+
     pthread_exit((void *) (size_t) r);
 }
 
@@ -92,6 +99,11 @@ void *connect_command(void *a)
     int r = vanilla_connect_to_console(args->wireless_interface, event_handler, NULL);
     free(args);
     write_control_code(VANILLA_PIPE_OUT_EOF);
+
+    pthread_mutex_lock(&action_mutex);
+    action_ended = 1;
+    pthread_mutex_unlock(&action_mutex);
+
     pthread_exit((void *) (size_t) r);
 }
 
@@ -105,14 +117,27 @@ void read_string(int fd, char *buf, size_t max)
     }
 }
 
+void lib_logger(const char *fmt, va_list args)
+{
+    vfprintf(stderr, fmt, args);
+    // FILE *fff = fopen("/home/matt/Desktop/temp.log", "a");
+    // vfprintf(fff, fmt, args);
+    // fclose(fff);
+}
+
 void vapipelog(const char *str, ...)
 {
     va_list va;
     va_start(va, str);
-    FILE *fff = fopen("/home/matt/Desktop/temp.log", "a");
-    vfprintf(fff, str, va);
-    fprintf(fff, "\n");
-    fclose(fff);
+
+    vfprintf(stderr, str, va);
+    fprintf(stderr, "\n");
+    
+    // FILE *fff = fopen("/home/matt/Desktop/temp.log", "a");
+    // vfprintf(fff, str, va);
+    // fprintf(fff, "\n");
+    // fclose(fff);
+
     va_end(va);
 }
 
@@ -123,11 +148,10 @@ int main()
     time_t now = time(0);
     char pipe_in_filename[256];
     char pipe_out_filename[256];
-    snprintf(pipe_in_filename, sizeof(pipe_in_filename), "%s-%li", "/home/matt/Desktop/vanilla-fifo-in", now);
-    snprintf(pipe_out_filename, sizeof(pipe_out_filename), "%s-%li", "/home/matt/Desktop/vanilla-fifo-out", now);
+    snprintf(pipe_in_filename, sizeof(pipe_in_filename), "%s-%li", "/tmp/vanilla-fifo-in", now);
+    snprintf(pipe_out_filename, sizeof(pipe_out_filename), "%s-%li", "/tmp/vanilla-fifo-out", now);
 
     umask(0000);
-    dup2(STDERR_FILENO, STDOUT_FILENO);
 
     if (create_fifo(pipe_in_filename) == -1) return 1;
     if (create_fifo(pipe_out_filename) == -1) return 1;
@@ -142,11 +166,26 @@ int main()
     ssize_t read_size;
     pthread_t current_action = 0;
     int m_quit = 0;
+
+    vanilla_install_logger(lib_logger);
+    
+    pthread_mutex_init(&output_mutex, NULL);
+    pthread_mutex_init(&action_mutex, NULL);
+
     while (!m_quit) {
         read_size = read(fd_in, &control_code, 1);
         if (read_size == 0) {
             continue;
         }
+
+        pthread_mutex_lock(&action_mutex);
+        if (action_ended) {
+            void *ret;
+            pthread_join(current_action, &ret);
+            action_ended = 0;
+            current_action = 0;
+        }
+        pthread_mutex_unlock(&action_mutex);
 
         switch (control_code) {
         case VANILLA_PIPE_IN_SYNC:
@@ -207,8 +246,8 @@ int main()
             if (current_action != 0) {
                 void *ret;
                 vanilla_stop();
-                pthread_join(current_action, &ret);
                 write_control_code(VANILLA_PIPE_ERR_SUCCESS);
+                pthread_join(current_action, &ret);
             } else {
                 write_control_code(VANILLA_PIPE_ERR_INVALID);
             }
@@ -219,6 +258,9 @@ int main()
             break;
         }
     }
+
+    pthread_mutex_destroy(&action_mutex);
+    pthread_mutex_destroy(&output_mutex);
 
     close(fd_in);
     close(fd_out);

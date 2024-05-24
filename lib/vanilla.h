@@ -5,6 +5,7 @@
 extern "C" {
 #endif
 
+#include <stdarg.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -105,6 +106,17 @@ void vanilla_set_button(int button, int16_t value);
  * If either `x` or `y` are -1, this point will be disabled.
  */
 void vanilla_set_touch(int x, int y);
+
+/**
+ * Logging function
+ */
+void vanilla_log(const char *format, ...);
+void vanilla_log_no_newline(const char *format, ...);
+
+/**
+ * Install custom logger
+ */
+void vanilla_install_logger(void (*logger)(const char *, va_list args));
 
 #if defined(__cplusplus)
 }
