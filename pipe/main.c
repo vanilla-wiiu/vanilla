@@ -42,7 +42,7 @@ void event_handler(void *context, int event_type, const char *data, size_t data_
 {
     uint8_t event_sized = event_type;
     uint64_t data_size_sized = data_size;
-    uint8_t control_code = VANILLA_OUT_DATA;
+    uint8_t control_code = VANILLA_PIPE_OUT_DATA;
     
     pthread_mutex_lock(&output_mutex);
 
@@ -50,6 +50,18 @@ void event_handler(void *context, int event_type, const char *data, size_t data_
     write(fd_out, &event_sized, sizeof(event_sized));
     write(fd_out, data, data_size);
     write(fd_out, &data_size_sized, sizeof(data_size_sized));
+
+    pthread_mutex_unlock(&output_mutex);
+}
+
+void write_sync_state(uint8_t success)
+{
+    uint8_t cc = VANILLA_PIPE_OUT_SYNC_STATE;
+
+    pthread_mutex_lock(&output_mutex);
+
+    write(fd_out, &cc, sizeof(cc));
+    write(fd_out, &success, sizeof(success));
 
     pthread_mutex_unlock(&output_mutex);
 }
@@ -65,6 +77,7 @@ void *sync_command(void *a)
     struct sync_args *args = (struct sync_args *)a;
     int r = vanilla_sync_with_console(args->wireless_interface, args->code);
     free(args);
+    write_sync_state(r);
     pthread_exit((void *) (size_t) r);
 }
 
@@ -91,15 +104,13 @@ void read_string(int fd, char *buf, size_t max)
 }
 
 int main()
-{
-    static const char *fifo_in_filename = "/tmp/vanilla-fifo-in";
-    static const char *fifo_out_filename = "/tmp/vanilla-fifo-out";
+{\
     int fd_in;
 
-    if (create_fifo(fifo_in_filename) == -1) return 1;
-    if (create_fifo(fifo_out_filename) == -1) return 1;
-    if ((fd_in = open_fifo(fifo_in_filename, O_RDONLY)) == -1) return 1;
-    if ((fd_out = open_fifo(fifo_out_filename, O_WRONLY)) == -1) return 1;
+    if (create_fifo(VANILLA_PIPE_IN_FILENAME) == -1) return 1;
+    if (create_fifo(VANILLA_PIPE_OUT_FILENAME) == -1) return 1;
+    if ((fd_in = open_fifo(VANILLA_PIPE_IN_FILENAME, O_RDONLY)) == -1) return 1;
+    if ((fd_out = open_fifo(VANILLA_PIPE_OUT_FILENAME, O_WRONLY)) == -1) return 1;
 
     uint8_t control_code;
     ssize_t read_size;
@@ -111,54 +122,54 @@ int main()
         }
 
         switch (control_code) {
-        case VANILLA_IN_SYNC:
+        case VANILLA_PIPE_IN_SYNC:
         {
             if (current_action != 0) {
-                write_control_code(VANILLA_ERR_BUSY);
+                write_control_code(VANILLA_PIPE_ERR_BUSY);
             } else {
                 struct sync_args *args = (struct sync_args *) malloc(sizeof(struct sync_args));
                 read(fd_in, &args->code, sizeof(args->code));
                 read_string(fd_in, args->wireless_interface, sizeof(args->wireless_interface));
-                write_control_code(VANILLA_ERR_SUCCESS);
+                write_control_code(VANILLA_PIPE_ERR_SUCCESS);
                 pthread_create(&current_action, NULL, sync_command, args);
             }
             break;
         }
-        case VANILLA_IN_CONNECT:
+        case VANILLA_PIPE_IN_CONNECT:
         {
             if (current_action != 0) {
-                write_control_code(VANILLA_ERR_BUSY);
+                write_control_code(VANILLA_PIPE_ERR_BUSY);
             } else {
                 struct connect_args *args = (struct connect_args *) malloc(sizeof(struct connect_args));
                 read_string(fd_in, args->wireless_interface, sizeof(args->wireless_interface));
-                write_control_code(VANILLA_ERR_SUCCESS);
+                write_control_code(VANILLA_PIPE_ERR_SUCCESS);
                 pthread_create(&current_action, NULL, connect_command, args);
             }
             break;
         }
-        case VANILLA_IN_BUTTON:
+        case VANILLA_PIPE_IN_BUTTON:
         {
             if (current_action == 0) {
-                write_control_code(VANILLA_ERR_INVALID);
+                write_control_code(VANILLA_PIPE_ERR_INVALID);
             } else {
                 int32_t button_id;
                 int16_t button_value;
                 read(fd_in, &button_id, sizeof(button_id));
                 read(fd_in, &button_value, sizeof(button_value));
                 vanilla_set_button(button_id, button_value);
-                write_control_code(VANILLA_ERR_SUCCESS);
+                write_control_code(VANILLA_PIPE_ERR_SUCCESS);
             }
             break;
         }
-        case VANILLA_IN_QUIT:
+        case VANILLA_PIPE_IN_QUIT:
         {
             if (current_action != 0) {
                 void *ret;
                 vanilla_stop();
                 pthread_join(current_action, &ret);
-                write_control_code(VANILLA_SUCCESS);
+                write_control_code(VANILLA_PIPE_ERR_SUCCESS);
             } else {
-                write_control_code(VANILLA_ERR_INVALID);
+                write_control_code(VANILLA_PIPE_ERR_INVALID);
             }
             break;
         }
@@ -168,8 +179,8 @@ int main()
     close(fd_in);
     close(fd_out);
 
-    unlink(fifo_in_filename);
-    unlink(fifo_out_filename);
+    unlink(VANILLA_PIPE_IN_FILENAME);
+    unlink(VANILLA_PIPE_OUT_FILENAME);
 
     return 0;
 }

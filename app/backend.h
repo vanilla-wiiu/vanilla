@@ -1,7 +1,9 @@
 #ifndef BACKEND_H
 #define BACKEND_H
 
+#include <QMutex>
 #include <QObject>
+#include <QProcess>
 
 class Backend : public QObject
 {
@@ -23,6 +25,17 @@ public slots:
     void connectToConsole(const QString &wirelessInterface);
     void updateTouch(int x, int y);
     void setButton(int button, int16_t value);
+
+private:
+    int getInPipe();
+    int getOutPipe();
+    bool ensurePipes();
+
+    bool m_usePipe;
+    QProcess *m_pipe;
+    int m_pipeIn;
+    int m_pipeOut;
+    QMutex m_pipeMutex;
 
 };
 

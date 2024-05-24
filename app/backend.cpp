@@ -1,6 +1,11 @@
 #include "backend.h"
 
+#include <fcntl.h>
+#include <stdio.h>
+#include <unistd.h>
 #include <vanilla.h>
+
+#include "../pipe/pipe.h"
 
 void vanillaEventHandler(void *context, int type, const char *data, size_t dataLength)
 {
@@ -21,7 +26,11 @@ void vanillaEventHandler(void *context, int type, const char *data, size_t dataL
 
 Backend::Backend(QObject *parent) : QObject(parent)
 {
-
+    // If not running as root, use pipe
+    m_usePipe = (geteuid() != 0);
+    m_pipe = nullptr;
+    m_pipeIn = -1;
+    m_pipeOut = -1;
 }
 
 void Backend::interrupt()
@@ -47,7 +56,66 @@ void Backend::setButton(int button, int16_t value)
 
 void Backend::sync(const QString &wirelessInterface, uint16_t code)
 {
-    QByteArray wirelessInterfaceC = wirelessInterface.toUtf8();
-    int r = vanilla_sync_with_console(wirelessInterfaceC.constData(), code);
-    emit syncCompleted(r == VANILLA_SUCCESS);
+    if (m_usePipe) {
+        // Get pipe handles
+        int in = getInPipe();
+        int out = getOutPipe();
+
+        // Request pipe to sync
+        m_pipeMutex.lock();
+        uint8_t cc = VANILLA_PIPE_IN_SYNC;
+        write(out, &cc, sizeof(cc));
+        m_pipeMutex.unlock();
+
+        // See if pipe accepted our request to sync
+        read(in, &cc, sizeof(cc));
+        if (cc != VANILLA_PIPE_ERR_SUCCESS) {
+            emit syncCompleted(false);
+            return;
+        }
+
+        // Wait for sync status
+        read(in, &cc, sizeof(cc));
+        if (cc == VANILLA_PIPE_OUT_SYNC_STATE) {
+            read(in, &cc, sizeof(cc));
+            emit syncCompleted(cc);
+        } else {
+            emit syncCompleted(false);
+        }
+    } else {
+        QByteArray wirelessInterfaceC = wirelessInterface.toUtf8();
+        int r = vanilla_sync_with_console(wirelessInterfaceC.constData(), code);
+        emit syncCompleted(r == VANILLA_SUCCESS);
+    }
+}
+
+int Backend::getInPipe()
+{
+    ensurePipes();
+    if (m_pipeIn == 0) {
+        // The pipe's output is our input
+        m_pipeIn = open(VANILLA_PIPE_OUT_FILENAME, O_RDONLY);
+    }
+
+    return m_pipeIn;
+}
+
+int Backend::getOutPipe()
+{
+    ensurePipes();
+    if (m_pipeOut == 0) {
+        // The pipe's input is our output
+        m_pipeOut = open(VANILLA_PIPE_IN_FILENAME, O_WRONLY);
+    }
+
+    return m_pipeOut;
+}
+
+bool Backend::ensurePipes()
+{
+    if (!m_pipe) {
+        m_pipe = new QProcess(this);
+        m_pipe->start(QStringLiteral("pkexec"), {QStringLiteral("vanilla-pipe")});
+    }
+    return true;
 }
