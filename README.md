@@ -2,6 +2,14 @@
 
 This is a **work-in-progress** software clone of the Wii U gamepad. No warranty is provided and everything should be considered **alpha** at best.
 
+<p align="center">
+    <a href="https://youtu.be/DSgFu4rDxgc">
+        <img align="center" src="https://i9.ytimg.com/vi_webp/DSgFu4rDxgc/maxresdefault.webp" width="50%">
+        <br>
+        <i>Announcement Video</i>
+    </a>
+</p>
+
 ## Compiling (Linux)
 
 Vanilla currently requires the following dependencies:
