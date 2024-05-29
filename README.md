@@ -1,6 +1,6 @@
 # Vanilla
 
-This is a **work-in-progress** software clone of the Wii U gamepad. No warranty is provided and everything should be considered **alpha** at best.
+This is a **work-in-progress** software clone of the Wii U gamepad for Linux (including Raspberry Pi and Steam Deck) and Android. No warranty is provided and everything should be considered **alpha** at best.
 
 <p align="center">
     <a href="https://youtu.be/DSgFu4rDxgc">
