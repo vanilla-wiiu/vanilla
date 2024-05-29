@@ -30,4 +30,12 @@ jobs:
         name: Vanilla U (${{ matrix.arch }})
         path: ${{ github.workspace }}/Vanilla_U-${{ matrix.arch }}.tar.gz
 
+    - name: Upload Continuous Release
+      if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' && github.repository == 'vanilla-wiiu/vanilla' }}
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        curl -fLOSs --retry 2 --retry-delay 60 https://github.com/probonopd/uploadtool/raw/master/upload.sh
+        bash upload.sh Vanilla_U-${{ matrix.arch }}.tar.gz
       
