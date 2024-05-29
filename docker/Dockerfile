@@ -27,14 +27,14 @@ RUN git clone --branch 6.7.1 --depth 1 git://code.qt.io/qt/qt5.git qt6 \
     && perl init-repository --module-subset=qtbase,qtmultimedia,qtshadertools \
     && mkdir qt6-build \
     && cd qt6-build \
-    && ../configure -xcb -verbose -no-feature-ffmpeg -prefix /usr/local \
+    && ../configure -xcb -verbose -no-feature-ffmpeg -no-feature-forkfd_pidfd -prefix /usr/local \
     && cmake --build . --parallel \
     && cmake --install . \
     && cd ../.. \
     && rm -rf qt6
 
 # Build linuxdeployqt
-RUN apt -y install patchelf
+RUN apt -y install patchelf wget
 RUN git clone https://github.com/probonopd/linuxdeployqt.git \
         && cd linuxdeployqt \
         && sed -i "s/find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Core)/find_package(Qt6 REQUIRED COMPONENTS Core)/g" tools/linuxdeployqt/CMakeLists.txt \
@@ -46,9 +46,21 @@ RUN git clone https://github.com/probonopd/linuxdeployqt.git \
         && cd ../.. \
         && rm -rf linuxdeployqt
 
+# Build SDL2
+RUN apt -y install libxext-dev
+RUN git clone https://github.com/libsdl-org/SDL.git -b release-2.30.3 --depth 1 \
+        && cd SDL \
+        && mkdir build \
+        && cd build \
+        && cmake .. -DCMAKE_BUILD_TYPE=Release \
+        && cmake --build . --parallel \
+        && cmake --install . \
+        && cd ../.. \
+        && rm -rf SDL
+
 # Other dependencies for Vanilla
 RUN apt -y install libavcodec-dev libavfilter-dev libavutil-dev \
-        libsdl2-dev libnl-genl-3-dev \
+        libnl-genl-3-dev \
         isc-dhcp-client
 
 # Build Vanilla and deploy
