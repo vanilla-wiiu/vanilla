@@ -30,7 +30,7 @@ SyncProgressDialog::SyncProgressDialog(Backend *backend, const QString &wireless
     animationLayout->addStretch();
 
     m_animationTimer = new QTimer(this);
-    m_animationTimer->setInterval(250);
+    m_animationTimer->setInterval(50);
     m_progressAnimation = 0;
     m_animationTimer->start();
     connect(m_animationTimer, &QTimer::timeout, this, &SyncProgressDialog::animationStep);
@@ -85,9 +85,13 @@ void SyncProgressDialog::animationStep()
     QString s;
 
     const int beats = sizeof(m_animationLabels)/sizeof(QLabel *);
+
+    //const int big = (m_progressAnimation % beats);
+    const int big = (qSin(m_progressAnimation * 0.2) * 0.5 + 0.5) * beats;
+
     for (int i = 0; i < beats; i++) {
         QLabel *l = m_animationLabels[i];
-        if (i == (m_progressAnimation % beats)) {
+        if (i == big) {
             l->setText(QString::fromUtf8("\xE2\xAC\xA4"));
         } else {
             l->setText(QString::fromUtf8("\xE2\x80\xA2"));

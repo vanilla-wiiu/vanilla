@@ -56,7 +56,9 @@ void handle_audio_packet(vanilla_event_handler_t event_handler, void *context, c
     }
 
     event_handler(context, VANILLA_EVENT_AUDIO, ap->payload, ap->payload_size);
-    event_handler(context, VANILLA_EVENT_VIBRATE, (void *) (size_t) ap->vibrate, 0);
+
+    uint8_t vibrate_val = ap->vibrate;
+    event_handler(context, VANILLA_EVENT_VIBRATE, &vibrate_val, sizeof(vibrate_val));
 }
 
 void *listen_audio(void *x)

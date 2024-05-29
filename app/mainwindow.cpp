@@ -72,7 +72,7 @@ MainWindow::MainWindow(QWidget *parent) : QWidget(parent)
 
         m_connectBtn = new QPushButton(connectionConfigGroupBox);
         m_connectBtn->setCheckable(true);
-        m_connectBtn->setEnabled(vanilla_has_config());
+        //m_connectBtn->setEnabled(vanilla_has_config()); // TODO: Implement this properly through the pipe at some point
         m_backend = nullptr;
         setConnectedState(false);
         connect(m_connectBtn, &QPushButton::clicked, this, &MainWindow::setConnectedState);

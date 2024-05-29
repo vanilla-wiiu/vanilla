@@ -38,3 +38,5 @@ target_include_directories(vanilla-gui PRIVATE
 )
 
 install(TARGETS vanilla-gui)
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/com.mattkc.vanilla.desktop" DESTINATION share/applications)
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/com.mattkc.vanilla.svg" DESTINATION share/pixmaps)

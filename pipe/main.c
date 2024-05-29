@@ -46,7 +46,7 @@ void event_handler(void *context, int event_type, const char *data, size_t data_
     uint8_t event_sized = event_type;
     uint64_t data_size_sized = data_size;
     uint8_t control_code = VANILLA_PIPE_OUT_DATA;
-    
+
     pthread_mutex_lock(&output_mutex);
 
     write(fd_out, &control_code, sizeof(control_code));
@@ -215,30 +215,20 @@ int main()
         }
         case VANILLA_PIPE_IN_BUTTON:
         {
-            if (current_action == 0) {
-                write_control_code(VANILLA_PIPE_ERR_INVALID);
-            } else {
-                int32_t button_id;
-                int16_t button_value;
-                read(fd_in, &button_id, sizeof(button_id));
-                read(fd_in, &button_value, sizeof(button_value));
-                vanilla_set_button(button_id, button_value);
-                write_control_code(VANILLA_PIPE_ERR_SUCCESS);
-            }
+            int32_t button_id;
+            int16_t button_value;
+            read(fd_in, &button_id, sizeof(button_id));
+            read(fd_in, &button_value, sizeof(button_value));
+            vanilla_set_button(button_id, button_value);
             break;
         }
         case VANILLA_PIPE_IN_TOUCH:
         {
-            if (current_action == 0) {
-                write_control_code(VANILLA_PIPE_ERR_INVALID);
-            } else {
-                int32_t touch_x;
-                int32_t touch_y;
-                read(fd_in, &touch_x, sizeof(touch_x));
-                read(fd_in, &touch_y, sizeof(touch_y));
-                vanilla_set_touch(touch_x, touch_y);
-                write_control_code(VANILLA_PIPE_ERR_SUCCESS);
-            }
+            int32_t touch_x;
+            int32_t touch_y;
+            read(fd_in, &touch_x, sizeof(touch_x));
+            read(fd_in, &touch_y, sizeof(touch_y));
+            vanilla_set_touch(touch_x, touch_y);
             break;
         }
         case VANILLA_PIPE_IN_INTERRUPT:

@@ -23,7 +23,7 @@ void vanillaEventHandler(void *context, int type, const char *data, size_t dataL
         emit backend->audioAvailable(QByteArray(data, dataLength));
         break;
     case VANILLA_EVENT_VIBRATE:
-        emit backend->vibrate(data != nullptr);
+        emit backend->vibrate(*data);
         break;
     }
 }
@@ -120,6 +120,7 @@ void Backend::connectToConsole(const QString &wirelessInterface)
                 read(m_pipeIn, &data_size, sizeof(data_size));
 
                 void *buf = malloc(data_size);
+                read(m_pipeIn, buf, data_size);
 
                 vanillaEventHandler(this, cc, (const char *) buf, data_size);
 
@@ -142,8 +143,6 @@ void Backend::updateTouch(int x, int y)
         write(m_pipeOut, &x, sizeof(x));
         write(m_pipeOut, &y, sizeof(y));
         m_pipeMutex.unlock();
-        
-        ignoreByte(m_pipeIn);
     } else {
         vanilla_set_touch(x, y);
     }
@@ -158,8 +157,6 @@ void Backend::setButton(int button, int16_t value)
         write(m_pipeOut, &buttonSized, sizeof(buttonSized));
         write(m_pipeOut, &value, sizeof(value));
         m_pipeMutex.unlock();
-
-        ignoreByte(m_pipeIn);
     } else {
         vanilla_set_button(button, value);
     }

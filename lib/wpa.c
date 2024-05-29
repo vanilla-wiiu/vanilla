@@ -117,10 +117,10 @@ int wpa_setup_environment(const char *wireless_interface, const char *wireless_c
     install_interrupt_handler();
 
     // Check status of interface with NetworkManager
-    int is_managed;
+    int is_managed = 0;
     if (is_networkmanager_managing_device(wireless_interface, &is_managed) != VANILLA_SUCCESS) {
         print_info("FAILED TO DETERMINE MANAGED STATE OF WIRELESS INTERFACE");
-        goto die;
+        //goto die;
     }
 
     // If NetworkManager is managing this device, temporarily stop it from doing so

@@ -26,7 +26,7 @@ private:
     uint16_t m_wpsCode;
     bool m_cancelled;
 
-    QLabel *m_animationLabels[5];
+    QLabel *m_animationLabels[8];
     int m_progressAnimation;
     QTimer *m_animationTimer;
 

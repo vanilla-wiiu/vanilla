@@ -26,10 +26,16 @@ target_include_directories(vanilla PRIVATE
 
 # Build WPA supplicant
 add_custom_target(
+    wpa_supplicant_configure
+    COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_SOURCE_DIR}/hostap/conf/wpa_supplicant.config" "${CMAKE_CURRENT_SOURCE_DIR}/hostap/wpa_supplicant/.config"
+)
+add_custom_target(
     wpa_supplicant_build
-    COMMAND make && cp wpa_supplicant wpa_supplicant_drc
+    COMMAND make -j$$(nproc) && cp wpa_supplicant wpa_supplicant_drc
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/hostap/wpa_supplicant"
     BYPRODUCTS "${CMAKE_CURRENT_SOURCE_DIR}/hostap/wpa_supplicant/wpa_supplicant_drc"
+    USES_TERMINAL
+    DEPENDS wpa_supplicant_configure
 )
 add_executable(wpa_supplicant IMPORTED)
 add_dependencies(wpa_supplicant wpa_supplicant_build)
@@ -60,6 +66,7 @@ add_dependencies(wpa_client wpa_client_build)
 # Link our library with the client library
 target_link_libraries(vanilla PRIVATE
     wpa_client
+    pthread
 )
 
 # Copy files into build directory

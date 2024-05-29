@@ -100,7 +100,7 @@ void vanilla_log(const char *format, ...)
 
     if (custom_logger) {
         custom_logger(format, va);
-        custom_logger("\n", NULL);
+        custom_logger("\n", va);
     }
 
     va_end(va);
