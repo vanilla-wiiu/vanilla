@@ -4,7 +4,7 @@ This is a **work-in-progress** software clone of the Wii U gamepad for Linux (in
 
 <p align="center">
     <a href="https://youtu.be/DSgFu4rDxgc">
-        <img align="center" src="https://i9.ytimg.com/vi_webp/DSgFu4rDxgc/maxresdefault.webp" width="50%">
+        <img align="center" src="https://github.com/vanilla-wiiu/vanilla/assets/64917206/d450047d-0961-4a16-9823-e07f9f9a356c" width="50%">
         <br>
         <i>Announcement Video</i>
     </a>
