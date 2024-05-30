@@ -10,6 +10,12 @@ This is a **work-in-progress** software clone of the Wii U gamepad for Linux (in
     </a>
 </p>
 
+## What Wi-Fi adapter should I use?
+
+At a minimum, you will need an adapter that supports 802.11n 5GHz. Newer standards (e.g. 802.11ac) are backwards compatible and should work as long as they can run at 5GHz.
+
+In practice, not all hardware/drivers appear to work at this time. Check the [Wireless Compatibility](/vanilla-wiiu/vanilla/wiki/Wireless-Compatibility) page on the wiki to check if a card is confirmed working or not.
+
 ## Compiling (Linux)
 
 Vanilla currently requires the following dependencies:
