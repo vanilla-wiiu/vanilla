@@ -59,7 +59,7 @@ int start_wpa_supplicant(const char *wireless_interface, const char *config_file
 
     // Kill any potentially orphaned wpa_supplicant_drcs
     const char *wpa_supplicant_drc = "wpa_supplicant_drc";
-    const char *kill_argv[] = {"killall", "-9", wpa_supplicant_drc};
+    const char *kill_argv[] = {"killall", "-9", wpa_supplicant_drc, NULL};
     pid_t kill_pid;
     int kill_pipe;
     int r = start_process(kill_argv, &kill_pid, &kill_pipe);
