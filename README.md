@@ -26,7 +26,7 @@ Vanilla currently requires the following dependencies:
 The build process is otherwise normal for a CMake program:
 
 ```
-git clone https://github.com/vanilla-wiiu/vanilla.git
+git clone --recursive https://github.com/vanilla-wiiu/vanilla.git
 cd vanilla
 mkdir build
 cd build
