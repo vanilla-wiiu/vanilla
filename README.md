@@ -18,6 +18,10 @@ Vanilla currently requires the following dependencies:
   ```
   # apt install qt6-base-dev qt6-multimedia-dev libavcodec-dev libavutil-dev libavfilter-dev libsdl2-dev libnl-genl-3-dev isc-dhcp-client
   ```
+- Fedora
+  ```
+  # dnf install qt6-qtbase-devel qt6-qtmultimedia-devel libavcodec-free-devel libavutil-free-devel libavfilter-free-devel libnl3-devel SDL2-devel openssl-devel
+  ```
 - Arch
   ```
   # pacman -S qt6 ffmpeg libnl sdl2 dhclient
