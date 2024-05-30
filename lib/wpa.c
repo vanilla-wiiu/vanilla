@@ -213,9 +213,12 @@ int call_dhcp(const char *network_interface)
         dhclient_script = malloc(buf_size);
         get_binary_in_working_directory("../sbin/dhclient-script", dhclient_script, buf_size);
         argv[3] = dhclient_script;
+        
+        print_info("Using custom dhclient at: %s", argv[0]);
+    } else {
+        print_info("Using system dhclient");
     }
 
-    print_info(argv[0]);
 
     pid_t dhclient_pid;
     int r = start_process(argv, &dhclient_pid, NULL);
