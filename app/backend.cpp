@@ -213,7 +213,7 @@ void Backend::setUpPipes(const QByteArray &in, const QByteArray &out)
         QMessageBox::critical(nullptr, tr("Pipe Error"), tr("Failed to create out pipe: %1").arg(strerror(errno)));
     }
 
-    printf("Pipes are good\n");
+    printf("Established connection with backend\n");
 }
 
 BackendPipe::BackendPipe(QObject *parent) : QObject(parent)
