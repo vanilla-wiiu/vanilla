@@ -58,6 +58,7 @@ CMD git config --global --add safe.directory /vanilla/lib/hostap \
         && cmake --build /build --parallel \
         && cmake --install /build \
         && cp $(which dhclient) /AppDir/usr/bin \
+        && mkdir -p /AppDir/usr/sbin \
         && wget https://raw.githubusercontent.com/isc-projects/dhcp/master/client/scripts/linux -O /AppDir/usr/sbin/dhclient-script \
         && chmod +x /AppDir/usr/sbin/dhclient-script \
         && linuxdeployqt /AppDir/usr/bin/vanilla-gui -executable-dir=/AppDir/usr/bin -bundle-non-qt-libs \
