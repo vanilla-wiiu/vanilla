@@ -227,6 +227,13 @@ int call_dhcp(const char *network_interface)
         return VANILLA_ERROR;
     }
 
+    int exit_status = WEXITSTATUS(status);
+    if (exit_status != 0) {
+        // Something went wrong
+        print_info("DHCLIENT DID NOT EXIT NORMALLY: %i", exit_status);
+        return VANILLA_ERROR;
+    }
+
     return VANILLA_SUCCESS;
 }
 
