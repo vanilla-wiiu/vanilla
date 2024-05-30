@@ -27,41 +27,54 @@ void wpa_ctrl_command(struct wpa_ctrl *ctrl, const char *cmd, char *buf, size_t 
     wpa_ctrl_request(ctrl, cmd, strlen(cmd), buf, buf_len, NULL /*wpa_msg*/);
 }
 
-int start_wpa_supplicant(const char *wireless_interface, const char *config_file, pid_t *pid)
+int get_binary_in_working_directory(const char *bin_name, char *buf, size_t buf_size)
 {
-    // TODO: drc-sim has `rfkill unblock wlan`, should we do that too?
-
-    // Get path to `wpa_supplicant_drc` (assumes it's in the same path as us - presumably /usr/bin/ or equivalent)
     size_t path_size = get_max_path_length();
     char *path_buf = malloc(path_size);
-    char *wpa_buf = malloc(path_size);
-    if (!path_buf || !wpa_buf) {
+    if (!path_buf) {
         // Failed to allocate buffer, terminate
-        return VANILLA_ERROR;
+        return -1;
     }
 
     // Get current working directory
-    // if (!getcwd(path_buf, path_size)) {
-    //     return VANILLA_ERROR;
-    // }
     // TODO: This is Linux only and will require changes on other platforms
     ssize_t link_len = readlink("/proc/self/exe", path_buf, path_size);
     if (link_len < 0) {
         print_info("READLINK ERROR: %i", errno);
-        return VANILLA_ERROR;
+        return -1;
     }
 
     // Merge current working directory with wpa_supplicant name
     path_buf[link_len] = 0;
     dirname(path_buf);
-    snprintf(wpa_buf, path_size, "%s/%s", path_buf, "wpa_supplicant_drc");
-    print_info(wpa_buf);
+    int r = snprintf(buf, path_size, "%s/%s", path_buf, bin_name);
     free(path_buf);
+
+    return r;
+}
+
+int start_wpa_supplicant(const char *wireless_interface, const char *config_file, pid_t *pid)
+{
+    // TODO: drc-sim has `rfkill unblock wlan`, should we do that too?
+
+    // Kill any potentially orphaned wpa_supplicant_drcs
+    const char *wpa_supplicant_drc = "wpa_supplicant_drc";
+    const char *kill_argv[] = {"killall", "-9", wpa_supplicant_drc};
+    pid_t kill_pid;
+    int kill_pipe;
+    int r = start_process(kill_argv, &kill_pid, &kill_pipe);
+    int status;
+    waitpid(kill_pid, &status, 0);
+
+    size_t path_size = get_max_path_length();
+    char *wpa_buf = malloc(path_size);
+
+    get_binary_in_working_directory(wpa_supplicant_drc, wpa_buf, path_size);
 
     const char *argv[] = {wpa_buf, "-Dnl80211", "-i", wireless_interface, "-c", config_file, NULL};
     int pipe;
 
-    int r = start_process(argv, pid, &pipe);
+    r = start_process(argv, pid, &pipe);
     free(wpa_buf);
 
     if (r != VANILLA_SUCCESS) {
@@ -185,12 +198,25 @@ die:
 int call_dhcp(const char *network_interface)
 {
     const char *argv[] = {"dhclient", network_interface, NULL};
+
+    size_t buf_size = get_max_path_length();
+    char *dhclient_buf = malloc(buf_size);
+    get_binary_in_working_directory("dhclient", dhclient_buf, buf_size);
+
+    if (access(dhclient_buf, F_OK) == 0) {
+        argv[0] = dhclient_buf;
+    }
+
+    print_info(argv[0]);
+
     pid_t dhclient_pid;
     int r = start_process(argv, &dhclient_pid, NULL);
     if (r != VANILLA_SUCCESS) {
         print_info("FAILED TO CALL DHCLIENT");
         return r;
     }
+
+    free(dhclient_buf);
 
     int status;
     waitpid(dhclient_pid, &status, 0);
