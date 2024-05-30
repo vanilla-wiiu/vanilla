@@ -62,8 +62,6 @@ int vanilla_connect_to_console(const char *wireless_interface, vanilla_event_han
     args.event_handler = event_handler;
     args.event_handler_context = context;
 
-    print_info("connecting with config: %s", get_wireless_connect_config_filename());
-
     return wpa_setup_environment(wireless_interface, get_wireless_connect_config_filename(), thunk_to_connect, &args);
 }
 
