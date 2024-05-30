@@ -46,21 +46,9 @@ RUN git clone https://github.com/probonopd/linuxdeployqt.git \
         && cd ../.. \
         && rm -rf linuxdeployqt
 
-# Build SDL2
-RUN apt -y install libxext-dev
-RUN git clone https://github.com/libsdl-org/SDL.git -b release-2.30.3 --depth 1 \
-        && cd SDL \
-        && mkdir build \
-        && cd build \
-        && cmake .. -DCMAKE_BUILD_TYPE=Release \
-        && cmake --build . --parallel \
-        && cmake --install . \
-        && cd ../.. \
-        && rm -rf SDL
-
 # Other dependencies for Vanilla
 RUN apt -y install libavcodec-dev libavfilter-dev libavutil-dev \
-        libnl-genl-3-dev \
+        libnl-genl-3-dev libsdl2-dev \
         isc-dhcp-client
 
 # Build Vanilla and deploy
