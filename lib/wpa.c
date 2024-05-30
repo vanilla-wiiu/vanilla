@@ -197,14 +197,22 @@ die:
 
 int call_dhcp(const char *network_interface)
 {
-    const char *argv[] = {"dhclient", network_interface, NULL};
+    const char *argv[] = {"dhclient", network_interface, NULL, NULL, NULL};
 
     size_t buf_size = get_max_path_length();
     char *dhclient_buf = malloc(buf_size);
+    char *dhclient_script = NULL;
     get_binary_in_working_directory("dhclient", dhclient_buf, buf_size);
 
     if (access(dhclient_buf, F_OK) == 0) {
+        // HACK: Assume we're working in our deployed environment
+        // TODO: Should probably just incorporate dhclient (or something like it) directly as a library
         argv[0] = dhclient_buf;
+        argv[2] = "-sf";
+
+        dhclient_script = malloc(buf_size);
+        get_binary_in_working_directory("../sbin/dhclient-script", dhclient_script, buf_size);
+        argv[3] = dhclient_script;
     }
 
     print_info(argv[0]);
@@ -217,6 +225,7 @@ int call_dhcp(const char *network_interface)
     }
 
     free(dhclient_buf);
+    if (dhclient_script) free(dhclient_script);
 
     int status;
     waitpid(dhclient_pid, &status, 0);
