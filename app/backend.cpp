@@ -249,10 +249,14 @@ void BackendPipe::receivedData()
         QByteArray a = m_process->readLine().trimmed();
         // Their out is our in which is why these are flipped
         if (m_pipeOutFilename.isEmpty()) {
-            m_pipeOutFilename = a;
+            if (QFile::exists(a)) {
+                m_pipeOutFilename = a;
+            }
         } else if (m_pipeInFilename.isEmpty()) {
-            m_pipeInFilename = a;
-            emit pipesAvailable(m_pipeInFilename, m_pipeOutFilename);
+            if (QFile::exists(a)) {
+                m_pipeInFilename = a;
+                emit pipesAvailable(m_pipeInFilename, m_pipeOutFilename);
+            }
         } else {
             printf("%s\n", a.constData());
         }
