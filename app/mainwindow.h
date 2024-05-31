@@ -14,6 +14,8 @@
 #include "videodecoder.h"
 #include "viewer.h"
 
+Q_DECLARE_METATYPE(uint16_t)
+
 class MainWindow : public QWidget
 {
     Q_OBJECT

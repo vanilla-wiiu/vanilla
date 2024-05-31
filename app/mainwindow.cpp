@@ -33,6 +33,8 @@ MainWindow::MainWindow(QWidget *parent) : QWidget(parent)
         QMessageBox::critical(this, tr("SDL2 Error"), tr("SDL2 failed to initialize. Controller support will be unavailable."));
     }
 
+    qRegisterMetaType<uint16_t>("uint16_t");
+
     QHBoxLayout *layout = new QHBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
 
@@ -282,7 +284,7 @@ void MainWindow::setConnectedState(bool on)
     if (on) {
         m_connectBtn->setText(tr("Disconnect"));
 
-        QMetaObject::invokeMethod(m_backend, &Backend::connectToConsole, Qt::QueuedConnection, m_wirelessInterfaceComboBox->currentText());
+        QMetaObject::invokeMethod(m_backend, "connectToConsole", Qt::QueuedConnection, Q_ARG(QString, m_wirelessInterfaceComboBox->currentText()));
     } else {
         if (m_backend) {
             m_backend->interrupt();
@@ -314,8 +316,8 @@ void MainWindow::exitFullScreen()
 void MainWindow::volumeChanged(int v)
 {
     qreal vol = v * 0.01;
-    vol = QtAudio::convertVolume(vol, QtAudio::LinearVolumeScale, QtAudio::LogarithmicVolumeScale);
-    QMetaObject::invokeMethod(m_audioHandler, &AudioHandler::setVolume, vol);
+    vol = QAudio::convertVolume(vol, QAudio::LinearVolumeScale, QAudio::LogarithmicVolumeScale);
+    QMetaObject::invokeMethod(m_audioHandler, "setVolume", Q_ARG(qreal, vol));
 }
 
 void MainWindow::showInputConfigDialog()
