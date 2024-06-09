@@ -53,7 +53,7 @@ SyncProgressDialog::SyncProgressDialog(Backend *backend, const QString &wireless
 
     m_backend = backend;
     connect(m_backend, &Backend::syncCompleted, this, &SyncProgressDialog::syncReturned);
-    QMetaObject::invokeMethod(m_backend, &Backend::sync, wirelessInterface, code);
+    QMetaObject::invokeMethod(m_backend, "sync", Q_ARG(QString, wirelessInterface), Q_ARG(uint16_t, code));
 }
 
 void SyncProgressDialog::syncReturned(bool success)
