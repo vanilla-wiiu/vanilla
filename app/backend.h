@@ -54,6 +54,7 @@ public slots:
     void connectToConsole(const QString &wirelessInterface);
     void updateTouch(int x, int y);
     void setButton(int button, int32_t value);
+    void requestIDR();
 
 private:
     BackendPipe *m_pipe;

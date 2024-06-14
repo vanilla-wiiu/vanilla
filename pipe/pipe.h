@@ -6,6 +6,7 @@
 #define VANILLA_PIPE_IN_CONNECT      0x02
 #define VANILLA_PIPE_IN_BUTTON       0x03
 #define VANILLA_PIPE_IN_TOUCH        0x04
+#define VANILLA_PIPE_IN_REQ_IDR      0x05
 #define VANILLA_PIPE_IN_INTERRUPT    0x1E
 #define VANILLA_PIPE_IN_QUIT         0x1F
 

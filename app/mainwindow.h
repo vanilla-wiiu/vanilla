@@ -39,6 +39,8 @@ private:
 
     QPushButton *m_syncBtn;
     QPushButton *m_connectBtn;
+    QPushButton *m_recordBtn;
+    QPushButton *m_screenshotBtn;
 
     QSplitter *m_splitter;
 
@@ -64,6 +66,11 @@ private slots:
     void volumeChanged(int val);
 
     void showInputConfigDialog();
+
+    void recordingError(int err);
+    void recordingFinished(const QString &filename);
+
+    void takeScreenshot();
 
 };
 

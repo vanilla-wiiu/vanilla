@@ -1,14 +1,26 @@
 #include "videodecoder.h"
 
+#include <QDateTime>
+#include <QDir>
 #include <QImage>
+#include <QStandardPaths>
+
+#include <vanilla.h>
 
 extern "C" {
 #include <libavfilter/buffersink.h>
 #include <libavfilter/buffersrc.h>
 }
 
+enum RecordingStream {
+    VIDEO_STREAM_INDEX,
+    AUDIO_STREAM_INDEX
+};
+
 VideoDecoder::VideoDecoder(QObject *parent) : QObject(parent)
 {
+    m_recordingCtx = nullptr;
+    
     m_packet = av_packet_alloc();
     m_frame = av_frame_alloc();
     
@@ -45,6 +57,13 @@ void cleanupFrame(void *v)
     av_frame_free(&f);
 }
 
+int64_t VideoDecoder::getCurrentTimestamp(AVRational timebase)
+{
+    int64_t millis = QDateTime::currentMSecsSinceEpoch() - m_recordingStartTime;
+    int64_t ts = av_rescale_q(millis, {1, 1000}, timebase);
+    return ts;
+}
+
 void VideoDecoder::sendPacket(const QByteArray &data)
 {
     int ret;
@@ -59,6 +78,20 @@ void VideoDecoder::sendPacket(const QByteArray &data)
         fprintf(stderr, "Failed to initialize packet from data: %i\n", ret);
         av_free(buffer);
         return;
+    }
+
+    // If recording, send packet to file
+    if (m_recordingCtx) {
+        AVPacket *encPkt = av_packet_clone(m_packet);
+        encPkt->stream_index = VIDEO_STREAM_INDEX;
+
+        int64_t ts = getCurrentTimestamp(m_videoStream->time_base);
+
+        encPkt->dts = ts;
+        encPkt->pts = ts;
+
+        av_interleaved_write_frame(m_recordingCtx, encPkt);
+        av_packet_free(&encPkt);
     }
 
     // Send packet to decoder
@@ -93,5 +126,124 @@ void VideoDecoder::sendPacket(const QByteArray &data)
 
         QImage image(filtered->data[0], filtered->width, filtered->height, filtered->linesize[0], QImage::Format_RGB888, cleanupFrame, filtered);
         emit frameReady(image);
+    }
+}
+
+void VideoDecoder::sendAudio(const QByteArray &data)
+{
+    if (m_recordingCtx) {
+        int ret;
+
+        // Copy data into buffer that FFmpeg will take ownership of
+        uint8_t *buffer = (uint8_t *) av_malloc(data.size());
+        memcpy(buffer, data.data(), data.size());
+
+        // Create AVPacket from this data
+        AVPacket *audPkt = av_packet_alloc();
+        int64_t ts;
+        ret = av_packet_from_data(audPkt, buffer, data.size());
+        if (ret < 0) {
+            fprintf(stderr, "Failed to initialize packet from data: %i\n", ret);
+            av_free(buffer);
+            goto free;
+        }
+
+        ts = getCurrentTimestamp(m_audioStream->time_base);
+
+        audPkt->stream_index = AUDIO_STREAM_INDEX;
+        audPkt->dts = ts;
+        audPkt->pts = ts;
+
+        av_interleaved_write_frame(m_recordingCtx, audPkt);
+
+free:
+        av_packet_free(&audPkt);
+    }
+}
+
+void VideoDecoder::enableRecording(bool e)
+{
+    if (e) startRecording(); else stopRecording();
+}
+
+void VideoDecoder::startRecording()
+{
+    m_recordingFilename = QDir(QStandardPaths::writableLocation(QStandardPaths::TempLocation)).filePath("vanilla-recording-%0.mp4").arg(QDateTime::currentSecsSinceEpoch());
+    
+    QByteArray filenameUtf8 = m_recordingFilename.toUtf8();
+
+    int r = avformat_alloc_output_context2(&m_recordingCtx, nullptr, nullptr, filenameUtf8.constData());
+    if (r < 0) {
+        emit recordingError(r);
+        return;
+    }
+
+    m_videoStream = avformat_new_stream(m_recordingCtx, nullptr);
+    if (!m_videoStream) {
+        emit recordingError(AVERROR(ENOMEM));
+        goto freeContext;
+    }
+
+    m_videoStream->id = VIDEO_STREAM_INDEX;
+    m_videoStream->codecpar->codec_type = AVMEDIA_TYPE_VIDEO;
+    m_videoStream->codecpar->width = 854;
+    m_videoStream->codecpar->height = 480;
+    m_videoStream->codecpar->format = AV_PIX_FMT_YUV420P;
+    m_videoStream->time_base = {1, 60};
+    m_videoStream->codecpar->codec_id = AV_CODEC_ID_H264;
+
+    size_t sps_pps_size;
+    vanilla_retrieve_sps_pps_data(nullptr, &sps_pps_size);
+    m_videoStream->codecpar->extradata_size = sps_pps_size;
+    m_videoStream->codecpar->extradata = (uint8_t *) av_malloc(sps_pps_size);
+    vanilla_retrieve_sps_pps_data(m_videoStream->codecpar->extradata, &sps_pps_size);
+
+    m_audioStream = avformat_new_stream(m_recordingCtx, nullptr);
+    if (!m_audioStream) {
+        emit recordingError(AVERROR(ENOMEM));
+        goto freeContext;
+    }
+
+    m_audioStream->id = AUDIO_STREAM_INDEX;
+    m_audioStream->codecpar->codec_type = AVMEDIA_TYPE_AUDIO;
+    m_audioStream->codecpar->sample_rate = 48000;
+    m_audioStream->codecpar->ch_layout = AV_CHANNEL_LAYOUT_STEREO;
+    m_audioStream->codecpar->format = AV_SAMPLE_FMT_S16;
+    m_audioStream->time_base = {1, 48000};
+    m_audioStream->codecpar->codec_id = AV_CODEC_ID_PCM_S16LE;
+
+    r = avio_open2(&m_recordingCtx->pb, filenameUtf8.constData(), AVIO_FLAG_WRITE, nullptr, nullptr);
+    if (r < 0) {
+        emit recordingError(r);
+        goto freeContext;
+    }
+
+    r = avformat_write_header(m_recordingCtx, nullptr);
+    if (r < 0) {
+        printf("err 5\n");
+        emit recordingError(r);
+        goto freeContext;
+    }
+
+    emit requestIDR();
+
+    printf("nb streams: %i\n", m_recordingCtx->nb_streams);
+
+    m_recordingStartTime = QDateTime::currentMSecsSinceEpoch();
+    return;
+
+freeContext:
+    avformat_free_context(m_recordingCtx);
+    m_recordingCtx = nullptr;
+}
+
+void VideoDecoder::stopRecording()
+{
+    if (m_recordingCtx) {
+        av_write_trailer(m_recordingCtx);
+        avio_closep(&m_recordingCtx->pb);
+        avformat_free_context(m_recordingCtx);
+        m_recordingCtx = nullptr;
+        emit recordingFinished(m_recordingFilename);
     }
 }

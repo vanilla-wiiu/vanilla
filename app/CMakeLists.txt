@@ -1,6 +1,6 @@
 find_package(Qt6 REQUIRED COMPONENTS Core Widgets Multimedia OpenGLWidgets)
 find_package(SDL2 REQUIRED)
-find_package(FFmpeg REQUIRED COMPONENTS avcodec avutil avfilter)
+find_package(FFmpeg REQUIRED COMPONENTS avformat avcodec avutil avfilter)
 
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOUIC ON)
@@ -28,6 +28,7 @@ target_link_libraries(vanilla-gui PRIVATE
     Qt6::OpenGLWidgets
     SDL2
     vanilla
+    FFmpeg::avformat
     FFmpeg::avcodec
     FFmpeg::avutil
     FFmpeg::avfilter

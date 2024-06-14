@@ -128,6 +128,19 @@ void vanilla_log_no_newline_va(const char *format, va_list args);
  */
 void vanilla_install_logger(void (*logger)(const char *, va_list args));
 
+/**
+ * Request an IDR (instant decoder refresh) video frame from the console
+ */
+void vanilla_request_idr();
+
+/**
+ * Retrieve SPS/PPS data for H.264 encoding
+ * 
+ * If `data` is null, `*size` will be set to the number of bytes required.
+ * If `data` is not null, bytes will be copied up to `*size` or the total number of bytes.
+ */
+void vanilla_retrieve_sps_pps_data(void *data, size_t *size);
+
 #if defined(__cplusplus)
 }
 #endif

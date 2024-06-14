@@ -1,11 +1,13 @@
 #include "vanilla.h"
 
 #include <signal.h>
+#include <string.h>
 #include <unistd.h>
 #include <wpa_ctrl.h>
 
 #include "gamepad/gamepad.h"
 #include "gamepad/input.h"
+#include "gamepad/video.h"
 #include "status.h"
 #include "sync.h"
 #include "util.h"
@@ -124,4 +126,17 @@ void vanilla_log_no_newline_va(const char *format, va_list args)
 void vanilla_install_logger(void (*logger)(const char *, va_list))
 {
     custom_logger = logger;
+}
+
+void vanilla_request_idr()
+{
+    request_idr();
+}
+
+void vanilla_retrieve_sps_pps_data(void *data, size_t *size)
+{
+    if (data != NULL) {
+        memcpy(data, sps_pps_params, MIN(*size, sizeof(sps_pps_params)));
+    }
+    *size = sizeof(sps_pps_params);
 }

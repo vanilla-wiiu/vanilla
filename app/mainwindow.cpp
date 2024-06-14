@@ -2,6 +2,7 @@
 
 #include <QAudioDevice>
 #include <QComboBox>
+#include <QFileDialog>
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -92,6 +93,16 @@ MainWindow::MainWindow(QWidget *parent) : QWidget(parent)
         QPushButton *fullScreenBtn = new QPushButton(tr("Full Screen"), configSection);
         connect(fullScreenBtn, &QPushButton::clicked, this, &MainWindow::setFullScreen);
         configLayout->addWidget(fullScreenBtn, row, 0, 1, 2);
+        
+        row++;
+
+        m_recordBtn = new QPushButton(tr("Record"), configSection);
+        m_recordBtn->setCheckable(true);
+        configLayout->addWidget(m_recordBtn, row, 0);
+
+        m_screenshotBtn = new QPushButton(tr("Screenshot"), configSection);
+        connect(m_screenshotBtn, &QPushButton::clicked, this, &MainWindow::takeScreenshot);
+        configLayout->addWidget(m_screenshotBtn, row, 1);
     }
 
     {
@@ -147,6 +158,7 @@ MainWindow::MainWindow(QWidget *parent) : QWidget(parent)
     startObjectOnThread(m_backend);
 
     m_videoDecoder = new VideoDecoder();
+    connect(m_recordBtn, &QPushButton::clicked, m_videoDecoder, &VideoDecoder::enableRecording);
     startObjectOnThread(m_videoDecoder);
 
     m_gamepadHandler = new GamepadHandler();
@@ -158,8 +170,12 @@ MainWindow::MainWindow(QWidget *parent) : QWidget(parent)
     QMetaObject::invokeMethod(m_audioHandler, &AudioHandler::run, Qt::QueuedConnection);
 
     connect(m_backend, &Backend::videoAvailable, m_videoDecoder, &VideoDecoder::sendPacket);
+    connect(m_backend, &Backend::audioAvailable, m_videoDecoder, &VideoDecoder::sendAudio);
     connect(m_backend, &Backend::syncCompleted, this, [this](bool e){if (e) m_connectBtn->setEnabled(true);});
     connect(m_videoDecoder, &VideoDecoder::frameReady, m_viewer, &Viewer::setImage);
+    connect(m_videoDecoder, &VideoDecoder::recordingError, this, &MainWindow::recordingError);
+    connect(m_videoDecoder, &VideoDecoder::recordingFinished, this, &MainWindow::recordingFinished);
+    connect(m_videoDecoder, &VideoDecoder::requestIDR, m_backend, &Backend::requestIDR, Qt::DirectConnection);
     connect(m_backend, &Backend::audioAvailable, m_audioHandler, &AudioHandler::write);
     connect(m_backend, &Backend::vibrate, m_gamepadHandler, &GamepadHandler::vibrate, Qt::DirectConnection);
     connect(m_viewer, &Viewer::touch, m_backend, &Backend::updateTouch, Qt::DirectConnection);
@@ -332,4 +348,37 @@ void MainWindow::startObjectOnThread(QObject *object)
     object->moveToThread(thread);
     thread->start();
     m_threadMap.insert(object, thread);
+}
+
+void MainWindow::recordingError(int err)
+{
+    QMessageBox::critical(this, tr("Recording Error"), tr("Recording failed with the following error: %0 (%1)").arg(av_err2str(err), QString::number(err)));
+}
+
+void MainWindow::recordingFinished(const QString &filename)
+{
+    QString s = QFileDialog::getSaveFileName(this, tr("Save Screenshot"), QString(), tr("MPEG-4 Video (*.mp4)"));
+    if (!s.isEmpty()) {
+        QString ext = QStringLiteral(".mp4");
+        if (!s.endsWith(ext, Qt::CaseInsensitive)) {
+            s = s.append(ext);
+        }
+
+        QFile::copy(filename, s);
+    }
+}
+
+void MainWindow::takeScreenshot()
+{
+    // Make a copy of the current image
+    QImage ss = m_viewer->image();
+
+    QString s = QFileDialog::getSaveFileName(this, tr("Save Screenshot"), QString(), tr("PNG (*.png)"));
+    if (!s.isEmpty()) {
+        QString ext = QStringLiteral(".png");
+        if (!s.endsWith(ext, Qt::CaseInsensitive)) {
+            s = s.append(ext);
+        }
+        ss.save(s);
+    }
 }

@@ -239,6 +239,11 @@ int main()
             }
             break;
         }
+        case VANILLA_PIPE_IN_REQ_IDR:
+        {
+            vanilla_request_idr();
+            break;
+        }
         case VANILLA_PIPE_IN_QUIT:
             m_quit = 1;
             break;

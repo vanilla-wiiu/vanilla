@@ -93,6 +93,17 @@ void writeNullTermString(int pipe, const QString &s)
     writeByte(pipe, 0);
 }
 
+void Backend::requestIDR()
+{
+    if (m_pipe) {
+        m_pipeMutex.lock();
+        writeByte(m_pipeOut, VANILLA_PIPE_IN_REQ_IDR);
+        m_pipeMutex.unlock();
+    } else {
+        vanilla_request_idr();
+    }
+}
+
 void Backend::connectToConsole(const QString &wirelessInterface)
 {
     if (m_pipe) {
