@@ -63,14 +63,6 @@ RUN apt -y install libavcodec-dev libavfilter-dev libavutil-dev \
         libnl-genl-3-dev isc-dhcp-client
 
 # Build Vanilla and deploy
-CMD git config --global --add safe.directory /vanilla/lib/hostap \
-        && cp /vanilla/lib/hostap/conf/wpa_supplicant.config /vanilla/lib/hostap/wpa_supplicant/.config \
-        && /usr/local/bin/cmake /vanilla -B/build -G Ninja -DCMAKE_INSTALL_PREFIX=/AppDir/usr \
-        && cmake --build /build --parallel \
-        && cmake --install /build \
-        && cp $(which dhclient) /AppDir/usr/bin \
-        && mkdir -p /AppDir/usr/sbin \
-        && wget https://raw.githubusercontent.com/isc-projects/dhcp/master/client/scripts/linux -O /AppDir/usr/sbin/dhclient-script \
-        && chmod +x /AppDir/usr/sbin/dhclient-script \
-        && linuxdeployqt /AppDir/usr/bin/vanilla-gui -executable-dir=/AppDir/usr/bin -bundle-non-qt-libs \
-        && tar czf /vanilla/Vanilla_U-$(uname -m).tar.gz -C /AppDir .
+#CMD /vanilla/docker/run.sh
+
+ENTRYPOINT ["/vanilla/docker/run.sh"]
