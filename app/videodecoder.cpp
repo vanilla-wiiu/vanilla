@@ -224,14 +224,11 @@ void VideoDecoder::startRecording()
 
     r = avformat_write_header(m_recordingCtx, nullptr);
     if (r < 0) {
-        printf("err 5\n");
         emit recordingError(r);
         goto freeContext;
     }
 
     emit requestIDR();
-
-    printf("nb streams: %i\n", m_recordingCtx->nb_streams);
 
     m_recordingStartTime = QDateTime::currentMSecsSinceEpoch();
     return;
