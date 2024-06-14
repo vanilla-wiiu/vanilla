@@ -361,7 +361,9 @@ void MainWindow::startObjectOnThread(QObject *object)
 
 void MainWindow::recordingError(int err)
 {
-    QMessageBox::critical(this, tr("Recording Error"), tr("Recording failed with the following error: %0 (%1)").arg(av_err2str(err), QString::number(err)));
+    char buf[64] = {0};
+    av_make_error_string(buf, sizeof(buf), err);
+    QMessageBox::critical(this, tr("Recording Error"), tr("Recording failed with the following error: %0 (%1)").arg(buf, QString::number(err)));
 }
 
 void MainWindow::recordingFinished(const QString &filename)
