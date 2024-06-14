@@ -16,7 +16,8 @@ extern "C" {
 #define VANILLA_UNKNOWN_COMMAND     -4
 #define VANILLA_INVALID_ARGUMENT    -5
 
-enum VanillaGamepadButtons {
+enum VanillaGamepadButtons
+{
     VANILLA_BTN_A,
     VANILLA_BTN_B,
     VANILLA_BTN_X,
@@ -46,6 +47,12 @@ enum VanillaGamepadButtons {
     VANILLA_AXIS_R_UP,
     VANILLA_AXIS_R_RIGHT,
     VANILLA_AXIS_R_DOWN,
+    VANILLA_SENSOR_ACCEL_X,
+    VANILLA_SENSOR_ACCEL_Y,
+    VANILLA_SENSOR_ACCEL_Z,
+    VANILLA_SENSOR_GYRO_PITCH,
+    VANILLA_SENSOR_GYRO_YAW,
+    VANILLA_SENSOR_GYRO_ROLL,
     VANILLA_BTN_COUNT
 };
 
@@ -63,14 +70,14 @@ typedef void (*vanilla_event_handler_t)(void *context, int event_type, const cha
 
 /**
  * Attempt to sync with the console
- * 
+ *
  * This will block until the task is over or vanilla_stop() is called from another thread.
  */
-int vanilla_sync_with_console(const char *wireless_interface, uint16_t code);  
+int vanilla_sync_with_console(const char *wireless_interface, uint16_t code);
 
 /**
  * Attempt gameplay connection with console
- * 
+ *
  * This will block until the task is over or vanilla_stop() is called from another thread.
  */
 int vanilla_connect_to_console(const char *wireless_interface, vanilla_event_handler_t event_handler, void *context);
@@ -82,26 +89,28 @@ int vanilla_has_config();
 
 /**
  * Attempt to stop the current action
- * 
+ *
  * This can be called from another thread to safely exit a blocking call to vanilla_sync_with_console() or vanilla_connect_to_console().
  */
 void vanilla_stop();
 
 /**
  * Set button/axis state
- * 
+ *
  * This can be called from another thread to change the button state while vanilla_connect_to_console() is running.
- * 
+ *
  * For buttons, anything non-zero will be considered a press.
- * For axes, the range is -32,768 - 32,767.
+ * For axes, the range is signed 16-bit (-32,768 to 32,767).
+ * For accelerometers, cast a float value in m/s^2.
+ * For gyroscopes, cast a float value in radians per second.
  */
-void vanilla_set_button(int button, int16_t value);
+void vanilla_set_button(int button, int32_t value);
 
 /**
  * Set touch screen coordinates to `x` and `y`
- * 
+ *
  * This can be called from another thread to change the button state while vanilla_connect_to_console() is running.
- * 
+ *
  * `x` and `y` are expected to be in gamepad screen coordinates (0x0 to 853x479).
  * If either `x` or `y` are -1, this point will be disabled.
  */

@@ -216,7 +216,7 @@ int main()
         case VANILLA_PIPE_IN_BUTTON:
         {
             int32_t button_id;
-            int16_t button_value;
+            int32_t button_value;
             read(fd_in, &button_id, sizeof(button_id));
             read(fd_in, &button_value, sizeof(button_value));
             vanilla_set_button(button_id, button_value);

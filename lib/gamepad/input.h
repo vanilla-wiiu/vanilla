@@ -4,7 +4,7 @@
 #include <stdint.h>
 
 void *listen_input(void *x);
-void set_button_state(int button, int16_t value);
+void set_button_state(int button, int32_t value);
 void set_touch_state(int x, int y);
 
 #endif // GAMEPAD_INPUT_H

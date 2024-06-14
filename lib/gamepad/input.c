@@ -1,6 +1,7 @@
 #include "input.h"
 
 #include <arpa/inet.h>
+#include <math.h>
 #include <pthread.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -11,29 +12,25 @@
 #include "vanilla.h"
 #include "util.h"
 
-#define MIN(a,b) (((a)<(b))?(a):(b))
-#define MAX(a,b) (((a)>(b))?(a):(b))
-#define CLAMP(x, min, max) (MIN(MAX(x, min), max))
-
 #pragma pack(push, 1)
 
 typedef struct {
     // Little endian
+    int16_t z;
     int16_t x;
     int16_t y;
-    int16_t z;
-} InputPacketAccelerometerWiiU;
+} InputPacketAccelerometer;
 
 typedef struct {
     // Little endian
-    signed roll : 24;
     signed yaw : 24;
     signed pitch : 24;
-} InputPacketGyroscopeWiiU;
+    signed roll : 24;
+} InputPacketGyroscope;
 
 typedef struct {
     signed char unknown[6];
-} InputPacketMagnetWiiU;
+} InputPacketMagnet;
 
 typedef struct {
     unsigned pad : 1;
@@ -52,7 +49,7 @@ typedef struct {
 } TouchScreenState;
 
 pthread_mutex_t button_mtx;
-int16_t current_buttons[VANILLA_BTN_COUNT] = {0};
+int32_t current_buttons[VANILLA_BTN_COUNT] = {0};
 int current_touch_x = -1;
 int current_touch_y = -1;
 
@@ -67,9 +64,9 @@ typedef struct {
     uint16_t stick_right_x;
     uint16_t stick_right_y;
     uint8_t audio_volume;
-    InputPacketAccelerometerWiiU accelerometer;
-    InputPacketGyroscopeWiiU gyroscope;
-    InputPacketMagnetWiiU magnet;
+    InputPacketAccelerometer accelerometer;
+    InputPacketGyroscope gyroscope;
+    InputPacketMagnet magnet;
     TouchScreenState touchscreen; // byte 36 - 76
     unsigned char unknown_0[4];
     uint8_t extra_buttons;
@@ -79,7 +76,7 @@ typedef struct {
 
 #pragma pack(pop)
 
-void set_button_state(int button, int16_t value)
+void set_button_state(int button, int32_t value)
 {
     pthread_mutex_lock(&button_mtx);
     current_buttons[button] = value;
@@ -114,10 +111,8 @@ uint16_t resolve_axis_value(float axis, float neg, float pos, int flip)
     return ((int) (val * 1024)) + 2048;
 }
 
-int64_t scale_x_touch_value(uint16_t val)
+int64_t scale_x_touch_value(int64_t v)
 {
-    int64_t v = val;
-
     // Scales 0-854 to 0-4096 with a 2.5% margin on each side
     const int scale_percent = 95;
 
@@ -130,10 +125,8 @@ int64_t scale_x_touch_value(uint16_t val)
     return v;
 }
 
-int64_t scale_y_touch_value(uint16_t val)
+int64_t scale_y_touch_value(int64_t v)
 {
-    int64_t v = val;
-
     // Scales 0-854 to 0-4096 with a 5% margin on the bottom and 3% margin on the top (I don't know why, but these values worked best)
     const int scale_percent = 92;
 
@@ -147,6 +140,23 @@ int64_t scale_y_touch_value(uint16_t val)
     return v;
 }
 
+float unpack_float(int32_t x)
+{
+    float f;
+    memcpy(&f, &x, sizeof(int32_t));
+    return f;
+}
+
+enum BatteryStatus {
+    BATTERY_STATUS_CHARGING,
+    BATTERY_STATUS_UNKNOWN,
+    BATTERY_STATUS_VERY_LOW,
+    BATTERY_STATUS_LOW,
+    BATTERY_STATUS_MEDIUM,
+    BATTERY_STATUS_HIGH,
+    BATTERY_STATUS_FULL,
+};
+
 void send_input(int socket_hid)
 {
     InputPacket ip;
@@ -156,6 +166,8 @@ void send_input(int socket_hid)
 
     pthread_mutex_lock(&button_mtx);
 
+    ip.touchscreen.points[9].x.extra = reverse_bits(BATTERY_STATUS_VERY_LOW, 3);
+
     if (current_touch_x >= 0 && current_touch_y >= 0) {
         for (int i = 0; i < 10; i++) {
             ip.touchscreen.points[i].x.pad = 1;
@@ -163,16 +175,18 @@ void send_input(int socket_hid)
             ip.touchscreen.points[i].x.value = reverse_bits(scale_x_touch_value(current_touch_x), 12);
             ip.touchscreen.points[i].y.value = reverse_bits(scale_y_touch_value(current_touch_y), 12);
         }
-        ip.touchscreen.points[0].x.extra = 0;
+
         ip.touchscreen.points[0].y.extra = reverse_bits(2, 3);
         ip.touchscreen.points[1].x.extra = reverse_bits(7, 3);
         ip.touchscreen.points[1].y.extra = reverse_bits(3, 3);
-        for (int byte = 0; byte < sizeof(ip.touchscreen); byte += 2) {
-            unsigned char *touchscreen_bytes = (unsigned char *) (&ip.touchscreen);
-            unsigned char first = (unsigned char) reverse_bits(touchscreen_bytes[byte], 8);
-            touchscreen_bytes[byte] = (unsigned char) reverse_bits(touchscreen_bytes[byte + 1], 8);
-            touchscreen_bytes[byte + 1] = first;
-        }
+    }
+
+    for (int byte = 0; byte < sizeof(ip.touchscreen); byte += 2)
+    {
+        unsigned char *touchscreen_bytes = (unsigned char *)(&ip.touchscreen);
+        unsigned char first = (unsigned char)reverse_bits(touchscreen_bytes[byte], 8);
+        touchscreen_bytes[byte] = (unsigned char)reverse_bits(touchscreen_bytes[byte + 1], 8);
+        touchscreen_bytes[byte + 1] = first;
     }
 
     uint16_t button_mask = 0;
@@ -207,6 +221,14 @@ void send_input(int socket_hid)
     ip.stick_right_x = resolve_axis_value(current_buttons[VANILLA_AXIS_R_X], current_buttons[VANILLA_AXIS_R_LEFT], current_buttons[VANILLA_AXIS_R_RIGHT], 0);
     ip.stick_right_y = resolve_axis_value(current_buttons[VANILLA_AXIS_R_Y], current_buttons[VANILLA_AXIS_R_UP], current_buttons[VANILLA_AXIS_R_DOWN], 1);
 
+    ip.accelerometer.x = unpack_float(current_buttons[VANILLA_SENSOR_ACCEL_X]) * -800;
+    ip.accelerometer.y = unpack_float(current_buttons[VANILLA_SENSOR_ACCEL_Y]) * -800;
+    ip.accelerometer.z = unpack_float(current_buttons[VANILLA_SENSOR_ACCEL_Z]) * 800;
+
+    // ip.gyroscope.yaw = (unpack_float(current_buttons[VANILLA_SENSOR_GYRO_YAW]) * (180.0f/M_PI)) / ((200.0f * 6.0f) / 154000.0f);
+    // ip.gyroscope.pitch = (unpack_float(current_buttons[VANILLA_SENSOR_GYRO_PITCH]) * (180.0f/M_PI)) / ((200.0f * 6.0f) / 154000.0f);
+    // ip.gyroscope.roll = (unpack_float(current_buttons[VANILLA_SENSOR_GYRO_ROLL]) * (180.0f/M_PI)) / ((200.0f * 6.0f) / 154000.0f);
+
     pthread_mutex_unlock(&button_mtx);
 
     ip.seq_id = htons(seq_id);
@@ -225,7 +247,7 @@ void *listen_input(void *x)
 
     do {
         send_input(info->socket_hid);
-        usleep(10 * 1000); // Produces 100Hz input, probably no need to go higher for the Wii U, but potentially could
+        usleep(5 * 1000); // Produces 200Hz input, probably no need to go higher for the Wii U, but potentially could
     } while (!is_interrupted());
 
     pthread_mutex_destroy(&button_mtx);

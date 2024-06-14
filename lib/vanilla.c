@@ -75,7 +75,7 @@ void vanilla_stop()
     force_interrupt();
 }
 
-void vanilla_set_button(int button, int16_t value)
+void vanilla_set_button(int button, int32_t value)
 {
     set_button_state(button, value);
 }

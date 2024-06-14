@@ -148,7 +148,7 @@ void Backend::updateTouch(int x, int y)
     }
 }
 
-void Backend::setButton(int button, int16_t value)
+void Backend::setButton(int button, int32_t value)
 {
     if (m_pipe) {
         m_pipeMutex.lock();

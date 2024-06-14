@@ -5,6 +5,10 @@
 #include <stdio.h>
 #include <sys/types.h>
 
+#define MIN(a,b) (((a)<(b))?(a):(b))
+#define MAX(a,b) (((a)>(b))?(a):(b))
+#define CLAMP(x, min, max) (MIN(MAX(x, min), max))
+
 size_t read_line_from_fd(int fd, char *output, size_t max_output_size);
 size_t read_line_from_file(FILE *file, char *output, size_t max_output_size);
 size_t get_home_directory(char *buf, size_t buf_size);

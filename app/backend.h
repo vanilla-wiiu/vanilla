@@ -53,7 +53,7 @@ public slots:
     void sync(const QString &wirelessInterface, uint16_t code);
     void connectToConsole(const QString &wirelessInterface);
     void updateTouch(int x, int y);
-    void setButton(int button, int16_t value);
+    void setButton(int button, int32_t value);
 
 private:
     BackendPipe *m_pipe;
