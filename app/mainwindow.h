@@ -30,6 +30,8 @@ private:
 
     void startObjectOnThread(QObject *object);
 
+    void updateVolumeAxis();
+
     Viewer *m_viewer;
 
     QComboBox *m_wirelessInterfaceComboBox;
@@ -41,6 +43,8 @@ private:
     QPushButton *m_connectBtn;
     QPushButton *m_recordBtn;
     QPushButton *m_screenshotBtn;
+
+    QSlider *m_volumeSlider;
 
     QSplitter *m_splitter;
 

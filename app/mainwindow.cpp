@@ -115,12 +115,12 @@ MainWindow::MainWindow(QWidget *parent) : QWidget(parent)
 
         configLayout->addWidget(new QLabel(tr("Volume: "), soundConfigGroupBox), row, 0);
         
-        QSlider *volumeSlider = new QSlider(Qt::Horizontal, soundConfigGroupBox);
-        volumeSlider->setMinimum(0);
-        volumeSlider->setMaximum(100);
-        volumeSlider->setValue(100);
-        connect(volumeSlider, &QSlider::valueChanged, this, &MainWindow::volumeChanged);
-        configLayout->addWidget(volumeSlider, row, 1);
+        m_volumeSlider = new QSlider(Qt::Horizontal, soundConfigGroupBox);
+        m_volumeSlider->setMinimum(0);
+        m_volumeSlider->setMaximum(100);
+        m_volumeSlider->setValue(100);
+        connect(m_volumeSlider, &QSlider::valueChanged, this, &MainWindow::volumeChanged);
+        configLayout->addWidget(m_volumeSlider, row, 1);
 
         row++;
 
@@ -301,6 +301,8 @@ void MainWindow::setConnectedState(bool on)
         m_connectBtn->setText(tr("Disconnect"));
 
         QMetaObject::invokeMethod(m_backend, "connectToConsole", Qt::QueuedConnection, Q_ARG(QString, m_wirelessInterfaceComboBox->currentText()));
+
+        updateVolumeAxis();
     } else {
         if (m_backend) {
             m_backend->interrupt();
@@ -329,11 +331,18 @@ void MainWindow::exitFullScreen()
     m_splitter->addWidget(m_viewer);
 }
 
+void MainWindow::updateVolumeAxis()
+{
+    m_backend->setButton(VANILLA_AXIS_VOLUME, m_volumeSlider->value() * 0xFF / m_volumeSlider->maximum());
+}
+
 void MainWindow::volumeChanged(int v)
 {
     qreal vol = v * 0.01;
     vol = QAudio::convertVolume(vol, QAudio::LinearVolumeScale, QAudio::LogarithmicVolumeScale);
     QMetaObject::invokeMethod(m_audioHandler, "setVolume", Q_ARG(qreal, vol));
+
+    updateVolumeAxis();
 }
 
 void MainWindow::showInputConfigDialog()

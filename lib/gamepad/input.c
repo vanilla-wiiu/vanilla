@@ -221,6 +221,8 @@ void send_input(int socket_hid)
     ip.stick_right_x = resolve_axis_value(current_buttons[VANILLA_AXIS_R_X], current_buttons[VANILLA_AXIS_R_LEFT], current_buttons[VANILLA_AXIS_R_RIGHT], 0);
     ip.stick_right_y = resolve_axis_value(current_buttons[VANILLA_AXIS_R_Y], current_buttons[VANILLA_AXIS_R_UP], current_buttons[VANILLA_AXIS_R_DOWN], 1);
 
+    ip.audio_volume = current_buttons[VANILLA_AXIS_VOLUME];
+
     ip.accelerometer.x = unpack_float(current_buttons[VANILLA_SENSOR_ACCEL_X]) * -800;
     ip.accelerometer.y = unpack_float(current_buttons[VANILLA_SENSOR_ACCEL_Y]) * -800;
     ip.accelerometer.z = unpack_float(current_buttons[VANILLA_SENSOR_ACCEL_Z]) * 800;
