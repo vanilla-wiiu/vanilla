@@ -207,7 +207,11 @@ void VideoDecoder::startRecording()
     m_audioStream->id = AUDIO_STREAM_INDEX;
     m_audioStream->codecpar->codec_type = AVMEDIA_TYPE_AUDIO;
     m_audioStream->codecpar->sample_rate = 48000;
+#if LIBAVUTIL_VERSION_INT >= AV_VERSION_INT(57,24,100)
     m_audioStream->codecpar->ch_layout = AV_CHANNEL_LAYOUT_STEREO;
+#else
+    m_audioStream->codecpar->channel_layout = AV_CH_LAYOUT_STEREO;
+#endif
     m_audioStream->codecpar->format = AV_SAMPLE_FMT_S16;
     m_audioStream->time_base = {1, 48000};
     m_audioStream->codecpar->codec_id = AV_CODEC_ID_PCM_S16LE;
