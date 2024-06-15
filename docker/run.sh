@@ -1,5 +1,10 @@
 #!/bin/sh
 
+# This is the entrypoint script for the Docker image. It is not intended to be
+# run outside of the Docker environment.
+
+set -e
+
 CREATE_ARCHIVE=1
 
 for i in "$@" ; do
@@ -13,7 +18,7 @@ echo "  Building TAR: $CREATE_ARCHIVE"
 
 git config --global --add safe.directory /vanilla/lib/hostap
 cp /vanilla/lib/hostap/conf/wpa_supplicant.config /vanilla/lib/hostap/wpa_supplicant/.config
-/usr/local/bin/cmake /vanilla -B/build -G Ninja -DCMAKE_INSTALL_PREFIX=/AppDir/usr
+/usr/local/bin/cmake /vanilla -B/build -DCMAKE_INSTALL_PREFIX=/AppDir/usr
 cmake --build /build --parallel
 cmake --install /build
 cp $(which dhclient) /AppDir/usr/bin

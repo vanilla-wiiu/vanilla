@@ -1,5 +1,9 @@
 #!/bin/sh
 
+# This script will build and name the Docker environment for building Vanilla.
+
+set -e
+
 if [ $# -ne 1 ]
 then
   echo "Usage: $0 <architecture>"
