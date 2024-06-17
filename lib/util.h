@@ -3,6 +3,7 @@
 
 #include <stddef.h>
 #include <stdio.h>
+#include <stdint.h>
 #include <sys/types.h>
 
 #define MIN(a,b) (((a)<(b))?(a):(b))
@@ -24,5 +25,7 @@ int start_process(const char **argv, pid_t *pid_out, int *stdout_pipe);
 
 const char *get_wireless_authenticate_config_filename();
 const char *get_wireless_connect_config_filename();
+
+uint16_t crc16(const void* data, size_t len);
 
 #endif // VANILLA_UTIL_H
