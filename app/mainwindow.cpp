@@ -9,6 +9,7 @@
 #include <QMediaDevices>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QScrollArea>
 #include <QSlider>
 #include <QSplitter>
 #include <QThread>
@@ -42,8 +43,15 @@ MainWindow::MainWindow(QWidget *parent) : QWidget(parent)
     m_splitter = new QSplitter(this);
     layout->addWidget(m_splitter);
 
-    QWidget *configSection = new QWidget(this);
-    m_splitter->addWidget(configSection);
+    QScrollArea *configScrollArea = new QScrollArea(this);
+    configScrollArea->setWidgetResizable(true);
+    configScrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    configScrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
+    m_splitter->addWidget(configScrollArea);
+
+    QWidget *configSection = new QWidget(configScrollArea);
+    configScrollArea->setSizePolicy(QSizePolicy::MinimumExpanding, QSizePolicy::Expanding);
+    configScrollArea->setWidget(configSection);
 
     m_viewer = new Viewer(this);
     m_viewer->setMinimumSize(854, 480);
@@ -80,6 +88,32 @@ MainWindow::MainWindow(QWidget *parent) : QWidget(parent)
         setConnectedState(false);
         connect(m_connectBtn, &QPushButton::clicked, this, &MainWindow::setConnectedState);
         configLayout->addWidget(m_connectBtn, row, 0, 1, 2);
+    }
+
+    {
+        QGroupBox *settingsGroupBox = new QGroupBox(tr("Settings"), configSection);
+        configOuterLayout->addWidget(settingsGroupBox);
+
+        QGridLayout *configLayout = new QGridLayout(settingsGroupBox);
+
+        int row = 0;
+
+        configLayout->addWidget(new QLabel(tr("Region: "), settingsGroupBox), row, 0);
+
+        m_regionComboBox = new QComboBox(settingsGroupBox);
+
+        m_regionComboBox->addItem(tr("Japan"));
+        m_regionComboBox->addItem(tr("North America"));
+        m_regionComboBox->addItem(tr("Europe"));
+        m_regionComboBox->addItem(tr("China (Unused)"));
+        m_regionComboBox->addItem(tr("South Korea (Unused)"));
+        m_regionComboBox->addItem(tr("Taiwan (Unused)"));
+        m_regionComboBox->addItem(tr("Australia (Unused)"));
+
+        // TODO: Should probably save this somewhere
+        m_regionComboBox->setCurrentIndex(1);
+
+        configLayout->addWidget(m_regionComboBox, row, 1);
     }
 
     {
@@ -127,7 +161,7 @@ MainWindow::MainWindow(QWidget *parent) : QWidget(parent)
         configLayout->addWidget(new QLabel(tr("Microphone: "), soundConfigGroupBox), row, 0);
 
         m_microphoneComboBox = new QComboBox(soundConfigGroupBox);
-        m_microphoneComboBox->setMaximumWidth(m_microphoneComboBox->fontMetrics().horizontalAdvance(QStringLiteral("SOMEAMOUNTOFTEXT")));
+        m_microphoneComboBox->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
         configLayout->addWidget(m_microphoneComboBox, row, 1);
     }
 

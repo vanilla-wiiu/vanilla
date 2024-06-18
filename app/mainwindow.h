@@ -37,6 +37,7 @@ private:
     QComboBox *m_wirelessInterfaceComboBox;
     QComboBox *m_microphoneComboBox;
     QComboBox *m_controllerComboBox;
+    QComboBox *m_regionComboBox;
     QProcess *m_process;
 
     QPushButton *m_syncBtn;
