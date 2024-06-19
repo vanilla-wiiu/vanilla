@@ -166,7 +166,7 @@ void send_input(int socket_hid)
 
     pthread_mutex_lock(&button_mtx);
 
-    ip.touchscreen.points[9].x.extra = reverse_bits(BATTERY_STATUS_VERY_LOW, 3);
+    ip.touchscreen.points[9].x.extra = reverse_bits(BATTERY_STATUS_CHARGING, 3);
 
     if (current_touch_x >= 0 && current_touch_y >= 0) {
         for (int i = 0; i < 10; i++) {
