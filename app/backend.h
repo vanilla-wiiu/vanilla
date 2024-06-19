@@ -56,6 +56,7 @@ public slots:
     void setButton(int button, int32_t value);
     void requestIDR();
     void setRegion(int region);
+    void setBatteryStatus(int status);
 
 private:
     BackendPipe *m_pipe;

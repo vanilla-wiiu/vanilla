@@ -146,3 +146,8 @@ void vanilla_set_region(int region)
 {
     set_region(region);
 }
+
+void vanilla_set_battery_status(int battery_status)
+{
+    set_battery_status(battery_status);
+}

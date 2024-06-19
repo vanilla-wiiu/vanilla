@@ -75,6 +75,16 @@ enum VanillaRegion
     VANILLA_REGION_AUSTRALIA     = 6,
 };
 
+enum VanillaBatteryStatus {
+    VANILLA_BATTERY_STATUS_CHARGING = 0,
+    VANILLA_BATTERY_STATUS_UNKNOWN  = 1,
+    VANILLA_BATTERY_STATUS_VERY_LOW = 2,
+    VANILLA_BATTERY_STATUS_LOW      = 3,
+    VANILLA_BATTERY_STATUS_MEDIUM   = 4,
+    VANILLA_BATTERY_STATUS_HIGH     = 5,
+    VANILLA_BATTERY_STATUS_FULL     = 6
+};
+
 /**
  * Event handler used by caller to receive events
  */
@@ -161,6 +171,11 @@ void vanilla_retrieve_sps_pps_data(void *data, size_t *size);
  * Set to a member of the VanillaRegion enum.
  */
 void vanilla_set_region(int region);
+
+/**
+ * Sets the gamepad battery status that Vanilla should send to the console
+ */
+void vanilla_set_battery_status(int battery_status);
 
 #if defined(__cplusplus)
 }

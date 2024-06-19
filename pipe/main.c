@@ -251,6 +251,13 @@ int main()
             vanilla_set_region(region);
             break;
         }
+        case VANILLA_PIPE_IN_BATTERY:
+        {
+            int8_t battery;
+            read(fd_in, &battery, sizeof(battery));
+            vanilla_set_battery_status(battery);
+            break;
+        }
         case VANILLA_PIPE_IN_QUIT:
             m_quit = 1;
             break;

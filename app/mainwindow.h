@@ -38,6 +38,7 @@ private:
     QComboBox *m_microphoneComboBox;
     QComboBox *m_controllerComboBox;
     QComboBox *m_regionComboBox;
+    QComboBox *m_batteryStatusComboBox;
     QProcess *m_process;
 
     QPushButton *m_syncBtn;
@@ -71,6 +72,7 @@ private slots:
     void volumeChanged(int val);
 
     void updateRegion();
+    void updateBatteryStatus();
 
     void showInputConfigDialog();
 

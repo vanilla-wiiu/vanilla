@@ -147,15 +147,13 @@ float unpack_float(int32_t x)
     return f;
 }
 
-enum BatteryStatus {
-    BATTERY_STATUS_CHARGING,
-    BATTERY_STATUS_UNKNOWN,
-    BATTERY_STATUS_VERY_LOW,
-    BATTERY_STATUS_LOW,
-    BATTERY_STATUS_MEDIUM,
-    BATTERY_STATUS_HIGH,
-    BATTERY_STATUS_FULL,
-};
+int current_battery_status = VANILLA_BATTERY_STATUS_CHARGING;
+void set_battery_status(int status)
+{
+    pthread_mutex_lock(&button_mtx);
+    current_battery_status = status;
+    pthread_mutex_unlock(&button_mtx);
+}
 
 void send_input(int socket_hid)
 {
@@ -166,7 +164,7 @@ void send_input(int socket_hid)
 
     pthread_mutex_lock(&button_mtx);
 
-    ip.touchscreen.points[9].x.extra = reverse_bits(BATTERY_STATUS_CHARGING, 3);
+    ip.touchscreen.points[9].x.extra = reverse_bits(current_battery_status, 3);
 
     if (current_touch_x >= 0 && current_touch_y >= 0) {
         for (int i = 0; i < 10; i++) {

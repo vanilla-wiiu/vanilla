@@ -186,6 +186,19 @@ void Backend::setRegion(int region)
     }
 }
 
+void Backend::setBatteryStatus(int status)
+{
+    if (m_pipe) {
+        m_pipeMutex.lock();
+        writeByte(m_pipeOut, VANILLA_PIPE_IN_BATTERY);
+        int8_t batterySized = status;
+        write(m_pipeOut, &batterySized, sizeof(batterySized));
+        m_pipeMutex.unlock();
+    } else {
+        vanilla_set_battery_status(status);
+    }
+}
+
 void Backend::sync(const QString &wirelessInterface, uint16_t code)
 {
     if (m_pipe) {

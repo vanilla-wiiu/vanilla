@@ -116,6 +116,24 @@ MainWindow::MainWindow(QWidget *parent) : QWidget(parent)
         connect(m_regionComboBox, &QComboBox::currentIndexChanged, this, &MainWindow::updateRegion);
 
         configLayout->addWidget(m_regionComboBox, row, 1);
+
+        row++;
+
+        configLayout->addWidget(new QLabel(tr("Battery Status: "), settingsGroupBox), row, 0);
+
+        m_batteryStatusComboBox = new QComboBox(settingsGroupBox);
+
+        m_batteryStatusComboBox->addItem(tr("Charging"), VANILLA_BATTERY_STATUS_CHARGING);
+        m_batteryStatusComboBox->addItem(tr("Unknown"), VANILLA_BATTERY_STATUS_UNKNOWN);
+        m_batteryStatusComboBox->addItem(tr("Very Low"), VANILLA_BATTERY_STATUS_VERY_LOW);
+        m_batteryStatusComboBox->addItem(tr("Low"), VANILLA_BATTERY_STATUS_LOW);
+        m_batteryStatusComboBox->addItem(tr("Medium"), VANILLA_BATTERY_STATUS_MEDIUM);
+        m_batteryStatusComboBox->addItem(tr("High"), VANILLA_BATTERY_STATUS_HIGH);
+        m_batteryStatusComboBox->addItem(tr("Full"), VANILLA_BATTERY_STATUS_FULL);
+
+        connect(m_batteryStatusComboBox, &QComboBox::currentIndexChanged, this, &MainWindow::updateBatteryStatus);
+
+        configLayout->addWidget(m_batteryStatusComboBox, row, 1);
     }
 
     {
@@ -340,6 +358,7 @@ void MainWindow::setConnectedState(bool on)
 
         updateVolumeAxis();
         updateRegion();
+        updateBatteryStatus();
     } else {
         if (m_backend) {
             m_backend->interrupt();
@@ -434,4 +453,9 @@ void MainWindow::takeScreenshot()
 void MainWindow::updateRegion()
 {
     m_backend->setRegion(m_regionComboBox->currentData().toInt());
+}
+
+void MainWindow::updateBatteryStatus()
+{
+    m_backend->setBatteryStatus(m_batteryStatusComboBox->currentData().toInt());
 }
