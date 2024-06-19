@@ -32,6 +32,10 @@ Vanilla currently requires the following dependencies:
   ```
   # pacman -S qt6 ffmpeg libnl sdl2 dhclient
   ```
+- Alpine/postmarketOS
+  ```
+  # apk add qt6-qtbase-dev qt6-qtmultimedia-dev ffmpeg-dev libnl3-dev sdl2-dev dhclient
+  ```
 
 The build process is otherwise normal for a CMake program:
 
