@@ -244,6 +244,13 @@ int main()
             vanilla_request_idr();
             break;
         }
+        case VANILLA_PIPE_IN_REGION:
+        {
+            int8_t region;
+            read(fd_in, &region, sizeof(region));
+            vanilla_set_region(region);
+            break;
+        }
         case VANILLA_PIPE_IN_QUIT:
             m_quit = 1;
             break;

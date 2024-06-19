@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <wpa_ctrl.h>
 
+#include "gamepad/command.h"
 #include "gamepad/gamepad.h"
 #include "gamepad/input.h"
 #include "gamepad/video.h"
@@ -139,4 +140,9 @@ void vanilla_retrieve_sps_pps_data(void *data, size_t *size)
         memcpy(data, sps_pps_params, MIN(*size, sizeof(sps_pps_params)));
     }
     *size = sizeof(sps_pps_params);
+}
+
+void vanilla_set_region(int region)
+{
+    set_region(region);
 }

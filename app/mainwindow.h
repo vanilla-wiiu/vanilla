@@ -70,6 +70,8 @@ private slots:
 
     void volumeChanged(int val);
 
+    void updateRegion();
+
     void showInputConfigDialog();
 
     void recordingError(int err);

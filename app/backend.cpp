@@ -173,6 +173,19 @@ void Backend::setButton(int button, int32_t value)
     }
 }
 
+void Backend::setRegion(int region)
+{
+    if (m_pipe) {
+        m_pipeMutex.lock();
+        writeByte(m_pipeOut, VANILLA_PIPE_IN_REGION);
+        int8_t regionSized = region;
+        write(m_pipeOut, &regionSized, sizeof(regionSized));
+        m_pipeMutex.unlock();
+    } else {
+        vanilla_set_region(region);
+    }
+}
+
 void Backend::sync(const QString &wirelessInterface, uint16_t code)
 {
     if (m_pipe) {

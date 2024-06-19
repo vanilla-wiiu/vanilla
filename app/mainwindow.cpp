@@ -102,16 +102,18 @@ MainWindow::MainWindow(QWidget *parent) : QWidget(parent)
 
         m_regionComboBox = new QComboBox(settingsGroupBox);
 
-        m_regionComboBox->addItem(tr("Japan"));
-        m_regionComboBox->addItem(tr("North America"));
-        m_regionComboBox->addItem(tr("Europe"));
-        m_regionComboBox->addItem(tr("China (Unused)"));
-        m_regionComboBox->addItem(tr("South Korea (Unused)"));
-        m_regionComboBox->addItem(tr("Taiwan (Unused)"));
-        m_regionComboBox->addItem(tr("Australia (Unused)"));
+        m_regionComboBox->addItem(tr("Japan"), VANILLA_REGION_JAPAN);
+        m_regionComboBox->addItem(tr("North America"), VANILLA_REGION_AMERICA);
+        m_regionComboBox->addItem(tr("Europe"), VANILLA_REGION_EUROPE);
+        m_regionComboBox->addItem(tr("China (Unused)"), VANILLA_REGION_CHINA);
+        m_regionComboBox->addItem(tr("South Korea (Unused)"), VANILLA_REGION_SOUTH_KOREA);
+        m_regionComboBox->addItem(tr("Taiwan (Unused)"), VANILLA_REGION_TAIWAN);
+        m_regionComboBox->addItem(tr("Australia (Unused)"), VANILLA_REGION_AUSTRALIA);
 
-        // TODO: Should probably save this somewhere
-        m_regionComboBox->setCurrentIndex(1);
+        // TODO: Should probably save/load this from a config file
+        m_regionComboBox->setCurrentIndex(VANILLA_REGION_AMERICA);
+
+        connect(m_regionComboBox, &QComboBox::currentIndexChanged, this, &MainWindow::updateRegion);
 
         configLayout->addWidget(m_regionComboBox, row, 1);
     }
@@ -337,6 +339,7 @@ void MainWindow::setConnectedState(bool on)
         QMetaObject::invokeMethod(m_backend, "connectToConsole", Qt::QueuedConnection, Q_ARG(QString, m_wirelessInterfaceComboBox->currentText()));
 
         updateVolumeAxis();
+        updateRegion();
     } else {
         if (m_backend) {
             m_backend->interrupt();
@@ -426,4 +429,9 @@ void MainWindow::takeScreenshot()
         }
         ss.save(s);
     }
+}
+
+void MainWindow::updateRegion()
+{
+    m_backend->setRegion(m_regionComboBox->currentData().toInt());
 }

@@ -53,16 +53,11 @@ typedef struct
 static_assert(offsetof(GenericPacket, generic_cmd_header) == 0x8);
 static_assert(sizeof(GenericPacket) == 0x61C);
 
-enum Region
+int current_region = VANILLA_REGION_AMERICA;
+void set_region(int region)
 {
-    REGION_JAPAN         = 0,
-    REGION_AMERICA       = 1,
-    REGION_EUROPE        = 2,
-    REGION_CHINA         = 3,
-    REGION_SOUTH_KOREA   = 4,
-    REGION_TAIWAN        = 5,
-    REGION_AUSTRALIA     = 6,
-};
+    current_region = region;
+}
 
 typedef struct
 {
@@ -265,8 +260,9 @@ void handle_generic_packet(int skt, GenericPacket *request)
             
             EEPROM *e = (EEPROM *)&response.payload[4];
 
-            // TODO make this configurable
-            e->region = REGION_EUROPE;//REGION_AMERICA;//REGION_JAPAN;
+            print_info("Setting region to: %i", current_region);
+
+            e->region = current_region;
             e->region_crc = crc16(&e->region, sizeof(e->region));
 
             e->touchpad_calibration.new_min_x = htons(0);

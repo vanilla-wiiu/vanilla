@@ -55,6 +55,7 @@ public slots:
     void updateTouch(int x, int y);
     void setButton(int button, int32_t value);
     void requestIDR();
+    void setRegion(int region);
 
 private:
     BackendPipe *m_pipe;

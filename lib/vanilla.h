@@ -64,6 +64,17 @@ enum VanillaEvent
     VANILLA_EVENT_VIBRATE
 };
 
+enum VanillaRegion
+{
+    VANILLA_REGION_JAPAN         = 0,
+    VANILLA_REGION_AMERICA       = 1,
+    VANILLA_REGION_EUROPE        = 2,
+    VANILLA_REGION_CHINA         = 3,
+    VANILLA_REGION_SOUTH_KOREA   = 4,
+    VANILLA_REGION_TAIWAN        = 5,
+    VANILLA_REGION_AUSTRALIA     = 6,
+};
+
 /**
  * Event handler used by caller to receive events
  */
@@ -141,6 +152,15 @@ void vanilla_request_idr();
  * If `data` is not null, bytes will be copied up to `*size` or the total number of bytes.
  */
 void vanilla_retrieve_sps_pps_data(void *data, size_t *size);
+
+/**
+ * Sets the region Vanilla should present itself to the console
+ * 
+ * The gamepad is region locked and the console will complain if the gamepad doesn't match.
+ * 
+ * Set to a member of the VanillaRegion enum.
+ */
+void vanilla_set_region(int region);
 
 #if defined(__cplusplus)
 }
