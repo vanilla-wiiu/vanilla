@@ -12,6 +12,6 @@ fi
 
 echo "Building for architecture: $1"
 TAG_NAME=itsmattkc/vanilla-u-build:$1-latest
-docker build -t $TAG_NAME --platform $1 $(dirname "$0")
+docker build -t $TAG_NAME $(dirname "$0") --build-arg PLATFORM=$1
 
 echo "Built to: $TAG_NAME"
