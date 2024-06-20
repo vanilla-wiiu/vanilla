@@ -140,6 +140,9 @@ void GamepadHandler::run()
             }
         }
 
+        // Don't spam CPU cycles, still allow for up to 200Hz polling (for reference, Wii U gamepad is 180Hz)
+        SDL_Delay(5);
+
         m_mutex.lock();
     }
 
