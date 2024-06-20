@@ -67,9 +67,9 @@ ENV PKG_CONFIG_LIBDIR="${PREFIX}/usr/lib64/pkgconfig"
 ENV PKG_CONFIG_SYSROOT_DIR=${PREFIX}
 
 # HACK: Helps prevent subsequent builds from trying to link with the system libraries
-RUN dnf -y remove glibc-devel zlib-devel libjpeg-devel libpng-devel
 RUN dnf -y install pkg-config
 
+ENV LD_LIBRARY_PATH=${PREFIX}/usr/lib64
 RUN cd qt6 \
         && mkdir qt6-build \
         && cd qt6-build \
