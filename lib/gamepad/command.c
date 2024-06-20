@@ -260,8 +260,6 @@ void handle_generic_packet(int skt, GenericPacket *request)
             
             EEPROM *e = (EEPROM *)&response.payload[4];
 
-            print_info("Setting region to: %i", current_region);
-
             e->region = current_region;
             e->region_crc = crc16(&e->region, sizeof(e->region));
 
