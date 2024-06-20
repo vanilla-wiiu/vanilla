@@ -113,7 +113,7 @@ MainWindow::MainWindow(QWidget *parent) : QWidget(parent)
         // TODO: Should probably save/load this from a config file
         m_regionComboBox->setCurrentIndex(VANILLA_REGION_AMERICA);
 
-        connect(m_regionComboBox, &QComboBox::currentIndexChanged, this, &MainWindow::updateRegion);
+        connect(m_regionComboBox, &QComboBox::currentIndexChanged, this, &MainWindow::updateRegionFromComboBox);
 
         configLayout->addWidget(m_regionComboBox, row, 1);
 
@@ -447,6 +447,14 @@ void MainWindow::takeScreenshot()
             s = s.append(ext);
         }
         ss.save(s);
+    }
+}
+
+void MainWindow::updateRegionFromComboBox()
+{
+    updateRegion();
+    if (m_connectBtn->isChecked()) {
+        QMessageBox::information(this, tr("Region Change"), tr("Changes will take effect after disconnecting and reconnecting."));
     }
 }
 

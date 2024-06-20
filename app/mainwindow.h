@@ -72,6 +72,7 @@ private slots:
     void volumeChanged(int val);
 
     void updateRegion();
+    void updateRegionFromComboBox();
     void updateBatteryStatus();
 
     void showInputConfigDialog();
