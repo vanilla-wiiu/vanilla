@@ -239,13 +239,15 @@ void Backend::sync(const QString &wirelessInterface, uint16_t code)
     }
 }
 
-void Backend::setUpPipes(const QByteArray &in, const QByteArray &out)
+void Backend::setUpPipes(const QString &in, const QString &out)
 {
-    m_pipeIn = open(in.constData(), O_RDONLY);
+    QByteArray inUtf8 = in.toUtf8();
+    QByteArray outUtf8 = out.toUtf8();
+    m_pipeIn = open(inUtf8.constData(), O_RDONLY);
     if (m_pipeIn == -1) {
         QMessageBox::critical(nullptr, tr("Pipe Error"), tr("Failed to create in pipe: %1").arg(strerror(errno)));
     }
-    m_pipeOut = open(out.constData(), O_WRONLY);
+    m_pipeOut = open(outUtf8.constData(), O_WRONLY);
     if (m_pipeOut == -1) {
         QMessageBox::critical(nullptr, tr("Pipe Error"), tr("Failed to create out pipe: %1").arg(strerror(errno)));
     }
@@ -261,6 +263,9 @@ BackendPipe::BackendPipe(QObject *parent) : QObject(parent)
 BackendPipe::~BackendPipe()
 {
     waitForFinished();
+
+    QFile::remove(m_pipeInFilename);
+    QFile::remove(m_pipeOutFilename);
 }
 
 void BackendPipe::waitForFinished()
@@ -277,23 +282,19 @@ void BackendPipe::start()
     m_process->setReadChannel(QProcess::StandardError);
     connect(m_process, &QProcess::readyReadStandardError, this, &BackendPipe::receivedData);
     //connect(m_pipe, &QProcess::finished, this, [this](int code){printf("closed??? %i\n", code);});
-    m_process->start(QStringLiteral("pkexec"), {pipe_bin});
+
+    m_pipeOutFilename = QStringLiteral("/tmp/vanilla-fifo-in-%0").arg(QString::number(QDateTime::currentMSecsSinceEpoch()));
+    m_pipeInFilename = QStringLiteral("/tmp/vanilla-fifo-out-%0").arg(QString::number(QDateTime::currentMSecsSinceEpoch()));
+
+    m_process->start(QStringLiteral("pkexec"), {pipe_bin, QStringLiteral("-pipe"), m_pipeOutFilename, m_pipeInFilename});
 }
 
 void BackendPipe::receivedData()
 {
     while (m_process->canReadLine()) {
         QByteArray a = m_process->readLine().trimmed();
-        // Their out is our in which is why these are flipped
-        if (m_pipeOutFilename.isEmpty()) {
-            if (QFile::exists(a)) {
-                m_pipeOutFilename = a;
-            }
-        } else if (m_pipeInFilename.isEmpty()) {
-            if (QFile::exists(a)) {
-                m_pipeInFilename = a;
-                emit pipesAvailable(m_pipeInFilename, m_pipeOutFilename);
-            }
+        if (a == QByteArrayLiteral("READY")) {
+            emit pipesAvailable(m_pipeInFilename, m_pipeOutFilename);
         } else {
             printf("%s\n", a.constData());
         }

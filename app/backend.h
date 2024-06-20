@@ -20,15 +20,18 @@ public slots:
     void start();
 
 signals:
-    void pipesAvailable(const QByteArray &in, const QByteArray &out);
+    void pipesAvailable(const QString &in, const QString &out);
+    void portAvailable(uint16_t port);
 
 private slots:
     void receivedData();
 
 private:
     QProcess *m_process;
-    QByteArray m_pipeOutFilename;
-    QByteArray m_pipeInFilename;
+    QString m_pipeOutFilename;
+    QString m_pipeInFilename;
+    uint16_t m_serverPort;
+    uint16_t m_clientPort;
 
 };
 
@@ -67,7 +70,7 @@ private:
     QAtomicInt m_interrupt;
 
 private slots:
-    void setUpPipes(const QByteArray &in, const QByteArray &out);
+    void setUpPipes(const QString &in, const QString &out);
 
 };
 

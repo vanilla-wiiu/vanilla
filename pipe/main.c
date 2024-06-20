@@ -1,3 +1,4 @@
+#include <arpa/inet.h>
 #include <errno.h>
 #include <stdio.h>
 #include <stdarg.h>
@@ -5,6 +6,7 @@
 #include <string.h>
 #include <fcntl.h>
 #include <pthread.h>
+#include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -33,7 +35,7 @@ int open_fifo(const char *name, int mode)
 pthread_mutex_t output_mutex;
 pthread_mutex_t action_mutex;
 int action_ended = 0;
-int fd_out = 0;
+int fd_in = 0, fd_out = 0;
 int write_control_code(uint8_t code)
 {
     pthread_mutex_lock(&output_mutex);
@@ -141,26 +143,59 @@ void vapipelog(const char *str, ...)
     va_end(va);
 }
 
-int main()
+int main(int argc, char **argv)
 {
-    int fd_in;
+    if (argc < 2) {
+        goto show_help;
+    }
 
-    time_t now = time(0);
-    char pipe_in_filename[256];
-    char pipe_out_filename[256];
-    snprintf(pipe_in_filename, sizeof(pipe_in_filename), "%s-%li", "/tmp/vanilla-fifo-in", now);
-    snprintf(pipe_out_filename, sizeof(pipe_out_filename), "%s-%li", "/tmp/vanilla-fifo-out", now);
+    if (!strcmp(argv[1], "-pipe")) {
+        if (argc < 4) {
+            printf("-pipe requires <in-fifo> and <out-fifo>\n");
+            goto show_help;
+        }
 
-    umask(0000);
+        const char *pipe_in_filename = argv[2];
+        const char *pipe_out_filename = argv[3];
 
-    if (create_fifo(pipe_in_filename) == -1) return 1;
-    if (create_fifo(pipe_out_filename) == -1) return 1;
+        umask(0000);
 
-    fprintf(stderr, "%s\n", pipe_in_filename);
-    fprintf(stderr, "%s\n", pipe_out_filename);
+        if (create_fifo(pipe_in_filename) == -1) return 1;
+        if (create_fifo(pipe_out_filename) == -1) return 1;
 
-    if ((fd_out = open_fifo(pipe_out_filename, O_WRONLY)) == -1) return 1;
-    if ((fd_in = open_fifo(pipe_in_filename, O_RDONLY)) == -1) return 1;
+        fprintf(stderr, "READY\n");
+
+        if ((fd_out = open_fifo(pipe_out_filename, O_WRONLY)) == -1) return 1;
+        if ((fd_in = open_fifo(pipe_in_filename, O_RDONLY)) == -1) return 1;
+    } else if (!strcmp(argv[1], "-udp")) {
+        if (argc < 5) {
+            printf("-udp requires <server-port> <client-address> <client-port>\n");
+            goto show_help;
+        }
+
+        uint16_t server_port = atoi(argv[2]);
+        if (server_port == 0) {
+            printf("UDP port provided was invalid\n");
+            goto show_help;
+        }
+
+        struct sockaddr_in address;
+        address.sin_family = AF_INET;
+        address.sin_addr.s_addr = INADDR_ANY;
+        address.sin_port = htons(server_port);
+        fd_in = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+        
+        // if (bind(fd_in, (const struct sockaddr *) &address, sizeof(address)) == -1) {
+        //     printf("Failed to bind to port %u\n", server_port);
+        //     return 1;
+        // }
+
+        fprintf(stderr, "UNIMPLEMENTED\n");
+        return 1;
+    } else {
+        printf("Unknown mode '%s'\n", argv[1]);
+        goto show_help;
+    }
 
     uint8_t control_code;
     ssize_t read_size;
@@ -270,8 +305,19 @@ int main()
     close(fd_in);
     close(fd_out);
 
-    unlink(pipe_in_filename);
-    unlink(pipe_out_filename);
-
     return 0;
+
+show_help:
+    printf("Usage: %s <mode> [args]\n\n", argv[0]);
+    printf("vanilla-pipe provides a way to connect a frontend to Vanilla's backend when they\n");
+    printf("aren't able to run on the same device or in the same environment (e.g. when the \n");
+    printf("backend must run as root but the frontend must run as user).\n\n");
+    printf("Modes:\n\n");
+    printf("    -pipe <in-fifo> <out-fifo>\n");
+    printf("        Set up communication through Unix FIFO pipes. This is the most reliable\n");
+    printf("        solution if you're running the frontend and backend on the same device.\n\n");
+    printf("    -udp <port>\n\n");
+    printf("        Set up communication through networked UDP port. This is the best option\n");
+    printf("        if the frontend and backend are on separate devices.\n\n");
+    return 1;
 }

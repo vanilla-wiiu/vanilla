@@ -1,4 +1,4 @@
-find_package(Qt6 REQUIRED COMPONENTS Core Widgets Multimedia OpenGLWidgets)
+find_package(Qt6 REQUIRED COMPONENTS Core Widgets Multimedia OpenGLWidgets Network)
 find_package(SDL2 REQUIRED)
 find_package(FFmpeg REQUIRED COMPONENTS avformat avcodec avutil avfilter)
 
@@ -24,6 +24,7 @@ add_executable(vanilla-gui
 target_link_libraries(vanilla-gui PRIVATE
     Qt6::Core
     Qt6::Widgets
+    Qt6::Network
     Qt6::Multimedia
     Qt6::OpenGLWidgets
     SDL2
