@@ -424,14 +424,24 @@ void MainWindow::recordingError(int err)
 
 void MainWindow::recordingFinished(const QString &filename)
 {
-    QString s = QFileDialog::getSaveFileName(this, tr("Save Screenshot"), QString(), tr("MPEG-4 Video (*.mp4)"));
-    if (!s.isEmpty()) {
+    while (1) {
+        QString s = QFileDialog::getSaveFileName(this, tr("Save Screenshot"), QString(), tr("MPEG-4 Video (*.mp4)"));
+        if (s.isEmpty()) {
+            break;
+        }
+
         QString ext = QStringLiteral(".mp4");
         if (!s.endsWith(ext, Qt::CaseInsensitive)) {
             s = s.append(ext);
         }
 
-        QFile::copy(filename, s);
+        if ((!QFile::exists(s) || QFile::remove(s)) && QFile::copy(filename, s)) {
+            // Copied file successfully
+            break;
+        }
+
+        // Failed to write file
+        QMessageBox::warning(this, tr("Save Failed"), tr("Failed to save to location '%0'. Please try another location.").arg(s));
     }
 }
 
