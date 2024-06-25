@@ -93,6 +93,17 @@ void writeNullTermString(int pipe, const QString &s)
     writeByte(pipe, 0);
 }
 
+void Backend::requestIDR()
+{
+    if (m_pipe) {
+        m_pipeMutex.lock();
+        writeByte(m_pipeOut, VANILLA_PIPE_IN_REQ_IDR);
+        m_pipeMutex.unlock();
+    } else {
+        vanilla_request_idr();
+    }
+}
+
 void Backend::connectToConsole(const QString &wirelessInterface)
 {
     if (m_pipe) {
@@ -148,7 +159,7 @@ void Backend::updateTouch(int x, int y)
     }
 }
 
-void Backend::setButton(int button, int16_t value)
+void Backend::setButton(int button, int32_t value)
 {
     if (m_pipe) {
         m_pipeMutex.lock();
@@ -159,6 +170,32 @@ void Backend::setButton(int button, int16_t value)
         m_pipeMutex.unlock();
     } else {
         vanilla_set_button(button, value);
+    }
+}
+
+void Backend::setRegion(int region)
+{
+    if (m_pipe) {
+        m_pipeMutex.lock();
+        writeByte(m_pipeOut, VANILLA_PIPE_IN_REGION);
+        int8_t regionSized = region;
+        write(m_pipeOut, &regionSized, sizeof(regionSized));
+        m_pipeMutex.unlock();
+    } else {
+        vanilla_set_region(region);
+    }
+}
+
+void Backend::setBatteryStatus(int status)
+{
+    if (m_pipe) {
+        m_pipeMutex.lock();
+        writeByte(m_pipeOut, VANILLA_PIPE_IN_BATTERY);
+        int8_t batterySized = status;
+        write(m_pipeOut, &batterySized, sizeof(batterySized));
+        m_pipeMutex.unlock();
+    } else {
+        vanilla_set_battery_status(status);
     }
 }
 
@@ -202,13 +239,15 @@ void Backend::sync(const QString &wirelessInterface, uint16_t code)
     }
 }
 
-void Backend::setUpPipes(const QByteArray &in, const QByteArray &out)
+void Backend::setUpPipes(const QString &in, const QString &out)
 {
-    m_pipeIn = open(in.constData(), O_RDONLY);
+    QByteArray inUtf8 = in.toUtf8();
+    QByteArray outUtf8 = out.toUtf8();
+    m_pipeIn = open(inUtf8.constData(), O_RDONLY);
     if (m_pipeIn == -1) {
         QMessageBox::critical(nullptr, tr("Pipe Error"), tr("Failed to create in pipe: %1").arg(strerror(errno)));
     }
-    m_pipeOut = open(out.constData(), O_WRONLY);
+    m_pipeOut = open(outUtf8.constData(), O_WRONLY);
     if (m_pipeOut == -1) {
         QMessageBox::critical(nullptr, tr("Pipe Error"), tr("Failed to create out pipe: %1").arg(strerror(errno)));
     }
@@ -224,6 +263,9 @@ BackendPipe::BackendPipe(QObject *parent) : QObject(parent)
 BackendPipe::~BackendPipe()
 {
     waitForFinished();
+
+    QFile::remove(m_pipeInFilename);
+    QFile::remove(m_pipeOutFilename);
 }
 
 void BackendPipe::waitForFinished()
@@ -240,23 +282,19 @@ void BackendPipe::start()
     m_process->setReadChannel(QProcess::StandardError);
     connect(m_process, &QProcess::readyReadStandardError, this, &BackendPipe::receivedData);
     //connect(m_pipe, &QProcess::finished, this, [this](int code){printf("closed??? %i\n", code);});
-    m_process->start(QStringLiteral("pkexec"), {pipe_bin});
+
+    m_pipeOutFilename = QStringLiteral("/tmp/vanilla-fifo-in-%0").arg(QString::number(QDateTime::currentMSecsSinceEpoch()));
+    m_pipeInFilename = QStringLiteral("/tmp/vanilla-fifo-out-%0").arg(QString::number(QDateTime::currentMSecsSinceEpoch()));
+
+    m_process->start(QStringLiteral("pkexec"), {pipe_bin, QStringLiteral("-pipe"), m_pipeOutFilename, m_pipeInFilename});
 }
 
 void BackendPipe::receivedData()
 {
     while (m_process->canReadLine()) {
         QByteArray a = m_process->readLine().trimmed();
-        // Their out is our in which is why these are flipped
-        if (m_pipeOutFilename.isEmpty()) {
-            if (QFile::exists(a)) {
-                m_pipeOutFilename = a;
-            }
-        } else if (m_pipeInFilename.isEmpty()) {
-            if (QFile::exists(a)) {
-                m_pipeInFilename = a;
-                emit pipesAvailable(m_pipeInFilename, m_pipeOutFilename);
-            }
+        if (a == QByteArrayLiteral("READY")) {
+            emit pipesAvailable(m_pipeInFilename, m_pipeOutFilename);
         } else {
             printf("%s\n", a.constData());
         }

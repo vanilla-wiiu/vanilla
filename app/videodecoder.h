@@ -4,6 +4,7 @@
 #include <QObject>
 
 extern "C" {
+#include <libavformat/avformat.h>
 #include <libavcodec/avcodec.h>
 #include <libavfilter/avfilter.h>
 #include <libswscale/swscale.h>
@@ -19,11 +20,20 @@ public:
 
 signals:
     void frameReady(const QImage &image);
+    void recordingError(int err);
+    void recordingFinished(const QString &filename);
+    void requestIDR();
 
 public slots:
     void sendPacket(const QByteArray &data);
+    void sendAudio(const QByteArray &data);
+    void enableRecording(bool e);
+    void startRecording();
+    void stopRecording();
 
 private:
+    int64_t getCurrentTimestamp(AVRational timebase);
+    
     AVCodecContext *m_codecCtx;
     AVPacket *m_packet;
     AVFrame *m_frame;
@@ -32,7 +42,11 @@ private:
     AVFilterContext *m_buffersrcCtx;
     AVFilterContext *m_buffersinkCtx;
 
-    QByteArray m_currentPacket;
+    AVFormatContext *m_recordingCtx;
+    AVStream *m_videoStream;
+    AVStream *m_audioStream;
+    QString m_recordingFilename;
+    int64_t m_recordingStartTime;
 
 };
 

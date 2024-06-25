@@ -2,12 +2,14 @@
 
 #include <QAudioDevice>
 #include <QComboBox>
+#include <QFileDialog>
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QMediaDevices>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QScrollArea>
 #include <QSlider>
 #include <QSplitter>
 #include <QThread>
@@ -41,8 +43,15 @@ MainWindow::MainWindow(QWidget *parent) : QWidget(parent)
     m_splitter = new QSplitter(this);
     layout->addWidget(m_splitter);
 
-    QWidget *configSection = new QWidget(this);
-    m_splitter->addWidget(configSection);
+    QScrollArea *configScrollArea = new QScrollArea(this);
+    configScrollArea->setWidgetResizable(true);
+    configScrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    configScrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
+    m_splitter->addWidget(configScrollArea);
+
+    QWidget *configSection = new QWidget(configScrollArea);
+    configScrollArea->setSizePolicy(QSizePolicy::MinimumExpanding, QSizePolicy::Expanding);
+    configScrollArea->setWidget(configSection);
 
     m_viewer = new Viewer(this);
     m_viewer->setMinimumSize(854, 480);
@@ -82,6 +91,52 @@ MainWindow::MainWindow(QWidget *parent) : QWidget(parent)
     }
 
     {
+        QGroupBox *settingsGroupBox = new QGroupBox(tr("Settings"), configSection);
+        configOuterLayout->addWidget(settingsGroupBox);
+
+        QGridLayout *configLayout = new QGridLayout(settingsGroupBox);
+
+        int row = 0;
+
+        configLayout->addWidget(new QLabel(tr("Region: "), settingsGroupBox), row, 0);
+
+        m_regionComboBox = new QComboBox(settingsGroupBox);
+
+        m_regionComboBox->addItem(tr("Japan"), VANILLA_REGION_JAPAN);
+        m_regionComboBox->addItem(tr("North America"), VANILLA_REGION_AMERICA);
+        m_regionComboBox->addItem(tr("Europe"), VANILLA_REGION_EUROPE);
+        m_regionComboBox->addItem(tr("China (Unused)"), VANILLA_REGION_CHINA);
+        m_regionComboBox->addItem(tr("South Korea (Unused)"), VANILLA_REGION_SOUTH_KOREA);
+        m_regionComboBox->addItem(tr("Taiwan (Unused)"), VANILLA_REGION_TAIWAN);
+        m_regionComboBox->addItem(tr("Australia (Unused)"), VANILLA_REGION_AUSTRALIA);
+
+        // TODO: Should probably save/load this from a config file
+        m_regionComboBox->setCurrentIndex(VANILLA_REGION_AMERICA);
+
+        connect(m_regionComboBox, &QComboBox::currentIndexChanged, this, &MainWindow::updateRegionFromComboBox);
+
+        configLayout->addWidget(m_regionComboBox, row, 1);
+
+        row++;
+
+        configLayout->addWidget(new QLabel(tr("Battery Status: "), settingsGroupBox), row, 0);
+
+        m_batteryStatusComboBox = new QComboBox(settingsGroupBox);
+
+        m_batteryStatusComboBox->addItem(tr("Charging"), VANILLA_BATTERY_STATUS_CHARGING);
+        m_batteryStatusComboBox->addItem(tr("Unknown"), VANILLA_BATTERY_STATUS_UNKNOWN);
+        m_batteryStatusComboBox->addItem(tr("Very Low"), VANILLA_BATTERY_STATUS_VERY_LOW);
+        m_batteryStatusComboBox->addItem(tr("Low"), VANILLA_BATTERY_STATUS_LOW);
+        m_batteryStatusComboBox->addItem(tr("Medium"), VANILLA_BATTERY_STATUS_MEDIUM);
+        m_batteryStatusComboBox->addItem(tr("High"), VANILLA_BATTERY_STATUS_HIGH);
+        m_batteryStatusComboBox->addItem(tr("Full"), VANILLA_BATTERY_STATUS_FULL);
+
+        connect(m_batteryStatusComboBox, &QComboBox::currentIndexChanged, this, &MainWindow::updateBatteryStatus);
+
+        configLayout->addWidget(m_batteryStatusComboBox, row, 1);
+    }
+
+    {
         QGroupBox *displayConfigGroupBox = new QGroupBox(tr("Display"), configSection);
         configOuterLayout->addWidget(displayConfigGroupBox);
 
@@ -92,6 +147,16 @@ MainWindow::MainWindow(QWidget *parent) : QWidget(parent)
         QPushButton *fullScreenBtn = new QPushButton(tr("Full Screen"), configSection);
         connect(fullScreenBtn, &QPushButton::clicked, this, &MainWindow::setFullScreen);
         configLayout->addWidget(fullScreenBtn, row, 0, 1, 2);
+        
+        row++;
+
+        m_recordBtn = new QPushButton(tr("Record"), configSection);
+        m_recordBtn->setCheckable(true);
+        configLayout->addWidget(m_recordBtn, row, 0);
+
+        m_screenshotBtn = new QPushButton(tr("Screenshot"), configSection);
+        connect(m_screenshotBtn, &QPushButton::clicked, this, &MainWindow::takeScreenshot);
+        configLayout->addWidget(m_screenshotBtn, row, 1);
     }
 
     {
@@ -104,19 +169,19 @@ MainWindow::MainWindow(QWidget *parent) : QWidget(parent)
 
         configLayout->addWidget(new QLabel(tr("Volume: "), soundConfigGroupBox), row, 0);
         
-        QSlider *volumeSlider = new QSlider(Qt::Horizontal, soundConfigGroupBox);
-        volumeSlider->setMinimum(0);
-        volumeSlider->setMaximum(100);
-        volumeSlider->setValue(100);
-        connect(volumeSlider, &QSlider::valueChanged, this, &MainWindow::volumeChanged);
-        configLayout->addWidget(volumeSlider, row, 1);
+        m_volumeSlider = new QSlider(Qt::Horizontal, soundConfigGroupBox);
+        m_volumeSlider->setMinimum(0);
+        m_volumeSlider->setMaximum(100);
+        m_volumeSlider->setValue(100);
+        connect(m_volumeSlider, &QSlider::valueChanged, this, &MainWindow::volumeChanged);
+        configLayout->addWidget(m_volumeSlider, row, 1);
 
         row++;
 
         configLayout->addWidget(new QLabel(tr("Microphone: "), soundConfigGroupBox), row, 0);
 
         m_microphoneComboBox = new QComboBox(soundConfigGroupBox);
-        m_microphoneComboBox->setMaximumWidth(m_microphoneComboBox->fontMetrics().horizontalAdvance(QStringLiteral("SOMEAMOUNTOFTEXT")));
+        m_microphoneComboBox->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
         configLayout->addWidget(m_microphoneComboBox, row, 1);
     }
 
@@ -147,6 +212,7 @@ MainWindow::MainWindow(QWidget *parent) : QWidget(parent)
     startObjectOnThread(m_backend);
 
     m_videoDecoder = new VideoDecoder();
+    connect(m_recordBtn, &QPushButton::clicked, m_videoDecoder, &VideoDecoder::enableRecording);
     startObjectOnThread(m_videoDecoder);
 
     m_gamepadHandler = new GamepadHandler();
@@ -158,8 +224,12 @@ MainWindow::MainWindow(QWidget *parent) : QWidget(parent)
     QMetaObject::invokeMethod(m_audioHandler, &AudioHandler::run, Qt::QueuedConnection);
 
     connect(m_backend, &Backend::videoAvailable, m_videoDecoder, &VideoDecoder::sendPacket);
+    connect(m_backend, &Backend::audioAvailable, m_videoDecoder, &VideoDecoder::sendAudio);
     connect(m_backend, &Backend::syncCompleted, this, [this](bool e){if (e) m_connectBtn->setEnabled(true);});
     connect(m_videoDecoder, &VideoDecoder::frameReady, m_viewer, &Viewer::setImage);
+    connect(m_videoDecoder, &VideoDecoder::recordingError, this, &MainWindow::recordingError);
+    connect(m_videoDecoder, &VideoDecoder::recordingFinished, this, &MainWindow::recordingFinished);
+    connect(m_videoDecoder, &VideoDecoder::requestIDR, m_backend, &Backend::requestIDR, Qt::DirectConnection);
     connect(m_backend, &Backend::audioAvailable, m_audioHandler, &AudioHandler::write);
     connect(m_backend, &Backend::vibrate, m_gamepadHandler, &GamepadHandler::vibrate, Qt::DirectConnection);
     connect(m_viewer, &Viewer::touch, m_backend, &Backend::updateTouch, Qt::DirectConnection);
@@ -285,6 +355,10 @@ void MainWindow::setConnectedState(bool on)
         m_connectBtn->setText(tr("Disconnect"));
 
         QMetaObject::invokeMethod(m_backend, "connectToConsole", Qt::QueuedConnection, Q_ARG(QString, m_wirelessInterfaceComboBox->currentText()));
+
+        updateVolumeAxis();
+        updateRegion();
+        updateBatteryStatus();
     } else {
         if (m_backend) {
             m_backend->interrupt();
@@ -313,11 +387,18 @@ void MainWindow::exitFullScreen()
     m_splitter->addWidget(m_viewer);
 }
 
+void MainWindow::updateVolumeAxis()
+{
+    m_backend->setButton(VANILLA_AXIS_VOLUME, m_volumeSlider->value() * 0xFF / m_volumeSlider->maximum());
+}
+
 void MainWindow::volumeChanged(int v)
 {
     qreal vol = v * 0.01;
     vol = QAudio::convertVolume(vol, QAudio::LinearVolumeScale, QAudio::LogarithmicVolumeScale);
     QMetaObject::invokeMethod(m_audioHandler, "setVolume", Q_ARG(qreal, vol));
+
+    updateVolumeAxis();
 }
 
 void MainWindow::showInputConfigDialog()
@@ -332,4 +413,67 @@ void MainWindow::startObjectOnThread(QObject *object)
     object->moveToThread(thread);
     thread->start();
     m_threadMap.insert(object, thread);
+}
+
+void MainWindow::recordingError(int err)
+{
+    char buf[64] = {0};
+    av_make_error_string(buf, sizeof(buf), err);
+    QMessageBox::critical(this, tr("Recording Error"), tr("Recording failed with the following error: %0 (%1)").arg(buf, QString::number(err)));
+}
+
+void MainWindow::recordingFinished(const QString &filename)
+{
+    while (1) {
+        QString s = QFileDialog::getSaveFileName(this, tr("Save Screenshot"), QString(), tr("MPEG-4 Video (*.mp4)"));
+        if (s.isEmpty()) {
+            break;
+        }
+
+        QString ext = QStringLiteral(".mp4");
+        if (!s.endsWith(ext, Qt::CaseInsensitive)) {
+            s = s.append(ext);
+        }
+
+        if ((!QFile::exists(s) || QFile::remove(s)) && QFile::copy(filename, s)) {
+            // Copied file successfully
+            break;
+        }
+
+        // Failed to write file
+        QMessageBox::warning(this, tr("Save Failed"), tr("Failed to save to location '%0'. Please try another location.").arg(s));
+    }
+}
+
+void MainWindow::takeScreenshot()
+{
+    // Make a copy of the current image
+    QImage ss = m_viewer->image();
+
+    QString s = QFileDialog::getSaveFileName(this, tr("Save Screenshot"), QString(), tr("PNG (*.png)"));
+    if (!s.isEmpty()) {
+        QString ext = QStringLiteral(".png");
+        if (!s.endsWith(ext, Qt::CaseInsensitive)) {
+            s = s.append(ext);
+        }
+        ss.save(s);
+    }
+}
+
+void MainWindow::updateRegionFromComboBox()
+{
+    updateRegion();
+    if (m_connectBtn->isChecked()) {
+        QMessageBox::information(this, tr("Region Change"), tr("Changes will take effect after disconnecting and reconnecting."));
+    }
+}
+
+void MainWindow::updateRegion()
+{
+    m_backend->setRegion(m_regionComboBox->currentData().toInt());
+}
+
+void MainWindow::updateBatteryStatus()
+{
+    m_backend->setBatteryStatus(m_batteryStatusComboBox->currentData().toInt());
 }

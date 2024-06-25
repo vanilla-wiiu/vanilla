@@ -9,6 +9,8 @@ class Viewer : public QOpenGLWidget
 public:
     Viewer(QWidget *parent = nullptr);
 
+    const QImage &image() const { return m_image; }
+
 public slots:
     void setImage(const QImage &image);
 

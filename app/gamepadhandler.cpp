@@ -52,6 +52,20 @@ void GamepadHandler::setController(int index)
     m_mutex.unlock();
 }
 
+void EnableSensorIfAvailable(SDL_GameController *controller, SDL_SensorType sensor)
+{
+    if (SDL_GameControllerHasSensor(controller, sensor)) {
+        SDL_GameControllerSetSensorEnabled(controller, sensor, SDL_TRUE);
+    }
+}
+
+int32_t packFloat(float f)
+{
+    int32_t x;
+    memcpy(&x, &f, sizeof(int32_t));
+    return x;
+}
+
 void GamepadHandler::run()
 {
     m_mutex.lock();
@@ -63,6 +77,8 @@ void GamepadHandler::run()
             }
             if (m_nextGamepad != -1) {
                 m_controller = SDL_GameControllerOpen(m_nextGamepad);
+                EnableSensorIfAvailable(m_controller, SDL_SENSOR_ACCEL);
+                EnableSensorIfAvailable(m_controller, SDL_SENSOR_GYRO);
             } else {
                 m_controller = nullptr;
             }
@@ -110,8 +126,22 @@ void GamepadHandler::run()
                     }
                 }
                 break;
+            case SDL_CONTROLLERSENSORUPDATE:
+                if (event.csensor.sensor == SDL_SENSOR_ACCEL) {
+                    emit buttonStateChanged(VANILLA_SENSOR_ACCEL_X, packFloat(event.csensor.data[0]));
+                    emit buttonStateChanged(VANILLA_SENSOR_ACCEL_Y, packFloat(event.csensor.data[1]));
+                    emit buttonStateChanged(VANILLA_SENSOR_ACCEL_Z, packFloat(event.csensor.data[2]));
+                } else if (event.csensor.sensor == SDL_SENSOR_GYRO) {
+                    emit buttonStateChanged(VANILLA_SENSOR_GYRO_PITCH, packFloat(event.csensor.data[0]));
+                    emit buttonStateChanged(VANILLA_SENSOR_GYRO_YAW, packFloat(event.csensor.data[1]));
+                    emit buttonStateChanged(VANILLA_SENSOR_GYRO_ROLL, packFloat(event.csensor.data[2]));
+                }
+                break;
             }
         }
+
+        // Don't spam CPU cycles, still allow for up to 200Hz polling (for reference, Wii U gamepad is 180Hz)
+        SDL_Delay(5);
 
         m_mutex.lock();
     }

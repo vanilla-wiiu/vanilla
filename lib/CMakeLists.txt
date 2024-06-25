@@ -1,5 +1,6 @@
 add_library(vanilla SHARED
     gamepad/audio.c
+    gamepad/command.c
     gamepad/gamepad.c
     gamepad/input.c
     gamepad/video.c

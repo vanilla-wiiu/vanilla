@@ -10,6 +10,7 @@
 
 #include "gamepad.h"
 #include "vanilla.h"
+#include "status.h"
 #include "util.h"
 
 typedef struct
@@ -27,6 +28,23 @@ typedef struct
     uint8_t extended_header[8];
     uint8_t payload[2048];
 } VideoPacket;
+
+pthread_mutex_t video_mutex;
+int idr_is_queued = 0;
+
+void request_idr()
+{
+    pthread_mutex_lock(&video_mutex);
+    idr_is_queued = 1;
+    pthread_mutex_unlock(&video_mutex);
+}
+
+void send_idr_request_to_console(int socket_msg)
+{
+    // Make an IDR request to the Wii U?
+    unsigned char idr_request[] = {1, 0, 0, 0}; // Undocumented
+    send_to_console(socket_msg, idr_request, sizeof(idr_request), PORT_MSG);
+}
 
 void handle_video_packet(vanilla_event_handler_t event_handler, void *context, unsigned char *data, size_t size, int socket_msg)
 {
@@ -81,13 +99,18 @@ void handle_video_packet(vanilla_event_handler_t event_handler, void *context, u
             if (is_idr) {
                 is_streaming = 1;
             } else {
-                // Make an IDR request to the Wii U?
-                unsigned char idr_request[] = {1, 0, 0, 0}; // Undocumented
-                send_to_console(socket_msg, idr_request, sizeof(idr_request), PORT_MSG);
+                send_idr_request_to_console(socket_msg);
                 return;
             }
         }
     }
+
+    pthread_mutex_lock(&video_mutex);
+    if (idr_is_queued) {
+        send_idr_request_to_console(socket_msg);
+        idr_is_queued = 0;
+    }
+    pthread_mutex_unlock(&video_mutex);
 
     memcpy(video_packet + video_packet_size, vp->payload, vp->payload_size);
     video_packet_size += vp->payload_size;
@@ -102,16 +125,9 @@ void handle_video_packet(vanilla_event_handler_t event_handler, void *context, u
             int slice_header = is_idr ? 0x25b804ff : (0x21e003ff | ((frame_decode_num & 0xff) << 13));
             frame_decode_num++;
 
-            uint8_t params[] = {
-                    // sps
-                    0x00, 0x00, 0x00, 0x01, 0x67, 0x64, 0x00, 0x20, 0xac, 0x2b, 0x40, 0x6c, 0x1e, 0xf3, 0x68,
-                    // pps
-                    0x00, 0x00, 0x00, 0x01, 0x68, 0xee, 0x06, 0x0c, 0xe8
-            };
-
             if (is_idr) {
-                memcpy(nals_current, params, sizeof(params));
-                nals_current += sizeof(params);
+                memcpy(nals_current, sps_pps_params, sizeof(sps_pps_params));
+                nals_current += sizeof(sps_pps_params);
             }
 
             // begin slice nalu
@@ -154,6 +170,7 @@ void *listen_video(void *x)
     unsigned char data[2048];
     ssize_t size;
 
+    pthread_mutex_init(&video_mutex, NULL);
 
     do {
         size = recv(info->socket_vid, data, sizeof(data), 0);
@@ -162,6 +179,8 @@ void *listen_video(void *x)
             handle_video_packet(info->event_handler, info->context, data, size, info->socket_msg);
         }
     } while (!is_interrupted());
+
+    pthread_mutex_destroy(&video_mutex);
 
     pthread_exit(NULL);
 

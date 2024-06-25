@@ -2,6 +2,7 @@
 #define VANILLA_WPA_H
 
 #include <stdlib.h>
+#include <sys/types.h>
 
 struct wpa_ctrl;
 extern const char *wpa_ctrl_interface;

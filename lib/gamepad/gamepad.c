@@ -12,6 +12,7 @@
 #include <wpa_ctrl.h>
 
 #include "audio.h"
+#include "command.h"
 #include "input.h"
 #include "video.h"
 
@@ -64,6 +65,16 @@ int create_socket(int *socket_out, uint16_t port)
     return 1;
 }
 
+void send_stop_code(int from_socket, in_port_t port)
+{
+    struct sockaddr_in address;
+    address.sin_family = AF_INET;
+    address.sin_addr.s_addr = inet_addr("127.0.0.1");
+
+    address.sin_port = htons(port);
+    sendto(from_socket, &STOP_CODE, sizeof(STOP_CODE), 0, (struct sockaddr *)&address, sizeof(address));
+}
+
 int main_loop(vanilla_event_handler_t event_handler, void *context)
 {
     struct gamepad_thread_context info;
@@ -84,20 +95,15 @@ int main_loop(vanilla_event_handler_t event_handler, void *context)
     pthread_create(&video_thread, NULL, listen_video, &info);
     pthread_create(&audio_thread, NULL, listen_audio, &info);
     pthread_create(&input_thread, NULL, listen_input, &info);
+    pthread_create(&cmd_thread, NULL, listen_command, &info);
 
     while (1) {
         usleep(250 * 1000);
         if (is_interrupted()) {
             // Wake up any threads that might be blocked on `recv`
-            struct sockaddr_in address;
-            address.sin_family = AF_INET;
-            address.sin_addr.s_addr = inet_addr("127.0.0.1");
-
-            address.sin_port = htons(PORT_VID);
-            sendto(info.socket_msg, &STOP_CODE, sizeof(STOP_CODE), 0, (struct sockaddr *) &address, sizeof(address));
-
-            address.sin_port = htons(PORT_AUD);
-            sendto(info.socket_msg, &STOP_CODE, sizeof(STOP_CODE), 0, (struct sockaddr *) &address, sizeof(address));
+            send_stop_code(info.socket_msg, PORT_VID);
+            send_stop_code(info.socket_msg, PORT_AUD);
+            send_stop_code(info.socket_msg, PORT_CMD);
             break;
         }
     }
@@ -105,6 +111,7 @@ int main_loop(vanilla_event_handler_t event_handler, void *context)
     pthread_join(video_thread, NULL);
     pthread_join(audio_thread, NULL);
     pthread_join(input_thread, NULL);
+    pthread_join(cmd_thread, NULL);
 
     ret = VANILLA_SUCCESS;
 

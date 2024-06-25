@@ -1,11 +1,14 @@
 #include "vanilla.h"
 
 #include <signal.h>
+#include <string.h>
 #include <unistd.h>
 #include <wpa_ctrl.h>
 
+#include "gamepad/command.h"
 #include "gamepad/gamepad.h"
 #include "gamepad/input.h"
+#include "gamepad/video.h"
 #include "status.h"
 #include "sync.h"
 #include "util.h"
@@ -75,7 +78,7 @@ void vanilla_stop()
     force_interrupt();
 }
 
-void vanilla_set_button(int button, int16_t value)
+void vanilla_set_button(int button, int32_t value)
 {
     set_button_state(button, value);
 }
@@ -124,4 +127,27 @@ void vanilla_log_no_newline_va(const char *format, va_list args)
 void vanilla_install_logger(void (*logger)(const char *, va_list))
 {
     custom_logger = logger;
+}
+
+void vanilla_request_idr()
+{
+    request_idr();
+}
+
+void vanilla_retrieve_sps_pps_data(void *data, size_t *size)
+{
+    if (data != NULL) {
+        memcpy(data, sps_pps_params, MIN(*size, sizeof(sps_pps_params)));
+    }
+    *size = sizeof(sps_pps_params);
+}
+
+void vanilla_set_region(int region)
+{
+    set_region(region);
+}
+
+void vanilla_set_battery_status(int battery_status)
+{
+    set_battery_status(battery_status);
 }

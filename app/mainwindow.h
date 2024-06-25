@@ -30,15 +30,23 @@ private:
 
     void startObjectOnThread(QObject *object);
 
+    void updateVolumeAxis();
+
     Viewer *m_viewer;
 
     QComboBox *m_wirelessInterfaceComboBox;
     QComboBox *m_microphoneComboBox;
     QComboBox *m_controllerComboBox;
+    QComboBox *m_regionComboBox;
+    QComboBox *m_batteryStatusComboBox;
     QProcess *m_process;
 
     QPushButton *m_syncBtn;
     QPushButton *m_connectBtn;
+    QPushButton *m_recordBtn;
+    QPushButton *m_screenshotBtn;
+
+    QSlider *m_volumeSlider;
 
     QSplitter *m_splitter;
 
@@ -63,7 +71,16 @@ private slots:
 
     void volumeChanged(int val);
 
+    void updateRegion();
+    void updateRegionFromComboBox();
+    void updateBatteryStatus();
+
     void showInputConfigDialog();
+
+    void recordingError(int err);
+    void recordingFinished(const QString &filename);
+
+    void takeScreenshot();
 
 };
 

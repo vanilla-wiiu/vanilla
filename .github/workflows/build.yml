@@ -11,7 +11,7 @@ jobs:
     strategy:
       matrix:
         arch: [ x86_64, aarch64 ]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
     - uses: actions/checkout@v4
       with:
@@ -19,10 +19,10 @@ jobs:
 
     - name: Install dependencies
       if: ${{ matrix.arch != 'x86_64' }}
-      run: sudo apt -y install qemu-user-static binfmt-support
+      run: sudo apt -y update && sudo apt -y install qemu-user-static binfmt-support
     
     - name: Run Docker container
-      run: docker run --platform ${{ matrix.arch }} -v "${{ github.workspace }}:/vanilla" itsmattkc/vanilla-u-build:${{ matrix.arch }}-latest
+      run: docker run -v "${{ github.workspace }}:/vanilla" itsmattkc/vanilla-u-build:${{ matrix.arch }}-latest
     
     - name: Upload a Build Artifact
       uses: actions/upload-artifact@v4
