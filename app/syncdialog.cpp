@@ -6,10 +6,10 @@
 #include "syncprogressdialog.h"
 
 QString SyncDialog::g_symbols[g_symbolCount] = {
-    QString::fromUtf8("\xE2\x99\xA0"),     // Spade = 0
-    QString::fromUtf8("\xE2\x99\xA5"),     // Heart = 1
-    QString::fromUtf8("\xE2\x99\xA6"),     // Diamond = 2
-    QString::fromUtf8("\xE2\x99\xA3")      // Club = 3
+    QString::fromUtf8("\xE2\x99\xA0\xEF\xB8\x8E"),     // Spade = 0
+    QString::fromUtf8("\xE2\x99\xA5\xEF\xB8\x8E"),     // Heart = 1
+    QString::fromUtf8("\xE2\x99\xA6\xEF\xB8\x8E"),     // Diamond = 2
+    QString::fromUtf8("\xE2\x99\xA3\xEF\xB8\x8E")      // Club = 3
 };
 
 SyncDialog::SyncDialog(QWidget *parent) : QDialog(parent)
