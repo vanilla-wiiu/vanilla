@@ -61,7 +61,7 @@ SyncDialog::SyncDialog(QWidget *parent) : QDialog(parent)
     vline->setFrameShadow(QFrame::Sunken);
     m_buttonLayout->addWidget(vline);
 
-    createButton(QString::fromUtf8("\xE2\xAC\x85"), -1);
+    createButton(QString::fromUtf8("\xE2\xAC\x85\xEF\xB8\x8E"), -1);
 
     m_buttonLayout->addStretch();
     outerLayout->addLayout(m_buttonLayout);
@@ -116,7 +116,7 @@ void SyncDialog::buttonClicked()
 
 void SyncDialog::updateLabels()
 {
-    static QString empty = QString::fromUtf8("\xE2\x80\xA2");
+    static QString empty = QString::fromUtf8("\xE2\x80\xA2\xEF\xB8\x8E");
     for (int i = 0; i < g_symbolCount; i++) {
         m_labels[i]->setText((m_code[i] == -1) ? empty : g_symbols[m_code[i]]);
     }
