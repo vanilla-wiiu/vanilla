@@ -6,10 +6,10 @@
 #include "syncprogressdialog.h"
 
 QString SyncDialog::g_symbols[g_symbolCount] = {
-    QString::fromUtf8("\xE2\x99\xA0"),     // Spade = 0
-    QString::fromUtf8("\xE2\x99\xA5"),     // Heart = 1
-    QString::fromUtf8("\xE2\x99\xA6"),     // Diamond = 2
-    QString::fromUtf8("\xE2\x99\xA3")      // Club = 3
+    QString::fromUtf8("\xE2\x99\xA0\xEF\xB8\x8E"),     // Spade = 0
+    QString::fromUtf8("\xE2\x99\xA5\xEF\xB8\x8E"),     // Heart = 1
+    QString::fromUtf8("\xE2\x99\xA6\xEF\xB8\x8E"),     // Diamond = 2
+    QString::fromUtf8("\xE2\x99\xA3\xEF\xB8\x8E")      // Club = 3
 };
 
 SyncDialog::SyncDialog(QWidget *parent) : QDialog(parent)
@@ -61,7 +61,7 @@ SyncDialog::SyncDialog(QWidget *parent) : QDialog(parent)
     vline->setFrameShadow(QFrame::Sunken);
     m_buttonLayout->addWidget(vline);
 
-    createButton(QString::fromUtf8("\xE2\xAC\x85"), -1);
+    createButton(QString::fromUtf8("\xE2\xAC\x85\xEF\xB8\x8E"), -1);
 
     m_buttonLayout->addStretch();
     outerLayout->addLayout(m_buttonLayout);
@@ -116,7 +116,7 @@ void SyncDialog::buttonClicked()
 
 void SyncDialog::updateLabels()
 {
-    static QString empty = QString::fromUtf8("\xE2\x80\xA2");
+    static QString empty = QString::fromUtf8("\xE2\x80\xA2\xEF\xB8\x8E");
     for (int i = 0; i < g_symbolCount; i++) {
         m_labels[i]->setText((m_code[i] == -1) ? empty : g_symbols[m_code[i]]);
     }
