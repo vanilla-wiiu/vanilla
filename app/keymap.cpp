@@ -22,6 +22,7 @@ KeyMap::KeyMap()
     ref[Qt::Key_Return] = VANILLA_BTN_PLUS;
     ref[Qt::Key_Control] = VANILLA_BTN_MINUS;
     ref[Qt::Key_H] = VANILLA_BTN_HOME;
+    ref[Qt::Key_Y] = VANILLA_BTN_TV;
     ref[Qt::Key_W] = VANILLA_AXIS_L_UP;
     ref[Qt::Key_A] = VANILLA_AXIS_L_LEFT;
     ref[Qt::Key_S] = VANILLA_AXIS_L_DOWN;
