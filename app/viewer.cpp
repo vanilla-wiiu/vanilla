@@ -18,8 +18,9 @@ void Viewer::paintGL()
 {
     QPainter p(this);
     
+    p.fillRect(this->rect(), Qt::black);
+    
     if (m_image.isNull()) {
-        p.fillRect(this->rect(), Qt::black);
         return;
     }
 
