@@ -93,6 +93,8 @@ int wait_for_output(int pipe, const char *expected_output)
         // Read line from child process
         read_line_from_pipe(pipe, buf, sizeof(buf));
 
+        print_info("SUBPROCESS %s", buf);
+
         // We got success message!
         if (!memcmp(buf, expected_output, expected_len)) {
             ret = 1;
