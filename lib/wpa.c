@@ -154,7 +154,7 @@ int wpa_setup_environment(const char *wireless_interface, const char *wireless_c
 {
     int ret = VANILLA_ERROR;
 
-    install_interrupt_handler();
+    //install_interrupt_handler();
 
     // Check status of interface with NetworkManager
     int is_managed = 0;
@@ -217,7 +217,7 @@ die_and_reenable_managed:
 
 die:
     // Remove our custom sigint signal handler
-    uninstall_interrupt_handler();
+    //uninstall_interrupt_handler();
 
     return ret;
 }
