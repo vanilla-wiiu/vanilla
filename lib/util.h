@@ -16,6 +16,7 @@ size_t get_home_directory(char *buf, size_t buf_size);
 size_t get_home_directory_file(const char *filename, char *buf, size_t buf_size);
 size_t get_max_path_length();
 
+void clear_interrupt();
 int is_interrupted();
 void force_interrupt();
 void install_interrupt_handler();

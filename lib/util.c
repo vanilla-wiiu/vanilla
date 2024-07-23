@@ -93,9 +93,14 @@ void force_interrupt()
     interrupted = 1;
 }
 
-void install_interrupt_handler()
+void clear_interrupt()
 {
     interrupted = 0;
+}
+
+void install_interrupt_handler()
+{
+    clear_interrupt();
     signal(SIGINT, interrupt_handler);
 }
 

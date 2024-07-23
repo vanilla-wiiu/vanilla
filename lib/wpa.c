@@ -154,6 +154,7 @@ int wpa_setup_environment(const char *wireless_interface, const char *wireless_c
 {
     int ret = VANILLA_ERROR;
 
+    clear_interrupt();
     //install_interrupt_handler();
 
     // Check status of interface with NetworkManager
