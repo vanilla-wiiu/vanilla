@@ -313,6 +313,10 @@ void handle_command_packet(int skt, CmdHeader *request)
             // print_info("[Command] Unhandled request command: %u", request->query_type);
         }
         break;
+    case PACKET_TYPE_REQUEST_ACK:
+    case PACKET_TYPE_RESPONSE_ACK:
+        // NOTE: Should we do something if we don't get this? e.g. attempt re-sending request/response after some time has passed
+        break;
     default:
         print_info("Unhandled command packet type: %u", request->packet_type);
     }
