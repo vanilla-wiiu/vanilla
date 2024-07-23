@@ -224,7 +224,7 @@ die:
 
 int call_dhcp(const char *network_interface, pid_t *dhclient_pid)
 {
-    const char *argv[] = {"dhclient", "-d", network_interface, NULL, NULL, NULL};
+    const char *argv[] = {"dhclient", "-d", "-r", network_interface, NULL, NULL, NULL};
 
     size_t buf_size = get_max_path_length();
     char *dhclient_buf = malloc(buf_size);
@@ -235,11 +235,11 @@ int call_dhcp(const char *network_interface, pid_t *dhclient_pid)
         // HACK: Assume we're working in our deployed environment
         // TODO: Should probably just incorporate dhclient (or something like it) directly as a library
         argv[0] = dhclient_buf;
-        argv[3] = "-sf";
+        argv[4] = "-sf";
 
         dhclient_script = malloc(buf_size);
         get_binary_in_working_directory("../sbin/dhclient-script", dhclient_script, buf_size);
-        argv[4] = dhclient_script;
+        argv[5] = dhclient_script;
         
         print_info("Using custom dhclient at: %s", argv[0]);
     } else {
