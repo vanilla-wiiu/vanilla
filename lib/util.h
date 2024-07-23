@@ -21,7 +21,7 @@ void force_interrupt();
 void install_interrupt_handler();
 void uninstall_interrupt_handler();
 
-int start_process(const char **argv, pid_t *pid_out, int *stdout_pipe);
+int start_process(const char **argv, pid_t *pid_out, int *stdout_pipe, int *stderr_pipe);
 
 const char *get_wireless_authenticate_config_filename();
 const char *get_wireless_connect_config_filename();
