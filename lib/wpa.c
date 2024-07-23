@@ -145,7 +145,7 @@ int start_wpa_supplicant(const char *wireless_interface, const char *config_file
     } else {
         // Give up
 give_up:
-        kill((*pid), SIGINT);
+        kill((*pid), SIGTERM);
         return VANILLA_ERROR;
     }
 }
@@ -205,7 +205,7 @@ die_and_close:
     wpa_ctrl_close(ctrl);
 
 die_and_kill:
-    kill(pid, SIGINT);
+    kill(pid, SIGTERM);
 
     free(buf);
 
@@ -260,7 +260,7 @@ int call_dhcp(const char *network_interface, pid_t *dhclient_pid)
         return VANILLA_SUCCESS;
     } else {
         print_info("FAILED TO ESTABLISH DHCP");
-        kill(*dhclient_pid, SIGINT);
+        kill(*dhclient_pid, SIGTERM);
 
         return VANILLA_ERROR;
     }

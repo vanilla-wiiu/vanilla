@@ -186,7 +186,7 @@ int connect_as_gamepad_internal(struct wpa_ctrl *ctrl, const char *wireless_inte
 
     r = main_loop(event_handler, context);
 
-    int kill_ret = kill(dhclient_pid, SIGKILL);
+    int kill_ret = kill(dhclient_pid, SIGTERM);
     print_info("killing dhclient %i: %i", dhclient_pid, kill_ret);
 
     return r;
