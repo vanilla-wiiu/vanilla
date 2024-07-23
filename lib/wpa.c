@@ -53,6 +53,60 @@ int get_binary_in_working_directory(const char *bin_name, char *buf, size_t buf_
     return r;
 }
 
+ssize_t read_line_from_pipe(int pipe, char *buf, size_t buf_len)
+{
+    int attempts = 0;
+    const static int max_attempts = 5;
+    ssize_t read_count = 0;
+    while (read_count < buf_len) {
+        ssize_t this_read = read(pipe, buf + read_count, 1);
+        if (this_read == 0) {
+            attempts++;
+            if (is_interrupted() || attempts == max_attempts) {
+                return -1;
+            }
+            sleep(1); // Wait for more output
+            continue;
+        }
+
+        attempts = 0;
+
+        if (buf[read_count] == '\n') {
+            buf[read_count] = 0;
+            break;
+        }
+
+        read_count++;
+    }
+    return read_count;
+}
+
+int wait_for_output(int pipe, const char *expected_output)
+{
+    static const int max_attempts = 5;
+    int nbytes, attempts = 0, success = 0;
+    const int expected_len = strlen(expected_output);
+    char buf[100];
+    int read_count = 0;
+    int ret = 0;
+    do {
+        // Read line from child process
+        read_line_from_pipe(pipe, buf, sizeof(buf));
+
+        print_info("SUBPROCESS %s", buf);
+
+        // We got success message!
+        if (!memcmp(buf, expected_output, expected_len)) {
+            ret = 1;
+            break;
+        }
+
+        // Haven't gotten success message (yet), wait and try again
+    } while (attempts < max_attempts && !is_interrupted());
+    
+    return ret;
+}
+
 int start_wpa_supplicant(const char *wireless_interface, const char *config_file, pid_t *pid)
 {
     // TODO: drc-sim has `rfkill unblock wlan`, should we do that too?
@@ -62,7 +116,7 @@ int start_wpa_supplicant(const char *wireless_interface, const char *config_file
     const char *kill_argv[] = {"killall", "-9", wpa_supplicant_drc, NULL};
     pid_t kill_pid;
     int kill_pipe;
-    int r = start_process(kill_argv, &kill_pid, &kill_pipe);
+    int r = start_process(kill_argv, &kill_pid, &kill_pipe, NULL);
     int status;
     waitpid(kill_pid, &status, 0);
 
@@ -74,7 +128,7 @@ int start_wpa_supplicant(const char *wireless_interface, const char *config_file
     const char *argv[] = {wpa_buf, "-Dnl80211", "-i", wireless_interface, "-c", config_file, NULL};
     int pipe;
 
-    r = start_process(argv, pid, &pipe);
+    r = start_process(argv, pid, &pipe, NULL);
     free(wpa_buf);
 
     if (r != VANILLA_SUCCESS) {
@@ -82,43 +136,16 @@ int start_wpa_supplicant(const char *wireless_interface, const char *config_file
     }
 
     // Wait for WPA supplicant to start
-    static const int max_attempts = 5;
-    int nbytes, attempts = 0, success = 0, total_nbytes = 0;
-    static const char *expected = "Successfully initialized wpa_supplicant";
-    static const int expected_len = 39; //strlen(expected)
-    char buf[expected_len];
-    do {
-        // Read string from child process
-        do {
-            nbytes = read(pipe, buf + total_nbytes, expected_len - total_nbytes);
-            total_nbytes += nbytes;
-            sleep(1);
-            if (is_interrupted()) goto give_up;
-        } while (total_nbytes < expected_len);
+    if (wait_for_output(pipe, "Successfully initialized wpa_supplicant")) {
+        // I'm not sure why, but closing this pipe breaks wpa_supplicant in subtle ways, so just leave it.
+        //close(pipe);
 
-        attempts++;
-
-        // We got success message!
-        if (!strncmp(buf, expected, expected_len)) {
-            success = 1;
-            break;
-        }
-
-        // Haven't gotten success message (yet), wait and try again
-        sleep(1);
-        if (is_interrupted()) goto give_up;
-    } while (attempts < max_attempts);
-
-    // I'm not sure why, but closing this pipe breaks wpa_supplicant in subtle ways, so just leave it.
-    //close(pipe);
-
-    if (success) {
         // WPA initialized correctly! Continue with action...
         return VANILLA_SUCCESS;
     } else {
         // Give up
 give_up:
-        kill((*pid), SIGINT);
+        kill((*pid), SIGTERM);
         return VANILLA_ERROR;
     }
 }
@@ -127,7 +154,8 @@ int wpa_setup_environment(const char *wireless_interface, const char *wireless_c
 {
     int ret = VANILLA_ERROR;
 
-    install_interrupt_handler();
+    clear_interrupt();
+    //install_interrupt_handler();
 
     // Check status of interface with NetworkManager
     int is_managed = 0;
@@ -178,7 +206,7 @@ die_and_close:
     wpa_ctrl_close(ctrl);
 
 die_and_kill:
-    kill(pid, SIGINT);
+    kill(pid, SIGTERM);
 
     free(buf);
 
@@ -190,14 +218,14 @@ die_and_reenable_managed:
 
 die:
     // Remove our custom sigint signal handler
-    uninstall_interrupt_handler();
+    //uninstall_interrupt_handler();
 
     return ret;
 }
 
-int call_dhcp(const char *network_interface)
+int call_dhcp(const char *network_interface, pid_t *dhclient_pid)
 {
-    const char *argv[] = {"dhclient", network_interface, NULL, NULL, NULL};
+    const char *argv[] = {"dhclient", "-d", "--no-pid", network_interface, NULL, NULL, NULL};
 
     size_t buf_size = get_max_path_length();
     char *dhclient_buf = malloc(buf_size);
@@ -208,20 +236,19 @@ int call_dhcp(const char *network_interface)
         // HACK: Assume we're working in our deployed environment
         // TODO: Should probably just incorporate dhclient (or something like it) directly as a library
         argv[0] = dhclient_buf;
-        argv[2] = "-sf";
+        argv[4] = "-sf";
 
         dhclient_script = malloc(buf_size);
         get_binary_in_working_directory("../sbin/dhclient-script", dhclient_script, buf_size);
-        argv[3] = dhclient_script;
+        argv[5] = dhclient_script;
         
         print_info("Using custom dhclient at: %s", argv[0]);
     } else {
         print_info("Using system dhclient");
     }
 
-
-    pid_t dhclient_pid;
-    int r = start_process(argv, &dhclient_pid, NULL);
+    int dhclient_pipe;
+    int r = start_process(argv, dhclient_pid, NULL, &dhclient_pipe);
     if (r != VANILLA_SUCCESS) {
         print_info("FAILED TO CALL DHCLIENT");
         return r;
@@ -230,23 +257,14 @@ int call_dhcp(const char *network_interface)
     free(dhclient_buf);
     if (dhclient_script) free(dhclient_script);
 
-    int status;
-    waitpid(dhclient_pid, &status, 0);
+    if (wait_for_output(dhclient_pipe, "bound to")) {
+        return VANILLA_SUCCESS;
+    } else {
+        print_info("FAILED TO ESTABLISH DHCP");
+        kill(*dhclient_pid, SIGTERM);
 
-    if (!WIFEXITED(status)) {
-        // Something went wrong
-        print_info("DHCLIENT DID NOT EXIT NORMALLY");
         return VANILLA_ERROR;
     }
-
-    int exit_status = WEXITSTATUS(status);
-    if (exit_status != 0) {
-        // Something went wrong
-        print_info("DHCLIENT DID NOT EXIT NORMALLY: %i", exit_status);
-        return VANILLA_ERROR;
-    }
-
-    return VANILLA_SUCCESS;
 }
 
 static const char *nmcli = "nmcli";
@@ -257,7 +275,7 @@ int is_networkmanager_managing_device(const char *wireless_interface, int *is_ma
 
     const char *argv[] = {nmcli, "device", "show", wireless_interface, NULL};
 
-    int r = start_process(argv, &nmcli_pid, &pipe);
+    int r = start_process(argv, &nmcli_pid, &pipe, NULL);
     if (r != VANILLA_SUCCESS) {
         // Assume nmcli is not installed so the host is not using NetworkManager
         print_info("FAILED TO LAUNCH NMCLI, RESULTS MAY BE UNPREDICTABLE");
@@ -294,7 +312,7 @@ int set_networkmanager_on_device(const char *wireless_interface, int on)
     const char *argv[] = {nmcli, "device", "set", wireless_interface, "managed", on ? "on" : "off", NULL};
 
     pid_t nmcli_pid;
-    int r = start_process(argv, &nmcli_pid, NULL);
+    int r = start_process(argv, &nmcli_pid, NULL, NULL);
     if (r != VANILLA_SUCCESS) {
         return r;
     }

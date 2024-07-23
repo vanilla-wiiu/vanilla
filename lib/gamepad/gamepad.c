@@ -158,7 +158,8 @@ int connect_as_gamepad_internal(struct wpa_ctrl *ctrl, const char *wireless_inte
     print_info("CONNECTED TO CONSOLE");
 
     // Use DHCP on interface
-    int r = call_dhcp(wireless_interface);
+    pid_t dhclient_pid;
+    int r = call_dhcp(wireless_interface, &dhclient_pid);
     if (r != VANILLA_SUCCESS) {
         print_info("FAILED TO RUN DHCP ON %s", wireless_interface);
         return r;
@@ -170,7 +171,7 @@ int connect_as_gamepad_internal(struct wpa_ctrl *ctrl, const char *wireless_inte
         // Destroy default route that dhclient will have created
         pid_t ip_pid;
         const char *ip_args[] = {"ip", "route", "del", "default", "via", "192.168.1.1", "dev", wireless_interface, NULL};
-        r = start_process(ip_args, &ip_pid, NULL);
+        r = start_process(ip_args, &ip_pid, NULL, NULL);
         if (r != VANILLA_SUCCESS) {
             print_info("FAILED TO REMOVE CONSOLE ROUTE FROM SYSTEM");
         }
@@ -183,9 +184,12 @@ int connect_as_gamepad_internal(struct wpa_ctrl *ctrl, const char *wireless_inte
         }
     }
 
-    // Set region
+    r = main_loop(event_handler, context);
 
-    return main_loop(event_handler, context);
+    int kill_ret = kill(dhclient_pid, SIGTERM);
+    print_info("killing dhclient %i: %i", dhclient_pid, kill_ret);
+
+    return r;
 }
 
 int is_stop_code(const char *data, size_t data_length)

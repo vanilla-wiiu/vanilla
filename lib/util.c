@@ -93,9 +93,14 @@ void force_interrupt()
     interrupted = 1;
 }
 
-void install_interrupt_handler()
+void clear_interrupt()
 {
     interrupted = 0;
+}
+
+void install_interrupt_handler()
+{
+    clear_interrupt();
     signal(SIGINT, interrupt_handler);
 }
 
@@ -104,11 +109,12 @@ void uninstall_interrupt_handler()
     signal(SIGINT, SIG_DFL);
 }
 
-int start_process(const char **argv, pid_t *pid_out, int *stdout_pipe)
+int start_process(const char **argv, pid_t *pid_out, int *stdout_pipe, int *stderr_pipe)
 {
     // Set up pipes so child stdout can be read by the parent process
-    int pipes[2];
-    pipe(pipes);
+    int out_pipes[2], err_pipes[2];
+    pipe(out_pipes);
+    pipe(err_pipes);
 
     // Get parent pid (allows us to check if parent was terminated immediately after fork)
     pid_t ppid_before_fork = getpid();
@@ -130,10 +136,12 @@ int start_process(const char **argv, pid_t *pid_out, int *stdout_pipe)
         }
 
         // Set up pipes so our stdout can be read by the parent process
-        dup2(pipes[1], STDOUT_FILENO);
-        //dup2(pipes[1], STDERR_FILENO);
-        close(pipes[0]);
-        close(pipes[1]);
+        dup2(out_pipes[1], STDOUT_FILENO);
+        dup2(err_pipes[1], STDERR_FILENO);
+        close(out_pipes[0]);
+        close(out_pipes[1]);
+        close(err_pipes[0]);
+        close(err_pipes[1]);
 
         // Execute process (this will replace the running code)
         r = execvp(argv[0], (char * const *) argv);
@@ -145,13 +153,19 @@ int start_process(const char **argv, pid_t *pid_out, int *stdout_pipe)
         return VANILLA_ERROR;
     } else {
         // Continuation of parent
-        close(pipes[1]);
+        close(out_pipes[1]);
+        close(err_pipes[1]);
         if (!stdout_pipe) {
             // Caller is not interested in the stdout
-            close(pipes[0]);
+            close(out_pipes[0]);
         } else {
             // Caller is interested so we'll hand them the pipe
-            *stdout_pipe = pipes[0];
+            *stdout_pipe = out_pipes[0];
+        }
+        if (!stderr_pipe) {
+            close(err_pipes[0]);
+        } else {
+            *stderr_pipe = err_pipes[0];
         }
 
         // If caller wants the pid, send it to them
