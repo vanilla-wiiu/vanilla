@@ -224,7 +224,7 @@ die:
 
 int call_dhcp(const char *network_interface, pid_t *dhclient_pid)
 {
-    const char *argv[] = {"dhclient", "-d", "-r", network_interface, NULL, NULL, NULL};
+    const char *argv[] = {"dhclient", "-d", "--no-pid", network_interface, NULL, NULL, NULL};
 
     size_t buf_size = get_max_path_length();
     char *dhclient_buf = malloc(buf_size);
