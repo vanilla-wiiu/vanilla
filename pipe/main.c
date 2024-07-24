@@ -32,15 +32,54 @@ int open_fifo(const char *name, int mode)
     return f;
 }
 
-pthread_mutex_t output_mutex;
+uint8_t buffer[1048576];
+size_t buffer_pos = 0;
+pthread_mutex_t buffer_mutex;
+int fd_in = 0, fd_out = 0;
+in_addr_t udp_client_addr = 0;
+in_port_t udp_client_port = 0;
+
+void buffer_start()
+{
+    pthread_mutex_lock(&buffer_mutex);
+}
+
+void buffer_write(const void *data, size_t length)
+{
+    memcpy(buffer + buffer_pos, data, length);
+    buffer_pos += length;
+}
+
+void buffer_finish()
+{
+    if (fd_out != 0) {
+        write(fd_out, buffer, buffer_pos);
+    }
+    
+    if (udp_client_addr != 0 && udp_client_port != 0) {
+        struct sockaddr_in address;
+        address.sin_family = AF_INET;
+        address.sin_addr.s_addr = udp_client_addr;
+        address.sin_port = htons(udp_client_port);
+        sendto(fd_in, buffer, buffer_pos, 0, (const struct sockaddr *) &address, sizeof(address));
+    }
+
+    buffer_pos = 0;
+    pthread_mutex_unlock(&buffer_mutex);
+}
+
+void buffer_write_single(void *data, size_t length)
+{
+    buffer_start();
+    buffer_write(data, length);
+    buffer_finish();
+}
+
 pthread_mutex_t action_mutex;
 int action_ended = 0;
-int fd_in = 0, fd_out = 0;
 int write_control_code(uint8_t code)
 {
-    pthread_mutex_lock(&output_mutex);
-    write(fd_out, &code, 1);
-    pthread_mutex_unlock(&output_mutex);
+    buffer_write_single(&code, 1);
 }
 
 void event_handler(void *context, int event_type, const char *data, size_t data_size)
@@ -49,26 +88,22 @@ void event_handler(void *context, int event_type, const char *data, size_t data_
     uint64_t data_size_sized = data_size;
     uint8_t control_code = VANILLA_PIPE_OUT_DATA;
 
-    pthread_mutex_lock(&output_mutex);
-
-    write(fd_out, &control_code, sizeof(control_code));
-    write(fd_out, &event_sized, sizeof(event_sized));
-    write(fd_out, &data_size_sized, sizeof(data_size_sized));
-    write(fd_out, data, data_size);
-
-    pthread_mutex_unlock(&output_mutex);
+    buffer_start();
+    buffer_write(&control_code, sizeof(control_code));
+    buffer_write(&event_sized, sizeof(event_sized));
+    buffer_write(&data_size_sized, sizeof(data_size_sized));
+    buffer_write(data, data_size);
+    buffer_finish();
 }
 
 void write_sync_state(uint8_t success)
 {
     uint8_t cc = VANILLA_PIPE_OUT_SYNC_STATE;
 
-    pthread_mutex_lock(&output_mutex);
-
-    write(fd_out, &cc, sizeof(cc));
-    write(fd_out, &success, sizeof(success));
-
-    pthread_mutex_unlock(&output_mutex);
+    buffer_start();
+    buffer_write(&cc, sizeof(cc));
+    buffer_write(&success, sizeof(success));
+    buffer_finish();
 }
 
 #define WIRELESS_INTERFACE_MAX_LEN 100
@@ -88,7 +123,7 @@ void *sync_command(void *a)
     action_ended = 1;
     pthread_mutex_unlock(&action_mutex);
 
-    pthread_exit((void *) (size_t) r);
+    return (void *) (size_t) r;
 }
 
 struct connect_args
@@ -106,7 +141,7 @@ void *connect_command(void *a)
     action_ended = 1;
     pthread_mutex_unlock(&action_mutex);
 
-    pthread_exit((void *) (size_t) r);
+    return (void *) (size_t) r;
 }
 
 void read_string(int fd, char *buf, size_t max)
@@ -179,19 +214,30 @@ int main(int argc, char **argv)
             goto show_help;
         }
 
+        udp_client_addr = inet_addr(argv[3]);
+        if (udp_client_addr == 0) {
+            printf("Client IP provided was invalid\n");
+            goto show_help;
+        }
+
+        udp_client_port = atoi(argv[4]);
+        if (udp_client_port == 0) {
+            printf("Client port provided was invalid\n");
+            goto show_help;
+        }
+
         struct sockaddr_in address;
         address.sin_family = AF_INET;
         address.sin_addr.s_addr = INADDR_ANY;
         address.sin_port = htons(server_port);
         fd_in = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
         
-        // if (bind(fd_in, (const struct sockaddr *) &address, sizeof(address)) == -1) {
-        //     printf("Failed to bind to port %u\n", server_port);
-        //     return 1;
-        // }
+        if (bind(fd_in, (const struct sockaddr *) &address, sizeof(address)) == -1) {
+            printf("Failed to bind to port %u\n", server_port);
+            return 1;
+        }
 
-        fprintf(stderr, "UNIMPLEMENTED\n");
-        return 1;
+        fprintf(stderr, "READY\n");
     } else {
         printf("Unknown mode '%s'\n", argv[1]);
         goto show_help;
@@ -204,7 +250,7 @@ int main(int argc, char **argv)
 
     vanilla_install_logger(lib_logger);
     
-    pthread_mutex_init(&output_mutex, NULL);
+    pthread_mutex_init(&buffer_mutex, NULL);
     pthread_mutex_init(&action_mutex, NULL);
 
     while (!m_quit) {
@@ -300,7 +346,7 @@ int main(int argc, char **argv)
     }
 
     pthread_mutex_destroy(&action_mutex);
-    pthread_mutex_destroy(&output_mutex);
+    pthread_mutex_destroy(&buffer_mutex);
 
     close(fd_in);
     close(fd_out);
