@@ -53,6 +53,42 @@ typedef struct
 static_assert(offsetof(GenericPacket, generic_cmd_header) == 0x8);
 static_assert(sizeof(GenericPacket) == 0x61C);
 
+struct UvcUacCommand {
+    uint8_t f1;
+    uint16_t unknown_0;
+    uint8_t f3;
+    uint8_t mic_enable;
+    uint8_t mic_mute;
+    int16_t mic_volume;
+    int16_t mic_volume_2;
+    uint8_t unknown_A;
+    uint8_t unknown_B;
+    uint16_t mic_freq;
+    uint8_t cam_enable;
+    uint8_t cam_power;
+    uint8_t cam_power_freq;
+    uint8_t cam_auto_expo;
+    uint32_t cam_expo_absolute;
+    uint16_t cam_brightness;
+    uint16_t cam_contrast;
+    uint16_t cam_gain;
+    uint16_t cam_hue;
+    uint16_t cam_saturation;
+    uint16_t cam_sharpness;
+    uint16_t cam_gamma;
+    uint8_t cam_key_frame;
+    uint8_t cam_white_balance_auto;
+    uint32_t cam_white_balance;
+    uint16_t cam_multiplier;
+    uint16_t cam_multiplier_limit;
+};
+
+typedef struct
+{
+    CmdHeader cmd_header;
+    struct UvcUacCommand uac_uvc;
+} UvcUacPacket;
+
 int current_region = VANILLA_REGION_AMERICA;
 void set_region(int region)
 {
@@ -288,6 +324,11 @@ void handle_generic_packet(int skt, GenericPacket *request)
     send_generic_response(skt, &response);
 }
 
+void handle_uac_uvc_packet(int skt, UvcUacPacket *request)
+{
+    print_info("uac/uvc - mic_enable: %u, mic_freq: %u, mic_mute: %u, mic_volume: %i, mic_volume2: %i", request->uac_uvc.mic_enable, request->uac_uvc.mic_freq, request->uac_uvc.mic_mute, request->uac_uvc.mic_volume, request->uac_uvc.mic_volume_2);
+}
+
 void handle_command_packet(int skt, CmdHeader *request)
 {
     switch (request->packet_type)
@@ -301,8 +342,13 @@ void handle_command_packet(int skt, CmdHeader *request)
             handle_generic_packet(skt, (GenericPacket *)request);
             break;
         }
+        case CMD_UVC_UAC:
+        {
+            handle_uac_uvc_packet(skt, (UvcUacPacket *)request);
+            break;
+        }
         default:
-            // print_info("[Command] Unhandled request command: %u", request->query_type);
+            print_info("[Command] Unhandled request command: %u", request->query_type);
         }
         break;
     case PACKET_TYPE_RESPONSE:
