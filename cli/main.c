@@ -1,3 +1,18 @@
+/**
+ * This is a simple test app that can be used to inspect base functionality.
+ * 
+ * Valid commands are:
+ *      "SYNC <wireless-interface> <code>"
+ *      "CONNECT <wireless-interface>"
+ *      "EXIT"
+ * 
+ * The sync code is a 4-digit number derived from the card suits shown by the console:
+ *      
+ *      ♠ (spade) = 0 ♥ (heart) = 1 ♦ (diamond) = 2 ♣ (clover) = 3
+ * 
+ *      Example: ♣♠♥♦ (clover, spade, heart, diamond) would equal 3012
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

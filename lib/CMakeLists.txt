@@ -11,14 +11,6 @@ add_library(vanilla SHARED
     wpa.c
 )
 
-add_executable(vanilla-cli
-    main.c
-)
-
-target_link_libraries(vanilla-cli PRIVATE
-    vanilla
-)
-
 target_include_directories(vanilla PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/hostap/src/common
     ${CMAKE_CURRENT_SOURCE_DIR}/hostap/src/utils
@@ -76,5 +68,5 @@ target_link_libraries(vanilla PRIVATE
 #    COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_SOURCE_DIR}/hostap/wpa_supplicant/wpa_supplicant" "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/wpa_supplicant_drc"
 #)
 
-install(TARGETS vanilla vanilla-cli)
+install(TARGETS vanilla)
 install(IMPORTED_RUNTIME_ARTIFACTS wpa_client wpa_supplicant)
