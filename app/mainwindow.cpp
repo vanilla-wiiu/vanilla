@@ -196,6 +196,7 @@ MainWindow::MainWindow(QWidget *parent) : QWidget(parent)
         configLayout->addWidget(new QLabel(tr("Input: "), inputConfigGroupBox), row, 0);
 
         m_controllerComboBox = new QComboBox(inputConfigGroupBox);
+        m_controllerComboBox->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
         connect(m_controllerComboBox, &QComboBox::currentIndexChanged, this, &MainWindow::setJoystick);
         configLayout->addWidget(m_controllerComboBox, row, 1);
 
