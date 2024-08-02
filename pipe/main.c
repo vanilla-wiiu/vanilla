@@ -32,84 +32,46 @@ int open_fifo(const char *name, int mode)
     return f;
 }
 
-uint8_t buffer[1048576];
-size_t buffer_pos = 0;
-pthread_mutex_t buffer_mutex;
 int fd_in = 0, fd_out = 0;
-in_addr_t udp_client_addr = 0;
-in_port_t udp_client_port = 0;
+struct sockaddr_in udp_client = {0};
 
-void buffer_start()
+ssize_t write_pipe(const void *buf, size_t size)
 {
-    pthread_mutex_lock(&buffer_mutex);
-}
-
-void buffer_write(const void *data, size_t length)
-{
-    memcpy(buffer + buffer_pos, data, length);
-    buffer_pos += length;
-}
-
-void buffer_finish()
-{
-    if (fd_out != 0) {
-        write(fd_out, buffer, buffer_pos);
-    }
-    
-    if (udp_client_addr != 0 && udp_client_port != 0) {
-        struct sockaddr_in address;
-        address.sin_family = AF_INET;
-        address.sin_addr.s_addr = udp_client_addr;
-        address.sin_port = htons(udp_client_port);
-        sendto(fd_in, buffer, buffer_pos, 0, (const struct sockaddr *) &address, sizeof(address));
-    }
-
-    buffer_pos = 0;
-    pthread_mutex_unlock(&buffer_mutex);
-}
-
-void buffer_write_single(void *data, size_t length)
-{
-    buffer_start();
-    buffer_write(data, length);
-    buffer_finish();
+    sendto(fd_in, buf, size, 0, (const struct sockaddr *) &udp_client, sizeof(udp_client));
 }
 
 pthread_mutex_t action_mutex;
 int action_ended = 0;
 int write_control_code(uint8_t code)
 {
-    buffer_write_single(&code, 1);
+    struct pipe_control_code cmd;
+    cmd.code = code;
+    write_pipe(&cmd, sizeof(cmd));
 }
 
 void event_handler(void *context, int event_type, const char *data, size_t data_size)
 {
-    uint8_t event_sized = event_type;
-    uint64_t data_size_sized = data_size;
-    uint8_t control_code = VANILLA_PIPE_OUT_DATA;
+    struct pipe_data_command cmd;
 
-    buffer_start();
-    buffer_write(&control_code, sizeof(control_code));
-    buffer_write(&event_sized, sizeof(event_sized));
-    buffer_write(&data_size_sized, sizeof(data_size_sized));
-    buffer_write(data, data_size);
-    buffer_finish();
+    cmd.base.code = VANILLA_PIPE_OUT_DATA;
+    cmd.event_type = event_type;
+    cmd.data_size = htons(data_size);
+    memcpy(cmd.data, data, data_size);
+
+    write_pipe(&cmd, sizeof(cmd)-sizeof(cmd.data)+data_size);
 }
 
 void write_sync_state(uint8_t success)
 {
-    uint8_t cc = VANILLA_PIPE_OUT_SYNC_STATE;
-
-    buffer_start();
-    buffer_write(&cc, sizeof(cc));
-    buffer_write(&success, sizeof(success));
-    buffer_finish();
+    struct pipe_sync_state_command cmd;
+    cmd.base.code = VANILLA_PIPE_OUT_SYNC_STATE;
+    cmd.state = success;
+    write_pipe(&cmd, sizeof(cmd));
 }
 
-#define WIRELESS_INTERFACE_MAX_LEN 100
 struct sync_args
 {
-    char wireless_interface[WIRELESS_INTERFACE_MAX_LEN];
+    const char *wireless_interface;
     uint16_t code;
 };
 void *sync_command(void *a)
@@ -128,7 +90,7 @@ void *sync_command(void *a)
 
 struct connect_args
 {
-    char wireless_interface[WIRELESS_INTERFACE_MAX_LEN];
+    const char *wireless_interface;
 };
 void *connect_command(void *a)
 {
@@ -142,16 +104,6 @@ void *connect_command(void *a)
     pthread_mutex_unlock(&action_mutex);
 
     return (void *) (size_t) r;
-}
-
-void read_string(int fd, char *buf, size_t max)
-{
-    for (size_t i = 0; i < max; i++) {
-        read(fd, &buf[i], 1);
-        if (buf[i] == 0) {
-            break;
-        }
-    }
 }
 
 void lib_logger(const char *fmt, va_list args)
@@ -180,18 +132,20 @@ void vapipelog(const char *str, ...)
 
 int main(int argc, char **argv)
 {
-    if (argc < 2) {
+    if (argc < 3) {
         goto show_help;
     }
 
-    if (!strcmp(argv[1], "-pipe")) {
-        if (argc < 4) {
+    const char *wireless_interface = argv[1];
+
+    if (!strcmp(argv[2], "-pipe")) {
+        if (argc < 5) {
             printf("-pipe requires <in-fifo> and <out-fifo>\n");
             goto show_help;
         }
 
-        const char *pipe_in_filename = argv[2];
-        const char *pipe_out_filename = argv[3];
+        const char *pipe_in_filename = argv[3];
+        const char *pipe_out_filename = argv[4];
 
         umask(0000);
 
@@ -202,27 +156,15 @@ int main(int argc, char **argv)
 
         if ((fd_out = open_fifo(pipe_out_filename, O_WRONLY)) == -1) return 1;
         if ((fd_in = open_fifo(pipe_in_filename, O_RDONLY)) == -1) return 1;
-    } else if (!strcmp(argv[1], "-udp")) {
-        if (argc < 5) {
-            printf("-udp requires <server-port> <client-address> <client-port>\n");
+    } else if (!strcmp(argv[2], "-udp")) {
+        if (argc < 4) {
+            printf("-udp requires <server-port>\n");
             goto show_help;
         }
 
-        uint16_t server_port = atoi(argv[2]);
+        uint16_t server_port = atoi(argv[3]);
         if (server_port == 0) {
             printf("UDP port provided was invalid\n");
-            goto show_help;
-        }
-
-        udp_client_addr = inet_addr(argv[3]);
-        if (udp_client_addr == 0) {
-            printf("Client IP provided was invalid\n");
-            goto show_help;
-        }
-
-        udp_client_port = atoi(argv[4]);
-        if (udp_client_port == 0) {
-            printf("Client port provided was invalid\n");
             goto show_help;
         }
 
@@ -239,22 +181,23 @@ int main(int argc, char **argv)
 
         fprintf(stderr, "READY\n");
     } else {
-        printf("Unknown mode '%s'\n", argv[1]);
+        printf("Unknown mode '%s'\n", argv[2]);
         goto show_help;
     }
 
-    uint8_t control_code;
+    char read_buffer[2048];
     ssize_t read_size;
     pthread_t current_action = 0;
     int m_quit = 0;
 
     vanilla_install_logger(lib_logger);
     
-    pthread_mutex_init(&buffer_mutex, NULL);
     pthread_mutex_init(&action_mutex, NULL);
 
     while (!m_quit) {
-        read_size = read(fd_in, &control_code, 1);
+        struct sockaddr_in sender_addr;
+        socklen_t sender_addr_len = sizeof(sender_addr);
+        read_size = recvfrom(fd_in, read_buffer, sizeof(read_buffer), 0, (struct sockaddr *) &sender_addr, &sender_addr_len);
         if (read_size == 0) {
             continue;
         }
@@ -268,16 +211,22 @@ int main(int argc, char **argv)
         }
         pthread_mutex_unlock(&action_mutex);
 
-        switch (control_code) {
+        struct pipe_control_code *control_code = (struct pipe_control_code *) read_buffer;
+        switch (control_code->code) {
         case VANILLA_PIPE_IN_SYNC:
         {
             if (current_action != 0) {
                 write_control_code(VANILLA_PIPE_ERR_BUSY);
             } else {
+                struct pipe_sync_command *sync_cmd = (struct pipe_sync_command *) read_buffer;
+                sync_cmd->code = ntohs(sync_cmd->code);
+
                 struct sync_args *args = (struct sync_args *) malloc(sizeof(struct sync_args));
-                read(fd_in, &args->code, sizeof(args->code));
-                read_string(fd_in, args->wireless_interface, sizeof(args->wireless_interface));
+                args->code = sync_cmd->code;
+                args->wireless_interface = wireless_interface;
+                
                 write_control_code(VANILLA_PIPE_ERR_SUCCESS);
+                
                 pthread_create(&current_action, NULL, sync_command, args);
             }
             break;
@@ -288,7 +237,7 @@ int main(int argc, char **argv)
                 write_control_code(VANILLA_PIPE_ERR_BUSY);
             } else {
                 struct connect_args *args = (struct connect_args *) malloc(sizeof(struct connect_args));
-                read_string(fd_in, args->wireless_interface, sizeof(args->wireless_interface));
+                args->wireless_interface = wireless_interface;
                 write_control_code(VANILLA_PIPE_ERR_SUCCESS);
                 pthread_create(&current_action, NULL, connect_command, args);
             }
@@ -296,20 +245,18 @@ int main(int argc, char **argv)
         }
         case VANILLA_PIPE_IN_BUTTON:
         {
-            int32_t button_id;
-            int32_t button_value;
-            read(fd_in, &button_id, sizeof(button_id));
-            read(fd_in, &button_value, sizeof(button_value));
-            vanilla_set_button(button_id, button_value);
+            struct pipe_button_command *btn_cmd = (struct pipe_button_command *) read_buffer;
+            btn_cmd->id = ntohl(btn_cmd->id);
+            btn_cmd->value = ntohl(btn_cmd->value);
+            vanilla_set_button(btn_cmd->id, btn_cmd->value);
             break;
         }
         case VANILLA_PIPE_IN_TOUCH:
         {
-            int32_t touch_x;
-            int32_t touch_y;
-            read(fd_in, &touch_x, sizeof(touch_x));
-            read(fd_in, &touch_y, sizeof(touch_y));
-            vanilla_set_touch(touch_x, touch_y);
+            struct pipe_touch_command *touch_cmd = (struct pipe_touch_command *) read_buffer;
+            touch_cmd->x = ntohl(touch_cmd->x);
+            touch_cmd->y = ntohl(touch_cmd->y);
+            vanilla_set_touch(touch_cmd->x, touch_cmd->y);
             break;
         }
         case VANILLA_PIPE_IN_INTERRUPT:
@@ -327,26 +274,39 @@ int main(int argc, char **argv)
         }
         case VANILLA_PIPE_IN_REGION:
         {
-            int8_t region;
-            read(fd_in, &region, sizeof(region));
-            vanilla_set_region(region);
+            struct pipe_region_command *region_cmd = (struct pipe_region_command *) read_buffer;
+            vanilla_set_region(region_cmd->region);
             break;
         }
         case VANILLA_PIPE_IN_BATTERY:
         {
-            int8_t battery;
-            read(fd_in, &battery, sizeof(battery));
-            vanilla_set_battery_status(battery);
+            struct pipe_battery_command *battery_cmd = (struct pipe_battery_command *) read_buffer;
+            vanilla_set_battery_status(battery_cmd->battery);
             break;
         }
         case VANILLA_PIPE_IN_QUIT:
             m_quit = 1;
             break;
+        case VANILLA_PIPE_IN_BIND:
+        {
+            struct pipe_bind_command *bind_cmd = (struct pipe_bind_command *) read_buffer;
+            
+            // Send success message back to client
+            uint8_t cc = VANILLA_PIPE_OUT_BOUND_SUCCESSFUL;
+            sendto(fd_in, &cc, sizeof(cc), 0, (const struct sockaddr *) &sender_addr, sizeof(sender_addr));
+
+            // Add client to list
+            udp_client = sender_addr;
+
+            char addr_buf[INET_ADDRSTRLEN];
+            inet_ntop(AF_INET, &udp_client.sin_addr.s_addr, addr_buf, INET_ADDRSTRLEN);
+            printf("BIND %s:%u\n", addr_buf, ntohs(udp_client.sin_port));
+            break;
+        }
         }
     }
 
     pthread_mutex_destroy(&action_mutex);
-    pthread_mutex_destroy(&buffer_mutex);
 
     close(fd_in);
     close(fd_out);
@@ -354,7 +314,7 @@ int main(int argc, char **argv)
     return 0;
 
 show_help:
-    printf("Usage: %s <mode> [args]\n\n", argv[0]);
+    printf("Usage: %s <wireless-interface> <mode> [args]\n\n", argv[0]);
     printf("vanilla-pipe provides a way to connect a frontend to Vanilla's backend when they\n");
     printf("aren't able to run on the same device or in the same environment (e.g. when the \n");
     printf("backend must run as root but the frontend must run as user).\n\n");

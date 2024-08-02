@@ -32,6 +32,9 @@ private:
 
     void updateVolumeAxis();
 
+    template<typename T>
+    void initBackend(T func);
+
     Viewer *m_viewer;
 
     QComboBox *m_wirelessInterfaceComboBox;
@@ -81,6 +84,10 @@ private slots:
     void recordingFinished(const QString &filename);
 
     void takeScreenshot();
+
+    void closeBackend();
+
+    void showBackendError(const QString &err);
 
 };
 

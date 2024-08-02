@@ -9,6 +9,7 @@ set(CMAKE_AUTORCC ON)
 add_executable(vanilla-gui
     audiohandler.cpp
     backend.cpp
+    backendinitdialog.cpp
     gamepadhandler.cpp
     keymap.cpp
     inputconfigdialog.cpp
