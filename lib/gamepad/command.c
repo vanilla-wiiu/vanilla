@@ -83,11 +83,23 @@ struct UvcUacCommand {
     uint16_t cam_multiplier_limit;
 };
 
+struct TimeCommand {
+    uint16_t days_counter;
+    uint16_t padding;
+    uint32_t seconds_counter;
+};
+
 typedef struct
 {
     CmdHeader cmd_header;
     struct UvcUacCommand uac_uvc;
 } UvcUacPacket;
+
+typedef struct
+{
+    CmdHeader cmd_header;
+    struct TimeCommand time;
+} TimePacket;
 
 int current_region = VANILLA_REGION_AMERICA;
 void set_region(int region)
@@ -201,7 +213,9 @@ enum MethodIDSystem
 
 enum MethodIDPeripheral
 {
-    METHOD_ID_PERIPHERAL_EEPROM = 0x6
+    METHOD_ID_PERIPHERAL_EEPROM = 0x6,
+    METHOD_ID_PERIPHERAL_UPDATE_EEPROM = 0xC,
+    METHOD_ID_PERIPHERAL_SET_REMOCON = 0x18,
 };
 
 void send_ack_packet(int skt, CmdHeader *pkt)
@@ -214,11 +228,21 @@ void send_ack_packet(int skt, CmdHeader *pkt)
     send_to_console(skt, &ack, sizeof(ack), PORT_CMD);
 }
 
-void send_generic_response(int skt, GenericPacket *response)
+void send_quick_response(int skt, CmdHeader *request)
 {
-    response->cmd_header.packet_type = PACKET_TYPE_RESPONSE;
+    CmdHeader response;
+    response.packet_type = PACKET_TYPE_RESPONSE;
+    response.payload_size = 0;
+    response.query_type = request->query_type;
+    response.seq_id = request->seq_id;
+    send_to_console(skt, &response, sizeof(CmdHeader), PORT_CMD);
+}
 
-    send_to_console(skt, response, response->cmd_header.payload_size + sizeof(CmdHeader), PORT_CMD);
+void send_generic_response(int skt, CmdHeader *response)
+{
+    response->packet_type = PACKET_TYPE_RESPONSE;
+
+    send_to_console(skt, response, response->payload_size + sizeof(CmdHeader), PORT_CMD);
 }
 
 void handle_generic_packet(int skt, GenericPacket *request)
@@ -313,6 +337,18 @@ void handle_generic_packet(int skt, GenericPacket *request)
             response.generic_cmd_header.error_code = 0;
             break;
         }
+        case METHOD_ID_PERIPHERAL_UPDATE_EEPROM:
+        {
+            print_info("5,12 - index: %u, length: %u", response.payload[0], response.payload[1]);
+            response.generic_cmd_header.error_code = 0;
+            break;
+        }
+        case METHOD_ID_PERIPHERAL_SET_REMOCON:
+        {
+            print_info("5,24 - str1: %s, str2: %s", response.payload, response.payload + 5);
+            response.generic_cmd_header.error_code = 0;
+            break;
+        }
         }
         break;
     }
@@ -321,12 +357,21 @@ void handle_generic_packet(int skt, GenericPacket *request)
     response.cmd_header.seq_id = request->cmd_header.seq_id;
     response.cmd_header.query_type = request->cmd_header.query_type;
     response.cmd_header.payload_size = ntohs(response.generic_cmd_header.payload_size) + sizeof(GenericCmdHeader);
-    send_generic_response(skt, &response);
+    send_generic_response(skt, (CmdHeader *) &response);
 }
 
 void handle_uac_uvc_packet(int skt, UvcUacPacket *request)
 {
     print_info("uac/uvc - mic_enable: %u, mic_freq: %u, mic_mute: %u, mic_volume: %i, mic_volume2: %i", request->uac_uvc.mic_enable, request->uac_uvc.mic_freq, request->uac_uvc.mic_mute, request->uac_uvc.mic_volume, request->uac_uvc.mic_volume_2);
+
+    // send_quick_response(skt, &request->cmd_header);
+}
+
+void handle_time_packet(int skt, TimePacket *request)
+{
+    print_info("time - days: %u, padding: %u, seconds: %u", request->time.days_counter, request->time.padding, request->time.seconds_counter);
+    
+    send_quick_response(skt, &request->cmd_header);
 }
 
 void handle_command_packet(int skt, CmdHeader *request)
@@ -345,6 +390,11 @@ void handle_command_packet(int skt, CmdHeader *request)
         case CMD_UVC_UAC:
         {
             handle_uac_uvc_packet(skt, (UvcUacPacket *)request);
+            break;
+        }
+        case CMD_TIME:
+        {
+            handle_time_packet(skt, (TimePacket *)request);
             break;
         }
         default:
