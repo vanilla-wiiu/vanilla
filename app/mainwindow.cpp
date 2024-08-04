@@ -348,20 +348,15 @@ void MainWindow::initBackend(T func)
         d->open();
 
         QString localWirelessIntf = m_wirelessInterfaceComboBox->currentData().toString();
-        if (localWirelessIntf.isEmpty()) {
+        if (0 && localWirelessIntf.isEmpty()) {
             UdpAddressDialog udpDiag(this);
             if (udpDiag.exec() == QDialog::Accepted) {
-                m_backend = new BackendViaSocket(udpDiag.acceptedAddress(), udpDiag.acceptedPort());
+                // m_backend = new BackendViaSocket(udpDiag.acceptedAddress(), udpDiag.acceptedPort());
             } else {
                 d->deleteLater();
+                closeBackend();
                 return;
             }
-        } else if ((geteuid() != 0)) {
-            // If not root, use named pipe
-            QMessageBox::critical(this, QString(), tr("Unimplemented..."));
-            d->deleteLater();
-            return;
-            //m_backend = new BackendViaNamedPipe(localWirelessIntf);
         } else {
             // If root, use lib locally
             m_backend = new BackendViaLocalRoot(localWirelessIntf);

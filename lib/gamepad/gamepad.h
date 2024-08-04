@@ -1,15 +1,10 @@
 #ifndef VANILLA_GAMEPAD_H
 #define VANILLA_GAMEPAD_H
 
+#include "ports.h"
 #include "vanilla.h"
 
 struct wpa_ctrl;
-
-static const uint16_t PORT_MSG = 50110;
-static const uint16_t PORT_VID = 50120;
-static const uint16_t PORT_AUD = 50121;
-static const uint16_t PORT_HID = 50122;
-static const uint16_t PORT_CMD = 50123;
 
 struct gamepad_thread_context
 {

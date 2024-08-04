@@ -9,12 +9,12 @@ extern "C" {
 #include <stddef.h>
 #include <stdint.h>
 
-#define VANILLA_SUCCESS              0
-#define VANILLA_ERROR               -1
-#define VANILLA_READY               -2
-#define VANILLA_INFO                -3
-#define VANILLA_UNKNOWN_COMMAND     -4
-#define VANILLA_INVALID_ARGUMENT    -5
+static const int VANILLA_SUCCESS           =  0;
+static const int VANILLA_ERROR             = -1;
+static const int VANILLA_READY             = -2;
+static const int VANILLA_INFO              = -3;
+static const int VANILLA_UNKNOWN_COMMAND   = -4;
+static const int VANILLA_INVALID_ARGUMENT  = -5;
 
 enum VanillaGamepadButtons
 {
