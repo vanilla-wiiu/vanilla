@@ -9,6 +9,7 @@
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <sys/un.h>
 #include <unistd.h>
 #include <vanilla.h>
 
@@ -33,11 +34,11 @@ int open_fifo(const char *name, int mode)
 }
 
 int fd_in = 0, fd_out = 0;
-struct sockaddr_in udp_client = {0};
+uint8_t client_addr[128] = {0};
 
 ssize_t write_pipe(const void *buf, size_t size)
 {
-    sendto(fd_in, buf, size, 0, (const struct sockaddr *) &udp_client, sizeof(udp_client));
+    sendto(fd_in, buf, size, 0, (const struct sockaddr *) client_addr, sizeof(client_addr));
 }
 
 pthread_mutex_t action_mutex;
@@ -130,60 +131,107 @@ void vapipelog(const char *str, ...)
     va_end(va);
 }
 
-int main(int argc, char **argv)
+const char *get_positional_arg(int argc, const char **argv, int index)
+{
+    int cur_index = 0;
+    for (int i = 1; i < argc; i++) {
+        if (argv[i][0] == '-') {
+            i++;
+        } else if (cur_index == index) {
+            return argv[i];
+        } else {
+            cur_index++;
+        }
+    }
+    return NULL;
+}
+
+const char *get_optional_arg(int argc, const char **argv, const char *opt_arg_name, int *exists)
+{
+    *exists = 0;
+    for (int i = 1; i < argc; i++) {
+        if (!strcmp(argv[i], opt_arg_name)) {
+            *exists = 1;
+            if (i + 1 < argc) {
+                return argv[i + 1];
+            }
+            break;
+        }
+    }
+
+    return NULL;
+}
+
+int main(int argc, const char **argv)
 {
     if (argc < 3) {
         goto show_help;
     }
 
-    const char *wireless_interface = argv[1];
+    const char *wireless_interface = get_positional_arg(argc, argv, 0);
+    if (!wireless_interface) {
+        printf("No wireless interface specified\n");
+        goto show_help;
+    }
 
-    if (!strcmp(argv[2], "-pipe")) {
-        if (argc < 5) {
-            printf("-pipe requires <in-fifo> and <out-fifo>\n");
-            goto show_help;
-        }
+    int pipe_exists, udp_exists;
+    const char *pipe_mode = get_optional_arg(argc, argv, "-pipe", &pipe_exists);
+    const char *udp_mode = get_optional_arg(argc, argv, "-udp", &udp_exists);
 
-        const char *pipe_in_filename = argv[3];
-        const char *pipe_out_filename = argv[4];
+    uint8_t address[128] = {0};
+    socklen_t address_len;
 
-        umask(0000);
+    if (pipe_exists && udp_exists) {
+        printf("-pipe and -udp cannot both be specified\n");
+        return 1;
+    } else if (pipe_mode) {
+        address_len = sizeof(struct sockaddr_un);
+    } else if (udp_mode) {
+        address_len = sizeof(struct sockaddr_in);
+    } else if (pipe_exists) {
+        printf("-pipe requires <fifo-path>\n");
+        return 1;
+    } else if (udp_exists) {
+        printf("-udp requires <server-port>\n");
+        return 1;
+    } else {
+        printf("No mode or mode option specified\n");
+        goto show_help;
+    }
 
-        if (create_fifo(pipe_in_filename) == -1) return 1;
-        if (create_fifo(pipe_out_filename) == -1) return 1;
-
-        fprintf(stderr, "READY\n");
-
-        if ((fd_out = open_fifo(pipe_out_filename, O_WRONLY)) == -1) return 1;
-        if ((fd_in = open_fifo(pipe_in_filename, O_RDONLY)) == -1) return 1;
-    } else if (!strcmp(argv[2], "-udp")) {
-        if (argc < 4) {
-            printf("-udp requires <server-port>\n");
-            goto show_help;
-        }
-
-        uint16_t server_port = atoi(argv[3]);
-        if (server_port == 0) {
-            printf("UDP port provided was invalid\n");
-            goto show_help;
-        }
-
-        struct sockaddr_in address;
-        address.sin_family = AF_INET;
-        address.sin_addr.s_addr = INADDR_ANY;
-        address.sin_port = htons(server_port);
-        fd_in = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-        
-        if (bind(fd_in, (const struct sockaddr *) &address, sizeof(address)) == -1) {
-            printf("Failed to bind to port %u\n", server_port);
+    if (pipe_mode) {
+        struct sockaddr_un *sa = (struct sockaddr_un *) address;
+        int len = strlen(pipe_mode);
+        if (len+1 > sizeof(sa->sun_path)) {
+            printf("<fifo-path> is too long, must be less than 108 chars including null-term\n");
             return 1;
         }
 
-        fprintf(stderr, "READY\n");
+        sa->sun_family = AF_UNIX;
+        strncpy(sa->sun_path, pipe_mode, sizeof(sa->sun_path)-1);
+
+        fd_in = socket(AF_UNIX, SOCK_STREAM, 0);
     } else {
-        printf("Unknown mode '%s'\n", argv[2]);
-        goto show_help;
+        uint16_t server_port = atoi(udp_mode);
+        if (server_port == 0) {
+            printf("UDP port provided was invalid\n");
+            return 1;
+        }
+
+        struct sockaddr_in *in = (struct sockaddr_in *) address;
+        in->sin_family = AF_INET;
+        in->sin_addr.s_addr = INADDR_ANY;
+        in->sin_port = htons(server_port);
+
+        fd_in = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     }
+
+    if (bind(fd_in, (const struct sockaddr *) address, address_len) == -1) {
+        printf("Failed to bind to socket\n");
+        return 1;
+    }
+
+    fprintf(stderr, "READY\n");
 
     char read_buffer[2048];
     ssize_t read_size;
@@ -195,9 +243,9 @@ int main(int argc, char **argv)
     pthread_mutex_init(&action_mutex, NULL);
 
     while (!m_quit) {
-        struct sockaddr_in sender_addr;
+        uint8_t sender_addr[sizeof(client_addr)];
         socklen_t sender_addr_len = sizeof(sender_addr);
-        read_size = recvfrom(fd_in, read_buffer, sizeof(read_buffer), 0, (struct sockaddr *) &sender_addr, &sender_addr_len);
+        read_size = recvfrom(fd_in, read_buffer, sizeof(read_buffer), 0, (struct sockaddr *) sender_addr, &sender_addr_len);
         if (read_size == 0) {
             continue;
         }
@@ -289,18 +337,20 @@ int main(int argc, char **argv)
             break;
         case VANILLA_PIPE_IN_BIND:
         {
-            struct pipe_bind_command *bind_cmd = (struct pipe_bind_command *) read_buffer;
+            struct pipe_command_code *bind_cmd = (struct pipe_command_code *) read_buffer;
             
             // Send success message back to client
             uint8_t cc = VANILLA_PIPE_OUT_BOUND_SUCCESSFUL;
             sendto(fd_in, &cc, sizeof(cc), 0, (const struct sockaddr *) &sender_addr, sizeof(sender_addr));
 
             // Add client to list
-            udp_client = sender_addr;
+            memcpy(client_addr, sender_addr, sizeof(client_addr));
+
+            struct sockaddr_in *udp_client = (struct sockaddr_in *) client_addr;
 
             char addr_buf[INET_ADDRSTRLEN];
-            inet_ntop(AF_INET, &udp_client.sin_addr.s_addr, addr_buf, INET_ADDRSTRLEN);
-            printf("BIND %s:%u\n", addr_buf, ntohs(udp_client.sin_port));
+            inet_ntop(AF_INET, &udp_client->sin_addr.s_addr, addr_buf, INET_ADDRSTRLEN);
+            printf("BIND %s:%u\n", addr_buf, ntohs(udp_client->sin_port));
             break;
         }
         }
@@ -319,7 +369,7 @@ show_help:
     printf("aren't able to run on the same device or in the same environment (e.g. when the \n");
     printf("backend must run as root but the frontend must run as user).\n\n");
     printf("Modes:\n\n");
-    printf("    -pipe <in-fifo> <out-fifo>\n");
+    printf("    -pipe <fifo>\n");
     printf("        Set up communication through Unix FIFO pipes. This is the most reliable\n");
     printf("        solution if you're running the frontend and backend on the same device.\n\n");
     printf("    -udp <port>\n\n");
