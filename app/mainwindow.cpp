@@ -29,6 +29,7 @@
 #include "inputconfigdialog.h"
 #include "keymap.h"
 #include "syncdialog.h"
+#include "udpaddressdialog.h"
 
 MainWindow::MainWindow(QWidget *parent) : QWidget(parent)
 {
@@ -348,8 +349,13 @@ void MainWindow::initBackend(T func)
 
         QString localWirelessIntf = m_wirelessInterfaceComboBox->currentData().toString();
         if (localWirelessIntf.isEmpty()) {
-            // TODO: Prompt for UDP server address
-            m_backend = new BackendViaSocket(QHostAddress::LocalHost, 10200);
+            UdpAddressDialog udpDiag(this);
+            if (udpDiag.exec() == QDialog::Accepted) {
+                m_backend = new BackendViaSocket(udpDiag.acceptedAddress(), udpDiag.acceptedPort());
+            } else {
+                d->deleteLater();
+                return;
+            }
         } else if ((geteuid() != 0)) {
             // If not root, use named pipe
             m_backend = new BackendViaNamedPipe(localWirelessIntf);

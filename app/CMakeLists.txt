@@ -18,6 +18,7 @@ add_executable(vanilla-gui
     main.cpp
     mainwindow.cpp
     resource.qrc
+    udpaddressdialog.cpp
     videodecoder.cpp
     viewer.cpp
 )
