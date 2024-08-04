@@ -230,7 +230,7 @@ void BackendViaPipe::sync(uint16_t code)
     // Request pipe to sync
     pipe_sync_command cmd;
     cmd.base.code = VANILLA_PIPE_IN_SYNC;
-    cmd.code = code;
+    cmd.code = htons(code);
     writeToPipe(&cmd, sizeof(cmd));
 
     // See if pipe accepted our request to sync
@@ -372,8 +372,11 @@ void BackendUdpWrapper::write(const QByteArray &data)
 ssize_t BackendViaUdp::readFromPipe(void *data, size_t length)
 {
     m_readMutex.lock();
-    if (m_buffer.size() < length) {
+    if (m_buffer.isEmpty()) {
         m_readWaitCond.wait(&m_readMutex);
+    }
+    if (m_buffer.size() < length) {
+        length = m_buffer.size();
     }
     memcpy(data, m_buffer.constData(), length);
     m_buffer.remove(0, length);
