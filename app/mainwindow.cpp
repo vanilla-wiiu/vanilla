@@ -349,7 +349,7 @@ void MainWindow::initBackend(T func)
         QString localWirelessIntf = m_wirelessInterfaceComboBox->currentData().toString();
         if (localWirelessIntf.isEmpty()) {
             // TODO: Prompt for UDP server address
-            m_backend = new BackendViaUdp(QHostAddress::LocalHost, 10200);
+            m_backend = new BackendViaSocket(QHostAddress::LocalHost, 10200);
         } else if ((geteuid() != 0)) {
             // If not root, use named pipe
             m_backend = new BackendViaNamedPipe(localWirelessIntf);

@@ -4,6 +4,7 @@
 #include <QDir>
 #include <QMessageBox>
 #include <QNetworkDatagram>
+#include <QtConcurrent/QtConcurrent>
 
 #include <arpa/inet.h>
 #include <fcntl.h>
@@ -66,25 +67,25 @@ void BackendViaNamedPipe::init()
     QMetaObject::invokeMethod(m_pipe, &BackendPipe::start, Qt::QueuedConnection);
 }
 
-BackendViaUdp::BackendViaUdp(const QHostAddress &backendAddr, quint16 backendPort, QObject *parent) : BackendViaPipe(parent)
+BackendViaSocket::BackendViaSocket(const QHostAddress &backendAddr, quint16 backendPort, QObject *parent) : BackendViaPipe(parent)
 {
     m_socket = new BackendUdpWrapper(backendAddr, backendPort, this);
-    connect(m_socket, &BackendUdpWrapper::socketReady, this, &BackendViaUdp::socketReady);
-    connect(m_socket, &BackendUdpWrapper::receivedData, this, &BackendViaUdp::receivedData, Qt::DirectConnection);
-    connect(m_socket, &BackendUdpWrapper::closed, this, &BackendViaUdp::closed);
-    connect(m_socket, &BackendUdpWrapper::error, this, &BackendViaUdp::error);
+    connect(m_socket, &BackendUdpWrapper::socketReady, this, &BackendViaSocket::socketReady);
+    connect(m_socket, &BackendUdpWrapper::receivedData, this, &BackendViaSocket::receivedData, Qt::DirectConnection);
+    connect(m_socket, &BackendUdpWrapper::closed, this, &BackendViaSocket::closed);
+    connect(m_socket, &BackendUdpWrapper::error, this, &BackendViaSocket::error);
 
     m_socketThread = new QThread(this);
 }
 
-BackendViaUdp::~BackendViaUdp()
+BackendViaSocket::~BackendViaSocket()
 {
     m_socket->deleteLater();
     m_socketThread->quit();
     m_socketThread->wait();
 }
 
-void BackendViaUdp::init()
+void BackendViaSocket::init()
 {
     m_socketThread->start();
     m_socket->setParent(nullptr);
@@ -134,8 +135,13 @@ void BackendViaPipe::requestIDR()
 
 void BackendViaLocalRoot::connectToConsole()
 {
-    QByteArray wirelessInterfaceC = m_wirelessInterface.toUtf8();
-    vanilla_connect_to_console(wirelessInterfaceC.constData(), vanillaEventHandler, this);
+    QtConcurrent::run(connectInternal, this, m_wirelessInterface);
+}
+
+int BackendViaLocalRoot::connectInternal(BackendViaLocalRoot *instance, const QString &intf)
+{
+    QByteArray wirelessInterfaceC = intf.toUtf8();
+    return vanilla_connect_to_console(wirelessInterfaceC.constData(), vanillaEventHandler, instance);
 }
 
 void BackendViaPipe::connectToConsole()
@@ -220,9 +226,23 @@ void BackendViaPipe::setBatteryStatus(int status)
 
 void BackendViaLocalRoot::sync(uint16_t code)
 {
-    QByteArray wirelessInterfaceC = m_wirelessInterface.toUtf8();
-    int r = vanilla_sync_with_console(wirelessInterfaceC.constData(), code);
+    QFutureWatcher<int> *watcher = new QFutureWatcher<int>(this);
+    connect(watcher, &QFutureWatcher<int>::finished, this, &BackendViaLocalRoot::syncCompleted);
+    watcher->setFuture(QtConcurrent::run(syncInternal, m_wirelessInterface, code));
+}
+
+int BackendViaLocalRoot::syncInternal(const QString &intf, uint16_t code)
+{
+    QByteArray wirelessInterfaceC = intf.toUtf8();
+    return vanilla_sync_with_console(wirelessInterfaceC.constData(), code);
+}
+
+void BackendViaLocalRoot::syncFutureCompleted()
+{
+    QFutureWatcher<int> *watcher = static_cast<QFutureWatcher<int>*>(sender());
+    int r = watcher->result();
     emit syncCompleted(r == VANILLA_SUCCESS);
+    watcher->deleteLater();
 }
 
 void BackendViaPipe::sync(uint16_t code)
@@ -369,7 +389,7 @@ void BackendUdpWrapper::write(const QByteArray &data)
     m_socket->writeDatagram(data, m_backendAddress, m_backendPort);
 }
 
-ssize_t BackendViaUdp::readFromPipe(void *data, size_t length)
+ssize_t BackendViaSocket::readFromPipe(void *data, size_t length)
 {
     m_readMutex.lock();
     if (m_buffer.isEmpty()) {
@@ -384,13 +404,13 @@ ssize_t BackendViaUdp::readFromPipe(void *data, size_t length)
     return length;
 }
 
-ssize_t BackendViaUdp::writeToPipe(const void *data, size_t length)
+ssize_t BackendViaSocket::writeToPipe(const void *data, size_t length)
 {
     QMetaObject::invokeMethod(m_socket, "write", Q_ARG(QByteArray, QByteArray((const char *) data, length)));
     return length;
 }
 
-void BackendViaUdp::receivedData(const QByteArray &data)
+void BackendViaSocket::receivedData(const QByteArray &data)
 {
     m_readMutex.lock();
     m_buffer.append(data);
@@ -398,7 +418,7 @@ void BackendViaUdp::receivedData(const QByteArray &data)
     m_readMutex.unlock();
 }
 
-void BackendViaUdp::socketReady(quint16 port)
+void BackendViaSocket::socketReady(quint16 port)
 {
     pipe_control_code cmd;
     cmd.code = VANILLA_PIPE_IN_BIND;

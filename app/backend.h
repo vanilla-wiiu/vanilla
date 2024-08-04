@@ -90,7 +90,12 @@ public slots:
     virtual void connectToConsole() override;
 
 private:
+    static int syncInternal(const QString &intf, uint16_t code);
+    static int connectInternal(BackendViaLocalRoot *instance, const QString &intf);
     QString m_wirelessInterface;
+
+private slots:
+    void syncFutureCompleted();
 
 };
 
@@ -171,12 +176,12 @@ private slots:
 
 };
 
-class BackendViaUdp : public BackendViaPipe
+class BackendViaSocket : public BackendViaPipe
 {
     Q_OBJECT
 public:
-    BackendViaUdp(const QHostAddress &backendAddr, quint16 backendPort, QObject *parent = nullptr);
-    virtual ~BackendViaUdp() override;
+    BackendViaSocket(const QHostAddress &backendAddr, quint16 backendPort, QObject *parent = nullptr);
+    virtual ~BackendViaSocket() override;
 
 public slots:
     virtual void init() override;

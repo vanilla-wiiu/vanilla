@@ -210,7 +210,7 @@ int main(int argc, const char **argv)
         sa->sun_family = AF_UNIX;
         strncpy(sa->sun_path, pipe_mode, sizeof(sa->sun_path)-1);
 
-        fd_in = socket(AF_UNIX, SOCK_STREAM, 0);
+        fd_in = socket(AF_UNIX, SOCK_DGRAM, 0);
     } else {
         uint16_t server_port = atoi(udp_mode);
         if (server_port == 0) {
