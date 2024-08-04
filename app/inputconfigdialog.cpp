@@ -30,7 +30,8 @@ InputConfigDialog::InputConfigDialog(QWidget *parent) : QDialog(parent)
     layout->addWidget(createButton(tr("D-Pad Left"), VANILLA_BTN_LEFT), 12, 0);
     layout->addWidget(createButton(tr("D-Pad Right"), VANILLA_BTN_RIGHT), 13, 0);
 
-    layout->addWidget(createButton(tr("Home"), VANILLA_BTN_HOME), 14, 1, 1, 3);
+    layout->addWidget(createButton(tr("TV"), VANILLA_BTN_TV), 14, 1, 1, 1);
+    layout->addWidget(createButton(tr("Home"), VANILLA_BTN_HOME), 14, 2);
 
     layout->addWidget(createButton(tr("Right Stick Up"), VANILLA_AXIS_R_UP), 2, 4);
     layout->addWidget(createButton(tr("Right Stick Down"), VANILLA_AXIS_R_DOWN), 3, 4);
