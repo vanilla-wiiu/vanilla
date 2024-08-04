@@ -147,6 +147,7 @@ int connect_as_gamepad_internal(struct wpa_ctrl *ctrl, const char *wireless_inte
         char buf[1024];
         size_t actual_buf_len = sizeof(buf);
         wpa_ctrl_recv(ctrl, buf, &actual_buf_len);
+        print_info("CONN RECV: %.*s", actual_buf_len, buf);
 
         if (memcmp(buf, "<3>CTRL-EVENT-CONNECTED", 23) == 0) {
             break;

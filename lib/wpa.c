@@ -126,6 +126,7 @@ int start_wpa_supplicant(const char *wireless_interface, const char *config_file
     get_binary_in_working_directory(wpa_supplicant_drc, wpa_buf, path_size);
 
     const char *argv[] = {wpa_buf, "-Dnl80211", "-i", wireless_interface, "-c", config_file, NULL};
+    print_info("USING WPA CONFIG: %s", config_file);
     int pipe;
 
     r = start_process(argv, pid, &pipe, NULL);
