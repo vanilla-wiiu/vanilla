@@ -227,7 +227,7 @@ void BackendViaPipe::setBatteryStatus(int status)
 void BackendViaLocalRoot::sync(uint16_t code)
 {
     QFutureWatcher<int> *watcher = new QFutureWatcher<int>(this);
-    connect(watcher, &QFutureWatcher<int>::finished, this, &BackendViaLocalRoot::syncCompleted);
+    connect(watcher, &QFutureWatcher<int>::finished, this, &BackendViaLocalRoot::syncFutureCompleted);
     watcher->setFuture(QtConcurrent::run(syncInternal, m_wirelessInterface, code));
 }
 
