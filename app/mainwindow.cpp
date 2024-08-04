@@ -358,7 +358,10 @@ void MainWindow::initBackend(T func)
             }
         } else if ((geteuid() != 0)) {
             // If not root, use named pipe
-            m_backend = new BackendViaNamedPipe(localWirelessIntf);
+            QMessageBox::critical(this, QString(), tr("Unimplemented..."));
+            d->deleteLater();
+            return;
+            //m_backend = new BackendViaNamedPipe(localWirelessIntf);
         } else {
             // If root, use lib locally
             m_backend = new BackendViaLocalRoot(localWirelessIntf);

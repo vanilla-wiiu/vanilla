@@ -1,5 +1,6 @@
 #include "backend.h"
 
+#include <QBuffer>
 #include <QCoreApplication>
 #include <QDir>
 #include <QMessageBox>
@@ -49,48 +50,39 @@ BackendViaPipe::BackendViaPipe(QObject *parent) : Backend(parent)
 {
 }
 
-BackendViaNamedPipe::BackendViaNamedPipe(const QString &wirelessInterface, QObject *parent) : BackendViaPipe(parent)
-{
-    m_pipeIn = -1;
-    m_pipeOut = -1;
-    m_pipeThread = new QThread(this);
-    m_pipe = new BackendPipe(wirelessInterface, this);
-    connect(m_pipe, &BackendPipe::pipesAvailable, this, &BackendViaNamedPipe::setUpPipes);
-    connect(m_pipe, &BackendPipe::closed, this, &BackendViaNamedPipe::closed);
-}
-
-void BackendViaNamedPipe::init()
-{
-    m_pipe->setParent(nullptr);
-    m_pipeThread->start();
-    m_pipe->moveToThread(m_pipeThread);
-    QMetaObject::invokeMethod(m_pipe, &BackendPipe::start, Qt::QueuedConnection);
-}
-
 BackendViaSocket::BackendViaSocket(const QHostAddress &backendAddr, quint16 backendPort, QObject *parent) : BackendViaPipe(parent)
 {
-    m_socket = new BackendUdpWrapper(backendAddr, backendPort, this);
-    connect(m_socket, &BackendUdpWrapper::socketReady, this, &BackendViaSocket::socketReady);
-    connect(m_socket, &BackendUdpWrapper::receivedData, this, &BackendViaSocket::receivedData, Qt::DirectConnection);
-    connect(m_socket, &BackendUdpWrapper::closed, this, &BackendViaSocket::closed);
-    connect(m_socket, &BackendUdpWrapper::error, this, &BackendViaSocket::error);
+    m_backendAddress = backendAddr;
+    m_backendPort = backendPort;
 
-    m_socketThread = new QThread(this);
-}
-
-BackendViaSocket::~BackendViaSocket()
-{
-    m_socket->deleteLater();
-    m_socketThread->quit();
-    m_socketThread->wait();
+    m_socket = new QUdpSocket(this);
+    connect(m_socket, &QUdpSocket::readyRead, this, &BackendViaSocket::readPendingDatagrams);
+    connect(m_socket, &QUdpSocket::disconnected, this, &BackendViaSocket::closed);
 }
 
 void BackendViaSocket::init()
 {
-    m_socketThread->start();
-    m_socket->setParent(nullptr);
-    m_socket->moveToThread(m_socketThread);
-    QMetaObject::invokeMethod(m_socket, &BackendUdpWrapper::start, Qt::QueuedConnection);
+    bool connected = false;
+
+    for (m_frontendPort = 10100; m_frontendPort < 10200; m_frontendPort++) {
+        printf("Trying to bind to port %u\n", m_frontendPort);
+        if (m_socket->bind(QHostAddress::Any, m_frontendPort)) {
+            printf("Bound to port %u\n", m_frontendPort);
+            connected = true;
+            break;
+        }
+    }
+
+    if (connected) {
+        // Send bind command to backend
+        pipe_control_code cmd;
+        cmd.code = VANILLA_PIPE_IN_BIND;
+        writeToPipe(&cmd, sizeof(cmd));
+    } else {
+        printf("Failed to bind to port\n");
+        emit error(tr("Failed to bind to UDP port"));
+        emit closed();
+    }
 }
 
 void BackendViaPipe::quitPipe()
@@ -98,15 +90,6 @@ void BackendViaPipe::quitPipe()
     pipe_control_code cmd;
     cmd.code = VANILLA_PIPE_IN_QUIT;
     writeToPipe(&cmd, sizeof(cmd));
-}
-
-BackendViaNamedPipe::~BackendViaNamedPipe()
-{
-    quitPipe();
-
-    m_pipe->deleteLater();
-    m_pipeThread->quit();
-    m_pipeThread->wait();
 }
 
 void BackendViaLocalRoot::interrupt()
@@ -144,30 +127,42 @@ int BackendViaLocalRoot::connectInternal(BackendViaLocalRoot *instance, const QS
     return vanilla_connect_to_console(wirelessInterfaceC.constData(), vanillaEventHandler, instance);
 }
 
+void BackendViaPipe::processPacket(const QByteArray &arr)
+{
+    const pipe_control_code *cc = (const pipe_control_code *) arr.data();
+
+    switch (cc->code) {
+    case VANILLA_PIPE_OUT_EOF:
+        // Do nothing?
+        break;
+    case VANILLA_PIPE_OUT_DATA:
+    {
+        pipe_data_command *event = (pipe_data_command *) cc;
+        event->data_size = ntohs(event->data_size);
+        vanillaEventHandler(this, event->event_type, (const char *) event->data, event->data_size);
+        break;
+    }
+    case VANILLA_PIPE_OUT_BOUND_SUCCESSFUL:
+        emit ready();
+        break;
+    case VANILLA_PIPE_ERR_SUCCESS:
+        printf("ERR_SUCCESS code\n");
+        break;
+    case VANILLA_PIPE_OUT_SYNC_STATE:
+    {
+        const pipe_sync_state_command *ss = (const pipe_sync_state_command *) cc;
+        emit syncCompleted(ss->state == VANILLA_SUCCESS);
+        break;
+    }
+    }
+}
+
 void BackendViaPipe::connectToConsole()
 {
     // Request pipe to connect
     pipe_control_code conn_cmd;
     conn_cmd.code = VANILLA_PIPE_IN_CONNECT;
     writeToPipe(&conn_cmd, sizeof(conn_cmd));
-
-    uint8_t cmd[UINT16_MAX];
-    while (true) {
-        ssize_t read_size = readFromPipe(cmd, sizeof(cmd));
-        if (read_size == 0) {
-            continue;
-        }
-
-        pipe_control_code *cc = (pipe_control_code *) cmd;
-
-        if (cc->code == VANILLA_PIPE_OUT_EOF) {
-            break;
-        } else if (cc->code == VANILLA_PIPE_OUT_DATA) {
-            pipe_data_command *event = (pipe_data_command *) cmd;
-            event->data_size = ntohs(event->data_size);
-            vanillaEventHandler(this, event->event_type, (const char *) event->data, event->data_size);
-        }
-    }
 }
 
 void BackendViaLocalRoot::updateTouch(int x, int y)
@@ -252,40 +247,6 @@ void BackendViaPipe::sync(uint16_t code)
     cmd.base.code = VANILLA_PIPE_IN_SYNC;
     cmd.code = htons(code);
     writeToPipe(&cmd, sizeof(cmd));
-
-    // See if pipe accepted our request to sync
-    uint8_t cc;
-    readFromPipe(&cc, sizeof(cc));
-    if (cc != VANILLA_PIPE_ERR_SUCCESS) {
-        emit syncCompleted(false);
-        return;
-    }
-
-    // Wait for sync status
-    readFromPipe(&cc, sizeof(cc));
-    if (cc == VANILLA_PIPE_OUT_SYNC_STATE) {
-        readFromPipe(&cc, sizeof(cc));
-        emit syncCompleted(cc == VANILLA_SUCCESS);
-    } else {
-        emit syncCompleted(false);
-    }
-}
-
-void BackendViaNamedPipe::setUpPipes(const QString &in, const QString &out)
-{
-    QByteArray inUtf8 = in.toUtf8();
-    QByteArray outUtf8 = out.toUtf8();
-    m_pipeIn = open(inUtf8.constData(), O_RDONLY);
-    if (m_pipeIn == -1) {
-        QMessageBox::critical(nullptr, tr("Pipe Error"), tr("Failed to create in pipe: %1").arg(strerror(errno)));
-    }
-    m_pipeOut = open(outUtf8.constData(), O_WRONLY);
-    if (m_pipeOut == -1) {
-        QMessageBox::critical(nullptr, tr("Pipe Error"), tr("Failed to create out pipe: %1").arg(strerror(errno)));
-    }
-
-    printf("Established connection with backend\n");
-    emit ready();
 }
 
 BackendPipe::BackendPipe(const QString &wirelessInterface, QObject *parent) : QObject(parent)
@@ -335,98 +296,15 @@ void BackendPipe::receivedData()
     }
 }
 
-ssize_t BackendViaNamedPipe::readFromPipe(void *data, size_t length)
-{
-    return read(m_pipeIn, data, length);
-}
-
-ssize_t BackendViaNamedPipe::writeToPipe(const void *data, size_t length)
-{
-    return write(m_pipeOut, data, length);
-}
-
-BackendUdpWrapper::BackendUdpWrapper(const QHostAddress &backendAddr, quint16 backendPort, QObject *parent) : QObject(parent)
-{
-    m_backendAddress = backendAddr;
-    m_backendPort = backendPort;
-
-    m_socket = new QUdpSocket(this);
-    connect(m_socket, &QUdpSocket::readyRead, this, &BackendUdpWrapper::readPendingDatagrams);
-}
-
-void BackendUdpWrapper::start()
-{
-    bool connected = false;
-
-    for (m_frontendPort = 10100; m_frontendPort < 10200; m_frontendPort++) {
-        printf("Trying to bind to port %u\n", m_frontendPort);
-        if (m_socket->bind(QHostAddress::Any, m_frontendPort)) {
-            printf("Bound to port %u\n", m_frontendPort);
-            connected = true;
-            break;
-        }
-    }
-
-    if (connected) {
-        emit socketReady(m_frontendPort);
-    } else {
-        printf("Failed to bind to port\n");
-        emit error(tr("Failed to bind to UDP port"));
-        emit closed();
-    }
-}
-
-void BackendUdpWrapper::readPendingDatagrams()
+void BackendViaSocket::readPendingDatagrams()
 {
     while (m_socket->hasPendingDatagrams()) {
         QNetworkDatagram datagram = m_socket->receiveDatagram();
-        emit receivedData(datagram.data());
+        processPacket(datagram.data());
     }
-}
-
-void BackendUdpWrapper::write(const QByteArray &data)
-{
-    m_socket->writeDatagram(data, m_backendAddress, m_backendPort);
-}
-
-ssize_t BackendViaSocket::readFromPipe(void *data, size_t length)
-{
-    m_readMutex.lock();
-    if (m_buffer.isEmpty()) {
-        m_readWaitCond.wait(&m_readMutex);
-    }
-    if (m_buffer.size() < length) {
-        length = m_buffer.size();
-    }
-    memcpy(data, m_buffer.constData(), length);
-    m_buffer.remove(0, length);
-    m_readMutex.unlock();
-    return length;
 }
 
 ssize_t BackendViaSocket::writeToPipe(const void *data, size_t length)
 {
-    QMetaObject::invokeMethod(m_socket, "write", Q_ARG(QByteArray, QByteArray((const char *) data, length)));
-    return length;
-}
-
-void BackendViaSocket::receivedData(const QByteArray &data)
-{
-    m_readMutex.lock();
-    m_buffer.append(data);
-    m_readWaitCond.wakeAll();
-    m_readMutex.unlock();
-}
-
-void BackendViaSocket::socketReady(quint16 port)
-{
-    pipe_control_code cmd;
-    cmd.code = VANILLA_PIPE_IN_BIND;
-    writeToPipe(&cmd, sizeof(cmd));
-
-    uint8_t cc;
-    readFromPipe(&cc, sizeof(cc));
-    if (cc == VANILLA_PIPE_OUT_BOUND_SUCCESSFUL) {
-        emit ready();
-    }
+    return m_socket->writeDatagram((const char *) data, length, m_backendAddress, m_backendPort);
 }

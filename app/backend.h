@@ -103,6 +103,13 @@ class BackendViaPipe : public Backend
 {
     Q_OBJECT
 public:
+    enum ListenState {
+        IDLE,
+        WAITING_FOR_SYNC_RESULT,
+        WAITING_FOR_BIND_RESULT,
+        RECEIVING_DATA
+    };
+
     BackendViaPipe(QObject *parent = nullptr);
 
     virtual void interrupt() override;
@@ -116,54 +123,28 @@ public slots:
     virtual void sync(uint16_t code) override;
     virtual void connectToConsole() override;
 
-protected slots:
-    virtual ssize_t readFromPipe(void *data, size_t length) = 0;
+    void quitPipe();
+
+protected:
+    void processPacket(const QByteArray &arr);
     virtual ssize_t writeToPipe(const void *data, size_t length) = 0;
 
-    void quitPipe();
+private:
+    ListenState m_listenState;
 
 };
 
-class BackendViaNamedPipe : public BackendViaPipe
+class BackendViaSocket : public BackendViaPipe
 {
     Q_OBJECT
 public:
-    BackendViaNamedPipe(const QString &wirelessInterface, QObject *parent = nullptr);
-    virtual ~BackendViaNamedPipe() override;
+    BackendViaSocket(const QHostAddress &backendAddr, quint16 backendPort, QObject *parent = nullptr);
 
 public slots:
     virtual void init() override;
 
-private:
-    BackendPipe *m_pipe;
-    QThread *m_pipeThread;
-    int m_pipeIn;
-    int m_pipeOut;
-
-protected slots:
-    virtual ssize_t readFromPipe(void *data, size_t length) override;
+protected:
     virtual ssize_t writeToPipe(const void *data, size_t length) override;
-
-private slots:
-    void setUpPipes(const QString &in, const QString &out);
-
-};
-
-class BackendUdpWrapper : public QObject
-{
-    Q_OBJECT
-public:
-    BackendUdpWrapper(const QHostAddress &backendAddr, quint16 backendPort, QObject *parent = nullptr);
-
-public slots:
-    void start();
-    void write(const QByteArray &data);
-
-signals:
-    void receivedData(const QByteArray &data);
-    void socketReady(quint16 port);
-    void closed();
-    void error(const QString &err);
 
 private:
     QUdpSocket *m_socket;
@@ -173,35 +154,6 @@ private:
 
 private slots:
     void readPendingDatagrams();
-
-};
-
-class BackendViaSocket : public BackendViaPipe
-{
-    Q_OBJECT
-public:
-    BackendViaSocket(const QHostAddress &backendAddr, quint16 backendPort, QObject *parent = nullptr);
-    virtual ~BackendViaSocket() override;
-
-public slots:
-    virtual void init() override;
-
-protected slots:
-    virtual ssize_t readFromPipe(void *data, size_t length) override;
-    virtual ssize_t writeToPipe(const void *data, size_t length) override;
-
-private:
-    BackendUdpWrapper *m_socket;
-    QThread *m_socketThread;
-
-    QByteArray m_buffer;
-
-    QMutex m_readMutex;
-    QWaitCondition m_readWaitCond;
-
-private slots:
-    void receivedData(const QByteArray &data);
-    void socketReady(quint16 port);
 
 };
 

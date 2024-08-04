@@ -78,7 +78,7 @@ struct pipe_data_command
     struct pipe_control_code base;
     uint8_t event_type;
     uint16_t data_size;
-    uint8_t data[UINT16_MAX];
+    uint8_t data[2048];
 };
 
 #pragma pack(pop)
