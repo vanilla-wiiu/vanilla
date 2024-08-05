@@ -62,7 +62,10 @@ void BackendViaLocalRoot::connectToConsole()
 int BackendViaLocalRoot::connectInternal(BackendViaLocalRoot *instance, const QString &intf)
 {
     QByteArray wirelessInterfaceC = intf.toUtf8();
-    return vanilla_connect_to_console(wirelessInterfaceC.constData(), vanillaEventHandler, instance);
+    return vanilla_start(vanillaEventHandler, instance);
+    //return vanilla_connect_to_console(wirelessInterfaceC.constData(), vanillaEventHandler, instance);
+    // printf("TEMPORARILY STUBBED\n");
+    // return 0;
 }
 
 void BackendViaLocalRoot::updateTouch(int x, int y)
@@ -95,7 +98,9 @@ void BackendViaLocalRoot::sync(uint16_t code)
 int BackendViaLocalRoot::syncInternal(const QString &intf, uint16_t code)
 {
     QByteArray wirelessInterfaceC = intf.toUtf8();
-    return vanilla_sync_with_console(wirelessInterfaceC.constData(), code);
+    //return vanilla_sync_with_console(wirelessInterfaceC.constData(), code);
+    printf("TEMPORARILY STUBBED\n");
+    return 0;
 }
 
 void BackendViaLocalRoot::syncFutureCompleted()

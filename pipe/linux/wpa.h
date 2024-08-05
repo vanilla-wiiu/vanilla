@@ -1,11 +1,14 @@
 #ifndef VANILLA_WPA_H
 #define VANILLA_WPA_H
 
+#include <stdint.h>
 #include <stdlib.h>
 #include <sys/types.h>
 
 struct wpa_ctrl;
 extern const char *wpa_ctrl_interface;
+
+extern struct in_addr client_address;
 
 typedef int (*ready_callback_t)(struct wpa_ctrl *, void *);
 
@@ -19,5 +22,9 @@ int call_dhcp(const char *network_interface, pid_t *dhclient_pid);
 int is_networkmanager_managing_device(const char *wireless_interface, int *is_managed);
 int disable_networkmanager_on_device(const char *wireless_interface);
 int enable_networkmanager_on_device(const char *wireless_interface);
+
+int vanilla_sync_with_console(const char *wireless_interface, uint16_t code);
+int vanilla_connect_to_console(const char *wireless_interface);
+int vanilla_has_config();
 
 #endif // VANILLA_WPA_H

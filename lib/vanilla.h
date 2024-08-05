@@ -91,28 +91,14 @@ enum VanillaBatteryStatus {
 typedef void (*vanilla_event_handler_t)(void *context, int event_type, const char *data, size_t data_size);
 
 /**
- * Attempt to sync with the console
- *
- * This will block until the task is over or vanilla_stop() is called from another thread.
+ * Start listening for gamepad commands
  */
-int vanilla_sync_with_console(const char *wireless_interface, uint16_t code);
-
-/**
- * Attempt gameplay connection with console
- *
- * This will block until the task is over or vanilla_stop() is called from another thread.
- */
-int vanilla_connect_to_console(const char *wireless_interface, vanilla_event_handler_t event_handler, void *context);
-
-/**
- * Determine if we have a configuration file that we can connect with.
- */
-int vanilla_has_config();
+int vanilla_start(vanilla_event_handler_t event_handler, void *context);
 
 /**
  * Attempt to stop the current action
  *
- * This can be called from another thread to safely exit a blocking call to vanilla_sync_with_console() or vanilla_connect_to_console().
+ * This can be called from another thread to safely exit a blocking call to vanilla_start().
  */
 void vanilla_stop();
 
