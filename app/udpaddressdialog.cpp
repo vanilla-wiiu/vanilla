@@ -12,7 +12,7 @@ UdpAddressDialog::UdpAddressDialog(QWidget *parent) : QDialog(parent)
     layout->addWidget(new QLabel(tr("<html><center><p><b>UDP Server Connection</b></p><p>Connect to a separate device handling the connection to the console.</p></center></html>")));
 
     m_addressLine = new QLineEdit(this);
-    m_addressLine->setPlaceholderText(QStringLiteral("127.0.0.1:10200"));
+    m_addressLine->setPlaceholderText(QStringLiteral("127.0.0.1"));
     layout->addWidget(m_addressLine);
 
     QDialogButtonBox *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
@@ -30,27 +30,13 @@ void UdpAddressDialog::done(int r)
             return;
         }
 
-        QStringList addressSplit = m_addressLine->text().split(':');
-        if (addressSplit.size() != 2) {
-            QMessageBox::critical(this, tr("Invalid Address"), tr("Invalid format, must be entered in the form of <address>:<port> (e.g. 127.0.0.1:10200)."));
-            return;
-        }
-
-        QHostAddress addressPortion = QHostAddress(addressSplit.at(0));
+        QHostAddress addressPortion = QHostAddress(m_addressLine->text());
         if (addressPortion.isNull()) {
             QMessageBox::critical(this, tr("Invalid Address"), tr("Address is invalid."));
             return;
         }
-        
-        bool portOk;
-        quint16 portPortion = addressSplit.at(1).toUShort(&portOk);
-        if (!portOk) {
-            QMessageBox::critical(this, tr("Invalid Address"), tr("Port is invalid."));
-            return;
-        }
 
         m_acceptedAddress = addressPortion;
-        m_acceptedPort = portPortion;
     }
 
     QDialog::done(r);

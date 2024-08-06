@@ -348,10 +348,10 @@ void MainWindow::initBackend(T func)
         d->open();
 
         QString localWirelessIntf = m_wirelessInterfaceComboBox->currentData().toString();
-        if (0 && localWirelessIntf.isEmpty()) {
+        if (localWirelessIntf.isEmpty()) {
             UdpAddressDialog udpDiag(this);
             if (udpDiag.exec() == QDialog::Accepted) {
-                // m_backend = new BackendViaSocket(udpDiag.acceptedAddress(), udpDiag.acceptedPort());
+                m_backend = new BackendViaLocalRoot(udpDiag.acceptedAddress());
             } else {
                 d->deleteLater();
                 closeBackend();
@@ -359,7 +359,7 @@ void MainWindow::initBackend(T func)
             }
         } else {
             // If root, use lib locally
-            m_backend = new BackendViaLocalRoot(localWirelessIntf);
+            m_backend = new BackendViaLocalRoot(QHostAddress());
         }
 
         connect(m_backend, &Backend::closed, d, &BackendInitDialog::deleteLater);

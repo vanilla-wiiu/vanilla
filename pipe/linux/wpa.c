@@ -15,8 +15,7 @@
 #include <unistd.h>
 #include <wpa_ctrl.h>
 
-#include "../../lib/gamepad/ports.h"
-
+#include "ports.h"
 #include "status.h"
 #include "util.h"
 #include "vanilla.h"
@@ -559,7 +558,7 @@ int call_ip(const char **argv)
     return VANILLA_SUCCESS;
 }
 
-int connect_as_gamepad_internal(struct wpa_ctrl *ctrl, const char *wireless_interface)
+int do_connect(struct wpa_ctrl *ctrl, const char *wireless_interface)
 {
     while (1) {
         while (!wpa_ctrl_pending(ctrl)) {
@@ -821,7 +820,7 @@ int thunk_to_sync(struct wpa_ctrl *ctrl, void *data)
 int thunk_to_connect(struct wpa_ctrl *ctrl, void *data)
 {
     struct connect_args *args = (struct connect_args *) data;
-    return connect_as_gamepad_internal(ctrl, args->wireless_interface);
+    return do_connect(ctrl, args->wireless_interface);
 }
 
 int vanilla_sync_with_console(const char *wireless_interface, uint16_t code)

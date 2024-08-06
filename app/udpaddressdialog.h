@@ -12,7 +12,6 @@ public:
     UdpAddressDialog(QWidget *parent = nullptr);
 
     inline const QHostAddress &acceptedAddress() const { return m_acceptedAddress; }
-    inline const quint16 &acceptedPort() const { return m_acceptedPort; }
 
 public slots:
     virtual void done(int r) override;
@@ -20,7 +19,6 @@ public slots:
 private:
     QLineEdit *m_addressLine;
     QHostAddress m_acceptedAddress;
-    quint16 m_acceptedPort;
 };
 
 #endif // UDP_ADDRESS_DIALOG

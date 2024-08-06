@@ -19,6 +19,13 @@
 #include "util.h"
 
 static const uint32_t STOP_CODE = 0xCAFEBABE;
+static uint32_t SERVER_ADDRESS = 0;
+
+uint16_t PORT_MSG = 50110;
+uint16_t PORT_VID = 50120;
+uint16_t PORT_AUD = 50121;
+uint16_t PORT_HID = 50122;
+uint16_t PORT_CMD = 50123;
 
 unsigned int reverse_bits(unsigned int b, int bit_count)
 {
@@ -35,8 +42,12 @@ void send_to_console(int fd, const void *data, size_t data_size, int port)
 {
     struct sockaddr_in address;
     address.sin_family = AF_INET;
-    address.sin_addr.s_addr = inet_addr("127.0.0.1"); // inet_addr("192.168.1.10");
+    address.sin_addr.s_addr = SERVER_ADDRESS;
     address.sin_port = htons((uint16_t) (port - 100));
+
+    char ip[20];
+    inet_ntop(AF_INET, &address.sin_addr, ip, sizeof(ip));
+
     ssize_t sent = sendto(fd, data, data_size, 0, (const struct sockaddr *) &address, sizeof(address));
     if (sent == -1) {
         print_info("Failed to send to Wii U socket: fd - %d; port - %d", fd, port);
@@ -45,15 +56,11 @@ void send_to_console(int fd, const void *data, size_t data_size, int port)
 
 int create_socket(int *socket_out, uint16_t port)
 {
-    // TODO: Limit these sockets to one interface?
-
     struct sockaddr_in address;
     address.sin_family = AF_INET;
     address.sin_addr.s_addr = INADDR_ANY;
     address.sin_port = htons(port);
     (*socket_out) = socket(AF_INET, SOCK_DGRAM, 0);
-    
-    //setsockopt((*socket_out), SOL_SOCKET, SO_RCVTIMEO)
     
     if (bind((*socket_out), (const struct sockaddr *) &address, sizeof(address)) == -1) {
         print_info("FAILED TO BIND PORT %u: %i", port, errno);
@@ -73,8 +80,19 @@ void send_stop_code(int from_socket, in_port_t port)
     sendto(from_socket, &STOP_CODE, sizeof(STOP_CODE), 0, (struct sockaddr *)&address, sizeof(address));
 }
 
-int main_loop(vanilla_event_handler_t event_handler, void *context)
+int connect_as_gamepad_internal(vanilla_event_handler_t event_handler, void *context, uint32_t server_address)
 {
+    if (server_address == 0) {
+        SERVER_ADDRESS = inet_addr("192.168.1.10");
+    } else {
+        SERVER_ADDRESS = htonl(server_address);
+        PORT_MSG += 200;
+        PORT_VID += 200;
+        PORT_AUD += 200;
+        PORT_HID += 200;
+        PORT_CMD += 200;
+    }
+
     struct gamepad_thread_context info;
     info.event_handler = event_handler;
     info.context = context;
@@ -94,8 +112,6 @@ int main_loop(vanilla_event_handler_t event_handler, void *context)
     pthread_create(&audio_thread, NULL, listen_audio, &info);
     pthread_create(&input_thread, NULL, listen_input, &info);
     pthread_create(&cmd_thread, NULL, listen_command, &info);
-
-    print_info("ready!");
 
     while (1) {
         usleep(250 * 1000);
@@ -132,11 +148,6 @@ exit_vid:
 
 exit:
     return ret;
-}
-
-int connect_as_gamepad_internal(vanilla_event_handler_t event_handler, void *context)
-{
-    return main_loop(event_handler, context);
 }
 
 int is_stop_code(const char *data, size_t data_length)

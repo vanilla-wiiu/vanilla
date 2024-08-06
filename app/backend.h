@@ -67,7 +67,6 @@ signals:
 public slots:
     // These slots must be called with Qt::QueuedConnection to start the event loops in the backend's thread
     virtual void init();
-    virtual void sync(uint16_t code) = 0;
     virtual void connectToConsole() = 0;
 
 };
@@ -76,7 +75,7 @@ class BackendViaLocalRoot : public Backend
 {
     Q_OBJECT
 public:
-    BackendViaLocalRoot(const QString &wirelessInterface, QObject *parent = nullptr);
+    BackendViaLocalRoot(const QHostAddress &serverAddress, QObject *parent = nullptr);
 
     virtual void interrupt() override;
     virtual void updateTouch(int x, int y) override;
@@ -86,13 +85,11 @@ public:
     virtual void setBatteryStatus(int status) override;
 
 public slots:
-    virtual void sync(uint16_t code) override;
     virtual void connectToConsole() override;
 
 private:
-    static int syncInternal(const QString &intf, uint16_t code);
-    static int connectInternal(BackendViaLocalRoot *instance, const QString &intf);
-    QString m_wirelessInterface;
+    static int connectInternal(BackendViaLocalRoot *instance, const QHostAddress &serverAddress);
+    QHostAddress m_serverAddress;
 
 private slots:
     void syncFutureCompleted();

@@ -94,6 +94,7 @@ typedef void (*vanilla_event_handler_t)(void *context, int event_type, const cha
  * Start listening for gamepad commands
  */
 int vanilla_start(vanilla_event_handler_t event_handler, void *context);
+int vanilla_start_udp(vanilla_event_handler_t event_handler, void *context, uint32_t server_address);
 
 /**
  * Attempt to stop the current action

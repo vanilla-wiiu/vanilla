@@ -39,9 +39,9 @@ void Backend::init()
     emit ready();
 }
 
-BackendViaLocalRoot::BackendViaLocalRoot(const QString &wirelessInterface, QObject *parent) : Backend(parent)
+BackendViaLocalRoot::BackendViaLocalRoot(const QHostAddress &udpServer, QObject *parent) : Backend(parent)
 {
-    m_wirelessInterface = wirelessInterface;
+    m_serverAddress = udpServer;
 }
 
 void BackendViaLocalRoot::interrupt()
@@ -56,16 +56,16 @@ void BackendViaLocalRoot::requestIDR()
 
 void BackendViaLocalRoot::connectToConsole()
 {
-    QtConcurrent::run(connectInternal, this, m_wirelessInterface);
+    QtConcurrent::run(connectInternal, this, m_serverAddress);
 }
 
-int BackendViaLocalRoot::connectInternal(BackendViaLocalRoot *instance, const QString &intf)
+int BackendViaLocalRoot::connectInternal(BackendViaLocalRoot *instance, const QHostAddress &server)
 {
-    QByteArray wirelessInterfaceC = intf.toUtf8();
-    return vanilla_start(vanillaEventHandler, instance);
-    //return vanilla_connect_to_console(wirelessInterfaceC.constData(), vanillaEventHandler, instance);
-    // printf("TEMPORARILY STUBBED\n");
-    // return 0;
+    if (server.isNull()) {
+        return vanilla_start(vanillaEventHandler, instance);
+    } else {
+        return vanilla_start_udp(vanillaEventHandler, instance, server.toIPv4Address());
+    }
 }
 
 void BackendViaLocalRoot::updateTouch(int x, int y)
@@ -86,21 +86,6 @@ void BackendViaLocalRoot::setRegion(int region)
 void BackendViaLocalRoot::setBatteryStatus(int status)
 {
     vanilla_set_battery_status(status);
-}
-
-void BackendViaLocalRoot::sync(uint16_t code)
-{
-    QFutureWatcher<int> *watcher = new QFutureWatcher<int>(this);
-    connect(watcher, &QFutureWatcher<int>::finished, this, &BackendViaLocalRoot::syncFutureCompleted);
-    watcher->setFuture(QtConcurrent::run(syncInternal, m_wirelessInterface, code));
-}
-
-int BackendViaLocalRoot::syncInternal(const QString &intf, uint16_t code)
-{
-    QByteArray wirelessInterfaceC = intf.toUtf8();
-    //return vanilla_sync_with_console(wirelessInterfaceC.constData(), code);
-    printf("TEMPORARILY STUBBED\n");
-    return 0;
 }
 
 void BackendViaLocalRoot::syncFutureCompleted()

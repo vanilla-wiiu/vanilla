@@ -14,7 +14,12 @@
 
 int vanilla_start(vanilla_event_handler_t event_handler, void *context)
 {
-    return connect_as_gamepad_internal(event_handler, context);
+    return connect_as_gamepad_internal(event_handler, context, 0);
+}
+
+int vanilla_start_udp(vanilla_event_handler_t event_handler, void *context, uint32_t server_address)
+{
+    return connect_as_gamepad_internal(event_handler, context, server_address);
 }
 
 void vanilla_stop()
