@@ -538,6 +538,27 @@ void create_all_relays()
     pthread_join(hid_thread, NULL);
 }
 
+int call_ip(const char **argv)
+{
+    // Destroy default route that dhclient will have created
+    pid_t ip_pid;
+    int r = start_process(argv, &ip_pid, NULL, NULL);
+    if (r != VANILLA_SUCCESS) {
+        print_info("FAILED TO REMOVE CONSOLE ROUTE FROM SYSTEM");
+        return r;
+    }
+
+    int ip_status;
+    waitpid(ip_pid, &ip_status, 0);
+
+    if (!WIFEXITED(ip_status)) {
+        print_info("FAILED TO REMOVE CONSOLE ROUTE FROM SYSTEM");
+        return VANILLA_ERROR;
+    }
+
+    return VANILLA_SUCCESS;
+}
+
 int connect_as_gamepad_internal(struct wpa_ctrl *ctrl, const char *wireless_interface)
 {
     while (1) {
@@ -572,22 +593,9 @@ int connect_as_gamepad_internal(struct wpa_ctrl *ctrl, const char *wireless_inte
         print_info("DHCP ESTABLISHED");
     }
 
-    {
-        // Destroy default route that dhclient will have created
-        pid_t ip_pid;
-        const char *ip_args[] = {"ip", "route", "del", "default", "via", "192.168.1.1", "dev", wireless_interface, NULL};
-        r = start_process(ip_args, &ip_pid, NULL, NULL);
-        if (r != VANILLA_SUCCESS) {
-            print_info("FAILED TO REMOVE CONSOLE ROUTE FROM SYSTEM");
-        }
-
-        int ip_status;
-        waitpid(ip_pid, &ip_status, 0);
-
-        if (!WIFEXITED(ip_status)) {
-            print_info("FAILED TO REMOVE CONSOLE ROUTE FROM SYSTEM");
-        }
-    }
+    call_ip((const char *[]){"ip", "route", "del", "default", "via", "192.168.1.1", "dev", wireless_interface, NULL});
+    call_ip((const char *[]){"ip", "route", "del", "192.168.1.0/24", "dev", wireless_interface, NULL});
+    call_ip((const char *[]){"route", "add", "-host", "192.168.1.10", "dev", wireless_interface, NULL});
 
     create_all_relays();
 
