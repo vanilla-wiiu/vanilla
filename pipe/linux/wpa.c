@@ -442,7 +442,7 @@ void* do_relay(void *data)
 
         char ip[20];
         inet_ntop(AF_INET, &forward.sin_addr, ip, sizeof(ip));
-        printf("received packet on port %i, forwarding to address %s:%i\n", ports->from_port, ip, ports->to_port);
+        // printf("received packet on port %i, forwarding to address %s:%i\n", ports->from_port, ip, ports->to_port);
         sendto(ports->to_socket, buf, read_size, 0, (const struct sockaddr *) &forward, sizeof(forward));
     }
     return NULL;
