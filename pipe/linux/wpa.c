@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <sys/prctl.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -422,21 +423,25 @@ typedef struct {
     int from_socket;
     in_port_t from_port;
     int to_socket;
-    in_addr_t to_address;
     in_port_t to_port;
 } relay_ports;
 
 struct in_addr client_address = {0};
+int client_bound = 0;
+pthread_mutex_t client_address_mutex;
 
 void* do_relay(void *data)
 {
     relay_ports *ports = (relay_ports *) data;
     char buf[2048];
     ssize_t read_size;
+
+    // TODO: Lock the client_address_mutex somehow...
+
     while ((read_size = recv(ports->from_socket, buf, sizeof(buf), 0)) != -1) {
         struct sockaddr_in forward = {0};
         forward.sin_family = AF_INET;
-        forward.sin_addr.s_addr = ports->to_address;
+        forward.sin_addr = client_address;
         forward.sin_port = htons(ports->to_port);
 
         char ip[20];
@@ -471,7 +476,7 @@ int open_socket(in_port_t port)
     }
     
     if (bind(skt, (const struct sockaddr *) &in, sizeof(in)) == -1) {
-        printf("FAILED TO BIND PORT %u: %i\n", port, errno);
+        print_info("FAILED TO BIND PORT %u: %i\n", port, errno);
         close(skt);
         return -1;
     }
@@ -528,7 +533,7 @@ void create_all_relays()
     pthread_create(&cmd_thread, NULL, open_relay, (void *) PORT_CMD);
     pthread_create(&hid_thread, NULL, open_relay, (void *) PORT_HID);
 
-    printf("READY\n");
+    vanilla_log("READY");
 
     pthread_join(vid_thread, NULL);
     pthread_join(aud_thread, NULL);
@@ -556,6 +561,49 @@ int call_ip(const char **argv)
     }
 
     return VANILLA_SUCCESS;
+}
+
+void *read_stdin(void *data)
+{
+    char *line = NULL;
+    size_t len = 0;
+    
+    while (getline(&line, &len, stdin) != -1) {
+        static const char *tokens = " \n";
+        char *t = strtok(line, tokens);
+        size_t arg_num = 0;
+
+        int binding = 0;
+
+        while (t) {
+            switch (arg_num) {
+            case 0:
+                if (!strcasecmp(t, "quit") || !strcasecmp(t, "bye") || !strcasecmp(t, "exit")) {
+                    // TODO: Set var to force everything to quit
+                    break;
+                } else if (!strcasecmp(t, "bind")) {
+                    binding = 1;
+                } else if (!strcasecmp(t, "unbind")) {
+                    pthread_mutex_lock(&client_address_mutex);
+                    client_bound = 0;
+                    pthread_mutex_unlock(&client_address_mutex);
+                }
+                break;
+            case 1:
+                if (binding) {
+                    pthread_mutex_lock(&client_address_mutex);
+                    inet_pton(AF_INET, t, &client_address);
+                    client_bound = 1;
+                    pthread_mutex_unlock(&client_address_mutex);
+                }
+                break;
+            }
+            t = strtok(NULL, tokens);
+            arg_num++;
+        }
+    }
+
+    return NULL;
 }
 
 int do_connect(struct wpa_ctrl *ctrl, const char *wireless_interface)
@@ -596,7 +644,16 @@ int do_connect(struct wpa_ctrl *ctrl, const char *wireless_interface)
     call_ip((const char *[]){"ip", "route", "del", "192.168.1.0/24", "dev", wireless_interface, NULL});
     call_ip((const char *[]){"route", "add", "-host", "192.168.1.10", "dev", wireless_interface, NULL});
 
+    pthread_mutex_init(&client_address_mutex);
+    
+    pthread_t stdin_thread;
+    pthread_create(&stdin_thread, NULL, read_stdin, NULL);
+
     create_all_relays();
+
+    pthread_join(stdin_thread, NULL);
+    
+    pthread_mutex_destroy(&client_address_mutex);
 
     int kill_ret = kill(dhclient_pid, SIGTERM);
     print_info("killing dhclient %i: %i", dhclient_pid, kill_ret);

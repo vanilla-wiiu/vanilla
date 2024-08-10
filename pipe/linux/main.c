@@ -2,7 +2,21 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "vanilla.h"
 #include "wpa.h"
+
+void lpprint(const char *fmt, va_list args)
+{
+    vfprintf(stderr, fmt, args);
+}
+
+void pprint(const char *fmt, ...)
+{
+    va_list args;
+    va_start(args, fmt);
+    lpprint(fmt, args);
+    va_end(args);
+}
 
 int main(int argc, const char **argv)
 {
@@ -13,60 +27,56 @@ int main(int argc, const char **argv)
     const char *wireless_interface = argv[1];
     const char *mode = argv[2];
 
+    vanilla_install_logger(lpprint);
 
     if (!strcmp("-sync", mode)) {
-        if (argc < 3) {
-            printf("ERROR: -sync requires sync code\n\n");
+        if (argc < 4) {
+            pprint("ERROR: -sync requires sync code\n\n");
             goto show_help;
         }
 
         int code = atoi(argv[3]);
         if (code == 0) {
-            printf("ERROR: Invalid sync code\n\n");
+            pprint("ERROR: Invalid sync code\n\n");
             goto show_help;
         }
 
         vanilla_sync_with_console(wireless_interface, code);
     } else if (!strcmp("-connect", mode)) {
-        if (argc < 3) {
-            printf("ERROR: -sync requires local address\n\n");
-            goto show_help;
-        }
-
-        if (!inet_pton(AF_INET, argv[3], &client_address)) {
-            printf("ERROR: Invalid client address\n\n");
-            goto show_help;
-        }
-
         vanilla_connect_to_console(wireless_interface);
     } else if (!strcmp("-is_synced", mode)) {
         if (vanilla_has_config()) {
-            printf("YES\n");
+            pprint("YES\n");
         } else {
-            printf("NO\n");
+            pprint("NO\n");
         }
     } else {
-        printf("ERROR: Invalid mode\n\n");
+        pprint("ERROR: Invalid mode\n\n");
         goto show_help;
     }
 
     return 0;
 
 show_help:
-    printf("vanilla-pipe - brokers a connection between Vanilla and the Wii U\n");
-    printf("\n");
-    printf("Usage: %s <wireless-interface> <mode> [args]\n", argv[0]);
-    printf("\n");
-    printf("Modes: \n");
-    printf("  -sync <code>                 Sync/authenticate with the Wii U\n");
-    printf("  -connect <client-address>    Connect to the Wii U (requires syncing prior)\n");
-    printf("  -is_synced                   Returns 1 if gamepad has been synced or 0 if it hasn't yet\n");
-    printf("\n");
-    printf("Sync code is a 4-digit PIN based on the card suits shown on the console.\n");
-    printf("To calculate the code, use the following:\n");
-    printf("  ♠ (spade) = 0 ♥ (heart) = 1 ♦ (diamond) = 2 ♣ (clover) = 3\n");
-    printf("  Example: ♣♠♥♦ (clover, spade, heart, diamond) would equal 3012\n");
-    printf("\n");
+    pprint("vanilla-pipe - brokers a connection between Vanilla and the Wii U\n");
+    pprint("\n");
+    pprint("Usage: %s <wireless-interface> <mode> [args]\n", argv[0]);
+    pprint("\n");
+    pprint("Modes: \n");
+    pprint("  -sync <code>                 Sync/authenticate with the Wii U.\n");
+    pprint("  -connect <client-address>    Connect to the Wii U (requires syncing prior).\n");
+    pprint("  -is_synced                   Returns 1 if gamepad has been synced or 0 if it hasn't yet.\n");
+    pprint("\n");
+    pprint("Sync code is a 4-digit PIN based on the card suits shown on the console.\n\n");
+    pprint("  To calculate the code, use the following:\n");
+    pprint("\n");
+    pprint("    ♠ (spade) = 0\n");
+    pprint("    ♥ (heart) = 1\n");
+    pprint("    ♦ (diamond) = 2\n");
+    pprint("    ♣ (clover) = 3\n");
+    pprint("\n");
+    pprint("  Example: ♣♠♥♦ (clover, spade, heart, diamond) would equal 3012\n");
+    pprint("\n");
 
     return 1;
 }

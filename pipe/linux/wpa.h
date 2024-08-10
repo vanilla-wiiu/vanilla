@@ -8,8 +8,6 @@
 struct wpa_ctrl;
 extern const char *wpa_ctrl_interface;
 
-extern struct in_addr client_address;
-
 typedef int (*ready_callback_t)(struct wpa_ctrl *, void *);
 
 int wpa_setup_environment(const char *wireless_interface, const char *wireless_conf_file, ready_callback_t callback, void *callback_data);

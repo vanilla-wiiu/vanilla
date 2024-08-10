@@ -100,14 +100,16 @@ BackendPipe::BackendPipe(const QString &wirelessInterface, QObject *parent) : QO
 {
     m_process = nullptr;
     m_wirelessInterface = wirelessInterface;
+
+    m_process = new QProcess(this);
+    m_process->setReadChannel(QProcess::StandardError);
+    connect(m_process, &QProcess::readyReadStandardError, this, &BackendPipe::receivedData);
+    connect(m_process, &QProcess::finished, this, &BackendPipe::closed);
 }
 
 BackendPipe::~BackendPipe()
 {
     waitForFinished();
-
-    QFile::remove(m_pipeInFilename);
-    QFile::remove(m_pipeOutFilename);
 }
 
 void BackendPipe::waitForFinished()
@@ -117,18 +119,20 @@ void BackendPipe::waitForFinished()
     }
 }
 
-void BackendPipe::start()
+void BackendPipe::sync(uint16_t code)
 {
-    const QString pipe_bin = QDir(QCoreApplication::applicationDirPath()).filePath(QStringLiteral("vanilla-pipe"));
-    m_process = new QProcess(this);
-    m_process->setReadChannel(QProcess::StandardError);
-    connect(m_process, &QProcess::readyReadStandardError, this, &BackendPipe::receivedData);
-    connect(m_process, &QProcess::finished, this, &BackendPipe::closed);
+    // m_socketFilename = QStringLiteral("/tmp/vanilla-socket-%0").arg(QString::number(QDateTime::currentMSecsSinceEpoch()));
+    m_process->start(QStringLiteral("pkexec"), {pipeProcessFilename(), m_wirelessInterface, QStringLiteral("-sync"), QString::number(code)});
+}
 
-    m_pipeOutFilename = QStringLiteral("/tmp/vanilla-fifo-in-%0").arg(QString::number(QDateTime::currentMSecsSinceEpoch()));
-    m_pipeInFilename = QStringLiteral("/tmp/vanilla-fifo-out-%0").arg(QString::number(QDateTime::currentMSecsSinceEpoch()));
+void BackendPipe::connectToConsole()
+{
+    m_process->start(QStringLiteral("pkexec"), {pipeProcessFilename(), m_wirelessInterface, QStringLiteral("-connect"), QStringLiteral("127.0.0.1")});
+}
 
-    m_process->start(QStringLiteral("pkexec"), {pipe_bin, m_wirelessInterface, QStringLiteral("-pipe"), m_pipeOutFilename, m_pipeInFilename});
+QString BackendPipe::pipeProcessFilename()
+{
+    return QDir(QCoreApplication::applicationDirPath()).filePath(QStringLiteral("vanilla-pipe"));
 }
 
 void BackendPipe::receivedData()
@@ -136,7 +140,7 @@ void BackendPipe::receivedData()
     while (m_process->canReadLine()) {
         QByteArray a = m_process->readLine().trimmed();
         if (a == QByteArrayLiteral("READY")) {
-            emit pipesAvailable(m_pipeInFilename, m_pipeOutFilename);
+            emit pipeAvailable();
         } else {
             printf("%s\n", a.constData());
         }

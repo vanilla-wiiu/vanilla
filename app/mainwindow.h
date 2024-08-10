@@ -54,6 +54,8 @@ private:
     QSplitter *m_splitter;
 
     Backend *m_backend;
+    BackendPipe *m_pipe;
+    
     VideoDecoder *m_videoDecoder;
     GamepadHandler *m_gamepadHandler;
     AudioHandler *m_audioHandler;

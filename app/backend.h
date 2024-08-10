@@ -20,22 +20,21 @@ public:
     void waitForFinished();
 
 public slots:
-    void start();
+    void sync(uint16_t code);
+    void connectToConsole();
 
 signals:
-    void pipesAvailable(const QString &in, const QString &out);
-    void portAvailable(uint16_t port);
+    void pipeAvailable();
     void closed();
 
 private slots:
     void receivedData();
 
 private:
+    static QString pipeProcessFilename();
+
     QProcess *m_process;
-    QString m_pipeOutFilename;
-    QString m_pipeInFilename;
-    uint16_t m_serverPort;
-    uint16_t m_clientPort;
+    QString m_socketFilename;
     QString m_wirelessInterface;
 
 };

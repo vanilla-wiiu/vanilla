@@ -38,6 +38,7 @@ MainWindow::MainWindow(QWidget *parent) : QWidget(parent)
     }
 
     m_backend = nullptr;
+    m_pipe = nullptr;
 
     qRegisterMetaType<uint16_t>("uint16_t");
 
@@ -259,6 +260,10 @@ MainWindow::~MainWindow()
         delete t;
     }
 
+    if (m_pipe) {
+        m_pipe->waitForFinished();
+    }
+
     SDL_Quit();
 
     delete m_viewer;
@@ -357,9 +362,12 @@ void MainWindow::initBackend(T func)
                 closeBackend();
                 return;
             }
-        } else {
+        // } else if (geteuid() == 0) {
             // If root, use lib locally
-            m_backend = new BackendViaLocalRoot(QHostAddress());
+            // m_backend = new BackendViaLocalRoot(QHostAddress());
+        } else {
+            m_pipe = new BackendPipe(localWirelessIntf, this);
+            m_backend = new BackendViaLocalRoot(QHostAddress::LocalHost);
         }
 
         connect(m_backend, &Backend::closed, d, &BackendInitDialog::deleteLater);
@@ -403,6 +411,10 @@ void MainWindow::setConnectedState(bool on)
     m_connectBtn->setText(on ? tr("Disconnect") : tr("Connect"));
     if (on) {
         initBackend([this]{
+            if (m_pipe) {
+                m_pipe->connectToConsole();
+            }
+            
             QMetaObject::invokeMethod(m_backend, &Backend::connectToConsole, Qt::QueuedConnection);
 
             updateVolumeAxis();
