@@ -430,8 +430,7 @@ void MainWindow::setConnectedState(bool on)
 
         if (m_backend) {
             m_backend->interrupt();
-            delete m_backend;
-            // m_backend->deleteLater();
+            m_backend->deleteLater();
             m_backend = nullptr;
         }
 
