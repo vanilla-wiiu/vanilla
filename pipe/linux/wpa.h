@@ -25,4 +25,6 @@ int vanilla_sync_with_console(const char *wireless_interface, uint16_t code);
 int vanilla_connect_to_console(const char *wireless_interface);
 int vanilla_has_config();
 
+void pprint(const char *fmt, ...);
+
 #endif // VANILLA_WPA_H

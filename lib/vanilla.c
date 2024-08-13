@@ -1,5 +1,6 @@
 #include "vanilla.h"
 
+#include <pthread.h>
 #include <signal.h>
 #include <string.h>
 #include <unistd.h>
@@ -12,19 +13,38 @@
 #include "util.h"
 #include "vanilla.h"
 
+pthread_mutex_t main_mutex = PTHREAD_MUTEX_INITIALIZER;
+
 int vanilla_start(vanilla_event_handler_t event_handler, void *context)
 {
-    return connect_as_gamepad_internal(event_handler, context, 0);
+    if (pthread_mutex_trylock(&main_mutex) == 0) {
+        int r = connect_as_gamepad_internal(event_handler, context, 0);
+        pthread_mutex_unlock(&main_mutex);
+        return r;
+    } else {
+        return VANILLA_ERROR;
+    }
 }
 
 int vanilla_start_udp(vanilla_event_handler_t event_handler, void *context, uint32_t server_address)
 {
-    return connect_as_gamepad_internal(event_handler, context, server_address);
+    if (pthread_mutex_trylock(&main_mutex) == 0) {
+        int r = connect_as_gamepad_internal(event_handler, context, server_address);
+        pthread_mutex_unlock(&main_mutex);
+        return r;
+    } else {
+        return VANILLA_ERROR;
+    }
 }
 
 void vanilla_stop()
 {
+    // Signal to all other threads to exit gracefully
     force_interrupt();
+
+    // Block until most recent vanilla_start finishes
+    pthread_mutex_lock(&main_mutex);
+    pthread_mutex_unlock(&main_mutex);
 }
 
 void vanilla_set_button(int button, int32_t value)

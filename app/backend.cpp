@@ -9,6 +9,7 @@
 
 #include <arpa/inet.h>
 #include <fcntl.h>
+#include <signal.h>
 #include <stdio.h>
 #include <unistd.h>
 #include <vanilla.h>
@@ -109,25 +110,17 @@ BackendPipe::BackendPipe(const QString &wirelessInterface, QObject *parent) : QO
 
 BackendPipe::~BackendPipe()
 {
-    waitForFinished();
-}
-
-void BackendPipe::waitForFinished()
-{
-    if (m_process) {
-        m_process->waitForFinished();
-    }
+    quit();
 }
 
 void BackendPipe::sync(uint16_t code)
 {
-    // m_socketFilename = QStringLiteral("/tmp/vanilla-socket-%0").arg(QString::number(QDateTime::currentMSecsSinceEpoch()));
     m_process->start(QStringLiteral("pkexec"), {pipeProcessFilename(), m_wirelessInterface, QStringLiteral("-sync"), QString::number(code)});
 }
 
 void BackendPipe::connectToConsole()
 {
-    m_process->start(QStringLiteral("pkexec"), {pipeProcessFilename(), m_wirelessInterface, QStringLiteral("-connect"), QStringLiteral("127.0.0.1")});
+    m_process->start(QStringLiteral("pkexec"), {pipeProcessFilename(), m_wirelessInterface, QStringLiteral("-connect")});
 }
 
 QString BackendPipe::pipeProcessFilename()
@@ -140,9 +133,23 @@ void BackendPipe::receivedData()
     while (m_process->canReadLine()) {
         QByteArray a = m_process->readLine().trimmed();
         if (a == QByteArrayLiteral("READY")) {
-            emit pipeAvailable();
+            // Do nothing?
         } else {
             printf("%s\n", a.constData());
         }
+    }
+}
+
+void BackendPipe::quit()
+{
+    if (m_process) {
+        // FIXME: Currently, terminate() appears to fail because of pkexec permission issues. Will have to find a workaround...
+        printf("terminate\n");
+        m_process->terminate();
+        printf("wait for finished\n");
+        m_process->waitForFinished();
+        printf("delete later\n");
+        m_process->deleteLater();
+        m_process = nullptr;
     }
 }

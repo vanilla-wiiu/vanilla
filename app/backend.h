@@ -17,11 +17,10 @@ public:
     
     virtual ~BackendPipe() override;
 
-    void waitForFinished();
-
 public slots:
     void sync(uint16_t code);
     void connectToConsole();
+    void quit();
 
 signals:
     void pipeAvailable();

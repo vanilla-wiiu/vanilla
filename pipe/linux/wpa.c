@@ -11,11 +11,13 @@
 #include <strings.h>
 #include <sys/prctl.h>
 #include <sys/stat.h>
+#include <sys/time.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
 #include <wpa_ctrl.h>
 
+#include "def.h"
 #include "ports.h"
 #include "status.h"
 #include "util.h"
@@ -24,12 +26,54 @@
 
 const char *wpa_ctrl_interface = "/var/run/wpa_supplicant_drc";
 
-int is_interrupted()
+pthread_mutex_t running_mutex;
+int running = 0;
+
+typedef struct {
+    int from_socket;
+    in_port_t from_port;
+    int to_socket;
+    in_addr_t to_address;
+    in_port_t to_port;
+} relay_ports;
+
+struct in_addr client_address = {0};
+pthread_mutex_t client_address_mutex;
+pthread_cond_t client_address_waitcond;
+
+void lpprint(const char *fmt, va_list args)
 {
-    return 0;
+    vfprintf(stderr, fmt, args);
 }
 
-void clear_interrupt(){}
+void pprint(const char *fmt, ...)
+{
+    va_list args;
+    va_start(args, fmt);
+    lpprint(fmt, args);
+    va_end(args);
+}
+
+void print_info(const char *errstr, ...)
+{
+    va_list args;
+    va_start(args, errstr);
+
+    lpprint(errstr, args);
+    pprint("\n");
+
+    va_end(args);
+}
+
+int is_interrupted()
+{
+    return !running;
+}
+
+void clear_interrupt()
+{
+    running = 1;
+}
 
 void wpa_msg(char *msg, size_t len)
 {
@@ -155,6 +199,8 @@ int start_process(const char **argv, pid_t *pid_out, int *stdout_pipe, int *stde
         close(err_pipes[0]);
         close(err_pipes[1]);
 
+        setsid();
+
         // Execute process (this will replace the running code)
         r = execvp(argv[0], (char * const *) argv);
 
@@ -233,11 +279,30 @@ give_up:
     }
 }
 
+void quit_loop()
+{
+    pthread_mutex_lock(&running_mutex);
+    pthread_mutex_lock(&client_address_mutex);
+    running = 0;
+    pthread_cond_broadcast(&client_address_waitcond);
+    pthread_mutex_unlock(&client_address_mutex);
+    pthread_mutex_unlock(&running_mutex);
+}
+
+void sigint_handler(int signum)
+{
+    quit_loop();
+    signal(signum, SIG_DFL);
+}
+
 int wpa_setup_environment(const char *wireless_interface, const char *wireless_conf_file, ready_callback_t callback, void *callback_data)
 {
     int ret = VANILLA_ERROR;
 
     clear_interrupt();
+
+    signal(SIGINT, sigint_handler);
+    signal(SIGTERM, sigint_handler);
     //install_interrupt_handler();
 
     // Check status of interface with NetworkManager
@@ -419,29 +484,20 @@ int enable_networkmanager_on_device(const char *wireless_interface)
     return set_networkmanager_on_device(wireless_interface, 1);
 }
 
-typedef struct {
-    int from_socket;
-    in_port_t from_port;
-    int to_socket;
-    in_port_t to_port;
-} relay_ports;
-
-struct in_addr client_address = {0};
-int client_bound = 0;
-pthread_mutex_t client_address_mutex;
-
 void* do_relay(void *data)
 {
     relay_ports *ports = (relay_ports *) data;
     char buf[2048];
     ssize_t read_size;
+    while (running && client_address.s_addr != 0) {
+        read_size = recv(ports->from_socket, buf, sizeof(buf), 0);
+        if (read_size <= 0) {
+            continue;
+        }
 
-    // TODO: Lock the client_address_mutex somehow...
-
-    while ((read_size = recv(ports->from_socket, buf, sizeof(buf), 0)) != -1) {
         struct sockaddr_in forward = {0};
         forward.sin_family = AF_INET;
-        forward.sin_addr = client_address;
+        forward.sin_addr.s_addr = ports->to_address;
         forward.sin_port = htons(ports->to_port);
 
         char ip[20];
@@ -474,6 +530,10 @@ int open_socket(in_port_t port)
     if (skt == -1) {
         return -1;
     }
+
+    struct timeval tv = {0};
+    tv.tv_usec = 250000;
+    setsockopt(skt, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
     
     if (bind(skt, (const struct sockaddr *) &in, sizeof(in)) == -1) {
         print_info("FAILED TO BIND PORT %u: %i\n", port, errno);
@@ -501,15 +561,40 @@ void *open_relay(void *data)
         goto close_console_connection;
     }
 
-    relay_ports console_to_frontend = create_ports(from_console, port, from_frontend, client_address.s_addr, port + 200);
-    relay_ports frontend_to_console = create_ports(from_frontend, port + 100, from_console, inet_addr("192.168.1.10"), port - 100);
+    // print_info("ENTERING MAIN LOOP");
+    pthread_mutex_lock(&running_mutex);
+    while (running) {
+        pthread_mutex_unlock(&running_mutex);
 
-    pthread_t a_thread, b_thread;
-    pthread_create(&a_thread, NULL, do_relay, &console_to_frontend);
-    pthread_create(&b_thread, NULL, do_relay, &frontend_to_console);
+        // print_info("CHECKING CLIENT ADDRESS STATUS");
+        pthread_mutex_lock(&client_address_mutex);
+        struct in_addr addr = {0};
+        while (client_address.s_addr == 0 && running) {
+            pthread_cond_wait(&client_address_waitcond, &client_address_mutex);
+        }
+        // print_info("READ CLIENT ADDRESS");
+        addr = client_address;
+        pthread_mutex_unlock(&client_address_mutex);
 
-    pthread_join(a_thread, NULL);
-    pthread_join(b_thread, NULL);
+        if (addr.s_addr != 0) {
+            print_info("STARTED RELAYS");
+            relay_ports console_to_frontend = create_ports(from_console, port, from_frontend, addr.s_addr, port + 200);
+            relay_ports frontend_to_console = create_ports(from_frontend, port + 100, from_console, inet_addr("192.168.1.10"), port - 100);
+
+            pthread_t a_thread, b_thread;
+            pthread_create(&a_thread, NULL, do_relay, &console_to_frontend);
+            pthread_create(&b_thread, NULL, do_relay, &frontend_to_console);
+
+            pthread_join(a_thread, NULL);
+            pthread_join(b_thread, NULL);
+
+            print_info("STOPPED RELAYS");
+        }
+
+        // print_info("RELAY EXITED");
+        pthread_mutex_lock(&running_mutex);
+    }
+    pthread_mutex_unlock(&running_mutex);
 
     ret = 0;
 
@@ -533,7 +618,7 @@ void create_all_relays()
     pthread_create(&cmd_thread, NULL, open_relay, (void *) PORT_CMD);
     pthread_create(&hid_thread, NULL, open_relay, (void *) PORT_HID);
 
-    vanilla_log("READY");
+    pprint("READY\n");
 
     pthread_join(vid_thread, NULL);
     pthread_join(aud_thread, NULL);
@@ -563,46 +648,41 @@ int call_ip(const char **argv)
     return VANILLA_SUCCESS;
 }
 
-void *read_stdin(void *data)
+void *read_stdin_udp(void *data)
 {
-    char *line = NULL;
-    size_t len = 0;
-    
-    while (getline(&line, &len, stdin) != -1) {
-        static const char *tokens = " \n";
-        char *t = strtok(line, tokens);
-        size_t arg_num = 0;
+    int skt = open_socket(VANILLA_PIPE_CMD_SERVER_PORT);
+    uint32_t control_code;
 
-        int binding = 0;
+    struct sockaddr_in addr = {0};
+    socklen_t addr_size = sizeof(addr);
 
-        while (t) {
-            switch (arg_num) {
-            case 0:
-                if (!strcasecmp(t, "quit") || !strcasecmp(t, "bye") || !strcasecmp(t, "exit")) {
-                    // TODO: Set var to force everything to quit
-                    break;
-                } else if (!strcasecmp(t, "bind")) {
-                    binding = 1;
-                } else if (!strcasecmp(t, "unbind")) {
-                    pthread_mutex_lock(&client_address_mutex);
-                    client_bound = 0;
-                    pthread_mutex_unlock(&client_address_mutex);
-                }
-                break;
-            case 1:
-                if (binding) {
-                    pthread_mutex_lock(&client_address_mutex);
-                    inet_pton(AF_INET, t, &client_address);
-                    client_bound = 1;
-                    pthread_mutex_unlock(&client_address_mutex);
-                }
-                break;
-            }
-            t = strtok(NULL, tokens);
-            arg_num++;
+    while (running) {
+        ssize_t r = recvfrom(skt, &control_code, sizeof(control_code), 0, (struct sockaddr *) &addr, &addr_size);
+        if (r <= 0) {
+            continue;
+        }
+
+        control_code = ntohl(control_code);
+        switch (control_code) {
+        case VANILLA_PIPE_CC_BIND:
+            print_info("RECEIVED BIND SIGNAL");
+            pthread_mutex_lock(&client_address_mutex);
+            client_address = addr.sin_addr;
+            pthread_cond_broadcast(&client_address_waitcond);
+            pthread_mutex_unlock(&client_address_mutex);
+
+            control_code = htonl(VANILLA_PIPE_CC_BIND_ACK);
+            sendto(skt, &control_code, sizeof(control_code), 0, (struct sockaddr *) &addr, sizeof(addr));
+            break;
+        case VANILLA_PIPE_CC_UNBIND:
+            print_info("RECEIVED UNBIND SIGNAL");
+            pthread_mutex_lock(&client_address_mutex);
+            client_address.s_addr = 0;
+            pthread_cond_broadcast(&client_address_waitcond);
+            pthread_mutex_unlock(&client_address_mutex);
+            break;
         }
     }
-
     return NULL;
 }
 
@@ -644,19 +724,23 @@ int do_connect(struct wpa_ctrl *ctrl, const char *wireless_interface)
     call_ip((const char *[]){"ip", "route", "del", "192.168.1.0/24", "dev", wireless_interface, NULL});
     call_ip((const char *[]){"route", "add", "-host", "192.168.1.10", "dev", wireless_interface, NULL});
 
-    pthread_mutex_init(&client_address_mutex);
+    pthread_mutex_init(&running_mutex, NULL);
+    pthread_mutex_init(&client_address_mutex, NULL);
+    pthread_cond_init(&client_address_waitcond, NULL);
     
     pthread_t stdin_thread;
-    pthread_create(&stdin_thread, NULL, read_stdin, NULL);
+    pthread_create(&stdin_thread, NULL, read_stdin_udp, NULL);
 
     create_all_relays();
 
     pthread_join(stdin_thread, NULL);
     
+    pthread_cond_destroy(&client_address_waitcond);
     pthread_mutex_destroy(&client_address_mutex);
+    pthread_mutex_destroy(&running_mutex);
 
     int kill_ret = kill(dhclient_pid, SIGTERM);
-    print_info("killing dhclient %i: %i", dhclient_pid, kill_ret);
+    print_info("KILLING DHCLIENT %i", dhclient_pid);
 }
 
 size_t read_line_from_fd(int pipe, char *output, size_t max_output_size)

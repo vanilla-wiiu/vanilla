@@ -54,7 +54,6 @@ add_dependencies(wpa_client wpa_client_build)
 target_link_libraries(vanilla-pipe PRIVATE
     wpa_client
     pthread
-    vanilla
 )
 
 # Copy files into build directory

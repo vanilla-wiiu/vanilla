@@ -261,7 +261,7 @@ MainWindow::~MainWindow()
     }
 
     if (m_pipe) {
-        m_pipe->waitForFinished();
+        m_pipe->quit();
     }
 
     SDL_Quit();
@@ -422,8 +422,17 @@ void MainWindow::setConnectedState(bool on)
             updateBatteryStatus();
         });
     } else {
+        if (m_pipe) {
+            m_pipe->quit();
+            m_pipe->deleteLater();
+            m_pipe = nullptr;
+        }
+
         if (m_backend) {
             m_backend->interrupt();
+            delete m_backend;
+            // m_backend->deleteLater();
+            m_backend = nullptr;
         }
 
         m_viewer->setImage(QImage());

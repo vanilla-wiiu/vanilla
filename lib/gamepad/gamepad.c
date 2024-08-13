@@ -7,6 +7,7 @@
 #include <signal.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/time.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -15,17 +16,18 @@
 #include "input.h"
 #include "video.h"
 
+#include "../pipe/linux/def.h"
 #include "status.h"
 #include "util.h"
 
 static const uint32_t STOP_CODE = 0xCAFEBABE;
 static uint32_t SERVER_ADDRESS = 0;
 
-uint16_t PORT_MSG = 50110;
-uint16_t PORT_VID = 50120;
-uint16_t PORT_AUD = 50121;
-uint16_t PORT_HID = 50122;
-uint16_t PORT_CMD = 50123;
+uint16_t PORT_MSG;
+uint16_t PORT_VID;
+uint16_t PORT_AUD;
+uint16_t PORT_HID;
+uint16_t PORT_CMD;
 
 unsigned int reverse_bits(unsigned int b, int bit_count)
 {
@@ -80,8 +82,42 @@ void send_stop_code(int from_socket, in_port_t port)
     sendto(from_socket, &STOP_CODE, sizeof(STOP_CODE), 0, (struct sockaddr *)&address, sizeof(address));
 }
 
+int send_pipe_cc(int skt, uint32_t cc, int wait_for_reply)
+{
+    struct sockaddr_in addr = {0};
+
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = SERVER_ADDRESS;
+    addr.sin_port = htons(VANILLA_PIPE_CMD_SERVER_PORT);
+
+    ssize_t read_size;
+    uint32_t send_cc = htonl(cc);
+    uint32_t recv_cc;
+
+    do {
+        sendto(skt, &send_cc, sizeof(send_cc), 0, (struct sockaddr *) &addr, sizeof(addr));
+
+        if (wait_for_reply) {
+            read_size = recv(skt, &recv_cc, sizeof(recv_cc), 0);
+            if (read_size == sizeof(recv_cc) && ntohl(recv_cc) == VANILLA_PIPE_CC_BIND_ACK) {
+                return 1;
+            }
+        }
+    } while (!is_interrupted());
+    
+    return 0;
+}
+
 int connect_as_gamepad_internal(vanilla_event_handler_t event_handler, void *context, uint32_t server_address)
 {
+    clear_interrupt();
+
+    PORT_MSG = 50110;
+    PORT_VID = 50120;
+    PORT_AUD = 50121;
+    PORT_HID = 50122;
+    PORT_CMD = 50123;
+
     if (server_address == 0) {
         SERVER_ADDRESS = inet_addr("192.168.1.10");
     } else {
@@ -99,8 +135,21 @@ int connect_as_gamepad_internal(vanilla_event_handler_t event_handler, void *con
 
     int ret = VANILLA_ERROR;
 
+    // Try to bind with backend
+    int pipe_cc_skt;
+    if (!create_socket(&pipe_cc_skt, VANILLA_PIPE_CMD_CLIENT_PORT)) goto exit;
+
+    struct timeval tv = {0};
+    tv.tv_sec = 2;
+    setsockopt(pipe_cc_skt, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+
+    if (!send_pipe_cc(pipe_cc_skt, VANILLA_PIPE_CC_BIND, 1)) {
+        print_info("FAILED TO BIND TO PIPE");
+        goto exit_pipe;
+    }
+
     // Open all required sockets
-    if (!create_socket(&info.socket_vid, PORT_VID)) goto exit;
+    if (!create_socket(&info.socket_vid, PORT_VID)) goto exit_pipe;
     if (!create_socket(&info.socket_msg, PORT_MSG)) goto exit_vid;
     if (!create_socket(&info.socket_hid, PORT_HID)) goto exit_msg;
     if (!create_socket(&info.socket_aud, PORT_AUD)) goto exit_hid;
@@ -129,6 +178,8 @@ int connect_as_gamepad_internal(vanilla_event_handler_t event_handler, void *con
     pthread_join(input_thread, NULL);
     pthread_join(cmd_thread, NULL);
 
+    send_pipe_cc(pipe_cc_skt, VANILLA_PIPE_CC_UNBIND, 0);
+
     ret = VANILLA_SUCCESS;
 
 exit_cmd:
@@ -145,6 +196,9 @@ exit_msg:
 
 exit_vid:
     close(info.socket_vid);
+
+exit_pipe:
+    close(pipe_cc_skt);
 
 exit:
     return ret;
