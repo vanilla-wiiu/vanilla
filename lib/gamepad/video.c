@@ -124,8 +124,8 @@ void handle_video_packet(vanilla_event_handler_t event_handler, void *context, u
     }
 
     if (video_packet_seq_end != -1) {
-        int complete_frame = 1;
-        if (complete_frame) {
+        // int complete_frame = 1;
+        if (is_streaming) {
             // Combine segments
             char video_packet[100000];
             size_t video_packet_size = 0;
