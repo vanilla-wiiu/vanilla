@@ -295,6 +295,26 @@ void sigint_handler(int signum)
     signal(signum, SIG_DFL);
 }
 
+void *read_stdin(void *)
+{
+    char *line = NULL;
+    size_t size = 0;
+    ssize_t read_size = 0;
+
+    while ((read_size = getline(&line, &size, stdin)) != -1) {
+        if (read_size == 0) {
+            continue;
+        }
+
+        line[read_size-1] = '\0';
+        if (!strcasecmp(line, "quit") || !strcasecmp(line, "exit") || !strcasecmp(line, "bye")) {
+            quit_loop();
+        }
+    }
+
+    return NULL;
+}
+
 int wpa_setup_environment(const char *wireless_interface, const char *wireless_conf_file, ready_callback_t callback, void *callback_data)
 {
     int ret = VANILLA_ERROR;
@@ -304,6 +324,9 @@ int wpa_setup_environment(const char *wireless_interface, const char *wireless_c
     signal(SIGINT, sigint_handler);
     signal(SIGTERM, sigint_handler);
     //install_interrupt_handler();
+
+    pthread_t stdin_thread;
+    pthread_create(&stdin_thread, NULL, read_stdin, NULL);
 
     // Check status of interface with NetworkManager
     int is_managed = 0;
@@ -365,6 +388,11 @@ die_and_reenable_managed:
     }
 
 die:
+    // Interrupt our stdin thread
+    signal(SIGINT, SIG_DFL);
+    signal(SIGTERM, SIG_DFL);
+    pthread_kill(stdin_thread, SIGINT);
+
     // Remove our custom sigint signal handler
     //uninstall_interrupt_handler();
 
@@ -648,7 +676,7 @@ int call_ip(const char **argv)
     return VANILLA_SUCCESS;
 }
 
-void *read_stdin_udp(void *data)
+void *read_client_control(void *data)
 {
     int skt = open_socket(VANILLA_PIPE_CMD_SERVER_PORT);
     uint32_t control_code;
@@ -728,12 +756,12 @@ int do_connect(struct wpa_ctrl *ctrl, const char *wireless_interface)
     pthread_mutex_init(&client_address_mutex, NULL);
     pthread_cond_init(&client_address_waitcond, NULL);
     
-    pthread_t stdin_thread;
-    pthread_create(&stdin_thread, NULL, read_stdin_udp, NULL);
+    pthread_t client_control_thread;
+    pthread_create(&client_control_thread, NULL, read_client_control, NULL);
 
     create_all_relays();
 
-    pthread_join(stdin_thread, NULL);
+    pthread_join(client_control_thread, NULL);
     
     pthread_cond_destroy(&client_address_waitcond);
     pthread_mutex_destroy(&client_address_mutex);

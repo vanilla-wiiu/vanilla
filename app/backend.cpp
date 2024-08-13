@@ -143,12 +143,8 @@ void BackendPipe::receivedData()
 void BackendPipe::quit()
 {
     if (m_process) {
-        // FIXME: Currently, terminate() appears to fail because of pkexec permission issues. Will have to find a workaround...
-        printf("terminate\n");
-        m_process->terminate();
-        printf("wait for finished\n");
+        m_process->write(QByteArrayLiteral("QUIT\n"));
         m_process->waitForFinished();
-        printf("delete later\n");
         m_process->deleteLater();
         m_process = nullptr;
     }
