@@ -92,14 +92,12 @@ void handle_video_packet(vanilla_event_handler_t event_handler, void *context, u
     // Check if this is the beginning of the packet
     static char video_segments[1024][2048];
     static size_t video_segment_size[1024];
-    static int video_packet_seq = 0;
-    static int video_packet_seq_end = 0;
+    static int video_packet_seq = -1;
+    static int video_packet_seq_end = -1;
 
     if (vp->frame_begin) {
         video_packet_seq = vp->seq_id;
-        video_packet_seq_end = 0;
-
-        memset(video_segment_size, 0, sizeof(video_segment_size));
+        video_packet_seq_end = -1;
 
         if (!is_streaming) {
             if (is_idr) {
@@ -118,24 +116,25 @@ void handle_video_packet(vanilla_event_handler_t event_handler, void *context, u
     }
     pthread_mutex_unlock(&video_mutex);
 
-    int segment = vp->seq_id;
-    memcpy(video_segments[segment], vp->payload, vp->payload_size);
-    video_segment_size[segment] = vp->payload_size;
+    memcpy(video_segments[vp->seq_id], vp->payload, vp->payload_size);
+    video_segment_size[vp->seq_id] = vp->payload_size;
 
     if (vp->frame_end) {
         video_packet_seq_end = vp->seq_id;
     }
 
-    if (video_packet_seq_end != 0) {
+    if (video_packet_seq_end != -1) {
         int complete_frame = 1;
         if (complete_frame) {
             // Combine segments
             char video_packet[100000];
             size_t video_packet_size = 0;
-            size_t video_packet_progress = 0;
-            for (int i = video_packet_seq; i != video_packet_seq_end; i = (i + 1) % 1024) {
-                memcpy(video_packet + video_packet_progress, video_segments[i], video_segment_size[i]);
+            for (int i = video_packet_seq; ; i = (i + 1) % 1024) {
+                memcpy(video_packet + video_packet_size, video_segments[i], video_segment_size[i]);
                 video_packet_size += video_segment_size[i];
+                if (i == video_packet_seq_end) {
+                    break;
+                }
             }
 
             // Encapsulate packet data into NAL unit
