@@ -16,7 +16,7 @@
 #include "input.h"
 #include "video.h"
 
-#include "../pipe/linux/def.h"
+#include "../pipe/def.h"
 #include "status.h"
 #include "util.h"
 
@@ -52,7 +52,7 @@ void send_to_console(int fd, const void *data, size_t data_size, int port)
 
     ssize_t sent = sendto(fd, data, data_size, 0, (const struct sockaddr *) &address, sizeof(address));
     if (sent == -1) {
-        print_info("Failed to send to Wii U socket: fd - %d; port - %d", fd, port);
+        print_info("Failed to send to Wii U socket: fd - %d; port - %d", fd, port - 100);
     }
 }
 
@@ -97,15 +97,83 @@ int send_pipe_cc(int skt, uint32_t cc, int wait_for_reply)
     do {
         sendto(skt, &send_cc, sizeof(send_cc), 0, (struct sockaddr *) &addr, sizeof(addr));
 
-        if (wait_for_reply) {
-            read_size = recv(skt, &recv_cc, sizeof(recv_cc), 0);
-            if (read_size == sizeof(recv_cc) && ntohl(recv_cc) == VANILLA_PIPE_CC_BIND_ACK) {
-                return 1;
-            }
+        if (1 || !wait_for_reply) {
+            return 1;
+        }
+        
+        read_size = recv(skt, &recv_cc, sizeof(recv_cc), 0);
+        if (read_size == sizeof(recv_cc) && ntohl(recv_cc) == VANILLA_PIPE_CC_BIND_ACK) {
+            return 1;
         }
     } while (!is_interrupted());
     
     return 0;
+}
+
+int connect_to_backend(int *socket, uint32_t cc)
+{
+    // Try to bind with backend
+    int pipe_cc_skt;
+    if (!create_socket(&pipe_cc_skt, VANILLA_PIPE_CMD_CLIENT_PORT)) {
+        return VANILLA_ERROR;
+    }
+
+    struct timeval tv = {0};
+    tv.tv_sec = 2;
+    setsockopt(pipe_cc_skt, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+
+    if (!send_pipe_cc(pipe_cc_skt, cc, 1)) {
+        print_info("FAILED TO BIND TO PIPE");
+        close(pipe_cc_skt);
+        return VANILLA_ERROR;
+    }
+
+    *socket = pipe_cc_skt;
+
+    return VANILLA_SUCCESS;
+}
+
+int sync_internal(uint16_t code, uint32_t server_address)
+{
+    clear_interrupt();
+    
+    if (server_address == 0) {
+        SERVER_ADDRESS = inet_addr("192.168.1.10");
+    } else {
+        SERVER_ADDRESS = htonl(server_address);
+    }
+
+    int skt;
+    int ret = connect_to_backend(&skt, VANILLA_PIPE_SYNC_CODE(code));
+    if (ret != VANILLA_SUCCESS) {
+        goto exit;
+    }
+
+    ret = VANILLA_ERROR;
+
+    // Wait for sync result from pipe
+    uint32_t recv_cc;
+    while (1) {
+        ssize_t read_size = recv(skt, &recv_cc, sizeof(recv_cc), 0);
+        if (read_size == sizeof(recv_cc)) {
+            recv_cc = ntohl(recv_cc);
+            if (recv_cc >> 8 == VANILLA_PIPE_CC_SYNC_STATUS >> 8) {
+                ret = recv_cc & 0xFF;
+                break;
+            }
+        }
+
+        if (is_interrupted()) {
+            send_pipe_cc(skt, VANILLA_PIPE_CC_UNBIND, 0);
+            break;
+        }
+    }
+
+exit_pipe:
+    close(skt);
+
+exit:
+    return ret;
 }
 
 int connect_as_gamepad_internal(vanilla_event_handler_t event_handler, void *context, uint32_t server_address)
@@ -135,17 +203,10 @@ int connect_as_gamepad_internal(vanilla_event_handler_t event_handler, void *con
 
     int ret = VANILLA_ERROR;
 
-    // Try to bind with backend
     int pipe_cc_skt;
-    if (!create_socket(&pipe_cc_skt, VANILLA_PIPE_CMD_CLIENT_PORT)) goto exit;
-
-    struct timeval tv = {0};
-    tv.tv_sec = 2;
-    setsockopt(pipe_cc_skt, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
-
-    if (!send_pipe_cc(pipe_cc_skt, VANILLA_PIPE_CC_BIND, 1)) {
-        print_info("FAILED TO BIND TO PIPE");
-        goto exit_pipe;
+    ret = connect_to_backend(&pipe_cc_skt, VANILLA_PIPE_CC_CONNECT);
+    if (ret != VANILLA_SUCCESS) {
+        goto exit;
     }
 
     // Open all required sockets

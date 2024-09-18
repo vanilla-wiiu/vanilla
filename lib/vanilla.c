@@ -112,3 +112,8 @@ void vanilla_set_battery_status(int battery_status)
 {
     set_battery_status(battery_status);
 }
+
+int vanilla_sync(uint16_t code, uint32_t server_address)
+{
+    return sync_internal(code, server_address);
+}
