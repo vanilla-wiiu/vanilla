@@ -37,66 +37,68 @@ Backend::Backend(QObject *parent) : QObject(parent)
 
 void Backend::init()
 {
-    emit ready();
+    initInternal();
 }
 
-BackendViaLocalRoot::BackendViaLocalRoot(const QHostAddress &udpServer, QObject *parent) : Backend(parent)
+int Backend::initInternal()
 {
-    m_serverAddress = udpServer;
+    emit ready();
+    return 0;
 }
 
-void BackendViaLocalRoot::interrupt()
+void Backend::interrupt()
 {
     vanilla_stop();
 }
 
-void BackendViaLocalRoot::requestIDR()
+void Backend::requestIDR()
 {
     vanilla_request_idr();
 }
 
-void BackendViaLocalRoot::sync(uint16_t code)
+void Backend::sync(uint16_t code)
 {
     auto watcher = new QFutureWatcher<int>();
-    connect(watcher, &QFutureWatcher<int>::finished, this, &BackendViaLocalRoot::syncFutureCompleted);
-    watcher->setFuture(QtConcurrent::run(vanilla_sync, code, m_serverAddress.toIPv4Address()));
+    connect(watcher, &QFutureWatcher<int>::finished, this, &Backend::syncFutureCompleted);
+    watcher->setFuture(QtConcurrent::run(&Backend::syncInternal, this, code));
 }
 
-void BackendViaLocalRoot::connectToConsole()
+int Backend::syncInternal(uint16_t code)
 {
-    QtConcurrent::run(connectInternal, this, m_serverAddress);
+    return vanilla_sync(code, 0);
 }
 
-int BackendViaLocalRoot::connectInternal(BackendViaLocalRoot *instance, const QHostAddress &server)
+void Backend::connectToConsole()
 {
-    if (server.isNull()) {
-        return vanilla_start(vanillaEventHandler, instance);
-    } else {
-        return vanilla_start_udp(vanillaEventHandler, instance, server.toIPv4Address());
-    }
+    QtConcurrent::run(&Backend::connectInternal, this);
 }
 
-void BackendViaLocalRoot::updateTouch(int x, int y)
+int Backend::connectInternal()
+{
+    return vanilla_start(vanillaEventHandler, this);
+}
+
+void Backend::updateTouch(int x, int y)
 {
     vanilla_set_touch(x, y);
 }
 
-void BackendViaLocalRoot::setButton(int button, int32_t value)
+void Backend::setButton(int button, int32_t value)
 {
     vanilla_set_button(button, value);
 }
 
-void BackendViaLocalRoot::setRegion(int region)
+void Backend::setRegion(int region)
 {
     vanilla_set_region(region);
 }
 
-void BackendViaLocalRoot::setBatteryStatus(int status)
+void Backend::setBatteryStatus(int status)
 {
     vanilla_set_battery_status(status);
 }
 
-void BackendViaLocalRoot::syncFutureCompleted()
+void Backend::syncFutureCompleted()
 {
     QFutureWatcher<int> *watcher = static_cast<QFutureWatcher<int>*>(sender());
     int r = watcher->result();
@@ -135,7 +137,7 @@ void BackendPipe::receivedData()
     while (m_process->canReadLine()) {
         QByteArray a = m_process->readLine().trimmed();
         if (a == QByteArrayLiteral("READY")) {
-            // Do nothing?
+            emit pipeAvailable();
         } else {
             printf("%s\n", a.constData());
         }
@@ -150,4 +152,42 @@ void BackendPipe::quit()
         m_process->deleteLater();
         m_process = nullptr;
     }
+}
+
+BackendViaInternalPipe::BackendViaInternalPipe(const QString &wirelessInterface, QObject *parent) : Backend(parent)
+{
+    m_wirelessInterface = wirelessInterface;
+}
+
+int BackendViaInternalPipe::initInternal()
+{
+    m_pipe = new BackendPipe(m_wirelessInterface, this);
+    connect(m_pipe, &BackendPipe::pipeAvailable, this, &BackendViaInternalPipe::ready);
+    m_pipe->start();
+    return 0;
+}
+
+int BackendViaInternalPipe::syncInternal(uint16_t code)
+{
+    return vanilla_sync(code, QHostAddress(QHostAddress::LocalHost).toIPv4Address());
+}
+
+int BackendViaInternalPipe::connectInternal()
+{
+    return vanilla_start_udp(vanillaEventHandler, this, QHostAddress(QHostAddress::LocalHost).toIPv4Address());
+}
+
+BackendViaExternalPipe::BackendViaExternalPipe(const QHostAddress &udpServer, QObject *parent) : Backend(parent)
+{
+    m_serverAddress = udpServer;
+}
+
+int BackendViaExternalPipe::syncInternal(uint16_t code)
+{
+    return vanilla_sync(code, m_serverAddress.toIPv4Address());
+}
+
+int BackendViaExternalPipe::connectInternal()
+{
+    return vanilla_start_udp(vanillaEventHandler, this, m_serverAddress.toIPv4Address());
 }

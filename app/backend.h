@@ -44,12 +44,12 @@ public:
     Backend(QObject *parent = nullptr);
 
     // These are all commands that can be issued to the backend. They are re-entrant and can be called at any time.
-    virtual void interrupt() = 0;
-    virtual void updateTouch(int x, int y) = 0;
-    virtual void setButton(int button, int32_t value) = 0;
-    virtual void requestIDR() = 0;
-    virtual void setRegion(int region) = 0;
-    virtual void setBatteryStatus(int status) = 0;
+    void interrupt();
+    void updateTouch(int x, int y);
+    void setButton(int button, int32_t value);
+    void requestIDR();
+    void setRegion(int region);
+    void setBatteryStatus(int status);
 
 signals:
     void videoAvailable(const QByteArray &packet);
@@ -63,36 +63,49 @@ signals:
 
 public slots:
     // These slots must be called with Qt::QueuedConnection to start the event loops in the backend's thread
-    virtual void init();
-    virtual void sync(uint16_t code) = 0;
-    virtual void connectToConsole() = 0;
+    void init();
+    void sync(uint16_t code);
+    void connectToConsole();
 
-};
-
-class BackendViaLocalRoot : public Backend
-{
-    Q_OBJECT
-public:
-    BackendViaLocalRoot(const QHostAddress &serverAddress, QObject *parent = nullptr);
-
-    virtual void interrupt() override;
-    virtual void updateTouch(int x, int y) override;
-    virtual void setButton(int button, int32_t value) override;
-    virtual void requestIDR() override;
-    virtual void setRegion(int region) override;
-    virtual void setBatteryStatus(int status) override;
-
-public slots:
-    virtual void sync(uint16_t code) override;
-    virtual void connectToConsole() override;
-
-private:
-    static int connectInternal(BackendViaLocalRoot *instance, const QHostAddress &serverAddress);
-    QHostAddress m_serverAddress;
+protected:
+    virtual int initInternal();
+    virtual int syncInternal(uint16_t code);
+    virtual int connectInternal();
 
 private slots:
     void syncFutureCompleted();
 
+};
+
+class BackendViaInternalPipe : public Backend
+{
+    Q_OBJECT
+public:
+    BackendViaInternalPipe(const QString &wirelessInterface, QObject *parent = nullptr);
+
+protected:
+    virtual int initInternal() override;
+    virtual int syncInternal(uint16_t code) override;
+    virtual int connectInternal() override;
+
+private:
+    QString m_wirelessInterface;
+    BackendPipe *m_pipe;
+};
+
+class BackendViaExternalPipe : public Backend
+{
+    Q_OBJECT
+public:
+    BackendViaExternalPipe(const QHostAddress &serverAddress, QObject *parent = nullptr);
+
+protected:
+    // virtual int initInternal() override;
+    virtual int syncInternal(uint16_t code) override;
+    virtual int connectInternal() override;
+
+private:
+    QHostAddress m_serverAddress;
 };
 
 #endif // BACKEND_H
