@@ -678,6 +678,7 @@ void *thread_handler(void *data)
     running = 0;
     pthread_mutex_unlock(&running_mutex);
 
+    // Locked by calling thread
     pthread_mutex_unlock(&action_mutex);
     
     return ret;

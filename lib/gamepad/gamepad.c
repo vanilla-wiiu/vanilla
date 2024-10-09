@@ -97,7 +97,7 @@ int send_pipe_cc(int skt, uint32_t cc, int wait_for_reply)
     do {
         sendto(skt, &send_cc, sizeof(send_cc), 0, (struct sockaddr *) &addr, sizeof(addr));
 
-        if (1 || !wait_for_reply) {
+        if (!wait_for_reply) {
             return 1;
         }
         
@@ -105,6 +105,8 @@ int send_pipe_cc(int skt, uint32_t cc, int wait_for_reply)
         if (read_size == sizeof(recv_cc) && ntohl(recv_cc) == VANILLA_PIPE_CC_BIND_ACK) {
             return 1;
         }
+
+        sleep(1);
     } while (!is_interrupted());
     
     return 0;
