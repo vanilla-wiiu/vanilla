@@ -1,4 +1,4 @@
-find_package(Qt6 REQUIRED COMPONENTS Core Widgets Multimedia OpenGLWidgets Network)
+find_package(Qt6 REQUIRED COMPONENTS Core Widgets Multimedia OpenGLWidgets Network Concurrent)
 find_package(SDL2 REQUIRED)
 find_package(FFmpeg REQUIRED COMPONENTS avformat avcodec avutil avfilter)
 
@@ -9,6 +9,7 @@ set(CMAKE_AUTORCC ON)
 add_executable(vanilla-gui
     audiohandler.cpp
     backend.cpp
+    backendinitdialog.cpp
     gamepadhandler.cpp
     keymap.cpp
     inputconfigdialog.cpp
@@ -17,6 +18,7 @@ add_executable(vanilla-gui
     main.cpp
     mainwindow.cpp
     resource.qrc
+    udpaddressdialog.cpp
     videodecoder.cpp
     viewer.cpp
 )
@@ -27,6 +29,7 @@ target_link_libraries(vanilla-gui PRIVATE
     Qt6::Network
     Qt6::Multimedia
     Qt6::OpenGLWidgets
+    Qt6::Concurrent
     SDL2
     vanilla
     FFmpeg::avformat

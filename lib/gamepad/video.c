@@ -66,7 +66,7 @@ void handle_video_packet(vanilla_event_handler_t event_handler, void *context, u
     for (int byte = 0; byte < vp->payload_size; ++byte)
         vp->payload[byte] = (unsigned char) reverse_bits(vp->payload[byte], 8);
     
-    // Check is_idr_packet (what the fuck is 'idr'?)
+    // Check if packet is IDR (instantaneous decoder refresh)
     int is_idr = 0;
     for (int i = 0; i < sizeof(vp->extended_header); i++) {
         if (vp->extended_header[i] == 0x80) {
@@ -90,11 +90,15 @@ void handle_video_packet(vanilla_event_handler_t event_handler, void *context, u
     }
 
     // Check if this is the beginning of the packet
-    static char video_packet[100000];
-    static size_t video_packet_size = 0;
+    static char video_segments[1024][2048];
+    static size_t video_segment_size[1024];
+    static int video_packet_seq = -1;
+    static int video_packet_seq_end = -1;
 
     if (vp->frame_begin) {
-        video_packet_size = 0;
+        video_packet_seq = vp->seq_id;
+        video_packet_seq_end = -1;
+
         if (!is_streaming) {
             if (is_idr) {
                 is_streaming = 1;
@@ -112,11 +116,27 @@ void handle_video_packet(vanilla_event_handler_t event_handler, void *context, u
     }
     pthread_mutex_unlock(&video_mutex);
 
-    memcpy(video_packet + video_packet_size, vp->payload, vp->payload_size);
-    video_packet_size += vp->payload_size;
+    memcpy(video_segments[vp->seq_id], vp->payload, vp->payload_size);
+    video_segment_size[vp->seq_id] = vp->payload_size;
 
     if (vp->frame_end) {
+        video_packet_seq_end = vp->seq_id;
+    }
+
+    if (video_packet_seq_end != -1) {
+        // int complete_frame = 1;
         if (is_streaming) {
+            // Combine segments
+            char video_packet[100000];
+            size_t video_packet_size = 0;
+            for (int i = video_packet_seq; ; i = (i + 1) % 1024) {
+                memcpy(video_packet + video_packet_size, video_segments[i], video_segment_size[i]);
+                video_packet_size += video_segment_size[i];
+                if (i == video_packet_seq_end) {
+                    break;
+                }
+            }
+
             // Encapsulate packet data into NAL unit
             static int frame_decode_num = 0;
             size_t nals_sz = video_packet_size * 2;

@@ -1,37 +1,40 @@
 #ifndef BACKEND_H
 #define BACKEND_H
 
+#include <QBuffer>
 #include <QMutex>
 #include <QObject>
 #include <QProcess>
 #include <QThread>
+#include <QUdpSocket>
+#include <QWaitCondition>
 
 class BackendPipe : public QObject
 {
     Q_OBJECT
 public:
-    BackendPipe(QObject *parent = nullptr);
+    BackendPipe(const QString &wirelessInterface, QObject *parent = nullptr);
     
     virtual ~BackendPipe() override;
 
-    void waitForFinished();
-
 public slots:
-    void start();
+    void sync(uint16_t code);
+    void connectToConsole();
+    void quit();
 
 signals:
-    void pipesAvailable(const QString &in, const QString &out);
-    void portAvailable(uint16_t port);
+    void pipeAvailable();
+    void closed();
 
 private slots:
     void receivedData();
 
 private:
+    static QString pipeProcessFilename();
+
     QProcess *m_process;
-    QString m_pipeOutFilename;
-    QString m_pipeInFilename;
-    uint16_t m_serverPort;
-    uint16_t m_clientPort;
+    QString m_socketFilename;
+    QString m_wirelessInterface;
 
 };
 
@@ -41,9 +44,13 @@ class Backend : public QObject
 public:
     Backend(QObject *parent = nullptr);
 
-    virtual ~Backend() override;
-
-    void interrupt();
+    // These are all commands that can be issued to the backend. They are re-entrant and can be called at any time.
+    virtual void interrupt() = 0;
+    virtual void updateTouch(int x, int y) = 0;
+    virtual void setButton(int button, int32_t value) = 0;
+    virtual void requestIDR() = 0;
+    virtual void setRegion(int region) = 0;
+    virtual void setBatteryStatus(int status) = 0;
 
 signals:
     void videoAvailable(const QByteArray &packet);
@@ -51,26 +58,39 @@ signals:
     void vibrate(bool on);
     void errorOccurred();
     void syncCompleted(bool success);
+    void ready();
+    void closed();
+    void error(const QString &err);
 
 public slots:
-    void sync(const QString &wirelessInterface, uint16_t code);
-    void connectToConsole(const QString &wirelessInterface);
-    void updateTouch(int x, int y);
-    void setButton(int button, int32_t value);
-    void requestIDR();
-    void setRegion(int region);
-    void setBatteryStatus(int status);
+    // These slots must be called with Qt::QueuedConnection to start the event loops in the backend's thread
+    virtual void init();
+    virtual void connectToConsole() = 0;
+
+};
+
+class BackendViaLocalRoot : public Backend
+{
+    Q_OBJECT
+public:
+    BackendViaLocalRoot(const QHostAddress &serverAddress, QObject *parent = nullptr);
+
+    virtual void interrupt() override;
+    virtual void updateTouch(int x, int y) override;
+    virtual void setButton(int button, int32_t value) override;
+    virtual void requestIDR() override;
+    virtual void setRegion(int region) override;
+    virtual void setBatteryStatus(int status) override;
+
+public slots:
+    virtual void connectToConsole() override;
 
 private:
-    BackendPipe *m_pipe;
-    QThread *m_pipeThread;
-    int m_pipeIn;
-    int m_pipeOut;
-    QMutex m_pipeMutex;
-    QAtomicInt m_interrupt;
+    static int connectInternal(BackendViaLocalRoot *instance, const QHostAddress &serverAddress);
+    QHostAddress m_serverAddress;
 
 private slots:
-    void setUpPipes(const QString &in, const QString &out);
+    void syncFutureCompleted();
 
 };
 

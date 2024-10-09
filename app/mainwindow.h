@@ -32,6 +32,9 @@ private:
 
     void updateVolumeAxis();
 
+    template<typename T>
+    void initBackend(T func);
+
     Viewer *m_viewer;
 
     QComboBox *m_wirelessInterfaceComboBox;
@@ -51,6 +54,8 @@ private:
     QSplitter *m_splitter;
 
     Backend *m_backend;
+    BackendPipe *m_pipe;
+    
     VideoDecoder *m_videoDecoder;
     GamepadHandler *m_gamepadHandler;
     AudioHandler *m_audioHandler;
@@ -81,6 +86,10 @@ private slots:
     void recordingFinished(const QString &filename);
 
     void takeScreenshot();
+
+    void closeBackend();
+
+    void showBackendError(const QString &err);
 
 };
 

@@ -17,7 +17,7 @@ echo "Building Vanilla.."
 echo "  Building TAR: $CREATE_ARCHIVE"
 
 git config --global --add safe.directory /vanilla/lib/hostap
-cp /vanilla/lib/hostap/conf/wpa_supplicant.config /vanilla/lib/hostap/wpa_supplicant/.config
+cp /vanilla/pipe/linux/hostap/conf/wpa_supplicant.config /vanilla/pipe/linux/hostap/wpa_supplicant/.config
 /usr/local/bin/cmake /vanilla -B/build -DCMAKE_PREFIX_PATH=${PREFIX}/usr -DCMAKE_INSTALL_PREFIX=/AppDir/usr
 cmake --build /build --parallel
 cmake --install /build

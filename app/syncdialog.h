@@ -13,7 +13,7 @@ class SyncDialog : public QDialog
 public:
     SyncDialog(QWidget *parent = nullptr);
 
-    void setup(Backend *backend, const QString &wirelessInterface);
+    void setup(Backend *backend);
 
 private:
     void updateLabels();
@@ -28,7 +28,6 @@ private:
     QHBoxLayout *m_buttonLayout;
 
     Backend *m_backend;
-    QString m_wirelessInterface;
 
 private slots:
     void buttonClicked();

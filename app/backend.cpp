@@ -1,15 +1,18 @@
 #include "backend.h"
 
+#include <QBuffer>
 #include <QCoreApplication>
 #include <QDir>
 #include <QMessageBox>
+#include <QNetworkDatagram>
+#include <QtConcurrent/QtConcurrent>
 
+#include <arpa/inet.h>
 #include <fcntl.h>
+#include <signal.h>
 #include <stdio.h>
 #include <unistd.h>
 #include <vanilla.h>
-
-#include "../pipe/pipe.h"
 
 void vanillaEventHandler(void *context, int type, const char *data, size_t dataLength)
 {
@@ -30,263 +33,99 @@ void vanillaEventHandler(void *context, int type, const char *data, size_t dataL
 
 Backend::Backend(QObject *parent) : QObject(parent)
 {
-    m_pipe = nullptr;
-    m_pipeIn = -1;
-    m_pipeOut = -1;
-    m_interrupt = 0;
-
-    // If not running as root, use pipe
-    if ((geteuid() != 0)) {
-        m_pipeThread = new QThread(this);
-        m_pipeThread->start();
-
-        m_pipe = new BackendPipe();
-        m_pipe->moveToThread(m_pipeThread);
-
-        connect(m_pipe, &BackendPipe::pipesAvailable, this, &Backend::setUpPipes);
-
-        QMetaObject::invokeMethod(m_pipe, &BackendPipe::start, Qt::QueuedConnection);
-    }
 }
 
-Backend::~Backend()
+void Backend::init()
 {
-    if (m_pipe) {
-        m_pipeMutex.lock();
-        uint8_t cc = VANILLA_PIPE_IN_QUIT;
-        write(m_pipeOut, &cc, sizeof(cc));
-        m_pipeMutex.unlock();
-
-        m_pipe->deleteLater();
-        m_pipeThread->quit();
-        m_pipeThread->wait();
-    }
+    emit ready();
 }
 
-void ignoreByte(int pipe)
+BackendViaLocalRoot::BackendViaLocalRoot(const QHostAddress &udpServer, QObject *parent) : Backend(parent)
 {
-    uint8_t ignore;
-    read(pipe, &ignore, sizeof(ignore));
+    m_serverAddress = udpServer;
 }
 
-void writeByte(int pipe, uint8_t byte)
+void BackendViaLocalRoot::interrupt()
 {
-    write(pipe, &byte, sizeof(byte));
+    vanilla_stop();
 }
 
-void Backend::interrupt()
+void BackendViaLocalRoot::requestIDR()
 {
-    if (m_pipe) {
-        m_pipeMutex.lock();
-        uint8_t cc = VANILLA_PIPE_IN_INTERRUPT;
-        write(m_pipeOut, &cc, sizeof(cc));
-        m_pipeMutex.unlock();
+    vanilla_request_idr();
+}
+
+void BackendViaLocalRoot::connectToConsole()
+{
+    QtConcurrent::run(connectInternal, this, m_serverAddress);
+}
+
+int BackendViaLocalRoot::connectInternal(BackendViaLocalRoot *instance, const QHostAddress &server)
+{
+    if (server.isNull()) {
+        return vanilla_start(vanillaEventHandler, instance);
     } else {
-        vanilla_stop();
+        return vanilla_start_udp(vanillaEventHandler, instance, server.toIPv4Address());
     }
 }
 
-void writeNullTermString(int pipe, const QString &s)
+void BackendViaLocalRoot::updateTouch(int x, int y)
 {
-    QByteArray sc = s.toUtf8();
-    write(pipe, sc.constData(), sc.size());
-    writeByte(pipe, 0);
+    vanilla_set_touch(x, y);
 }
 
-void Backend::requestIDR()
+void BackendViaLocalRoot::setButton(int button, int32_t value)
 {
-    if (m_pipe) {
-        m_pipeMutex.lock();
-        writeByte(m_pipeOut, VANILLA_PIPE_IN_REQ_IDR);
-        m_pipeMutex.unlock();
-    } else {
-        vanilla_request_idr();
-    }
+    vanilla_set_button(button, value);
 }
 
-void Backend::connectToConsole(const QString &wirelessInterface)
+void BackendViaLocalRoot::setRegion(int region)
 {
-    if (m_pipe) {
-        // Request pipe to connect
-        m_pipeMutex.lock();
-        writeByte(m_pipeOut, VANILLA_PIPE_IN_CONNECT);
-        writeNullTermString(m_pipeOut, wirelessInterface);
-        m_pipeMutex.unlock();
-
-        uint8_t cc;
-        while (true) {
-            ssize_t read_size = read(m_pipeIn, &cc, sizeof(cc));
-            if (read_size == 0) {
-                continue;
-            }
-
-            if (cc == VANILLA_PIPE_OUT_EOF) {
-                break;
-            } else if (cc == VANILLA_PIPE_OUT_DATA) {
-                // Read event
-                read(m_pipeIn, &cc, sizeof(cc));
-
-                // Read data size
-                uint64_t data_size;
-                read(m_pipeIn, &data_size, sizeof(data_size));
-
-                void *buf = malloc(data_size);
-                read(m_pipeIn, buf, data_size);
-
-                vanillaEventHandler(this, cc, (const char *) buf, data_size);
-
-                free(buf);
-            }
-        }
-    } else {
-        QByteArray wirelessInterfaceC = wirelessInterface.toUtf8();
-        vanilla_connect_to_console(wirelessInterfaceC.constData(), vanillaEventHandler, this);
-    }
+    vanilla_set_region(region);
 }
 
-void Backend::updateTouch(int x, int y)
+void BackendViaLocalRoot::setBatteryStatus(int status)
 {
-    if (m_pipe) {
-        m_pipeMutex.lock();
-        writeByte(m_pipeOut, VANILLA_PIPE_IN_TOUCH);
-        int32_t touchX = x;
-        int32_t touchY = y;
-        write(m_pipeOut, &x, sizeof(x));
-        write(m_pipeOut, &y, sizeof(y));
-        m_pipeMutex.unlock();
-    } else {
-        vanilla_set_touch(x, y);
-    }
+    vanilla_set_battery_status(status);
 }
 
-void Backend::setButton(int button, int32_t value)
+void BackendViaLocalRoot::syncFutureCompleted()
 {
-    if (m_pipe) {
-        m_pipeMutex.lock();
-        writeByte(m_pipeOut, VANILLA_PIPE_IN_BUTTON);
-        int32_t buttonSized = button;
-        write(m_pipeOut, &buttonSized, sizeof(buttonSized));
-        write(m_pipeOut, &value, sizeof(value));
-        m_pipeMutex.unlock();
-    } else {
-        vanilla_set_button(button, value);
-    }
+    QFutureWatcher<int> *watcher = static_cast<QFutureWatcher<int>*>(sender());
+    int r = watcher->result();
+    emit syncCompleted(r == VANILLA_SUCCESS);
+    watcher->deleteLater();
 }
 
-void Backend::setRegion(int region)
-{
-    if (m_pipe) {
-        m_pipeMutex.lock();
-        writeByte(m_pipeOut, VANILLA_PIPE_IN_REGION);
-        int8_t regionSized = region;
-        write(m_pipeOut, &regionSized, sizeof(regionSized));
-        m_pipeMutex.unlock();
-    } else {
-        vanilla_set_region(region);
-    }
-}
-
-void Backend::setBatteryStatus(int status)
-{
-    if (m_pipe) {
-        m_pipeMutex.lock();
-        writeByte(m_pipeOut, VANILLA_PIPE_IN_BATTERY);
-        int8_t batterySized = status;
-        write(m_pipeOut, &batterySized, sizeof(batterySized));
-        m_pipeMutex.unlock();
-    } else {
-        vanilla_set_battery_status(status);
-    }
-}
-
-void Backend::sync(const QString &wirelessInterface, uint16_t code)
-{
-    if (m_pipe) {
-        // Request pipe to sync
-        m_pipeMutex.lock();
-        
-        // Write control code
-        writeByte(m_pipeOut, VANILLA_PIPE_IN_SYNC);
-
-        // Write WPS code
-        write(m_pipeOut, &code, sizeof(code));
-
-        // Write wireless interface
-        writeNullTermString(m_pipeOut, wirelessInterface);
-
-        m_pipeMutex.unlock();
-
-        // See if pipe accepted our request to sync
-        uint8_t cc;
-        read(m_pipeIn, &cc, sizeof(cc));
-        if (cc != VANILLA_PIPE_ERR_SUCCESS) {
-            emit syncCompleted(false);
-            return;
-        }
-
-        // Wait for sync status
-        read(m_pipeIn, &cc, sizeof(cc));
-        if (cc == VANILLA_PIPE_OUT_SYNC_STATE) {
-            read(m_pipeIn, &cc, sizeof(cc));
-            emit syncCompleted(cc == VANILLA_SUCCESS);
-        } else {
-            emit syncCompleted(false);
-        }
-    } else {
-        QByteArray wirelessInterfaceC = wirelessInterface.toUtf8();
-        int r = vanilla_sync_with_console(wirelessInterfaceC.constData(), code);
-        emit syncCompleted(r == VANILLA_SUCCESS);
-    }
-}
-
-void Backend::setUpPipes(const QString &in, const QString &out)
-{
-    QByteArray inUtf8 = in.toUtf8();
-    QByteArray outUtf8 = out.toUtf8();
-    m_pipeIn = open(inUtf8.constData(), O_RDONLY);
-    if (m_pipeIn == -1) {
-        QMessageBox::critical(nullptr, tr("Pipe Error"), tr("Failed to create in pipe: %1").arg(strerror(errno)));
-    }
-    m_pipeOut = open(outUtf8.constData(), O_WRONLY);
-    if (m_pipeOut == -1) {
-        QMessageBox::critical(nullptr, tr("Pipe Error"), tr("Failed to create out pipe: %1").arg(strerror(errno)));
-    }
-
-    printf("Established connection with backend\n");
-}
-
-BackendPipe::BackendPipe(QObject *parent) : QObject(parent)
+BackendPipe::BackendPipe(const QString &wirelessInterface, QObject *parent) : QObject(parent)
 {
     m_process = nullptr;
+    m_wirelessInterface = wirelessInterface;
+
+    m_process = new QProcess(this);
+    m_process->setReadChannel(QProcess::StandardError);
+    connect(m_process, &QProcess::readyReadStandardError, this, &BackendPipe::receivedData);
+    connect(m_process, &QProcess::finished, this, &BackendPipe::closed);
 }
 
 BackendPipe::~BackendPipe()
 {
-    waitForFinished();
-
-    QFile::remove(m_pipeInFilename);
-    QFile::remove(m_pipeOutFilename);
+    quit();
 }
 
-void BackendPipe::waitForFinished()
+void BackendPipe::sync(uint16_t code)
 {
-    if (m_process) {
-        m_process->waitForFinished();
-    }
+    m_process->start(QStringLiteral("pkexec"), {pipeProcessFilename(), m_wirelessInterface, QStringLiteral("-sync"), QString::number(code)});
 }
 
-void BackendPipe::start()
+void BackendPipe::connectToConsole()
 {
-    const QString pipe_bin = QDir(QCoreApplication::applicationDirPath()).filePath(QStringLiteral("vanilla-pipe"));
-    m_process = new QProcess(this);
-    m_process->setReadChannel(QProcess::StandardError);
-    connect(m_process, &QProcess::readyReadStandardError, this, &BackendPipe::receivedData);
-    //connect(m_pipe, &QProcess::finished, this, [this](int code){printf("closed??? %i\n", code);});
+    m_process->start(QStringLiteral("pkexec"), {pipeProcessFilename(), m_wirelessInterface, QStringLiteral("-connect")});
+}
 
-    m_pipeOutFilename = QStringLiteral("/tmp/vanilla-fifo-in-%0").arg(QString::number(QDateTime::currentMSecsSinceEpoch()));
-    m_pipeInFilename = QStringLiteral("/tmp/vanilla-fifo-out-%0").arg(QString::number(QDateTime::currentMSecsSinceEpoch()));
-
-    m_process->start(QStringLiteral("pkexec"), {pipe_bin, QStringLiteral("-pipe"), m_pipeOutFilename, m_pipeInFilename});
+QString BackendPipe::pipeProcessFilename()
+{
+    return QDir(QCoreApplication::applicationDirPath()).filePath(QStringLiteral("vanilla-pipe"));
 }
 
 void BackendPipe::receivedData()
@@ -294,9 +133,19 @@ void BackendPipe::receivedData()
     while (m_process->canReadLine()) {
         QByteArray a = m_process->readLine().trimmed();
         if (a == QByteArrayLiteral("READY")) {
-            emit pipesAvailable(m_pipeInFilename, m_pipeOutFilename);
+            // Do nothing?
         } else {
             printf("%s\n", a.constData());
         }
+    }
+}
+
+void BackendPipe::quit()
+{
+    if (m_process) {
+        m_process->write(QByteArrayLiteral("QUIT\n"));
+        m_process->waitForFinished();
+        m_process->deleteLater();
+        m_process = nullptr;
     }
 }

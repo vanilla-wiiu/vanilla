@@ -139,14 +139,13 @@ void SyncDialog::launchSync()
         code += m_code[i] * intPow(10, g_symbolCount - 1 - i);
     }
 
-    SyncProgressDialog *progressDialog = new SyncProgressDialog(m_backend, m_wirelessInterface, code, this->parentWidget());
+    SyncProgressDialog *progressDialog = new SyncProgressDialog(m_backend, code, this->parentWidget());
     progressDialog->open();
     connect(progressDialog, &SyncProgressDialog::finished, this, &SyncProgressDialog::deleteLater);
     this->close();
 }
 
-void SyncDialog::setup(Backend *backend, const QString &wirelessInterface)
+void SyncDialog::setup(Backend *backend)
 {
     m_backend = backend;
-    m_wirelessInterface = wirelessInterface;
 }

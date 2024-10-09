@@ -7,20 +7,27 @@
 #include <signal.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/time.h>
 #include <sys/wait.h>
 #include <unistd.h>
-#include <wpa_ctrl.h>
 
 #include "audio.h"
 #include "command.h"
 #include "input.h"
 #include "video.h"
 
+#include "../pipe/linux/def.h"
 #include "status.h"
 #include "util.h"
-#include "wpa.h"
 
 static const uint32_t STOP_CODE = 0xCAFEBABE;
+static uint32_t SERVER_ADDRESS = 0;
+
+uint16_t PORT_MSG;
+uint16_t PORT_VID;
+uint16_t PORT_AUD;
+uint16_t PORT_HID;
+uint16_t PORT_CMD;
 
 unsigned int reverse_bits(unsigned int b, int bit_count)
 {
@@ -37,8 +44,12 @@ void send_to_console(int fd, const void *data, size_t data_size, int port)
 {
     struct sockaddr_in address;
     address.sin_family = AF_INET;
-    address.sin_addr.s_addr = inet_addr("192.168.1.10");
+    address.sin_addr.s_addr = SERVER_ADDRESS;
     address.sin_port = htons((uint16_t) (port - 100));
+
+    char ip[20];
+    inet_ntop(AF_INET, &address.sin_addr, ip, sizeof(ip));
+
     ssize_t sent = sendto(fd, data, data_size, 0, (const struct sockaddr *) &address, sizeof(address));
     if (sent == -1) {
         print_info("Failed to send to Wii U socket: fd - %d; port - %d", fd, port);
@@ -47,15 +58,11 @@ void send_to_console(int fd, const void *data, size_t data_size, int port)
 
 int create_socket(int *socket_out, uint16_t port)
 {
-    // TODO: Limit these sockets to one interface?
-
     struct sockaddr_in address;
     address.sin_family = AF_INET;
     address.sin_addr.s_addr = INADDR_ANY;
     address.sin_port = htons(port);
     (*socket_out) = socket(AF_INET, SOCK_DGRAM, 0);
-    
-    //setsockopt((*socket_out), SOL_SOCKET, SO_RCVTIMEO)
     
     if (bind((*socket_out), (const struct sockaddr *) &address, sizeof(address)) == -1) {
         print_info("FAILED TO BIND PORT %u: %i", port, errno);
@@ -75,16 +82,74 @@ void send_stop_code(int from_socket, in_port_t port)
     sendto(from_socket, &STOP_CODE, sizeof(STOP_CODE), 0, (struct sockaddr *)&address, sizeof(address));
 }
 
-int main_loop(vanilla_event_handler_t event_handler, void *context)
+int send_pipe_cc(int skt, uint32_t cc, int wait_for_reply)
 {
+    struct sockaddr_in addr = {0};
+
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = SERVER_ADDRESS;
+    addr.sin_port = htons(VANILLA_PIPE_CMD_SERVER_PORT);
+
+    ssize_t read_size;
+    uint32_t send_cc = htonl(cc);
+    uint32_t recv_cc;
+
+    do {
+        sendto(skt, &send_cc, sizeof(send_cc), 0, (struct sockaddr *) &addr, sizeof(addr));
+
+        if (wait_for_reply) {
+            read_size = recv(skt, &recv_cc, sizeof(recv_cc), 0);
+            if (read_size == sizeof(recv_cc) && ntohl(recv_cc) == VANILLA_PIPE_CC_BIND_ACK) {
+                return 1;
+            }
+        }
+    } while (!is_interrupted());
+    
+    return 0;
+}
+
+int connect_as_gamepad_internal(vanilla_event_handler_t event_handler, void *context, uint32_t server_address)
+{
+    clear_interrupt();
+
+    PORT_MSG = 50110;
+    PORT_VID = 50120;
+    PORT_AUD = 50121;
+    PORT_HID = 50122;
+    PORT_CMD = 50123;
+
+    if (server_address == 0) {
+        SERVER_ADDRESS = inet_addr("192.168.1.10");
+    } else {
+        SERVER_ADDRESS = htonl(server_address);
+        PORT_MSG += 200;
+        PORT_VID += 200;
+        PORT_AUD += 200;
+        PORT_HID += 200;
+        PORT_CMD += 200;
+    }
+
     struct gamepad_thread_context info;
     info.event_handler = event_handler;
     info.context = context;
 
     int ret = VANILLA_ERROR;
 
+    // Try to bind with backend
+    int pipe_cc_skt;
+    if (!create_socket(&pipe_cc_skt, VANILLA_PIPE_CMD_CLIENT_PORT)) goto exit;
+
+    struct timeval tv = {0};
+    tv.tv_sec = 2;
+    setsockopt(pipe_cc_skt, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+
+    if (!send_pipe_cc(pipe_cc_skt, VANILLA_PIPE_CC_BIND, 1)) {
+        print_info("FAILED TO BIND TO PIPE");
+        goto exit_pipe;
+    }
+
     // Open all required sockets
-    if (!create_socket(&info.socket_vid, PORT_VID)) goto exit;
+    if (!create_socket(&info.socket_vid, PORT_VID)) goto exit_pipe;
     if (!create_socket(&info.socket_msg, PORT_MSG)) goto exit_vid;
     if (!create_socket(&info.socket_hid, PORT_HID)) goto exit_msg;
     if (!create_socket(&info.socket_aud, PORT_AUD)) goto exit_hid;
@@ -113,6 +178,8 @@ int main_loop(vanilla_event_handler_t event_handler, void *context)
     pthread_join(input_thread, NULL);
     pthread_join(cmd_thread, NULL);
 
+    send_pipe_cc(pipe_cc_skt, VANILLA_PIPE_CC_UNBIND, 0);
+
     ret = VANILLA_SUCCESS;
 
 exit_cmd:
@@ -130,66 +197,11 @@ exit_msg:
 exit_vid:
     close(info.socket_vid);
 
+exit_pipe:
+    close(pipe_cc_skt);
+
 exit:
     return ret;
-}
-
-int connect_as_gamepad_internal(struct wpa_ctrl *ctrl, const char *wireless_interface, vanilla_event_handler_t event_handler, void *context)
-{
-    while (1) {
-        while (!wpa_ctrl_pending(ctrl)) {
-            sleep(2);
-            print_info("WAITING FOR CONNECTION");
-
-            if (is_interrupted()) return VANILLA_ERROR;
-        }
-
-        char buf[1024];
-        size_t actual_buf_len = sizeof(buf);
-        wpa_ctrl_recv(ctrl, buf, &actual_buf_len);
-
-        if (memcmp(buf, "<3>CTRL-EVENT-CONNECTED", 23) == 0) {
-            break;
-        }
-
-        if (is_interrupted()) return VANILLA_ERROR;
-    }
-
-    print_info("CONNECTED TO CONSOLE");
-
-    // Use DHCP on interface
-    pid_t dhclient_pid;
-    int r = call_dhcp(wireless_interface, &dhclient_pid);
-    if (r != VANILLA_SUCCESS) {
-        print_info("FAILED TO RUN DHCP ON %s", wireless_interface);
-        return r;
-    } else {
-        print_info("DHCP ESTABLISHED");
-    }
-
-    {
-        // Destroy default route that dhclient will have created
-        pid_t ip_pid;
-        const char *ip_args[] = {"ip", "route", "del", "default", "via", "192.168.1.1", "dev", wireless_interface, NULL};
-        r = start_process(ip_args, &ip_pid, NULL, NULL);
-        if (r != VANILLA_SUCCESS) {
-            print_info("FAILED TO REMOVE CONSOLE ROUTE FROM SYSTEM");
-        }
-
-        int ip_status;
-        waitpid(ip_pid, &ip_status, 0);
-
-        if (!WIFEXITED(ip_status)) {
-            print_info("FAILED TO REMOVE CONSOLE ROUTE FROM SYSTEM");
-        }
-    }
-
-    r = main_loop(event_handler, context);
-
-    int kill_ret = kill(dhclient_pid, SIGTERM);
-    print_info("killing dhclient %i: %i", dhclient_pid, kill_ret);
-
-    return r;
 }
 
 int is_stop_code(const char *data, size_t data_length)

@@ -8,7 +8,7 @@
 
 #include "mainwindow.h"
 
-SyncProgressDialog::SyncProgressDialog(Backend *backend, const QString &wirelessInterface, uint16_t code, QWidget *parent) : QDialog(parent)
+SyncProgressDialog::SyncProgressDialog(Backend *backend, uint16_t code, QWidget *parent) : QDialog(parent)
 {
     QVBoxLayout *layout = new QVBoxLayout(this);
 
@@ -53,7 +53,7 @@ SyncProgressDialog::SyncProgressDialog(Backend *backend, const QString &wireless
 
     m_backend = backend;
     connect(m_backend, &Backend::syncCompleted, this, &SyncProgressDialog::syncReturned);
-    QMetaObject::invokeMethod(m_backend, "sync", Q_ARG(QString, wirelessInterface), Q_ARG(uint16_t, code));
+    QMetaObject::invokeMethod(m_backend, "sync", Q_ARG(uint16_t, code));
 }
 
 void SyncProgressDialog::syncReturned(bool success)

@@ -12,7 +12,7 @@ class SyncProgressDialog : public QDialog
 {
     Q_OBJECT
 public:
-    SyncProgressDialog(Backend *backend, const QString &wirelessInterface, uint16_t code, QWidget *parent = nullptr);
+    SyncProgressDialog(Backend *backend, uint16_t code, QWidget *parent = nullptr);
 
 protected:
     virtual void done(int r) override;
@@ -22,7 +22,6 @@ private:
     Backend *m_backend;
     QLabel *m_headerLabel;
     QLabel *m_statusLabel;
-    QString m_wirelessInterface;
     uint16_t m_wpsCode;
     bool m_cancelled;
 

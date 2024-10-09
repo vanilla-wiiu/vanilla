@@ -25,15 +25,20 @@
 #include <linux/wireless.h>
 #include <vanilla.h>
 
+#include "backendinitdialog.h"
 #include "inputconfigdialog.h"
 #include "keymap.h"
 #include "syncdialog.h"
+#include "udpaddressdialog.h"
 
 MainWindow::MainWindow(QWidget *parent) : QWidget(parent)
 {
     if (SDL_Init(SDL_INIT_GAMECONTROLLER) < 0) {
         QMessageBox::critical(this, tr("SDL2 Error"), tr("SDL2 failed to initialize. Controller support will be unavailable."));
     }
+
+    m_backend = nullptr;
+    m_pipe = nullptr;
 
     qRegisterMetaType<uint16_t>("uint16_t");
 
@@ -71,6 +76,7 @@ MainWindow::MainWindow(QWidget *parent) : QWidget(parent)
         configLayout->addWidget(new QLabel(tr("Wi-Fi Adapter: "), connectionConfigGroupBox), row, 0);
 
         m_wirelessInterfaceComboBox = new QComboBox(connectionConfigGroupBox);
+        connect(m_wirelessInterfaceComboBox, &QComboBox::currentIndexChanged, this, &MainWindow::closeBackend);
         configLayout->addWidget(m_wirelessInterfaceComboBox, row, 1);
 
         row++;
@@ -84,7 +90,6 @@ MainWindow::MainWindow(QWidget *parent) : QWidget(parent)
         m_connectBtn = new QPushButton(connectionConfigGroupBox);
         m_connectBtn->setCheckable(true);
         //m_connectBtn->setEnabled(vanilla_has_config()); // TODO: Implement this properly through the pipe at some point
-        m_backend = nullptr;
         setConnectedState(false);
         connect(m_connectBtn, &QPushButton::clicked, this, &MainWindow::setConnectedState);
         configLayout->addWidget(m_connectBtn, row, 0, 1, 2);
@@ -209,9 +214,6 @@ MainWindow::MainWindow(QWidget *parent) : QWidget(parent)
 
     configOuterLayout->addStretch();
 
-    m_backend = new Backend();
-    startObjectOnThread(m_backend);
-
     m_videoDecoder = new VideoDecoder();
     connect(m_recordBtn, &QPushButton::clicked, m_videoDecoder, &VideoDecoder::enableRecording);
     startObjectOnThread(m_videoDecoder);
@@ -224,18 +226,10 @@ MainWindow::MainWindow(QWidget *parent) : QWidget(parent)
     startObjectOnThread(m_audioHandler);
     QMetaObject::invokeMethod(m_audioHandler, &AudioHandler::run, Qt::QueuedConnection);
 
-    connect(m_backend, &Backend::videoAvailable, m_videoDecoder, &VideoDecoder::sendPacket);
-    connect(m_backend, &Backend::audioAvailable, m_videoDecoder, &VideoDecoder::sendAudio);
-    connect(m_backend, &Backend::syncCompleted, this, [this](bool e){if (e) m_connectBtn->setEnabled(true);});
     connect(m_videoDecoder, &VideoDecoder::frameReady, m_viewer, &Viewer::setImage);
     connect(m_videoDecoder, &VideoDecoder::recordingError, this, &MainWindow::recordingError);
     connect(m_videoDecoder, &VideoDecoder::recordingFinished, this, &MainWindow::recordingFinished);
-    connect(m_videoDecoder, &VideoDecoder::requestIDR, m_backend, &Backend::requestIDR, Qt::DirectConnection);
-    connect(m_backend, &Backend::audioAvailable, m_audioHandler, &AudioHandler::write);
-    connect(m_backend, &Backend::vibrate, m_gamepadHandler, &GamepadHandler::vibrate, Qt::DirectConnection);
-    connect(m_viewer, &Viewer::touch, m_backend, &Backend::updateTouch, Qt::DirectConnection);
     connect(m_gamepadHandler, &GamepadHandler::gamepadsChanged, this, &MainWindow::populateControllers);
-    connect(m_gamepadHandler, &GamepadHandler::buttonStateChanged, m_backend, &Backend::setButton, Qt::DirectConnection);
     connect(m_viewer, &Viewer::keyPressed, m_gamepadHandler, &GamepadHandler::keyPressed, Qt::DirectConnection);
     connect(m_viewer, &Viewer::keyReleased, m_gamepadHandler, &GamepadHandler::keyReleased, Qt::DirectConnection);
 
@@ -258,13 +252,16 @@ MainWindow::~MainWindow()
 
     m_videoDecoder->deleteLater();
 
-    m_backend->interrupt();
-    m_backend->deleteLater();
+    closeBackend();
 
     for (QThread *t : m_threadMap) {
         t->quit();
         t->wait();
         delete t;
+    }
+
+    if (m_pipe) {
+        m_pipe->quit();
     }
 
     SDL_Quit();
@@ -305,14 +302,22 @@ void MainWindow::populateWirelessInterfaces()
     while (tmp)
     {
         if (tmp->ifa_addr && tmp->ifa_addr->sa_family == AF_PACKET) {
-            if (isWireless(tmp->ifa_name, nullptr))
-                m_wirelessInterfaceComboBox->addItem(tmp->ifa_name);
+            if (isWireless(tmp->ifa_name, nullptr)) {
+                QString s = tmp->ifa_name;
+                m_wirelessInterfaceComboBox->addItem(s, s);
+            }
         }
 
         tmp = tmp->ifa_next;
     }
 
     freeifaddrs(addrs);
+
+    if (m_wirelessInterfaceComboBox->count() > 0) {
+        m_wirelessInterfaceComboBox->insertSeparator(m_wirelessInterfaceComboBox->count());
+    }
+
+    m_wirelessInterfaceComboBox->addItem(tr("External Server..."));
 }
 
 void MainWindow::populateMicrophones()
@@ -340,32 +345,94 @@ void MainWindow::populateControllers()
     }
 }
 
+template<typename T>
+void MainWindow::initBackend(T func)
+{
+    if (!m_backend) {
+        BackendInitDialog *d = new BackendInitDialog(this);
+        d->open();
+
+        QString localWirelessIntf = m_wirelessInterfaceComboBox->currentData().toString();
+        if (localWirelessIntf.isEmpty()) {
+            UdpAddressDialog udpDiag(this);
+            if (udpDiag.exec() == QDialog::Accepted) {
+                m_backend = new BackendViaLocalRoot(udpDiag.acceptedAddress());
+            } else {
+                d->deleteLater();
+                closeBackend();
+                return;
+            }
+        // } else if (geteuid() == 0) {
+            // If root, use lib locally
+            // m_backend = new BackendViaLocalRoot(QHostAddress());
+        } else {
+            m_pipe = new BackendPipe(localWirelessIntf, this);
+            m_backend = new BackendViaLocalRoot(QHostAddress::LocalHost);
+        }
+
+        connect(m_backend, &Backend::closed, d, &BackendInitDialog::deleteLater);
+        connect(m_backend, &Backend::ready, d, &BackendInitDialog::deleteLater);
+
+        connect(m_backend, &Backend::closed, this, &MainWindow::closeBackend);
+        connect(m_backend, &Backend::ready, this, func);
+        connect(m_backend, &Backend::error, this, &MainWindow::showBackendError);
+
+        connect(m_backend, &Backend::videoAvailable, m_videoDecoder, &VideoDecoder::sendPacket);
+        connect(m_backend, &Backend::audioAvailable, m_videoDecoder, &VideoDecoder::sendAudio);
+        connect(m_backend, &Backend::syncCompleted, this, [this](bool e){if (e) m_connectBtn->setEnabled(true);});
+        connect(m_videoDecoder, &VideoDecoder::requestIDR, m_backend, &Backend::requestIDR, Qt::DirectConnection);
+        connect(m_backend, &Backend::audioAvailable, m_audioHandler, &AudioHandler::write);
+        connect(m_backend, &Backend::vibrate, m_gamepadHandler, &GamepadHandler::vibrate, Qt::DirectConnection);
+        connect(m_viewer, &Viewer::touch, m_backend, &Backend::updateTouch, Qt::DirectConnection);
+        connect(m_gamepadHandler, &GamepadHandler::buttonStateChanged, m_backend, &Backend::setButton, Qt::DirectConnection);
+
+        startObjectOnThread(m_backend);
+        QMetaObject::invokeMethod(m_backend, &Backend::init, Qt::QueuedConnection);
+    } else {
+        func();
+    }
+}
+
 void MainWindow::showSyncDialog()
 {
-    SyncDialog *d = new SyncDialog(this);
-    d->setup(m_backend, m_wirelessInterfaceComboBox->currentText());
-    connect(d, &SyncDialog::finished, d, &SyncDialog::deleteLater);
-    d->open();
+    initBackend([this]{
+        SyncDialog *d = new SyncDialog(this);
+        d->setup(m_backend);
+        connect(d, &SyncDialog::finished, d, &SyncDialog::deleteLater);
+        d->open();
+    });
 }
 
 void MainWindow::setConnectedState(bool on)
 {
     m_wirelessInterfaceComboBox->setEnabled(!on);
     m_syncBtn->setEnabled(!on);
+    m_connectBtn->setChecked(on);
+    m_connectBtn->setText(on ? tr("Disconnect") : tr("Connect"));
     if (on) {
-        m_connectBtn->setText(tr("Disconnect"));
+        initBackend([this]{
+            if (m_pipe) {
+                m_pipe->connectToConsole();
+            }
+            
+            QMetaObject::invokeMethod(m_backend, &Backend::connectToConsole, Qt::QueuedConnection);
 
-        QMetaObject::invokeMethod(m_backend, "connectToConsole", Qt::QueuedConnection, Q_ARG(QString, m_wirelessInterfaceComboBox->currentText()));
-
-        updateVolumeAxis();
-        updateRegion();
-        updateBatteryStatus();
+            updateVolumeAxis();
+            updateRegion();
+            updateBatteryStatus();
+        });
     } else {
-        if (m_backend) {
-            m_backend->interrupt();
+        if (m_pipe) {
+            m_pipe->quit();
+            m_pipe->deleteLater();
+            m_pipe = nullptr;
         }
 
-        m_connectBtn->setText(tr("Connect"));
+        if (m_backend) {
+            m_backend->interrupt();
+            m_backend->deleteLater();
+            m_backend = nullptr;
+        }
 
         m_viewer->setImage(QImage());
     }
@@ -390,7 +457,7 @@ void MainWindow::exitFullScreen()
 
 void MainWindow::updateVolumeAxis()
 {
-    m_backend->setButton(VANILLA_AXIS_VOLUME, m_volumeSlider->value() * 0xFF / m_volumeSlider->maximum());
+    if (m_backend) m_backend->setButton(VANILLA_AXIS_VOLUME, m_volumeSlider->value() * 0xFF / m_volumeSlider->maximum());
 }
 
 void MainWindow::volumeChanged(int v)
@@ -471,10 +538,25 @@ void MainWindow::updateRegionFromComboBox()
 
 void MainWindow::updateRegion()
 {
-    m_backend->setRegion(m_regionComboBox->currentData().toInt());
+    if (m_backend) m_backend->setRegion(m_regionComboBox->currentData().toInt());
 }
 
 void MainWindow::updateBatteryStatus()
 {
-    m_backend->setBatteryStatus(m_batteryStatusComboBox->currentData().toInt());
+    if (m_backend) m_backend->setBatteryStatus(m_batteryStatusComboBox->currentData().toInt());
+}
+
+void MainWindow::closeBackend()
+{
+    setConnectedState(false);
+    if (m_backend) {
+        m_backend->interrupt();
+        m_backend->deleteLater();
+        m_backend = nullptr;
+    }
+}
+
+void MainWindow::showBackendError(const QString &err)
+{
+    QMessageBox::critical(this, tr("Backend Error"), err);
 }

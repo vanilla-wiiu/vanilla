@@ -11,5 +11,4 @@ SET(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 
 add_subdirectory(lib)
 add_subdirectory(pipe)
-add_subdirectory(cli)
 add_subdirectory(app)
