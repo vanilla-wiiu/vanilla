@@ -211,6 +211,7 @@ void send_input(int socket_hid)
     
     if (current_buttons[VANILLA_BTN_L3]) button_mask |= 0x80;
     if (current_buttons[VANILLA_BTN_R3]) button_mask |= 0x40;
+    if (current_buttons[VANILLA_BTN_TV]) button_mask |= 0x20;
 
     ip.extra_buttons = button_mask;
 
