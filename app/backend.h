@@ -18,8 +18,7 @@ public:
     virtual ~BackendPipe() override;
 
 public slots:
-    void sync(uint16_t code);
-    void connectToConsole();
+    void start();
     void quit();
 
 signals:
@@ -65,6 +64,7 @@ signals:
 public slots:
     // These slots must be called with Qt::QueuedConnection to start the event loops in the backend's thread
     virtual void init();
+    virtual void sync(uint16_t code) = 0;
     virtual void connectToConsole() = 0;
 
 };
@@ -83,6 +83,7 @@ public:
     virtual void setBatteryStatus(int status) override;
 
 public slots:
+    virtual void sync(uint16_t code) override;
     virtual void connectToConsole() override;
 
 private:

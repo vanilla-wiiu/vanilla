@@ -55,6 +55,13 @@ void BackendViaLocalRoot::requestIDR()
     vanilla_request_idr();
 }
 
+void BackendViaLocalRoot::sync(uint16_t code)
+{
+    auto watcher = new QFutureWatcher<int>();
+    connect(watcher, &QFutureWatcher<int>::finished, this, &BackendViaLocalRoot::syncFutureCompleted);
+    watcher->setFuture(QtConcurrent::run(vanilla_sync, code, m_serverAddress.toIPv4Address()));
+}
+
 void BackendViaLocalRoot::connectToConsole()
 {
     QtConcurrent::run(connectInternal, this, m_serverAddress);
@@ -113,14 +120,9 @@ BackendPipe::~BackendPipe()
     quit();
 }
 
-void BackendPipe::sync(uint16_t code)
+void BackendPipe::start()
 {
-    m_process->start(QStringLiteral("pkexec"), {pipeProcessFilename(), m_wirelessInterface, QStringLiteral("-sync"), QString::number(code)});
-}
-
-void BackendPipe::connectToConsole()
-{
-    m_process->start(QStringLiteral("pkexec"), {pipeProcessFilename(), m_wirelessInterface, QStringLiteral("-connect")});
+    m_process->start(QStringLiteral("pkexec"), {pipeProcessFilename(), m_wirelessInterface});
 }
 
 QString BackendPipe::pipeProcessFilename()

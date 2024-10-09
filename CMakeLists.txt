@@ -10,5 +10,9 @@ SET(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib")
 SET(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 
 add_subdirectory(lib)
-add_subdirectory(pipe)
+
+if (NOT ANDROID)
+	add_subdirectory(pipe)
+endif()
+
 add_subdirectory(app)

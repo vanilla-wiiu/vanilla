@@ -171,6 +171,7 @@ void VideoDecoder::startRecording()
     m_recordingFilename = QDir(QStandardPaths::writableLocation(QStandardPaths::TempLocation)).filePath("vanilla-recording-%0.mp4").arg(QDateTime::currentSecsSinceEpoch());
     
     QByteArray filenameUtf8 = m_recordingFilename.toUtf8();
+    size_t sps_pps_size;
 
     int r = avformat_alloc_output_context2(&m_recordingCtx, nullptr, nullptr, filenameUtf8.constData());
     if (r < 0) {
@@ -192,11 +193,11 @@ void VideoDecoder::startRecording()
     m_videoStream->time_base = {1, 60};
     m_videoStream->codecpar->codec_id = AV_CODEC_ID_H264;
 
-    size_t sps_pps_size;
-    vanilla_retrieve_sps_pps_data(nullptr, &sps_pps_size);
+    sps_pps_size = sizeof(VANILLA_SPS_PARAMS) + sizeof(VANILLA_PPS_PARAMS);
     m_videoStream->codecpar->extradata_size = sps_pps_size;
     m_videoStream->codecpar->extradata = (uint8_t *) av_malloc(sps_pps_size);
-    vanilla_retrieve_sps_pps_data(m_videoStream->codecpar->extradata, &sps_pps_size);
+    memcpy(m_videoStream->codecpar->extradata, VANILLA_SPS_PARAMS, sizeof(VANILLA_SPS_PARAMS));
+    memcpy(m_videoStream->codecpar->extradata + sizeof(VANILLA_SPS_PARAMS), VANILLA_PPS_PARAMS, sizeof(VANILLA_PPS_PARAMS));
 
     m_audioStream = avformat_new_stream(m_recordingCtx, nullptr);
     if (!m_audioStream) {

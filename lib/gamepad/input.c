@@ -9,6 +9,7 @@
 #include <unistd.h>
 
 #include "gamepad.h"
+#include "status.h"
 #include "vanilla.h"
 #include "util.h"
 

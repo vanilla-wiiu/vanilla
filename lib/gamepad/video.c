@@ -146,8 +146,10 @@ void handle_video_packet(vanilla_event_handler_t event_handler, void *context, u
             frame_decode_num++;
 
             if (is_idr) {
-                memcpy(nals_current, sps_pps_params, sizeof(sps_pps_params));
-                nals_current += sizeof(sps_pps_params);
+                memcpy(nals_current, VANILLA_SPS_PARAMS, sizeof(VANILLA_SPS_PARAMS));
+                nals_current += sizeof(VANILLA_SPS_PARAMS);
+                memcpy(nals_current, VANILLA_PPS_PARAMS, sizeof(VANILLA_PPS_PARAMS));
+                nals_current += sizeof(VANILLA_PPS_PARAMS);
             }
 
             // begin slice nalu

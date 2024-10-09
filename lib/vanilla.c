@@ -103,14 +103,6 @@ void vanilla_request_idr()
     request_idr();
 }
 
-void vanilla_retrieve_sps_pps_data(void *data, size_t *size)
-{
-    if (data != NULL) {
-        memcpy(data, sps_pps_params, MIN(*size, sizeof(sps_pps_params)));
-    }
-    *size = sizeof(sps_pps_params);
-}
-
 void vanilla_set_region(int region)
 {
     set_region(region);
@@ -119,4 +111,9 @@ void vanilla_set_region(int region)
 void vanilla_set_battery_status(int battery_status)
 {
     set_battery_status(battery_status);
+}
+
+int vanilla_sync(uint16_t code, uint32_t server_address)
+{
+    return sync_internal(code, server_address);
 }

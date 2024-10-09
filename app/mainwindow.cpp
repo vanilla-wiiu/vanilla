@@ -367,6 +367,8 @@ void MainWindow::initBackend(T func)
             // m_backend = new BackendViaLocalRoot(QHostAddress());
         } else {
             m_pipe = new BackendPipe(localWirelessIntf, this);
+            m_pipe->start();
+
             m_backend = new BackendViaLocalRoot(QHostAddress::LocalHost);
         }
 
@@ -411,10 +413,6 @@ void MainWindow::setConnectedState(bool on)
     m_connectBtn->setText(on ? tr("Disconnect") : tr("Connect"));
     if (on) {
         initBackend([this]{
-            if (m_pipe) {
-                m_pipe->connectToConsole();
-            }
-            
             QMetaObject::invokeMethod(m_backend, &Backend::connectToConsole, Qt::QueuedConnection);
 
             updateVolumeAxis();
