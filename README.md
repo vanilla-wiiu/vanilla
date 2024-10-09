@@ -16,6 +16,16 @@ At a minimum, you will need an adapter that supports 802.11n 5GHz. Newer standar
 
 In practice, not all hardware/drivers appear to work at this time. Check the [Wireless Compatibility](https://github.com/vanilla-wiiu/vanilla/wiki/Wireless-Compatibility) page on the wiki to check if a card is confirmed working or not.
 
+## Running (Nix)
+To run the desktop client, you can use the following command:
+```
+nix run ".?submodules=1"
+```
+For other commands use:
+```
+nix shell ".?submodules=1"
+```
+
 ## Compiling (Linux)
 #### Note: Qt 6.4 or later is required!
 Vanilla currently requires the following dependencies:

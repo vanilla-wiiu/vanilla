@@ -1,0 +1,43 @@
+{
+  "nodes": {
+    "dhclient_nixpkgs": {
+      "locked": {
+        "lastModified": 1690554897,
+        "narHash": "sha256-Nda7vK+krkrmmKKArGe2sPYItSlOa9TzWKvdSHCSv/Q=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "8d34cf8e7dfd8f00357afffe3597bc3b209edf8e",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "8d34cf8e7dfd8f00357afffe3597bc3b209edf8e",
+        "type": "github"
+      }
+    },
+    "nixpkgs": {
+      "locked": {
+        "lastModified": 1728418294,
+        "narHash": "sha256-GMx1UB4qHR3I4jrGVa9Jwalbn5YmWuJ1P6/OvobEKVo=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "47913dd80e2348aa3856674a5b3f7e425969a19b",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "root": {
+      "inputs": {
+        "dhclient_nixpkgs": "dhclient_nixpkgs",
+        "nixpkgs": "nixpkgs"
+      }
+    }
+  },
+  "root": "root",
+  "version": 7
+}
