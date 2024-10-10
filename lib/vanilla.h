@@ -29,6 +29,7 @@ enum VanillaGamepadButtons
     VANILLA_BTN_MINUS,
     VANILLA_BTN_PLUS,
     VANILLA_BTN_HOME,
+    VANILLA_BTN_TV,
     VANILLA_BTN_L3,
     VANILLA_BTN_R3,
     VANILLA_BTN_LEFT,
@@ -85,6 +86,14 @@ enum VanillaBatteryStatus {
     VANILLA_BATTERY_STATUS_FULL     = 6
 };
 
+static const uint8_t VANILLA_SPS_PARAMS[] = {
+    0x00, 0x00, 0x00, 0x01, 0x67, 0x64, 0x00, 0x20, 0xac, 0x2b, 0x40, 0x6c, 0x1e, 0xf3, 0x68,
+};
+
+static const uint8_t VANILLA_PPS_PARAMS[] = {
+    0x00, 0x00, 0x00, 0x01, 0x68, 0xee, 0x06, 0x0c, 0xe8
+};
+
 /**
  * Event handler used by caller to receive events
  */
@@ -95,6 +104,8 @@ typedef void (*vanilla_event_handler_t)(void *context, int event_type, const cha
  */
 int vanilla_start(vanilla_event_handler_t event_handler, void *context);
 int vanilla_start_udp(vanilla_event_handler_t event_handler, void *context, uint32_t server_address);
+
+int vanilla_sync(uint16_t code, uint32_t server_address);
 
 /**
  * Attempt to stop the current action
@@ -141,14 +152,6 @@ void vanilla_install_logger(void (*logger)(const char *, va_list args));
  * Request an IDR (instant decoder refresh) video frame from the console
  */
 void vanilla_request_idr();
-
-/**
- * Retrieve SPS/PPS data for H.264 encoding
- * 
- * If `data` is null, `*size` will be set to the number of bytes required.
- * If `data` is not null, bytes will be copied up to `*size` or the total number of bytes.
- */
-void vanilla_retrieve_sps_pps_data(void *data, size_t *size);
 
 /**
  * Sets the region Vanilla should present itself to the console

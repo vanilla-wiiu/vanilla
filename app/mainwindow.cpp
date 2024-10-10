@@ -38,7 +38,6 @@ MainWindow::MainWindow(QWidget *parent) : QWidget(parent)
     }
 
     m_backend = nullptr;
-    m_pipe = nullptr;
 
     qRegisterMetaType<uint16_t>("uint16_t");
 
@@ -260,10 +259,6 @@ MainWindow::~MainWindow()
         delete t;
     }
 
-    if (m_pipe) {
-        m_pipe->quit();
-    }
-
     SDL_Quit();
 
     delete m_viewer;
@@ -356,7 +351,7 @@ void MainWindow::initBackend(T func)
         if (localWirelessIntf.isEmpty()) {
             UdpAddressDialog udpDiag(this);
             if (udpDiag.exec() == QDialog::Accepted) {
-                m_backend = new BackendViaLocalRoot(udpDiag.acceptedAddress());
+                m_backend = new BackendViaExternalPipe(udpDiag.acceptedAddress());
             } else {
                 d->deleteLater();
                 closeBackend();
@@ -364,10 +359,9 @@ void MainWindow::initBackend(T func)
             }
         // } else if (geteuid() == 0) {
             // If root, use lib locally
-            // m_backend = new BackendViaLocalRoot(QHostAddress());
+            // m_backend = new Backend(QHostAddress());
         } else {
-            m_pipe = new BackendPipe(localWirelessIntf, this);
-            m_backend = new BackendViaLocalRoot(QHostAddress::LocalHost);
+            m_backend = new BackendViaInternalPipe(localWirelessIntf);
         }
 
         connect(m_backend, &Backend::closed, d, &BackendInitDialog::deleteLater);
@@ -411,10 +405,6 @@ void MainWindow::setConnectedState(bool on)
     m_connectBtn->setText(on ? tr("Disconnect") : tr("Connect"));
     if (on) {
         initBackend([this]{
-            if (m_pipe) {
-                m_pipe->connectToConsole();
-            }
-            
             QMetaObject::invokeMethod(m_backend, &Backend::connectToConsole, Qt::QueuedConnection);
 
             updateVolumeAxis();
@@ -422,16 +412,8 @@ void MainWindow::setConnectedState(bool on)
             updateBatteryStatus();
         });
     } else {
-        if (m_pipe) {
-            m_pipe->quit();
-            m_pipe->deleteLater();
-            m_pipe = nullptr;
-        }
-
         if (m_backend) {
             m_backend->interrupt();
-            m_backend->deleteLater();
-            m_backend = nullptr;
         }
 
         m_viewer->setImage(QImage());
@@ -549,6 +531,7 @@ void MainWindow::updateBatteryStatus()
 void MainWindow::closeBackend()
 {
     setConnectedState(false);
+
     if (m_backend) {
         m_backend->interrupt();
         m_backend->deleteLater();

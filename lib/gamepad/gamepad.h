@@ -25,6 +25,7 @@ struct gamepad_thread_context
     int socket_cmd;
 };
 
+int sync_internal(uint16_t code, uint32_t server_address);
 int connect_as_gamepad_internal(vanilla_event_handler_t event_handler, void *context, uint32_t server_address);
 unsigned int reverse_bits(unsigned int b, int bit_count);
 void send_to_console(int fd, const void *data, size_t data_size, int port);

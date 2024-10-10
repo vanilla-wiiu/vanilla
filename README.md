@@ -22,19 +22,19 @@ Vanilla currently requires the following dependencies:
 
 - Debian/Ubuntu 
   ```
-  # apt install qt6-base-dev qt6-multimedia-dev libavcodec-dev libavutil-dev libavfilter-dev libsdl2-dev libnl-genl-3-dev isc-dhcp-client libssl-dev
+  # apt install qt6-base-dev qt6-multimedia-dev libavcodec-dev libavutil-dev libavfilter-dev libsdl2-dev libnl-genl-3-dev isc-dhcp-client libssl-dev build-essential cmake
   ```
 - Fedora
   ```
-  # dnf install qt6-qtbase-devel qt6-qtmultimedia-devel libavcodec-free-devel libavutil-free-devel libavfilter-free-devel libnl3-devel SDL2-devel openssl-devel
+  # dnf install qt6-qtbase-devel qt6-qtmultimedia-devel libavcodec-free-devel libavutil-free-devel libavfilter-free-devel libnl3-devel SDL2-devel openssl-devel make automake gcc gcc-c++ kernel-devel cmake
   ```
 - Arch
   ```
-  # pacman -S qt6 ffmpeg libnl sdl2 dhclient
+  # pacman -S qt6 ffmpeg libnl sdl2 dhclient base-devel make cmake
   ```
 - Alpine/postmarketOS
   ```
-  # apk add qt6-qtbase-dev qt6-qtmultimedia-dev ffmpeg-dev libnl3-dev sdl2-dev dhclient
+  # apk add qt6-qtbase-dev qt6-qtmultimedia-dev ffmpeg-dev libnl3-dev sdl2-dev dhclient build-base cmake
   ```
 
 The build process is otherwise normal for a CMake program:
@@ -42,8 +42,13 @@ The build process is otherwise normal for a CMake program:
 ```
 git clone --recursive https://github.com/vanilla-wiiu/vanilla.git
 cd vanilla
-mkdir build
-cd build
+mkdir build && cd build
 cmake ..
 cmake --build .
+```
+
+Optionally, to install the program:
+
+```
+sudo cmake --install .
 ```

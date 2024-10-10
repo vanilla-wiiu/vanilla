@@ -1,4 +1,4 @@
-add_library(vanilla SHARED
+add_library(vanilla STATIC
     gamepad/audio.c
     gamepad/command.c
     gamepad/gamepad.c
@@ -13,8 +13,10 @@ target_include_directories(vanilla PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
-target_link_libraries(vanilla PRIVATE
-    pthread
-)
+if (NOT ANDROID)
+    target_link_libraries(vanilla PRIVATE
+        pthread
+    )
+endif()
 
 install(TARGETS vanilla)
