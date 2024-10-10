@@ -137,15 +137,17 @@ int connect_as_gamepad_internal(vanilla_event_handler_t event_handler, void *con
 
     // Try to bind with backend
     int pipe_cc_skt;
-    if (!create_socket(&pipe_cc_skt, VANILLA_PIPE_CMD_CLIENT_PORT)) goto exit;
+    if (server_address != 0) {
+        if (!create_socket(&pipe_cc_skt, VANILLA_PIPE_CMD_CLIENT_PORT)) goto exit;
 
-    struct timeval tv = {0};
-    tv.tv_sec = 2;
-    setsockopt(pipe_cc_skt, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+        struct timeval tv = {0};
+        tv.tv_sec = 2;
+        setsockopt(pipe_cc_skt, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
 
-    if (!send_pipe_cc(pipe_cc_skt, VANILLA_PIPE_CC_BIND, 1)) {
-        print_info("FAILED TO BIND TO PIPE");
-        goto exit_pipe;
+        if (!send_pipe_cc(pipe_cc_skt, VANILLA_PIPE_CC_BIND, 1)) {
+            print_info("FAILED TO BIND TO PIPE");
+            goto exit_pipe;
+        }
     }
 
     // Open all required sockets
@@ -178,7 +180,9 @@ int connect_as_gamepad_internal(vanilla_event_handler_t event_handler, void *con
     pthread_join(input_thread, NULL);
     pthread_join(cmd_thread, NULL);
 
-    send_pipe_cc(pipe_cc_skt, VANILLA_PIPE_CC_UNBIND, 0);
+    if (server_address != 0) {
+        send_pipe_cc(pipe_cc_skt, VANILLA_PIPE_CC_UNBIND, 0);
+    }
 
     ret = VANILLA_SUCCESS;
 
