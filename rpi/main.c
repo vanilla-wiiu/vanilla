@@ -64,7 +64,6 @@ int decode_frame(const void *data, size_t size)
         ret = av_buffersink_get_frame(m_buffersinkCtx, filtering_frame);
         if (ret < 0) {
             fprintf(stderr, "Failed to get frame from buffersink: %i\n", ret);
-            av_frame_free(&filtering_frame);
             return 1;
         }
 
@@ -95,7 +94,7 @@ void event_handler(void *context, int event_type, const char *data, size_t data_
 
 int run_backend(void *data)
 {
-	vanilla_start_udp(event_handler, NULL, inet_addr("127.0.0.1"));
+	vanilla_start_udp(event_handler, NULL, ntohl(inet_addr("127.0.0.1")));
 	return 0;
 }
 
@@ -140,7 +139,7 @@ int main(int argc, const char **argv)
 		return 1;
 	}
 
-    AVCodecContext *video_codec_ctx = avcodec_alloc_context3(codec);
+    video_codec_ctx = avcodec_alloc_context3(codec);
 	if (!video_codec_ctx) {
 		fprintf(stderr, "Failed to allocate codec context\n");
 		return 1;
@@ -149,6 +148,14 @@ int main(int argc, const char **argv)
 	int ffmpeg_err = avcodec_open2(video_codec_ctx, codec, NULL);
     if (ffmpeg_err < 0) {
 		fprintf(stderr, "Failed to open decoder: %i\n", ffmpeg_err);
+		return 1;
+	}
+
+	decoding_frame = av_frame_alloc();
+	filtering_frame = av_frame_alloc();
+	present_frame = av_frame_alloc();
+	if (!decode_frame || !filtering_frame || !present_frame) {
+		fprintf(stderr, "Failed to allocate AVFrame\n");
 		return 1;
 	}
 
@@ -166,7 +173,7 @@ int main(int argc, const char **argv)
 
     avfilter_graph_create_filter(&m_buffersinkCtx, avfilter_get_by_name("buffersink"), "out", NULL, NULL, m_filterGraph);
 
-    enum AVPixelFormat pix_fmts[] = {AV_PIX_FMT_RGB24, AV_PIX_FMT_NONE};
+    enum AVPixelFormat pix_fmts[] = {AV_PIX_FMT_RGBA, AV_PIX_FMT_NONE};
     av_opt_set_int_list(m_buffersinkCtx, "pix_fmts", pix_fmts, AV_PIX_FMT_NONE, AV_OPT_SEARCH_CHILDREN);
     
     avfilter_link(m_buffersrcCtx, 0, m_buffersinkCtx, 0);
@@ -179,7 +186,7 @@ int main(int argc, const char **argv)
 	SDL_Thread *backend_thread = SDL_CreateThread(run_backend, "Backend", NULL);
 
 	// Create main video display texture
-	SDL_Texture *main_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, SCREEN_WIDTH, SCREEN_HEIGHT);
+	SDL_Texture *main_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STREAMING, SCREEN_WIDTH, SCREEN_HEIGHT);
 
 	int delay = 16;
 
@@ -216,6 +223,9 @@ int main(int argc, const char **argv)
 	SDL_WaitThread(backend_thread, NULL);
 
     avfilter_graph_free(&m_filterGraph);
+	av_frame_free(&present_frame);
+	av_frame_free(&filtering_frame);
+	av_frame_free(&decoding_frame);
 	av_packet_free(&video_packet);
     avcodec_free_context(&video_codec_ctx);
 
