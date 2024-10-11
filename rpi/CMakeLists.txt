@@ -17,5 +17,4 @@ target_link_libraries(vanilla-pi PRIVATE
     FFmpeg::avformat
     FFmpeg::avcodec
     FFmpeg::avutil
-    FFmpeg::avfilter
 )
