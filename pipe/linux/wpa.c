@@ -976,6 +976,10 @@ void *vanilla_connect_to_console(void *data)
 void vanilla_listen(const char *wireless_interface)
 {
     int skt = open_socket(VANILLA_PIPE_CMD_SERVER_PORT);
+    if (skt == -1) {
+        pprint("Failed to open server socket\n");
+        return;
+    }
     uint32_t control_code;
 
     struct sockaddr_in addr = {0};
