@@ -132,7 +132,7 @@ int main(int argc, const char **argv)
 
 	decoding_frame = av_frame_alloc();
 	present_frame = av_frame_alloc();
-	if (!decode_frame || !present_frame) {
+	if (!decoding_frame || !present_frame) {
 		fprintf(stderr, "Failed to allocate AVFrame\n");
 		return 1;
 	}
@@ -173,13 +173,6 @@ int main(int argc, const char **argv)
 			);
 		}
 		SDL_UnlockMutex(decoding_mutex);
-
-		// int height = 64;
-		// SDL_SetRenderDrawColor(renderer, 0xFF, 0x00, 0xFF, 0xFF);
-		// SDL_RenderFillRect(renderer, NULL);
-		// SDL_Rect r = {0, 240 - height/2, hasFrame, height};
-		// SDL_SetRenderDrawColor(renderer, 0xFF, 0xFF, 0xFF, 0xFF);
-		// SDL_RenderFillRect(renderer, &r);
 
 		SDL_RenderCopy(renderer, main_texture, NULL, NULL);
 		SDL_RenderPresent(renderer);
