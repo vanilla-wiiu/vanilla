@@ -14,20 +14,22 @@
 #include <unistd.h>
 #include <vanilla.h>
 
-void vanillaEventHandler(void *context, int type, const char *data, size_t dataLength)
+void Backend::vanillaEventHandler()
 {
-    Backend *backend = static_cast<Backend*>(context);
+    vanilla_event_t event;
 
-    switch (type) {
-    case VANILLA_EVENT_VIDEO:
-        emit backend->videoAvailable(QByteArray(data, dataLength));
-        break;
-    case VANILLA_EVENT_AUDIO:
-        emit backend->audioAvailable(QByteArray(data, dataLength));
-        break;
-    case VANILLA_EVENT_VIBRATE:
-        emit backend->vibrate(*data);
-        break;
+    while (vanilla_wait_event(&event)) {
+        switch (event.type) {
+        case VANILLA_EVENT_VIDEO:
+            emit videoAvailable(QByteArray((const char *) event.data, event.size));
+            break;
+        case VANILLA_EVENT_AUDIO:
+            emit audioAvailable(QByteArray((const char *) event.data, event.size));
+            break;
+        case VANILLA_EVENT_VIBRATE:
+            emit vibrate(*event.data);
+            break;
+        }
     }
 }
 
@@ -70,12 +72,13 @@ int Backend::syncInternal(uint16_t code)
 
 void Backend::connectToConsole()
 {
-    QtConcurrent::run(&Backend::connectInternal, this);
+    connectInternal();
+    QtConcurrent::run(&Backend::vanillaEventHandler, this);
 }
 
 int Backend::connectInternal()
 {
-    return vanilla_start(vanillaEventHandler, this);
+    return vanilla_start(0);
 }
 
 void Backend::updateTouch(int x, int y)
@@ -174,7 +177,7 @@ int BackendViaInternalPipe::syncInternal(uint16_t code)
 
 int BackendViaInternalPipe::connectInternal()
 {
-    return vanilla_start_udp(vanillaEventHandler, this, QHostAddress(QHostAddress::LocalHost).toIPv4Address());
+    return vanilla_start(QHostAddress(QHostAddress::LocalHost).toIPv4Address());
 }
 
 BackendViaExternalPipe::BackendViaExternalPipe(const QHostAddress &udpServer, QObject *parent) : Backend(parent)
@@ -189,5 +192,5 @@ int BackendViaExternalPipe::syncInternal(uint16_t code)
 
 int BackendViaExternalPipe::connectInternal()
 {
-    return vanilla_start_udp(vanillaEventHandler, this, m_serverAddress.toIPv4Address());
+    return vanilla_start(m_serverAddress.toIPv4Address());
 }

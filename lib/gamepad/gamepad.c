@@ -180,7 +180,7 @@ exit:
     return ret;
 }
 
-int connect_as_gamepad_internal(vanilla_event_handler_t event_handler, void *context, uint32_t server_address)
+int connect_as_gamepad_internal(event_loop_t *event_loop, uint32_t server_address)
 {
     clear_interrupt();
 
@@ -201,9 +201,8 @@ int connect_as_gamepad_internal(vanilla_event_handler_t event_handler, void *con
         PORT_CMD += 200;
     }
 
-    struct gamepad_thread_context info;
-    info.event_handler = event_handler;
-    info.context = context;
+    gamepad_context_t info;
+    info.event_loop = event_loop;
 
     int ret = VANILLA_ERROR;
 
@@ -277,4 +276,58 @@ exit:
 int is_stop_code(const char *data, size_t data_length)
 {
     return (data_length == sizeof(STOP_CODE) && !memcmp(data, &STOP_CODE, sizeof(STOP_CODE)));
+}
+
+int push_event(event_loop_t *loop, int type, const void *data, size_t size)
+{
+
+    pthread_mutex_lock(&loop->mutex);
+
+    vanilla_event_t *ev = &loop->events[loop->new_index % VANILLA_MAX_EVENT_COUNT];
+
+    if (size <= sizeof(ev->data)) {
+        ev->type = type;
+        memcpy(ev->data, data, size);
+        ev->size = size;
+
+        loop->new_index++;
+
+        // Prevent rollover by skipping oldest event if necessary
+        if (loop->new_index > loop->used_index + VANILLA_MAX_EVENT_COUNT) {
+            print_info("SKIPPED EVENT TO PREVENT ROLLOVER (%lu > %lu + %lu)\n", loop->new_index, loop->used_index, VANILLA_MAX_EVENT_COUNT);
+            loop->used_index++;
+        }
+
+        pthread_cond_broadcast(&loop->waitcond);
+    } else {
+        print_info("FAILED TO PUSH EVENT: wanted %lu, only had %lu. This is a bug, please report to developers.\n", size, sizeof(ev->data));
+    }
+
+    pthread_mutex_unlock(&loop->mutex);
+}
+
+int get_event(event_loop_t *loop, vanilla_event_t *event, int wait)
+{
+    int ret = 0;
+
+    pthread_mutex_lock(&loop->mutex);
+
+    if (loop->active) {
+        if (wait) {
+            while (loop->active && loop->used_index == loop->new_index) {
+                pthread_cond_wait(&loop->waitcond, &loop->mutex);
+            }
+        }
+
+        if (loop->active && loop->used_index < loop->new_index) {
+            // Output data to pointer
+            *event = loop->events[loop->used_index % VANILLA_MAX_EVENT_COUNT];
+            loop->used_index++;
+            ret = 1;
+        }
+    }
+
+    pthread_mutex_unlock(&loop->mutex);
+    
+    return ret;
 }
