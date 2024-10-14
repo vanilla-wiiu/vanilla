@@ -163,6 +163,7 @@ int BackendViaInternalPipe::initInternal()
 {
     m_pipe = new BackendPipe(m_wirelessInterface, this);
     connect(m_pipe, &BackendPipe::pipeAvailable, this, &BackendViaInternalPipe::ready);
+    connect(m_pipe, &BackendPipe::closed, this, &BackendViaInternalPipe::closed);
     m_pipe->start();
     return 0;
 }
