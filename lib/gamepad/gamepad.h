@@ -20,6 +20,7 @@ typedef struct
     vanilla_event_t events[VANILLA_MAX_EVENT_COUNT];
     size_t new_index;
     size_t used_index;
+    int active;
     pthread_mutex_t mutex;
     pthread_cond_t waitcond;
 } event_loop_t;
@@ -39,6 +40,7 @@ int connect_as_gamepad_internal(event_loop_t *ctx, uint32_t server_address);
 unsigned int reverse_bits(unsigned int b, int bit_count);
 void send_to_console(int fd, const void *data, size_t data_size, int port);
 int is_stop_code(const char *data, size_t data_length);
-int push_event(gamepad_context_t *ctx, int type, const void *data, size_t size);
+int push_event(event_loop_t *loop, int type, const void *data, size_t size);
+int get_event(event_loop_t *loop, vanilla_event_t *event, int wait);
 
 #endif // VANILLA_GAMEPAD_H

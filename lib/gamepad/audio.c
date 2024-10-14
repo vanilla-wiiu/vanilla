@@ -56,10 +56,10 @@ void handle_audio_packet(gamepad_context_t *ctx, char *data, size_t len)
         return;
     }
 
-    push_event(ctx, VANILLA_EVENT_AUDIO, ap->payload, ap->payload_size);
+    push_event(ctx->event_loop, VANILLA_EVENT_AUDIO, ap->payload, ap->payload_size);
 
     uint8_t vibrate_val = ap->vibrate;
-    push_event(ctx, VANILLA_EVENT_VIBRATE, &vibrate_val, sizeof(vibrate_val));
+    push_event(ctx->event_loop, VANILLA_EVENT_VIBRATE, &vibrate_val, sizeof(vibrate_val));
 }
 
 void *listen_audio(void *x)

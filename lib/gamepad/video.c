@@ -176,7 +176,7 @@ void handle_video_packet(gamepad_context_t *ctx, unsigned char *data, size_t siz
                 nals_current++;
             }
 
-            push_event(ctx, VANILLA_EVENT_VIDEO, nals, (nals_current - nals));
+            push_event(ctx->event_loop, VANILLA_EVENT_VIDEO, nals, (nals_current - nals));
 
             free(nals);
         } else {

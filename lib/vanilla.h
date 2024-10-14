@@ -98,7 +98,7 @@ static const uint8_t VANILLA_PPS_PARAMS[] = {
 typedef struct
 {
     int type;
-    uint8_t data[2048];
+    uint8_t data[65536];
     size_t size;
 } vanilla_event_t;
 

@@ -16,7 +16,7 @@
 
 pthread_mutex_t main_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t gamepad_mutex = PTHREAD_MUTEX_INITIALIZER;
-event_loop_t event_loop = {0};
+event_loop_t event_loop = {{0}, 0, 0, 0, PTHREAD_MUTEX_INITIALIZER, PTHREAD_COND_INITIALIZER};
 
 struct gamepad_data_t
 {
@@ -26,19 +26,23 @@ struct gamepad_data_t
 void *start_gamepad(void *arg)
 {
     struct gamepad_data_t *data = (struct gamepad_data_t *) arg;
-    
-    // Initialize gamepad
+
+    pthread_mutex_lock(&event_loop.mutex);
+    event_loop.active = 1;
     event_loop.new_index = 0;
     event_loop.used_index = 0;
-    pthread_mutex_init(&event_loop.mutex, NULL);
-    pthread_cond_init(&event_loop.waitcond, NULL);
+    pthread_cond_broadcast(&event_loop.waitcond);
+    pthread_mutex_unlock(&event_loop.mutex);
     
     connect_as_gamepad_internal(&event_loop, data->server_address);
 
-    pthread_cond_destroy(&event_loop.waitcond);
-    pthread_mutex_destroy(&event_loop.mutex);
-
     free(data);
+
+    pthread_mutex_lock(&event_loop.mutex);
+    event_loop.active = 0;
+    pthread_cond_broadcast(&event_loop.waitcond);
+    pthread_mutex_unlock(&event_loop.mutex);
+
     pthread_mutex_unlock(&main_mutex);
     return 0;
 }
@@ -51,7 +55,18 @@ int vanilla_start_internal(uint32_t server_address)
         struct gamepad_data_t *data = malloc(sizeof(struct gamepad_data_t));
         data->server_address = server_address;
 
+        // Lock event loop mutex so it can't be set to active until we're ready
+        pthread_mutex_lock(&event_loop.mutex);
+
+        // Start other thread (which will set event loop to active)
         pthread_create(&other, NULL, start_gamepad, data);
+
+        // Wait for event loop to be set active before returning
+        while (!event_loop.active) {
+            pthread_cond_wait(&event_loop.waitcond, &event_loop.mutex);
+        }
+        pthread_mutex_unlock(&event_loop.mutex);
+
         return VANILLA_SUCCESS;
     } else {
         return VANILLA_ERROR;
@@ -144,36 +159,12 @@ int vanilla_sync(uint16_t code, uint32_t server_address)
     return sync_internal(code, server_address);
 }
 
-int vanilla_get_event(vanilla_event_t *event, int wait)
-{
-    int ret = 0;
-    
-    pthread_mutex_lock(&event_loop.mutex);
-
-    if (wait) {
-        while (event_loop.used_index == event_loop.new_index) {
-            pthread_cond_wait(&event_loop.waitcond, &event_loop.mutex);
-        }
-    }
-
-    if (event_loop.used_index < event_loop.new_index) {
-        // Output data to pointer
-        *event = event_loop.events[event_loop.used_index % VANILLA_MAX_EVENT_COUNT];
-        event_loop.used_index++;
-        ret = 1;
-    }
-
-    pthread_mutex_unlock(&event_loop.mutex);
-    
-    return ret;
-}
-
 int vanilla_poll_event(vanilla_event_t *event)
 {
-    return vanilla_get_event(event, 0);
+    return get_event(&event_loop, event, 0);
 }
 
 int vanilla_wait_event(vanilla_event_t *event)
 {
-    return vanilla_get_event(event, 1);
+    return get_event(&event_loop, event, 1);
 }

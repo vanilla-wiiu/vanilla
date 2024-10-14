@@ -31,8 +31,6 @@ void Backend::vanillaEventHandler()
             break;
         }
     }
-
-    // TODO: Add way for this loop to exit, preferably from libvanilla
 }
 
 Backend::Backend(QObject *parent) : QObject(parent)
