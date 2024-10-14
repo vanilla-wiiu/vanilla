@@ -46,7 +46,7 @@ void send_idr_request_to_console(int socket_msg)
     send_to_console(socket_msg, idr_request, sizeof(idr_request), PORT_MSG);
 }
 
-void handle_video_packet(vanilla_event_handler_t event_handler, void *context, unsigned char *data, size_t size, int socket_msg)
+void handle_video_packet(gamepad_context_t *ctx, unsigned char *data, size_t size, int socket_msg)
 {
     // TODO: This is all really weird. Copied from drc-sim-c but I feel like there's probably a better way.
 
@@ -176,7 +176,7 @@ void handle_video_packet(vanilla_event_handler_t event_handler, void *context, u
                 nals_current++;
             }
 
-            event_handler(context, VANILLA_EVENT_VIDEO, nals, (nals_current - nals));
+            push_event(ctx, VANILLA_EVENT_VIDEO, nals, (nals_current - nals));
 
             free(nals);
         } else {
@@ -188,7 +188,7 @@ void handle_video_packet(vanilla_event_handler_t event_handler, void *context, u
 void *listen_video(void *x)
 {
     // Receive video
-    struct gamepad_thread_context *info = (struct gamepad_thread_context *) x;
+    gamepad_context_t *info = (gamepad_context_t *) x;
     unsigned char data[2048];
     ssize_t size;
 
@@ -198,7 +198,7 @@ void *listen_video(void *x)
         size = recv(info->socket_vid, data, sizeof(data), 0);
         if (size > 0) {
             if (is_stop_code(data, size)) break;
-            handle_video_packet(info->event_handler, info->context, data, size, info->socket_msg);
+            handle_video_packet(info, data, size, info->socket_msg);
         }
     } while (!is_interrupted());
 

@@ -178,7 +178,7 @@ exit:
     return ret;
 }
 
-int connect_as_gamepad_internal(vanilla_event_handler_t event_handler, void *context, uint32_t server_address)
+int connect_as_gamepad_internal(event_loop_t *event_loop, uint32_t server_address)
 {
     clear_interrupt();
 
@@ -199,9 +199,8 @@ int connect_as_gamepad_internal(vanilla_event_handler_t event_handler, void *con
         PORT_CMD += 200;
     }
 
-    struct gamepad_thread_context info;
-    info.event_handler = event_handler;
-    info.context = context;
+    gamepad_context_t info;
+    info.event_loop = event_loop;
 
     int ret = VANILLA_ERROR;
 
@@ -270,4 +269,25 @@ exit:
 int is_stop_code(const char *data, size_t data_length)
 {
     return (data_length == sizeof(STOP_CODE) && !memcmp(data, &STOP_CODE, sizeof(STOP_CODE)));
+}
+
+int push_event(gamepad_context_t *ctx, int type, const void *data, size_t size)
+{
+    pthread_mutex_lock(&ctx->event_loop->mutex);
+
+    vanilla_event_t *ev = &ctx->event_loop->events[ctx->event_loop->new_index % VANILLA_MAX_EVENT_COUNT];
+
+    ev->type = type;
+    memcpy(ev->data, data, size);
+    ev->size = size;
+
+    ctx->event_loop->new_index++;
+
+    // Prevent rollover by skipping oldest event if necessary
+    if (ctx->event_loop->new_index > ctx->event_loop->used_index - VANILLA_MAX_EVENT_COUNT) {
+        ctx->event_loop->used_index++;
+    }
+
+    pthread_cond_broadcast(&ctx->event_loop->waitcond);
+    pthread_mutex_unlock(&ctx->event_loop->mutex);
 }

@@ -420,7 +420,7 @@ void handle_command_packet(int skt, CmdHeader *request)
 
 void *listen_command(void *x)
 {
-    struct gamepad_thread_context *info = (struct gamepad_thread_context *)x;
+    gamepad_context_t *info = (gamepad_context_t *)x;
 
     unsigned char data[sizeof(CmdHeader) + 2048];
     ssize_t size;

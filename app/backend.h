@@ -75,6 +75,8 @@ protected:
 private slots:
     void syncFutureCompleted();
 
+    void vanillaEventHandler();
+
 };
 
 class BackendViaInternalPipe : public Backend

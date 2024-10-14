@@ -2,6 +2,7 @@
 
 #include <pthread.h>
 #include <signal.h>
+#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
@@ -14,31 +15,40 @@
 #include "vanilla.h"
 
 pthread_mutex_t main_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t gamepad_mutex = PTHREAD_MUTEX_INITIALIZER;
+event_loop_t event_loop = {0};
 
 struct gamepad_data_t
 {
-    vanilla_event_handler_t event_handler;
-    void *context;
     uint32_t server_address;
 };
 
 void *start_gamepad(void *arg)
 {
     struct gamepad_data_t *data = (struct gamepad_data_t *) arg;
-    connect_as_gamepad_internal(data->event_handler, data->context, data->server_address);
+    
+    // Initialize gamepad
+    event_loop.new_index = 0;
+    event_loop.used_index = 0;
+    pthread_mutex_init(&event_loop.mutex, NULL);
+    pthread_cond_init(&event_loop.waitcond, NULL);
+    
+    connect_as_gamepad_internal(&event_loop, data->server_address);
+
+    pthread_cond_destroy(&event_loop.waitcond);
+    pthread_mutex_destroy(&event_loop.mutex);
+
     free(data);
     pthread_mutex_unlock(&main_mutex);
     return 0;
 }
 
-int vanilla_start_internal(vanilla_event_handler_t event_handler, void *context, uint32_t server_address)
+int vanilla_start_internal(uint32_t server_address)
 {
     if (pthread_mutex_trylock(&main_mutex) == 0) {
         pthread_t other;
         
         struct gamepad_data_t *data = malloc(sizeof(struct gamepad_data_t));
-        data->event_handler = event_handler;
-        data->context = context;
         data->server_address = server_address;
 
         pthread_create(&other, NULL, start_gamepad, data);
@@ -48,14 +58,9 @@ int vanilla_start_internal(vanilla_event_handler_t event_handler, void *context,
     }
 }
 
-int vanilla_start(vanilla_event_handler_t event_handler, void *context)
+int vanilla_start(uint32_t server_address)
 {
-    return vanilla_start_internal(event_handler, context, 0);
-}
-
-int vanilla_start_udp(vanilla_event_handler_t event_handler, void *context, uint32_t server_address)
-{
-    return vanilla_start_internal(event_handler, context, server_address);
+    return vanilla_start_internal(server_address);
 }
 
 void vanilla_stop()
@@ -137,4 +142,38 @@ void vanilla_set_battery_status(int battery_status)
 int vanilla_sync(uint16_t code, uint32_t server_address)
 {
     return sync_internal(code, server_address);
+}
+
+int vanilla_get_event(vanilla_event_t *event, int wait)
+{
+    int ret = 0;
+    
+    pthread_mutex_lock(&event_loop.mutex);
+
+    if (wait) {
+        while (event_loop.used_index == event_loop.new_index) {
+            pthread_cond_wait(&event_loop.waitcond, &event_loop.mutex);
+        }
+    }
+
+    if (event_loop.used_index < event_loop.new_index) {
+        // Output data to pointer
+        *event = event_loop.events[event_loop.used_index % VANILLA_MAX_EVENT_COUNT];
+        event_loop.used_index++;
+        ret = 1;
+    }
+
+    pthread_mutex_unlock(&event_loop.mutex);
+    
+    return ret;
+}
+
+int vanilla_poll_event(vanilla_event_t *event)
+{
+    return vanilla_get_event(event, 0);
+}
+
+int vanilla_wait_event(vanilla_event_t *event)
+{
+    return vanilla_get_event(event, 1);
 }

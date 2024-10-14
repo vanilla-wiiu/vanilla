@@ -60,6 +60,7 @@ enum VanillaGamepadButtons
 
 enum VanillaEvent
 {
+    VANILLA_EVENT_NONE,
     VANILLA_EVENT_VIDEO,
     VANILLA_EVENT_AUDIO,
     VANILLA_EVENT_VIBRATE
@@ -94,18 +95,21 @@ static const uint8_t VANILLA_PPS_PARAMS[] = {
     0x00, 0x00, 0x00, 0x01, 0x68, 0xee, 0x06, 0x0c, 0xe8
 };
 
-/**
- * Event handler used by caller to receive events
- */
-typedef void (*vanilla_event_handler_t)(void *context, int event_type, const char *data, size_t data_size);
+typedef struct
+{
+    int type;
+    uint8_t data[2048];
+    size_t size;
+} vanilla_event_t;
 
 /**
  * Start listening for gamepad commands
  */
-int vanilla_start(vanilla_event_handler_t event_handler, void *context);
-int vanilla_start_udp(vanilla_event_handler_t event_handler, void *context, uint32_t server_address);
-
+int vanilla_start(uint32_t server_address);
 int vanilla_sync(uint16_t code, uint32_t server_address);
+
+int vanilla_poll_event(vanilla_event_t *event);
+int vanilla_wait_event(vanilla_event_t *event);
 
 /**
  * Attempt to stop the current action

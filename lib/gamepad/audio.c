@@ -31,7 +31,7 @@ typedef struct {
     uint32_t video_format;
 } AudioPacketVideoFormat;
 
-void handle_audio_packet(vanilla_event_handler_t event_handler, void *context, char *data, size_t len)
+void handle_audio_packet(gamepad_context_t *ctx, char *data, size_t len)
 {
     for (int byte = 0; byte < len; byte++) {
         data[byte] = (unsigned char) reverse_bits(data[byte], 8);
@@ -56,22 +56,22 @@ void handle_audio_packet(vanilla_event_handler_t event_handler, void *context, c
         return;
     }
 
-    event_handler(context, VANILLA_EVENT_AUDIO, ap->payload, ap->payload_size);
+    push_event(ctx, VANILLA_EVENT_AUDIO, ap->payload, ap->payload_size);
 
     uint8_t vibrate_val = ap->vibrate;
-    event_handler(context, VANILLA_EVENT_VIBRATE, &vibrate_val, sizeof(vibrate_val));
+    push_event(ctx, VANILLA_EVENT_VIBRATE, &vibrate_val, sizeof(vibrate_val));
 }
 
 void *listen_audio(void *x)
 {
-    struct gamepad_thread_context *info = (struct gamepad_thread_context *) x;
+    gamepad_context_t *info = (gamepad_context_t *) x;
     unsigned char data[2048];
     ssize_t size;
     do {
         size = recv(info->socket_aud, data, sizeof(data), 0);
         if (size > 0) {
             if (is_stop_code(data, size)) break;
-            handle_audio_packet(info->event_handler, info->context, data, size);
+            handle_audio_packet(info, data, size);
         }
     } while (!is_interrupted());
     
