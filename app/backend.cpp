@@ -70,7 +70,7 @@ int Backend::syncInternal(uint16_t code)
 
 void Backend::connectToConsole()
 {
-    QtConcurrent::run(&Backend::connectInternal, this);
+    connectInternal();
 }
 
 int Backend::connectInternal()

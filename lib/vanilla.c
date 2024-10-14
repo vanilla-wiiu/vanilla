@@ -15,26 +15,47 @@
 
 pthread_mutex_t main_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-int vanilla_start(vanilla_event_handler_t event_handler, void *context)
+struct gamepad_data_t
+{
+    vanilla_event_handler_t event_handler;
+    void *context;
+    uint32_t server_address;
+};
+
+void *start_gamepad(void *arg)
+{
+    struct gamepad_data_t *data = (struct gamepad_data_t *) arg;
+    connect_as_gamepad_internal(data->event_handler, data->context, data->server_address);
+    free(data);
+    pthread_mutex_unlock(&main_mutex);
+    return 0;
+}
+
+int vanilla_start_internal(vanilla_event_handler_t event_handler, void *context, uint32_t server_address)
 {
     if (pthread_mutex_trylock(&main_mutex) == 0) {
-        int r = connect_as_gamepad_internal(event_handler, context, 0);
-        pthread_mutex_unlock(&main_mutex);
-        return r;
+        pthread_t other;
+        
+        struct gamepad_data_t *data = malloc(sizeof(struct gamepad_data_t));
+        data->event_handler = event_handler;
+        data->context = context;
+        data->server_address = server_address;
+
+        pthread_create(&other, NULL, start_gamepad, data);
+        return VANILLA_SUCCESS;
     } else {
         return VANILLA_ERROR;
     }
 }
 
+int vanilla_start(vanilla_event_handler_t event_handler, void *context)
+{
+    return vanilla_start_internal(event_handler, context, 0);
+}
+
 int vanilla_start_udp(vanilla_event_handler_t event_handler, void *context, uint32_t server_address)
 {
-    if (pthread_mutex_trylock(&main_mutex) == 0) {
-        int r = connect_as_gamepad_internal(event_handler, context, server_address);
-        pthread_mutex_unlock(&main_mutex);
-        return r;
-    } else {
-        return VANILLA_ERROR;
-    }
+    return vanilla_start_internal(event_handler, context, server_address);
 }
 
 void vanilla_stop()
