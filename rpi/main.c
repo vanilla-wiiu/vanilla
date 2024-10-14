@@ -7,60 +7,66 @@
 #include <stdio.h>
 #include <SDL2/SDL.h>
 #include <vanilla.h>
+#include <unistd.h>
 
 AVFrame *present_frame;
 AVFrame *decoding_frame;
 SDL_mutex *decoding_mutex;
 int decoding_ready = 0;
 AVCodecContext *video_codec_ctx;
+AVCodecParserContext *video_parser;
 AVPacket *video_packet;
+
+FILE *tmp_file;
 
 int decode_frame(const void *data, size_t size)
 {
 	int ret;
 
-    // Copy data into buffer that FFmpeg will take ownership of
-    uint8_t *buffer = (uint8_t *) av_malloc(size);
-    memcpy(buffer, data, size);
-
-    // Create AVPacket from this data
-    ret = av_packet_from_data(video_packet, buffer, size);
-    if (ret < 0) {
-        fprintf(stderr, "Failed to initialize packet from data: %i\n", ret);
-        av_free(buffer);
-        return 1;
-    }
-
-    // Send packet to decoder
-    ret = avcodec_send_packet(video_codec_ctx, video_packet);
-    av_packet_unref(video_packet);
-    if (ret < 0) {
-        fprintf(stderr, "Failed to send packet to decoder: %i\n", ret);
-        return 1;
-    }
-
-    // Retrieve frame from decoder
-    ret = avcodec_receive_frame(video_codec_ctx, decoding_frame);
-    if (ret == AVERROR(EAGAIN)) {
-        // Decoder wants another packet before it can output a frame. Silently exit.
-    } else if (ret < 0) {
-        fprintf(stderr, "Failed to receive frame from decoder: %i\n", ret);
-    } else {
-		SDL_LockMutex(decoding_mutex);
+    // Parse this data for packets
+	while (size) {
+		ret = av_parser_parse2(video_parser, video_codec_ctx, &video_packet->data, &video_packet->size,
+                               data, size, AV_NOPTS_VALUE, AV_NOPTS_VALUE, 0);
 		
-		// Swap frames
-		AVFrame *tmp = decoding_frame;
-		decoding_frame = present_frame;
-		present_frame = tmp;
+		data += ret;
+		size -= ret;
 
-		// Un-ref frame
-		av_frame_unref(decoding_frame);
+		if (video_packet->size) {
+			// Send packet to decoder
+			printf("sending packet to decoder, video_packet->data = %p, video_packet->size = %i\n", video_packet->data, video_packet->size);
+			ret = avcodec_send_packet(video_codec_ctx, video_packet);
+			if (ret < 0) {
+				fprintf(stderr, "Failed to send packet to decoder: %i\n", ret);
+				return 1;
+			}
 
-		// Signal we have a frame
-		decoding_ready = 1;
-		
-		SDL_UnlockMutex(decoding_mutex);
-    }
+			// Retrieve frame from decoder
+			printf("attempting to receive frame from decoder\n");
+			ret = avcodec_receive_frame(video_codec_ctx, decoding_frame);
+			if (ret == AVERROR(EAGAIN)) {
+				// Decoder wants another packet before it can output a frame. Silently exit.
+			} else if (ret < 0) {
+				fprintf(stderr, "Failed to receive frame from decoder: %i\n", ret);
+			} else {
+				printf("received frame, sending frame back to the main thread\n");
+				SDL_LockMutex(decoding_mutex);
+				
+				// Swap frames
+				AVFrame *tmp = decoding_frame;
+				decoding_frame = present_frame;
+				present_frame = tmp;
+
+				// Un-ref frame
+				av_frame_unref(decoding_frame);
+
+				// Signal we have a frame
+				decoding_ready = 1;
+				
+				SDL_UnlockMutex(decoding_mutex);
+			}
+		}
+	}
+
 }
 
 void event_handler(void *context, int event_type, const char *data, size_t data_size)
@@ -68,12 +74,18 @@ void event_handler(void *context, int event_type, const char *data, size_t data_
 	if (event_type == VANILLA_EVENT_VIDEO) {
 		// Decode the frame!!!!!!!!
 		decode_frame(data, data_size);
+		/*char buf[1024];
+		size_t len;
+		while ((len = fread(buf, 1, sizeof(buf), tmp_file))) {
+			decode_frame(buf, len);
+		}*/
 	}
 }
 
 int run_backend(void *data)
 {
 	vanilla_start(event_handler, NULL);
+
 	return 0;
 }
 
@@ -143,6 +155,14 @@ int main(int argc, const char **argv)
 		return 1;
 	}
 
+	video_parser = av_parser_init(codec->id);
+	if (!video_parser) {
+        fprintf(stderr, "Failed to create codec parser\n");
+        exit(1);
+    }
+
+	tmp_file = fopen("/dump.h264", "rb");
+
 	// Install logging debugger
 	vanilla_install_logger(logger);
 
@@ -180,9 +200,12 @@ int main(int argc, const char **argv)
 		SDL_Delay(16);
 	}
 	vanilla_stop();
+	
+	fclose(tmp_file);
 
 	SDL_WaitThread(backend_thread, NULL);
 
+	av_parser_close(video_parser);
 	av_frame_free(&present_frame);
 	av_frame_free(&decoding_frame);
 	av_packet_free(&video_packet);
