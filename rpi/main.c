@@ -1,6 +1,8 @@
 #define SCREEN_WIDTH    854
 #define SCREEN_HEIGHT   480
 
+#include <arpa/inet.h>
+
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
 #include <libavutil/opt.h>
@@ -17,8 +19,6 @@ AVCodecContext *video_codec_ctx;
 AVCodecParserContext *video_parser;
 AVPacket *video_packet;
 
-FILE *tmp_file;
-
 int decode_frame(const void *data, size_t size)
 {
 	int ret;
@@ -33,7 +33,6 @@ int decode_frame(const void *data, size_t size)
 
 		if (video_packet->size) {
 			// Send packet to decoder
-			printf("sending packet to decoder, video_packet->data = %p, video_packet->size = %i\n", video_packet->data, video_packet->size);
 			ret = avcodec_send_packet(video_codec_ctx, video_packet);
 			if (ret < 0) {
 				fprintf(stderr, "Failed to send packet to decoder: %i\n", ret);
@@ -41,14 +40,12 @@ int decode_frame(const void *data, size_t size)
 			}
 
 			// Retrieve frame from decoder
-			printf("attempting to receive frame from decoder\n");
 			ret = avcodec_receive_frame(video_codec_ctx, decoding_frame);
 			if (ret == AVERROR(EAGAIN)) {
 				// Decoder wants another packet before it can output a frame. Silently exit.
 			} else if (ret < 0) {
 				fprintf(stderr, "Failed to receive frame from decoder: %i\n", ret);
 			} else {
-				printf("received frame, sending frame back to the main thread\n");
 				SDL_LockMutex(decoding_mutex);
 				
 				// Swap frames
@@ -66,25 +63,17 @@ int decode_frame(const void *data, size_t size)
 			}
 		}
 	}
-
-}
-
-void event_handler(void *context, int event_type, const char *data, size_t data_size)
-{
-	if (event_type == VANILLA_EVENT_VIDEO) {
-		// Decode the frame!!!!!!!!
-		decode_frame(data, data_size);
-		/*char buf[1024];
-		size_t len;
-		while ((len = fread(buf, 1, sizeof(buf), tmp_file))) {
-			decode_frame(buf, len);
-		}*/
-	}
 }
 
 int run_backend(void *data)
 {
-	vanilla_start(event_handler, NULL);
+	vanilla_event_t event;
+
+	while (vanilla_wait_event(&event)) {
+		if (event.type == VANILLA_EVENT_VIDEO) {
+			decode_frame(event.data, event.size);
+		}
+	}
 
 	return 0;
 }
@@ -94,6 +83,7 @@ void logger(const char *s, va_list args)
 	vfprintf(stderr, s, args);
 }
 
+// #define NO_DISPLAY
 int main(int argc, const char **argv)
 {
 	// Initialize SDL2
@@ -105,6 +95,9 @@ int main(int argc, const char **argv)
 		fprintf(stderr, "Failed to initialize SDL: %s\n", SDL_GetError());
 		return 1;
 	}
+
+#ifndef NO_DISPLAY
+	SDL_ShowCursor(SDL_DISABLE);
 
 	window = SDL_CreateWindow(
 				"Vanilla Pi",
@@ -122,9 +115,11 @@ int main(int argc, const char **argv)
 		fprintf(stderr, "Failed to create renderer: %s\n", SDL_GetError());
 		return 1;
 	}
+#endif
 
 	// Initialize FFmpeg
-	const AVCodec *codec = avcodec_find_decoder(AV_CODEC_ID_H264);
+	const AVCodec *codec = avcodec_find_decoder_by_name("h264_v4l2m2m");
+	// const AVCodec *codec = avcodec_find_decoder(AV_CODEC_ID_H264);
 	if (!codec) {
 		fprintf(stderr, "No decoder was available\n");
 		return 1;
@@ -161,16 +156,20 @@ int main(int argc, const char **argv)
         exit(1);
     }
 
-	tmp_file = fopen("/dump.h264", "rb");
-
 	// Install logging debugger
 	vanilla_install_logger(logger);
+
+	// Start Vanilla
+	// vanilla_start(ntohl(inet_addr("127.0.0.1")));
+	vanilla_start(0);
 
 	// Launch backend on second thread
 	SDL_Thread *backend_thread = SDL_CreateThread(run_backend, "Backend", NULL);
 
+#ifndef NO_DISPLAY
 	// Create main video display texture
 	SDL_Texture *main_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_IYUV, SDL_TEXTUREACCESS_STREAMING, SCREEN_WIDTH, SCREEN_HEIGHT);
+#endif
 
 	int delay = 16;
 
@@ -186,22 +185,22 @@ int main(int argc, const char **argv)
 		// If a frame is available, present it here
 		SDL_LockMutex(decoding_mutex);
 		if (decoding_ready) {
+#ifndef NO_DISPLAY
 			SDL_UpdateYUVTexture(main_texture, NULL,
 				present_frame->data[0], present_frame->linesize[0],
 				present_frame->data[1], present_frame->linesize[1],
 				present_frame->data[2], present_frame->linesize[2]
 			);
+#endif
 		}
 		SDL_UnlockMutex(decoding_mutex);
 
+#ifndef NO_DISPLAY
 		SDL_RenderCopy(renderer, main_texture, NULL, NULL);
 		SDL_RenderPresent(renderer);
-		
-		SDL_Delay(16);
+#endif
 	}
 	vanilla_stop();
-	
-	fclose(tmp_file);
 
 	SDL_WaitThread(backend_thread, NULL);
 
@@ -211,8 +210,10 @@ int main(int argc, const char **argv)
 	av_packet_free(&video_packet);
     avcodec_free_context(&video_codec_ctx);
 
+#ifndef NO_DISPLAY
 	SDL_DestroyTexture(main_texture);
 	SDL_DestroyRenderer(renderer);
+#endif
 	SDL_DestroyWindow(window);
 	SDL_Quit();
 
