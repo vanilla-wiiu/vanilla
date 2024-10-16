@@ -46,13 +46,13 @@ void send_to_console(int fd, const void *data, size_t data_size, int port)
     address.sin_family = AF_INET;
     address.sin_addr.s_addr = SERVER_ADDRESS;
     address.sin_port = htons((uint16_t) (port - 100));
-
-    char ip[20];
-    inet_ntop(AF_INET, &address.sin_addr, ip, sizeof(ip));
+    
+    char ip[INET_ADDRSTRLEN];
+    inet_ntop(AF_INET, &address.sin_addr, ip, INET_ADDRSTRLEN);
 
     ssize_t sent = sendto(fd, data, data_size, 0, (const struct sockaddr *) &address, sizeof(address));
     if (sent == -1) {
-        print_info("Failed to send to Wii U socket: fd - %d; port - %d", fd, port - 100);
+        print_info("Failed to send to Wii U socket: address: %s, fd: %d, port: %d, errno: %i", ip, fd, port - 100, errno);
     }
 }
 
@@ -62,13 +62,21 @@ int create_socket(int *socket_out, uint16_t port)
     address.sin_family = AF_INET;
     address.sin_addr.s_addr = INADDR_ANY;
     address.sin_port = htons(port);
-    (*socket_out) = socket(AF_INET, SOCK_DGRAM, 0);
+
+    int skt = socket(AF_INET, SOCK_DGRAM, 0);\
+    if (skt == -1) {
+        print_info("FAILED TO CREATE SOCKET FOR PORT %i", port);
+        return 0;
+    }
+
+    (*socket_out) = skt;
     
     if (bind((*socket_out), (const struct sockaddr *) &address, sizeof(address)) == -1) {
         print_info("FAILED TO BIND PORT %u: %i", port, errno);
         return 0;
     }
 
+    print_info("SUCCESSFULLY BOUND SOCKET %i on PORT %i", skt, port);
     return 1;
 }
 
