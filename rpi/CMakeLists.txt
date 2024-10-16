@@ -6,6 +6,8 @@ add_executable(vanilla-pi
     main.c
 )
 
+install(TARGETS vanilla-pi)
+
 target_include_directories(vanilla-pi PRIVATE
     "${CMAKE_SOURCE_DIR}/lib"
 )
