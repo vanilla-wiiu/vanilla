@@ -19,6 +19,11 @@ AVCodecContext *video_codec_ctx;
 AVCodecParserContext *video_parser;
 AVPacket *video_packet;
 
+// HACK: Easy macro to test between desktop and RPi (even though ARM doesn't necessarily mean RPi)
+#ifdef __arm__
+#define RASPBERRY_PI
+#endif
+
 int decode_frame(const void *data, size_t size)
 {
 	int ret;
@@ -118,8 +123,11 @@ int main(int argc, const char **argv)
 #endif
 
 	// Initialize FFmpeg
+#ifdef RASPBERRY_PI
 	const AVCodec *codec = avcodec_find_decoder_by_name("h264_v4l2m2m");
-	// const AVCodec *codec = avcodec_find_decoder(AV_CODEC_ID_H264);
+#else
+	const AVCodec *codec = avcodec_find_decoder(AV_CODEC_ID_H264);
+#endif
 	if (!codec) {
 		fprintf(stderr, "No decoder was available\n");
 		return 1;
@@ -160,8 +168,11 @@ int main(int argc, const char **argv)
 	vanilla_install_logger(logger);
 
 	// Start Vanilla
-	// vanilla_start(ntohl(inet_addr("127.0.0.1")));
+#ifdef RASPBERRY_PI
 	vanilla_start(0);
+#else
+	vanilla_start(ntohl(inet_addr("127.0.0.1")));
+#endif
 
 	// Launch backend on second thread
 	SDL_Thread *backend_thread = SDL_CreateThread(run_backend, "Backend", NULL);
