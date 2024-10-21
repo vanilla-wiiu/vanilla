@@ -302,7 +302,7 @@ int push_event(event_loop_t *loop, int type, const void *data, size_t size)
 
         // Prevent rollover by skipping oldest event if necessary
         if (loop->new_index > loop->used_index + VANILLA_MAX_EVENT_COUNT) {
-            print_info("SKIPPED EVENT TO PREVENT ROLLOVER (%lu > %lu + %lu)\n", loop->new_index, loop->used_index, VANILLA_MAX_EVENT_COUNT);
+            print_info("SKIPPED EVENT TO PREVENT ROLLOVER (%lu > %lu + %lu)", loop->new_index, loop->used_index, VANILLA_MAX_EVENT_COUNT);
             loop->used_index++;
         }
 
