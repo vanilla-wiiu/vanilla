@@ -4,6 +4,8 @@
 #include <arpa/inet.h>
 
 #include <libavcodec/avcodec.h>
+#include <libavfilter/buffersink.h>
+#include <libavfilter/buffersrc.h>
 #include <libavformat/avformat.h>
 #include <libavutil/opt.h>
 #include <stdio.h>
@@ -11,13 +13,20 @@
 #include <vanilla.h>
 #include <unistd.h>
 
+#include "drm.h"
+
 AVFrame *present_frame;
+AVFrame *recv_frame;
 AVFrame *decoding_frame;
 SDL_mutex *decoding_mutex;
 int decoding_ready = 0;
 AVCodecContext *video_codec_ctx;
 AVCodecParserContext *video_parser;
 AVPacket *video_packet;
+int running = 0;
+AVFilterGraph *video_filter_graph;
+AVFilterContext *video_buffersrc;
+AVFilterContext *video_buffersink;
 
 // HACK: Easy macro to test between desktop and RPi (even though ARM doesn't necessarily mean RPi)
 #ifdef __arm__
@@ -51,20 +60,34 @@ int decode_frame(const void *data, size_t size)
 			} else if (ret < 0) {
 				fprintf(stderr, "Failed to receive frame from decoder: %i\n", ret);
 			} else {
-				SDL_LockMutex(decoding_mutex);
-				
-				// Swap frames
-				AVFrame *tmp = decoding_frame;
-				decoding_frame = present_frame;
-				present_frame = tmp;
-
-				// Un-ref frame
+				ret = av_buffersrc_add_frame_flags(video_buffersrc, decoding_frame, AV_BUFFERSRC_FLAG_KEEP_REF);
 				av_frame_unref(decoding_frame);
+				if (ret < 0) {
+					fprintf(stderr, "Failed to add frame to buffersrc: %i\n", ret);
+					return 1;
+				}
+
+				av_frame_unref(recv_frame);
+				ret = av_buffersink_get_frame(video_buffersink, recv_frame);
+				if (ret < 0) {
+					fprintf(stderr, "Failed to get frame from buffersink: %i\n", ret);
+					return 1;
+				}
+
+				SDL_LockMutex(decoding_mutex);
+
+				// Swap frames
+				AVFrame *tmp = recv_frame;
+				recv_frame = present_frame;
+				present_frame = tmp;
 
 				// Signal we have a frame
 				decoding_ready = 1;
 				
 				SDL_UnlockMutex(decoding_mutex);
+
+				// Un-ref frame
+				av_frame_unref(recv_frame);
 			}
 		}
 	}
@@ -88,39 +111,74 @@ void logger(const char *s, va_list args)
 	vfprintf(stderr, s, args);
 }
 
-// #define NO_DISPLAY
+int display_loop(void *data)
+{
+	vanilla_drm_ctx_t *drm_ctx = (vanilla_drm_ctx_t *) data;
+
+	Uint32 start_ticks = SDL_GetTicks();
+
+	#define TICK_MAX 30
+	Uint32 tick_deltas[TICK_MAX];
+	size_t tick_delta_index = 0;
+
+	while (running) {
+		// If a frame is available, present it here
+		SDL_LockMutex(decoding_mutex);
+		if (decoding_ready) {
+			printf("Got frame, format is: %i\n", present_frame->format);
+			// TODO: Update texture here!
+		}
+		SDL_UnlockMutex(decoding_mutex);
+
+		// FPS counter stuff
+		Uint32 now = SDL_GetTicks();
+		tick_deltas[tick_delta_index] = (now - start_ticks);
+		start_ticks = now;
+		tick_delta_index++;
+
+		if (tick_delta_index == TICK_MAX) {
+			Uint32 total = 0;
+			for (int i = 0; i < TICK_MAX; i++) {
+				total += tick_deltas[i];
+			}
+
+			fprintf(stderr, "AVERAGE FPS: %.2f\n", 1000.0f / (total / (float) TICK_MAX));
+
+			tick_delta_index = 0;
+		}
+
+		// TODO: Replace with vblank
+		SDL_Delay(16);
+	}
+
+	return 0;
+}
+
+SDL_GameController *find_valid_controller()
+{
+	for (int i = 0; i < SDL_NumJoysticks(); i++) {
+		SDL_GameController *c = SDL_GameControllerOpen(i);
+		if (c) {
+			return c;
+		}
+	}
+
+	return NULL;
+}
+
 int main(int argc, const char **argv)
 {
-	// Initialize SDL2
-	SDL_LogSetAllPriority(SDL_LOG_PRIORITY_VERBOSE);
-	
-	SDL_Window* window = NULL;
-	SDL_Surface* screenSurface = NULL;
-	if (SDL_Init(SDL_INIT_VIDEO/* | SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER*/) < 0) {
+	vanilla_drm_ctx_t drm_ctx;
+	if (!initialize_drm(&drm_ctx)) {
+		fprintf(stderr, "Failed to find DRM output\n");
+		return 1;
+	}
+
+	// Initialize SDL2 for audio and input
+	if (SDL_Init(SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER) < 0) {
 		fprintf(stderr, "Failed to initialize SDL: %s\n", SDL_GetError());
 		return 1;
 	}
-
-#ifndef NO_DISPLAY
-	SDL_ShowCursor(SDL_DISABLE);
-
-	window = SDL_CreateWindow(
-				"Vanilla Pi",
-				SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
-				SCREEN_WIDTH, SCREEN_HEIGHT,
-				SDL_WINDOW_SHOWN
-			);
-	if (window == NULL) {
-		fprintf(stderr, "Failed to create window: %s\n", SDL_GetError());
-		return 1;
-	}
-
-	SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
-	if (!renderer) {
-		fprintf(stderr, "Failed to create renderer: %s\n", SDL_GetError());
-		return 1;
-	}
-#endif
 
 	// Initialize FFmpeg
 #ifdef RASPBERRY_PI
@@ -139,15 +197,60 @@ int main(int argc, const char **argv)
 		return 1;
 	}
 
-	int ffmpeg_err = avcodec_open2(video_codec_ctx, codec, NULL);
+	int ffmpeg_err;
+
+	ffmpeg_err = av_hwdevice_ctx_create(&video_codec_ctx->hw_device_ctx, AV_HWDEVICE_TYPE_DRM, "/dev/dri/card0", NULL, 0);
+	if (ffmpeg_err < 0) {
+		fprintf(stderr, "Failed to create hwdevice context: %s (%i)\n", av_err2str(ffmpeg_err), ffmpeg_err);
+		return 1;
+	}
+
+	ffmpeg_err = avcodec_open2(video_codec_ctx, codec, NULL);
     if (ffmpeg_err < 0) {
 		fprintf(stderr, "Failed to open decoder: %i\n", ffmpeg_err);
 		return 1;
 	}
 
+	video_filter_graph = avfilter_graph_alloc();
+	if (!video_filter_graph) {
+		fprintf(stderr, "Failed to allocate filtergraphs\n");
+		return 1;
+	}
+
+    char args[512];
+    snprintf(args, sizeof(args), "video_size=%dx%d:pix_fmt=%d:time_base=1/60:pixel_aspect=1/1", SCREEN_WIDTH, SCREEN_HEIGHT, AV_PIX_FMT_YUV420P);
+    
+	ffmpeg_err = avfilter_graph_create_filter(&video_buffersrc, avfilter_get_by_name("buffer"), "in", args, NULL, video_filter_graph);
+	if (ffmpeg_err < 0) {
+		fprintf(stderr, "Failed to create buffersrc: %i\n", ffmpeg_err);
+		return 1;
+	}
+
+    ffmpeg_err = avfilter_graph_create_filter(&video_buffersink, avfilter_get_by_name("buffersink"), "out", NULL, NULL, video_filter_graph);
+	if (ffmpeg_err < 0) {
+		fprintf(stderr, "Failed to create buffersink: %i\n", ffmpeg_err);
+		return 1;
+	}
+
+    enum AVPixelFormat pix_fmts[] = {AV_PIX_FMT_DRM_PRIME, AV_PIX_FMT_NONE};
+    av_opt_set_int_list(video_buffersink, "pix_fmts", pix_fmts, AV_PIX_FMT_NONE, AV_OPT_SEARCH_CHILDREN);
+    
+    ffmpeg_err = avfilter_link(video_buffersrc, 0, video_buffersink, 0);
+	if (ffmpeg_err < 0) {
+		fprintf(stderr, "Failed to link filters: %i\n", ffmpeg_err);
+		return 1;
+	}
+
+    ffmpeg_err = avfilter_graph_config(video_filter_graph, 0);
+	if (ffmpeg_err < 0) {
+		fprintf(stderr, "Failed to configure filtergraph: %i\n", ffmpeg_err);
+		return 1;
+	}
+
 	decoding_frame = av_frame_alloc();
 	present_frame = av_frame_alloc();
-	if (!decoding_frame || !present_frame) {
+	recv_frame = av_frame_alloc();
+	if (!decoding_frame || !present_frame || !recv_frame) {
 		fprintf(stderr, "Failed to allocate AVFrame\n");
 		return 1;
 	}
@@ -174,93 +277,96 @@ int main(int argc, const char **argv)
 	vanilla_start(ntohl(inet_addr("127.0.0.1")));
 #endif
 
-	// Launch backend on second thread
+	// Create variable for background threads to run
+	running = 1;
+
+	// Start background threads
 	SDL_Thread *backend_thread = SDL_CreateThread(run_backend, "Backend", NULL);
+	SDL_Thread *display_thread = SDL_CreateThread(display_loop, "Display", &drm_ctx);
 
-#ifndef NO_DISPLAY
-	// Create main video display texture
-	SDL_Texture *main_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_IYUV, SDL_TEXTUREACCESS_STREAMING, SCREEN_WIDTH, SCREEN_HEIGHT);
-#endif
+	SDL_GameController *controller = find_valid_controller();
 
-	int delay = 16;
-
-	int dst_w, dst_h;
-	SDL_GetRendererOutputSize(renderer, &dst_w, &dst_h);
-
-	SDL_Rect center_rect;
-	center_rect.w = SCREEN_WIDTH;
-	center_rect.h = SCREEN_HEIGHT;
-	center_rect.x = dst_w/2 - SCREEN_WIDTH/2;
-	center_rect.y = dst_h/2 - SCREEN_HEIGHT/2;
-
-	Uint32 start_ticks = SDL_GetTicks();
-
-	#define TICK_MAX 30
-	Uint32 tick_deltas[TICK_MAX];
-	size_t tick_delta_index = 0;
-
-	while (1) {
+	while (running) {
 		SDL_Event event;
-		if (SDL_PollEvent(&event)) {
-			if (event.type == SDL_QUIT) {
-				vanilla_stop();
+		if (SDL_WaitEvent(&event)) {
+			switch (event.type) {
+			case SDL_QUIT:
+				// Exit loop
+				running = 0;
 				break;
+			case SDL_CONTROLLERDEVICEADDED:
+				// Attempt to find controller if one doesn't exist already
+				if (!controller) {
+					controller = find_valid_controller();
+				}
+				break;
+			case SDL_CONTROLLERDEVICEREMOVED:
+				// Handle current controller being removed
+				if (controller && event.cdevice.which == SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(controller))) {
+					SDL_GameControllerClose(controller);
+					controller = find_valid_controller();
+				}
+				break;
+			case SDL_CONTROLLERBUTTONDOWN:
+			case SDL_CONTROLLERBUTTONUP:
+				printf("Button: %i - Pressed: %i\n", event.cbutton.button, event.type == SDL_CONTROLLERBUTTONDOWN);
+				break;
+			/*case SDL_CONTROLLERBUTTONDOWN:
+			case SDL_CONTROLLERBUTTONUP:
+				if (m_controller && event.cdevice.which == SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(m_controller))) {
+					int vanilla_btn = g_buttonMap[event.cbutton.button];
+					if (vanilla_btn != -1) {
+						emit buttonStateChanged(vanilla_btn, event.type == SDL_CONTROLLERBUTTONDOWN ? INT16_MAX : 0);
+					}
+				}
+				break;
+			case SDL_CONTROLLERAXISMOTION:
+				if (m_controller && event.cdevice.which == SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(m_controller))) {
+					int vanilla_axis = g_axisMap[event.caxis.axis];
+					Sint16 axis_value = event.caxis.value;
+					if (vanilla_axis != -1) {
+						emit buttonStateChanged(vanilla_axis, axis_value);
+					}
+				}
+				break;
+			case SDL_CONTROLLERSENSORUPDATE:
+				if (event.csensor.sensor == SDL_SENSOR_ACCEL) {
+					emit buttonStateChanged(VANILLA_SENSOR_ACCEL_X, packFloat(event.csensor.data[0]));
+					emit buttonStateChanged(VANILLA_SENSOR_ACCEL_Y, packFloat(event.csensor.data[1]));
+					emit buttonStateChanged(VANILLA_SENSOR_ACCEL_Z, packFloat(event.csensor.data[2]));
+				} else if (event.csensor.sensor == SDL_SENSOR_GYRO) {
+					emit buttonStateChanged(VANILLA_SENSOR_GYRO_PITCH, packFloat(event.csensor.data[0]));
+					emit buttonStateChanged(VANILLA_SENSOR_GYRO_YAW, packFloat(event.csensor.data[1]));
+					emit buttonStateChanged(VANILLA_SENSOR_GYRO_ROLL, packFloat(event.csensor.data[2]));
+				}
+				break;*/
 			}
+    
+			/*if (m_controller) {
+				uint16_t amount = m_vibrate ? 0xFFFF : 0;
+				SDL_GameControllerRumble(m_controller, amount, amount, 0);
+			}*/
 		}
-
-		// If a frame is available, present it here
-		SDL_LockMutex(decoding_mutex);
-		if (decoding_ready) {
-#ifndef NO_DISPLAY
-			Uint32 ticks = SDL_GetTicks();
-			SDL_UpdateYUVTexture(main_texture, NULL,
-				present_frame->data[0], present_frame->linesize[0],
-				present_frame->data[1], present_frame->linesize[1],
-				present_frame->data[2], present_frame->linesize[2]
-			);
-			fprintf(stderr, "UpdateYUVTexture took: %i\n", SDL_GetTicks() - ticks);
-#endif
-		}
-		SDL_UnlockMutex(decoding_mutex);
-
-#ifndef NO_DISPLAY
-		SDL_RenderCopy(renderer, main_texture, NULL, &center_rect);
-		SDL_RenderPresent(renderer);
-#endif
-
-		Uint32 now = SDL_GetTicks();
-		tick_deltas[tick_delta_index] = (now - start_ticks);
-		start_ticks = now;
-		tick_delta_index++;
-
-		if (tick_delta_index == TICK_MAX) {
-			Uint32 total = 0;
-			for (int i = 0; i < TICK_MAX; i++) {
-				total += tick_deltas[i];
-			}
-
-			fprintf(stderr, "AVERAGE FPS: %.2f\n", 1000.0f / (total / (float) TICK_MAX));
-
-			tick_delta_index = 0;
-		}
-		// SDL_Delay(delay);
 	}
+
+	// Terminate background threads and wait for them to end gracefully
 	vanilla_stop();
+	running = 0;
 
 	SDL_WaitThread(backend_thread, NULL);
+	SDL_WaitThread(display_thread, NULL);
 
+	avfilter_graph_free(&video_filter_graph);
 	av_parser_close(video_parser);
+	av_frame_free(&recv_frame);
 	av_frame_free(&present_frame);
 	av_frame_free(&decoding_frame);
 	av_packet_free(&video_packet);
     avcodec_free_context(&video_codec_ctx);
 
-#ifndef NO_DISPLAY
-	SDL_DestroyTexture(main_texture);
-	SDL_DestroyRenderer(renderer);
-#endif
-	SDL_DestroyWindow(window);
 	SDL_Quit();
+
+	free_drm(&drm_ctx);
 
 	return 0;
 }
