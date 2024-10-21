@@ -115,7 +115,7 @@ int main(int argc, const char **argv)
 		return 1;
 	}
 
-	SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
+	SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
 	if (!renderer) {
 		fprintf(stderr, "Failed to create renderer: %s\n", SDL_GetError());
 		return 1;
@@ -184,6 +184,21 @@ int main(int argc, const char **argv)
 
 	int delay = 16;
 
+	int dst_w, dst_h;
+	SDL_GetRendererOutputSize(renderer, &dst_w, &dst_h);
+
+	SDL_Rect center_rect;
+	center_rect.w = SCREEN_WIDTH;
+	center_rect.h = SCREEN_HEIGHT;
+	center_rect.x = dst_w/2 - SCREEN_WIDTH/2;
+	center_rect.y = dst_h/2 - SCREEN_HEIGHT/2;
+
+	Uint32 start_ticks = SDL_GetTicks();
+
+	#define TICK_MAX 30
+	Uint32 tick_deltas[TICK_MAX];
+	size_t tick_delta_index = 0;
+
 	while (1) {
 		SDL_Event event;
 		if (SDL_PollEvent(&event)) {
@@ -197,19 +212,38 @@ int main(int argc, const char **argv)
 		SDL_LockMutex(decoding_mutex);
 		if (decoding_ready) {
 #ifndef NO_DISPLAY
+			Uint32 ticks = SDL_GetTicks();
 			SDL_UpdateYUVTexture(main_texture, NULL,
 				present_frame->data[0], present_frame->linesize[0],
 				present_frame->data[1], present_frame->linesize[1],
 				present_frame->data[2], present_frame->linesize[2]
 			);
+			fprintf(stderr, "UpdateYUVTexture took: %i\n", SDL_GetTicks() - ticks);
 #endif
 		}
 		SDL_UnlockMutex(decoding_mutex);
 
 #ifndef NO_DISPLAY
-		SDL_RenderCopy(renderer, main_texture, NULL, NULL);
+		SDL_RenderCopy(renderer, main_texture, NULL, &center_rect);
 		SDL_RenderPresent(renderer);
 #endif
+
+		Uint32 now = SDL_GetTicks();
+		tick_deltas[tick_delta_index] = (now - start_ticks);
+		start_ticks = now;
+		tick_delta_index++;
+
+		if (tick_delta_index == TICK_MAX) {
+			Uint32 total = 0;
+			for (int i = 0; i < TICK_MAX; i++) {
+				total += tick_deltas[i];
+			}
+
+			fprintf(stderr, "AVERAGE FPS: %.2f\n", 1000.0f / (total / (float) TICK_MAX));
+
+			tick_delta_index = 0;
+		}
+		// SDL_Delay(delay);
 	}
 	vanilla_stop();
 
