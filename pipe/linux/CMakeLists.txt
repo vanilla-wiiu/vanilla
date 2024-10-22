@@ -56,8 +56,12 @@ set_target_properties(wpa_client PROPERTIES
 )
 add_dependencies(wpa_client wpa_client_build)
 
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(LIBSYSTEMD REQUIRED libsystemd>=229)
+
 # Link our library with the client library
 target_link_libraries(vanilla-pipe PRIVATE
+    ${LIBSYSTEMD_LIBRARIES}
     wpa_client
     pthread
 )

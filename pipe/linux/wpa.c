@@ -14,6 +14,8 @@
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <systemd/sd-bus-protocol.h>
+#include <systemd/sd-bus.h>
 #include <unistd.h>
 #include <wpa_ctrl.h>
 
@@ -23,6 +25,10 @@
 #include "util.h"
 #include "vanilla.h"
 #include "wpa.h"
+
+#define DBUS_PROP_IFACE "org.freedesktop.DBus.Properties"
+#define NM_BUS_NAME "org.freedesktop.NetworkManager"
+#define NM_BUS_DEVICE_IFACE NM_BUS_NAME ".Device"
 
 const char *wpa_ctrl_interface = "/var/run/wpa_supplicant_drc";
 
@@ -450,63 +456,71 @@ int call_dhcp(const char *network_interface, pid_t *dhclient_pid)
     }
 }
 
-static const char *nmcli = "nmcli";
+static int get_networkmanager_device_path(sd_bus *bus, const char *wireless_interface, char **ret_path)
+{
+    CLEANUP(sd_bus_message_unrefp) sd_bus_message *response = NULL;
+    
+    int r = sd_bus_call_method(bus, NM_BUS_NAME, "/org/freedesktop/NetworkManager", NM_BUS_NAME, "GetDeviceByIpIface", NULL, &response, "s", wireless_interface);
+    if (r < 0)
+        return r;
+
+    char *path;
+    r = sd_bus_message_read_basic(response, SD_BUS_TYPE_OBJECT_PATH, &path);
+    *ret_path = strdup(path);
+    return r;
+}
+
 int is_networkmanager_managing_device(const char *wireless_interface, int *is_managed)
 {
-    pid_t nmcli_pid;
-    int pipe;
+    CLEANUP(sd_bus_unrefp) sd_bus *bus = NULL;
 
-    const char *argv[] = {nmcli, "device", "show", wireless_interface, NULL};
-
-    int r = start_process(argv, &nmcli_pid, &pipe, NULL);
-    if (r != VANILLA_SUCCESS) {
-        // Assume nmcli is not installed so the host is not using NetworkManager
-        print_info("FAILED TO LAUNCH NMCLI, RESULTS MAY BE UNPREDICTABLE");
-        *is_managed = 0;
-        return VANILLA_SUCCESS;
-    }
-
-    int status;
-    waitpid(nmcli_pid, &status, 0);
-
-    if (!WIFEXITED(status)) {
-        // Something went wrong
-        print_info("NMCLI DID NOT EXIT NORMALLY");
+    if (sd_bus_default_system(&bus) < 0) {
+        print_info("FAILED TO CONNECT TO SYSTEM BUS");
         return VANILLA_ERROR;
     }
 
-    char buf[100];
-    int ret = VANILLA_ERROR;
-    while (read_line_from_fd(pipe, buf, sizeof(buf))) {
-        if (memcmp(buf, "GENERAL.STATE", 13) == 0) {
-            *is_managed = !strstr(buf, "unmanaged");
-            ret = VANILLA_SUCCESS;
-            goto exit;
-        }
-    }
+    CLEANUP(freep) char *path = NULL;
+    int r = get_networkmanager_device_path(bus, wireless_interface, &path);
+    if (r == -EHOSTUNREACH) {
+        // NetworkManager doesn't seem to be running
+        print_info("FAILED TO CONNECT TO NETWORKMANAGER, RESULTS MAY BE UNPREDICTABLE");
+        *is_managed = 0;
+        return VANILLA_SUCCESS;
+    } else if (r < 0)
+        goto fail;
 
-exit:
-    close(pipe);
-    return ret;
+    if (sd_bus_get_property_trivial(bus, NM_BUS_NAME, path, NM_BUS_DEVICE_IFACE, "Managed", NULL, SD_BUS_TYPE_BOOLEAN, is_managed) < 0)
+        goto fail;
+
+    return VANILLA_SUCCESS;
+
+fail:
+    print_info("FAILED TO DETERMINE WHETHER NETWORKMANAGER IS MANAGING %s", wireless_interface);
+    return VANILLA_ERROR;
 }
 
 int set_networkmanager_on_device(const char *wireless_interface, int on)
 {
-    const char *argv[] = {nmcli, "device", "set", wireless_interface, "managed", on ? "on" : "off", NULL};
+    CLEANUP(sd_bus_unrefp) sd_bus *bus = NULL;
+    CLEANUP(sd_bus_message_unrefp) sd_bus_message *call = NULL;
 
-    pid_t nmcli_pid;
-    int r = start_process(argv, &nmcli_pid, NULL, NULL);
-    if (r != VANILLA_SUCCESS) {
-        return r;
-    }
-
-    int status;
-    waitpid(nmcli_pid, &status, 0);
-    if (WIFEXITED(status)) {
-        return VANILLA_SUCCESS;
-    } else {
+    if (sd_bus_default_system(&bus) < 0) {
+        print_info("FAILED TO CONNECT TO SYSTEM BUS");
         return VANILLA_ERROR;
     }
+
+    CLEANUP(freep) char *path = NULL;
+    if (get_networkmanager_device_path(bus, wireless_interface, &path) < 0)
+        goto fail;
+
+    if (sd_bus_set_property(bus, NM_BUS_NAME, path, NM_BUS_DEVICE_IFACE, "Managed", NULL, "b", on) < 0)
+        goto fail;
+
+    return VANILLA_SUCCESS;
+
+fail:
+    print_info("FAILED TO SET MANAGEMENT OVER NETWORKMANAGER INTERFACE %s", wireless_interface);
+    return VANILLA_ERROR;
 }
 
 int disable_networkmanager_on_device(const char *wireless_interface)
