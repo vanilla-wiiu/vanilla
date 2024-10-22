@@ -111,6 +111,7 @@ int get_binary_in_working_directory(const char *bin_name, char *buf, size_t buf_
     ssize_t link_len = readlink("/proc/self/exe", path_buf, path_size);
     if (link_len < 0) {
         print_info("READLINK ERROR: %i", errno);
+        free(path_buf);
         return -1;
     }
 
@@ -329,6 +330,7 @@ void *read_stdin(void *)
         }
     }
 
+    free(line);
     return NULL;
 }
 
@@ -430,11 +432,13 @@ int call_dhcp(const char *network_interface, pid_t *dhclient_pid)
     int r = start_process(argv, dhclient_pid, NULL, &dhclient_pipe);
     if (r != VANILLA_SUCCESS) {
         print_info("FAILED TO CALL DHCLIENT");
+        free(dhclient_buf);
+        free(dhclient_script);
         return r;
     }
 
     free(dhclient_buf);
-    if (dhclient_script) free(dhclient_script);
+    free(dhclient_script);
 
     if (wait_for_output(dhclient_pipe, "bound to")) {
         return VANILLA_SUCCESS;
@@ -761,6 +765,7 @@ int create_connect_config(const char *input_config, const char *bssid)
     FILE *out_file = fopen(get_wireless_connect_config_filename(), "w");
     if (!out_file) {
         print_info("FAILED TO OPEN OUTPUT CONFIG FILE");
+        fclose(in_file);
         return VANILLA_ERROR;
     }
 
