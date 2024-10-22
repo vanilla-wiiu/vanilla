@@ -16,7 +16,6 @@
 #include "drm.h"
 
 AVFrame *present_frame;
-AVFrame *recv_frame;
 AVFrame *decoding_frame;
 SDL_mutex *decoding_mutex;
 int decoding_ready = 0;
@@ -24,14 +23,22 @@ AVCodecContext *video_codec_ctx;
 AVCodecParserContext *video_parser;
 AVPacket *video_packet;
 int running = 0;
-AVFilterGraph *video_filter_graph;
-AVFilterContext *video_buffersrc;
-AVFilterContext *video_buffersink;
 
 // HACK: Easy macro to test between desktop and RPi (even though ARM doesn't necessarily mean RPi)
 #ifdef __arm__
 #define RASPBERRY_PI
 #endif
+
+enum AVPixelFormat get_format(AVCodecContext* ctx, const enum AVPixelFormat *pix_fmt)
+{
+    while (*pix_fmt != AV_PIX_FMT_NONE)
+    {
+        if (*pix_fmt == AV_PIX_FMT_DRM_PRIME)
+            return AV_PIX_FMT_DRM_PRIME;
+        pix_fmt++;
+    }
+    return AV_PIX_FMT_NONE;
+}
 
 int decode_frame(const void *data, size_t size)
 {
@@ -49,7 +56,7 @@ int decode_frame(const void *data, size_t size)
 			// Send packet to decoder
 			ret = avcodec_send_packet(video_codec_ctx, video_packet);
 			if (ret < 0) {
-				fprintf(stderr, "Failed to send packet to decoder: %i\n", ret);
+				fprintf(stderr, "Failed to send packet to decoder: %s (%i)\n", av_err2str(ret), ret);
 				return 1;
 			}
 
@@ -60,25 +67,12 @@ int decode_frame(const void *data, size_t size)
 			} else if (ret < 0) {
 				fprintf(stderr, "Failed to receive frame from decoder: %i\n", ret);
 			} else {
-				ret = av_buffersrc_add_frame_flags(video_buffersrc, decoding_frame, AV_BUFFERSRC_FLAG_KEEP_REF);
-				av_frame_unref(decoding_frame);
-				if (ret < 0) {
-					fprintf(stderr, "Failed to add frame to buffersrc: %i\n", ret);
-					return 1;
-				}
-
-				av_frame_unref(recv_frame);
-				ret = av_buffersink_get_frame(video_buffersink, recv_frame);
-				if (ret < 0) {
-					fprintf(stderr, "Failed to get frame from buffersink: %i\n", ret);
-					return 1;
-				}
 
 				SDL_LockMutex(decoding_mutex);
 
 				// Swap frames
-				AVFrame *tmp = recv_frame;
-				recv_frame = present_frame;
+				AVFrame *tmp = decoding_frame;
+				decoding_frame = present_frame;
 				present_frame = tmp;
 
 				// Signal we have a frame
@@ -87,7 +81,7 @@ int decode_frame(const void *data, size_t size)
 				SDL_UnlockMutex(decoding_mutex);
 
 				// Un-ref frame
-				av_frame_unref(recv_frame);
+				av_frame_unref(decoding_frame);
 			}
 		}
 	}
@@ -125,7 +119,7 @@ int display_loop(void *data)
 		// If a frame is available, present it here
 		SDL_LockMutex(decoding_mutex);
 		if (decoding_ready) {
-			printf("Got frame, format is: %i\n", present_frame->format);
+			// printf("Got frame, format is: %i\n", present_frame->format);
 			// TODO: Update texture here!
 		}
 		SDL_UnlockMutex(decoding_mutex);
@@ -205,52 +199,18 @@ int main(int argc, const char **argv)
 		return 1;
 	}
 
+	// MAKE SURE WE GET DRM PRIME FRAMES BY OVERRIDING THE GET_FORMAT FUNCTION
+	video_codec_ctx->get_format = get_format;
+
 	ffmpeg_err = avcodec_open2(video_codec_ctx, codec, NULL);
     if (ffmpeg_err < 0) {
 		fprintf(stderr, "Failed to open decoder: %i\n", ffmpeg_err);
 		return 1;
 	}
 
-	video_filter_graph = avfilter_graph_alloc();
-	if (!video_filter_graph) {
-		fprintf(stderr, "Failed to allocate filtergraphs\n");
-		return 1;
-	}
-
-    char args[512];
-    snprintf(args, sizeof(args), "video_size=%dx%d:pix_fmt=%d:time_base=1/60:pixel_aspect=1/1", SCREEN_WIDTH, SCREEN_HEIGHT, AV_PIX_FMT_YUV420P);
-    
-	ffmpeg_err = avfilter_graph_create_filter(&video_buffersrc, avfilter_get_by_name("buffer"), "in", args, NULL, video_filter_graph);
-	if (ffmpeg_err < 0) {
-		fprintf(stderr, "Failed to create buffersrc: %i\n", ffmpeg_err);
-		return 1;
-	}
-
-    ffmpeg_err = avfilter_graph_create_filter(&video_buffersink, avfilter_get_by_name("buffersink"), "out", NULL, NULL, video_filter_graph);
-	if (ffmpeg_err < 0) {
-		fprintf(stderr, "Failed to create buffersink: %i\n", ffmpeg_err);
-		return 1;
-	}
-
-    enum AVPixelFormat pix_fmts[] = {AV_PIX_FMT_DRM_PRIME, AV_PIX_FMT_NONE};
-    av_opt_set_int_list(video_buffersink, "pix_fmts", pix_fmts, AV_PIX_FMT_NONE, AV_OPT_SEARCH_CHILDREN);
-    
-    ffmpeg_err = avfilter_link(video_buffersrc, 0, video_buffersink, 0);
-	if (ffmpeg_err < 0) {
-		fprintf(stderr, "Failed to link filters: %i\n", ffmpeg_err);
-		return 1;
-	}
-
-    ffmpeg_err = avfilter_graph_config(video_filter_graph, 0);
-	if (ffmpeg_err < 0) {
-		fprintf(stderr, "Failed to configure filtergraph: %i\n", ffmpeg_err);
-		return 1;
-	}
-
 	decoding_frame = av_frame_alloc();
 	present_frame = av_frame_alloc();
-	recv_frame = av_frame_alloc();
-	if (!decoding_frame || !present_frame || !recv_frame) {
+	if (!decoding_frame || !present_frame) {
 		fprintf(stderr, "Failed to allocate AVFrame\n");
 		return 1;
 	}
@@ -356,9 +316,7 @@ int main(int argc, const char **argv)
 	SDL_WaitThread(backend_thread, NULL);
 	SDL_WaitThread(display_thread, NULL);
 
-	avfilter_graph_free(&video_filter_graph);
 	av_parser_close(video_parser);
-	av_frame_free(&recv_frame);
 	av_frame_free(&present_frame);
 	av_frame_free(&decoding_frame);
 	av_packet_free(&video_packet);
