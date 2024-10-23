@@ -8,6 +8,7 @@
 #include <libavfilter/buffersrc.h>
 #include <libavformat/avformat.h>
 #include <libavutil/opt.h>
+#include <signal.h>
 #include <stdio.h>
 #include <SDL2/SDL.h>
 #include <vanilla.h>
@@ -31,60 +32,67 @@ int running = 0;
 
 enum AVPixelFormat get_format(AVCodecContext* ctx, const enum AVPixelFormat *pix_fmt)
 {
-    while (*pix_fmt != AV_PIX_FMT_NONE)
-    {
-        if (*pix_fmt == AV_PIX_FMT_DRM_PRIME)
+    while (*pix_fmt != AV_PIX_FMT_NONE) {
+        if (*pix_fmt == AV_PIX_FMT_DRM_PRIME) {
             return AV_PIX_FMT_DRM_PRIME;
+		}
         pix_fmt++;
     }
+
     return AV_PIX_FMT_NONE;
 }
 
 int decode_frame(const void *data, size_t size)
 {
-	int ret;
+	int err;
 
     // Parse this data for packets
-	while (size) {
-		ret = av_parser_parse2(video_parser, video_codec_ctx, &video_packet->data, &video_packet->size,
-                               data, size, AV_NOPTS_VALUE, AV_NOPTS_VALUE, 0);
-		
-		data += ret;
-		size -= ret;
+	err = av_packet_from_data(video_packet, data, size);
+	if (err < 0) {
+		fprintf(stderr, "Failed to initialize AVPacket from data: %s (%i)\n", av_err2str(err), err);
+		return 0;
+	}
 
-		if (video_packet->size) {
-			// Send packet to decoder
-			ret = avcodec_send_packet(video_codec_ctx, video_packet);
-			if (ret < 0) {
-				fprintf(stderr, "Failed to send packet to decoder: %s (%i)\n", av_err2str(ret), ret);
-				return 1;
-			}
+	// Send packet to decoder
+	err = avcodec_send_packet(video_codec_ctx, video_packet);
+	if (err < 0) {
+		fprintf(stderr, "Failed to send packet to decoder: %s (%i)\n", av_err2str(err), err);
+		return 1;
+	}
 
-			// Retrieve frame from decoder
-			ret = avcodec_receive_frame(video_codec_ctx, decoding_frame);
-			if (ret == AVERROR(EAGAIN)) {
-				// Decoder wants another packet before it can output a frame. Silently exit.
-			} else if (ret < 0) {
-				fprintf(stderr, "Failed to receive frame from decoder: %i\n", ret);
-			} else {
+	int ret = 1;
 
-				SDL_LockMutex(decoding_mutex);
+	// Retrieve frame from decoder
+	while (1) {
+		err = avcodec_receive_frame(video_codec_ctx, decoding_frame);
+		if (err == AVERROR(EAGAIN)) {
+			// Decoder wants another packet before it can output a frame. Silently exit.
+			break;
+		} else if (err < 0) {
+			fprintf(stderr, "Failed to receive frame from decoder: %i\n", err);
+			ret = 0;
+			break;
+		} else {
+			SDL_LockMutex(decoding_mutex);
 
-				// Swap frames
-				AVFrame *tmp = decoding_frame;
-				decoding_frame = present_frame;
-				present_frame = tmp;
+			// Swap frames
+			AVFrame *tmp = decoding_frame;
+			decoding_frame = present_frame;
+			present_frame = tmp;
 
-				// Signal we have a frame
-				decoding_ready = 1;
-				
-				SDL_UnlockMutex(decoding_mutex);
+			printf("Frame decoded (%i), sent to display...\n", present_frame->format);
 
-				// Un-ref frame
-				av_frame_unref(decoding_frame);
-			}
+			// Signal we have a frame
+			decoding_ready = 1;
+			
+			SDL_UnlockMutex(decoding_mutex);
+
+			// Un-ref frame
+			av_frame_unref(decoding_frame);
 		}
 	}
+
+	return ret;
 }
 
 int run_backend(void *data)
@@ -119,8 +127,7 @@ int display_loop(void *data)
 		// If a frame is available, present it here
 		SDL_LockMutex(decoding_mutex);
 		if (decoding_ready) {
-			// printf("Got frame, format is: %i\n", present_frame->format);
-			// TODO: Update texture here!
+			display_drm(drm_ctx, present_frame);
 		}
 		SDL_UnlockMutex(decoding_mutex);
 
@@ -140,9 +147,6 @@ int display_loop(void *data)
 
 			tick_delta_index = 0;
 		}
-
-		// TODO: Replace with vblank
-		SDL_Delay(16);
 	}
 
 	return 0;
@@ -158,6 +162,17 @@ SDL_GameController *find_valid_controller()
 	}
 
 	return NULL;
+}
+
+void sigint_handler(int signum)
+{
+	printf("Received SIGINT...\n");
+	running = 0;
+
+	SDL_QuitEvent ev;
+	ev.type = SDL_QUIT;
+	ev.timestamp = SDL_GetTicks();
+	SDL_PushEvent((SDL_Event *) &ev);
 }
 
 int main(int argc, const char **argv)
@@ -239,6 +254,7 @@ int main(int argc, const char **argv)
 
 	// Create variable for background threads to run
 	running = 1;
+	signal(SIGINT, sigint_handler);
 
 	// Start background threads
 	SDL_Thread *backend_thread = SDL_CreateThread(run_backend, "Backend", NULL);
