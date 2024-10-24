@@ -218,17 +218,10 @@ int display_drm(vanilla_drm_ctx_t *ctx, AVFrame *frame)
               );
 
 
-    /*if (drmModeAddFB2WithModifiers(ctx->fd,
+    if (drmModeAddFB2WithModifiers(ctx->fd,
                                    frame->width, frame->height, desc->layers[0].format,
                                    bo_handles, pitches, offsets, modifiers,
-                                   &ctx->fb_id, 0) != 0) {
-        fprintf(stderr, "Failed to create framebuffer: %s\n", strerror(errno));
-        return 0;
-    }*/
-    if (drmModeAddFB2(ctx->fd,
-                      frame->width, frame->height, desc->layers[0].format,
-                      bo_handles, pitches, offsets,
-                      &ctx->fb_id, 0) != 0) {
+                                   &ctx->fb_id, DRM_MODE_FB_MODIFIERS) != 0) {
         fprintf(stderr, "Failed to create framebuffer: %s\n", strerror(errno));
         return 0;
     }
@@ -237,7 +230,7 @@ int display_drm(vanilla_drm_ctx_t *ctx, AVFrame *frame)
 
     if (drmModeSetPlane(ctx->fd, ctx->plane_id, ctx->crtc, ctx->fb_id, 0,
                     0, 0, frame->width, frame->height,
-                    0, 0, frame->width, frame->height) != 0) {
+                    0, 0, frame->width << 16, frame->height << 16) != 0) {
         fprintf(stderr, "Failed to set plane: %s\n", strerror(errno));
         return 0;
     }
