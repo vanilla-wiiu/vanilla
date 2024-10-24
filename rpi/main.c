@@ -8,6 +8,7 @@
 #include <libavfilter/buffersrc.h>
 #include <libavformat/avformat.h>
 #include <libavutil/opt.h>
+#include <semaphore.h>
 #include <signal.h>
 #include <stdio.h>
 #include <SDL2/SDL.h>
@@ -18,8 +19,8 @@
 
 AVFrame *present_frame;
 AVFrame *decoding_frame;
+sem_t decoding_sem;
 SDL_mutex *decoding_mutex;
-int decoding_ready = 0;
 AVCodecContext *video_codec_ctx;
 AVCodecParserContext *video_parser;
 AVPacket *video_packet;
@@ -47,7 +48,7 @@ int decode_frame(const void *data, size_t size)
 	int err;
 
     // Parse this data for packets
-	err = av_packet_from_data(video_packet, data, size);
+	err = av_packet_from_data(video_packet, (uint8_t *) data, size);
 	if (err < 0) {
 		fprintf(stderr, "Failed to initialize AVPacket from data: %s (%i)\n", av_err2str(err), err);
 		return 0;
@@ -72,23 +73,27 @@ int decode_frame(const void *data, size_t size)
 			fprintf(stderr, "Failed to receive frame from decoder: %i\n", err);
 			ret = 0;
 			break;
+		} else if (!decoding_frame->data[0]) {
+			fprintf(stderr, "WE GOT A NULL DATA[0] STRAIGHT FROM THE DECODER?????\n");
+			abort();
+		} else if ((decoding_frame->flags & AV_FRAME_FLAG_CORRUPT) != 0) {
+			fprintf(stderr, "GOT A CORRUPT FRAME??????\n");
+			abort();
 		} else {
 			SDL_LockMutex(decoding_mutex);
 
 			// Swap frames
-			AVFrame *tmp = decoding_frame;
-			decoding_frame = present_frame;
-			present_frame = tmp;
+			av_frame_unref(present_frame);
+			av_frame_ref(present_frame, decoding_frame);
 
-			printf("Frame decoded (%i), sent to display...\n", present_frame->format);
-
-			// Signal we have a frame
-			decoding_ready = 1;
-			
-			SDL_UnlockMutex(decoding_mutex);
+			// printf("Frame decoded (%i), sent to display...\n", present_frame->format);
 
 			// Un-ref frame
 			av_frame_unref(decoding_frame);
+			
+			SDL_UnlockMutex(decoding_mutex);
+			
+			sem_post(&decoding_sem);
 		}
 	}
 
@@ -123,13 +128,18 @@ int display_loop(void *data)
 	Uint32 tick_deltas[TICK_MAX];
 	size_t tick_delta_index = 0;
 
+	AVFrame *frame = av_frame_alloc();
+
 	while (running) {
+		sem_wait(&decoding_sem);
+
 		// If a frame is available, present it here
 		SDL_LockMutex(decoding_mutex);
-		if (decoding_ready) {
-			display_drm(drm_ctx, present_frame);
-		}
+		av_frame_unref(frame);
+		av_frame_ref(frame, present_frame);
 		SDL_UnlockMutex(decoding_mutex);
+
+		display_drm(drm_ctx, frame);
 
 		// FPS counter stuff
 		Uint32 now = SDL_GetTicks();
@@ -149,6 +159,8 @@ int display_loop(void *data)
 		}
 	}
 
+	av_frame_free(&frame);
+
 	return 0;
 }
 
@@ -166,6 +178,8 @@ SDL_GameController *find_valid_controller()
 
 void sigint_handler(int signum)
 {
+	set_tty(KD_TEXT);
+
 	printf("Received SIGINT...\n");
 	running = 0;
 
@@ -173,6 +187,8 @@ void sigint_handler(int signum)
 	ev.type = SDL_QUIT;
 	ev.timestamp = SDL_GetTicks();
 	SDL_PushEvent((SDL_Event *) &ev);
+
+	sem_post(&decoding_sem);
 }
 
 int main(int argc, const char **argv)
@@ -256,6 +272,8 @@ int main(int argc, const char **argv)
 	running = 1;
 	signal(SIGINT, sigint_handler);
 
+	sem_init(&decoding_sem, 0, 0);
+
 	// Start background threads
 	SDL_Thread *backend_thread = SDL_CreateThread(run_backend, "Backend", NULL);
 	SDL_Thread *display_thread = SDL_CreateThread(display_loop, "Display", &drm_ctx);
@@ -331,6 +349,8 @@ int main(int argc, const char **argv)
 
 	SDL_WaitThread(backend_thread, NULL);
 	SDL_WaitThread(display_thread, NULL);
+
+	sem_destroy(&decoding_sem);
 
 	av_parser_close(video_parser);
 	av_frame_free(&present_frame);

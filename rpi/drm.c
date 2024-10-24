@@ -1,14 +1,37 @@
 #include "drm.h"
 
 #include <drm_fourcc.h>
+#include <fcntl.h>
 #include <libavutil/hwcontext_drm.h>
+#include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/ioctl.h>
 #include <xf86drm.h>
 #include <xf86drmMode.h>
 
 #define DRM_FORMAT_MAX_PLANES 4u
 #define ALIGN(x, a)		((x) + (a - 1)) & (~(a - 1))
+
+int set_tty(int mode)
+{
+    /*int tty_fd = open("/dev/tty", O_RDWR);
+    if (tty_fd == -1) {
+        fprintf(stderr, "Failed to open /dev/tty\n");
+        return 0;
+    }
+    if (ioctl(tty_fd, KDSETMODE, mode) < 0) {
+        fprintf(stderr, "Failed to set KDSETMODE: %s (%i)\n", strerror(errno), errno);
+        return 0;
+    }
+    close(tty_fd);*/
+
+    if (ioctl(STDIN_FILENO, KDSETMODE, mode) < 0) {
+        fprintf(stderr, "Failed to set KDSETMODE: %s (%i)\n", strerror(errno), errno);
+        return 0;
+    }
+    return 1;
+}
 
 int initialize_drm(vanilla_drm_ctx_t *ctx)
 {
@@ -17,6 +40,10 @@ int initialize_drm(vanilla_drm_ctx_t *ctx)
 	if (ctx->fd == -1) {
 		return 0;
 	}
+
+    if (!set_tty(KD_GRAPHICS)) {
+        return 0;
+    }
 
 	int ret = 0;
 
@@ -54,7 +81,6 @@ int initialize_drm(vanilla_drm_ctx_t *ctx)
 
     ctx->got_plane = 0;
     ctx->got_fb = 0;
-    ctx->frame = av_frame_alloc();;
 
 	return ret;
 }
@@ -65,9 +91,7 @@ int free_drm(vanilla_drm_ctx_t *ctx)
         drmModeRmFB(ctx->fd, ctx->fb_id);
     }
 
-    if (ctx->frame) {
-        av_frame_free(&ctx->frame);
-    }
+    set_tty(KD_TEXT);
 
 	// Close DRM
 	drmClose(ctx->fd);
@@ -123,11 +147,12 @@ static int find_plane(const int drmfd, const int crtcidx, const uint32_t format,
 extern int running;
 int display_drm(vanilla_drm_ctx_t *ctx, AVFrame *frame)
 {
-    av_frame_unref(ctx->frame);
-    av_frame_ref(ctx->frame, frame);
-
     const AVDRMFrameDescriptor *desc = (AVDRMFrameDescriptor *) frame->data[0];
-	const uint32_t format = desc->layers[0].format;
+    /*if (!desc) {
+        return 1;
+    }*/
+
+    const uint32_t format = desc->layers[0].format;
 
     if (!ctx->got_plane) {
         if (find_plane(ctx->fd, ctx->crtc_index, format, &ctx->plane_id) < 0) {
@@ -143,7 +168,10 @@ int display_drm(vanilla_drm_ctx_t *ctx, AVFrame *frame)
         vbl.request.type = DRM_VBLANK_RELATIVE;
         vbl.request.sequence = 0;
         while (running && drmWaitVBlank(ctx->fd, &vbl)) {
-            // TODO: Break if not EINTR?
+            // Not sure what this does, stole it from hello_drmprime
+            if (errno != EINTR) {
+                break;
+            }
         }
     }
 
@@ -194,7 +222,7 @@ int display_drm(vanilla_drm_ctx_t *ctx, AVFrame *frame)
         }
     }
 
-    fprintf(stderr, "%dx%d, fmt: %x, boh=%d,%d,%d,%d, pitch=%d,%d,%d,%d,"
+    /*fprintf(stderr, "%dx%d, fmt: %x, boh=%d,%d,%d,%d, pitch=%d,%d,%d,%d,"
                " offset=%d,%d,%d,%d, mod=%llx,%llx,%llx,%llx\n",
                frame->width,
                frame->height,
@@ -215,7 +243,7 @@ int display_drm(vanilla_drm_ctx_t *ctx, AVFrame *frame)
                (long long)modifiers[1],
                (long long)modifiers[2],
                (long long)modifiers[3]
-              );
+              );*/
 
 
     if (drmModeAddFB2WithModifiers(ctx->fd,
@@ -234,8 +262,6 @@ int display_drm(vanilla_drm_ctx_t *ctx, AVFrame *frame)
         fprintf(stderr, "Failed to set plane: %s\n", strerror(errno));
         return 0;
     }
-
-    printf("Set planes!!!\n");
 
     return 1;
 }

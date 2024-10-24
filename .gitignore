@@ -1,7 +1,9 @@
 build/
-buildpi/
 .vscode/
 .directory
 .cache/
 *.AppImage
 squashfs-root/
+
+buildpi/
+rpi-ffmpeg/
