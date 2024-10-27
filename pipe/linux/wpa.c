@@ -456,32 +456,36 @@ int call_dhcp(const char *network_interface, pid_t *dhclient_pid)
     }
 }
 
-static int get_networkmanager_device_path(sd_bus *bus, const char *wireless_interface, char **ret_path)
+static int get_networkmanager_device_path(sd_bus *bus, const char *wireless_interface, char **ret_path, sd_bus_error *ret_error)
 {
-    CLEANUP(sd_bus_message_unrefp) sd_bus_message *response = NULL;
+    int r;
     
-    int r = sd_bus_call_method(bus, NM_BUS_NAME, "/org/freedesktop/NetworkManager", NM_BUS_NAME, "GetDeviceByIpIface", NULL, &response, "s", wireless_interface);
-    if (r < 0)
+    CLEANUP(sd_bus_message_unrefp) sd_bus_message *response = NULL;
+    if ((r = sd_bus_call_method(bus, NM_BUS_NAME, "/org/freedesktop/NetworkManager", NM_BUS_NAME, "GetDeviceByIpIface", ret_error, &response, "s", wireless_interface)) < 0)
         return r;
 
     char *path;
     r = sd_bus_message_read_basic(response, SD_BUS_TYPE_OBJECT_PATH, &path);
-    *ret_path = strdup(path);
+    if ((*ret_path = strdup(path)) == NULL) {
+        print_info("FAILED TO ALLOCATE MEMORY");
+        return sd_bus_error_set_errno(ret_error, ENOMEM);
+    }
     return r;
 }
 
 int is_networkmanager_managing_device(const char *wireless_interface, int *is_managed)
 {
-    CLEANUP(sd_bus_unrefp) sd_bus *bus = NULL;
+    int r;
+    CLEANUP(sd_bus_error_free) sd_bus_error err = SD_BUS_ERROR_NULL;
 
-    if (sd_bus_default_system(&bus) < 0) {
-        print_info("FAILED TO CONNECT TO SYSTEM BUS");
+    CLEANUP(sd_bus_unrefp) sd_bus *bus = NULL;
+    if ((r = sd_bus_default_system(&bus)) < 0) {
+        print_info("FAILED TO CONNECT TO SYSTEM BUS: %i", -r);
         return VANILLA_ERROR;
     }
 
     CLEANUP(freep) char *path = NULL;
-    int r = get_networkmanager_device_path(bus, wireless_interface, &path);
-    if (r == -EHOSTUNREACH) {
+    if ((r = get_networkmanager_device_path(bus, wireless_interface, &path, &err)) == -EHOSTUNREACH) {
         // NetworkManager doesn't seem to be running
         print_info("FAILED TO CONNECT TO NETWORKMANAGER, RESULTS MAY BE UNPREDICTABLE");
         *is_managed = 0;
@@ -489,37 +493,39 @@ int is_networkmanager_managing_device(const char *wireless_interface, int *is_ma
     } else if (r < 0)
         goto fail;
 
-    if (sd_bus_get_property_trivial(bus, NM_BUS_NAME, path, NM_BUS_DEVICE_IFACE, "Managed", NULL, SD_BUS_TYPE_BOOLEAN, is_managed) < 0)
+    if (sd_bus_get_property_trivial(bus, NM_BUS_NAME, path, NM_BUS_DEVICE_IFACE, "Managed", &err, SD_BUS_TYPE_BOOLEAN, is_managed) < 0)
         goto fail;
 
     return VANILLA_SUCCESS;
 
 fail:
-    print_info("FAILED TO DETERMINE WHETHER NETWORKMANAGER IS MANAGING %s", wireless_interface);
+    print_info("FAILED TO DETERMINE WHETHER NETWORKMANAGER IS MANAGING %s: %s", wireless_interface, err.message);
     return VANILLA_ERROR;
 }
 
-int set_networkmanager_on_device(const char *wireless_interface, int on)
+static int set_networkmanager_on_device(const char *wireless_interface, int on)
 {
-    CLEANUP(sd_bus_unrefp) sd_bus *bus = NULL;
+    int r;
+    CLEANUP(sd_bus_error_free) sd_bus_error err = SD_BUS_ERROR_NULL;
     CLEANUP(sd_bus_message_unrefp) sd_bus_message *call = NULL;
 
-    if (sd_bus_default_system(&bus) < 0) {
-        print_info("FAILED TO CONNECT TO SYSTEM BUS");
+    CLEANUP(sd_bus_unrefp) sd_bus *bus = NULL;
+    if ((r = sd_bus_default_system(&bus)) < 0) {
+        print_info("FAILED TO CONNECT TO SYSTEM BUS: %i", -r);
         return VANILLA_ERROR;
     }
 
     CLEANUP(freep) char *path = NULL;
-    if (get_networkmanager_device_path(bus, wireless_interface, &path) < 0)
+    if (get_networkmanager_device_path(bus, wireless_interface, &path, &err) < 0)
         goto fail;
 
-    if (sd_bus_set_property(bus, NM_BUS_NAME, path, NM_BUS_DEVICE_IFACE, "Managed", NULL, "b", on) < 0)
+    if (sd_bus_set_property(bus, NM_BUS_NAME, path, NM_BUS_DEVICE_IFACE, "Managed", &err, "b", on) < 0)
         goto fail;
 
     return VANILLA_SUCCESS;
 
 fail:
-    print_info("FAILED TO SET MANAGEMENT OVER NETWORKMANAGER INTERFACE %s", wireless_interface);
+    print_info("FAILED TO SET MANAGEMENT OVER NETWORKMANAGER INTERFACE %s: %s", wireless_interface, err.message);
     return VANILLA_ERROR;
 }
 
