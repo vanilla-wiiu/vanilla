@@ -8,6 +8,7 @@
 #include <libavfilter/buffersrc.h>
 #include <libavformat/avformat.h>
 #include <libavutil/opt.h>
+#include <pthread.h>
 #include <semaphore.h>
 #include <signal.h>
 #include <stdio.h>
@@ -19,8 +20,8 @@
 
 AVFrame *present_frame;
 AVFrame *decoding_frame;
-sem_t decoding_sem;
-SDL_mutex *decoding_mutex;
+pthread_mutex_t decoding_mutex;
+pthread_cond_t decoding_wait_cond;
 AVCodecContext *video_codec_ctx;
 AVCodecParserContext *video_parser;
 AVPacket *video_packet;
@@ -43,7 +44,7 @@ enum AVPixelFormat get_format(AVCodecContext* ctx, const enum AVPixelFormat *pix
     return AV_PIX_FMT_NONE;
 }
 
-int decode_frame(const void *data, size_t size)
+int decode(const void *data, size_t size)
 {
 	int err;
 
@@ -80,20 +81,14 @@ int decode_frame(const void *data, size_t size)
 			fprintf(stderr, "GOT A CORRUPT FRAME??????\n");
 			abort();
 		} else {
-			SDL_LockMutex(decoding_mutex);
+			pthread_mutex_lock(&decoding_mutex);
 
-			// Swap frames
+			// Swap refs from decoding_frame to present_frame
 			av_frame_unref(present_frame);
-			av_frame_ref(present_frame, decoding_frame);
-
-			// printf("Frame decoded (%i), sent to display...\n", present_frame->format);
-
-			// Un-ref frame
-			av_frame_unref(decoding_frame);
+			av_frame_move_ref(present_frame, decoding_frame);
 			
-			SDL_UnlockMutex(decoding_mutex);
-			
-			sem_post(&decoding_sem);
+			pthread_cond_broadcast(&decoding_wait_cond);
+			pthread_mutex_unlock(&decoding_mutex);
 		}
 	}
 
@@ -106,7 +101,7 @@ int run_backend(void *data)
 
 	while (vanilla_wait_event(&event)) {
 		if (event.type == VANILLA_EVENT_VIDEO) {
-			decode_frame(event.data, event.size);
+			decode(event.data, event.size);
 		}
 	}
 
@@ -130,14 +125,22 @@ int display_loop(void *data)
 
 	AVFrame *frame = av_frame_alloc();
 
+	pthread_mutex_lock(&decoding_mutex);
+
 	while (running) {
-		sem_wait(&decoding_sem);
+		while (running && !present_frame->data[0]) {
+			pthread_cond_wait(&decoding_wait_cond, &decoding_mutex);
+		}
+
+		if (!running) {
+			break;
+		}
 
 		// If a frame is available, present it here
-		SDL_LockMutex(decoding_mutex);
 		av_frame_unref(frame);
-		av_frame_ref(frame, present_frame);
-		SDL_UnlockMutex(decoding_mutex);
+		av_frame_move_ref(frame, present_frame);
+		
+		pthread_mutex_unlock(&decoding_mutex);
 
 		display_drm(drm_ctx, frame);
 
@@ -157,7 +160,11 @@ int display_loop(void *data)
 
 			tick_delta_index = 0;
 		}
+	
+		pthread_mutex_lock(&decoding_mutex);
 	}
+
+	pthread_mutex_unlock(&decoding_mutex);
 
 	av_frame_free(&frame);
 
@@ -187,8 +194,6 @@ void sigint_handler(int signum)
 	ev.type = SDL_QUIT;
 	ev.timestamp = SDL_GetTicks();
 	SDL_PushEvent((SDL_Event *) &ev);
-
-	sem_post(&decoding_sem);
 }
 
 int main(int argc, const char **argv)
@@ -272,7 +277,8 @@ int main(int argc, const char **argv)
 	running = 1;
 	signal(SIGINT, sigint_handler);
 
-	sem_init(&decoding_sem, 0, 0);
+	pthread_mutex_init(&decoding_mutex, NULL);
+	pthread_cond_init(&decoding_wait_cond, NULL);
 
 	// Start background threads
 	SDL_Thread *backend_thread = SDL_CreateThread(run_backend, "Backend", NULL);
@@ -345,12 +351,17 @@ int main(int argc, const char **argv)
 
 	// Terminate background threads and wait for them to end gracefully
 	vanilla_stop();
+
+	pthread_mutex_lock(&decoding_mutex);
 	running = 0;
+	pthread_cond_broadcast(&decoding_wait_cond);
+	pthread_mutex_unlock(&decoding_mutex);
 
 	SDL_WaitThread(backend_thread, NULL);
 	SDL_WaitThread(display_thread, NULL);
 
-	sem_destroy(&decoding_sem);
+	pthread_cond_destroy(&decoding_wait_cond);
+	pthread_mutex_destroy(&decoding_mutex);
 
 	av_parser_close(video_parser);
 	av_frame_free(&present_frame);

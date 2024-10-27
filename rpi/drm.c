@@ -2,7 +2,6 @@
 
 #include <drm_fourcc.h>
 #include <fcntl.h>
-#include <libavutil/hwcontext_drm.h>
 #include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -10,12 +9,11 @@
 #include <xf86drm.h>
 #include <xf86drmMode.h>
 
-#define DRM_FORMAT_MAX_PLANES 4u
 #define ALIGN(x, a)		((x) + (a - 1)) & (~(a - 1))
 
 int set_tty(int mode)
 {
-    /*int tty_fd = open("/dev/tty", O_RDWR);
+    /*int tty_fd = open("/dev/tty0", O_RDWR);
     if (tty_fd == -1) {
         fprintf(stderr, "Failed to open /dev/tty\n");
         return 0;
@@ -26,10 +24,11 @@ int set_tty(int mode)
     }
     close(tty_fd);*/
 
-    if (ioctl(STDIN_FILENO, KDSETMODE, mode) < 0) {
+    /*if (ioctl(STDIN_FILENO, KDSETMODE, mode) < 0) {
         fprintf(stderr, "Failed to set KDSETMODE: %s (%i)\n", strerror(errno), errno);
         return 0;
-    }
+    }*/
+
     return 1;
 }
 
@@ -81,6 +80,8 @@ int initialize_drm(vanilla_drm_ctx_t *ctx)
 
     ctx->got_plane = 0;
     ctx->got_fb = 0;
+    ctx->got_handles = 0;
+    memset(ctx->handles, 0, sizeof(ctx->handles));
 
 	return ret;
 }
@@ -148,10 +149,6 @@ extern int running;
 int display_drm(vanilla_drm_ctx_t *ctx, AVFrame *frame)
 {
     const AVDRMFrameDescriptor *desc = (AVDRMFrameDescriptor *) frame->data[0];
-    /*if (!desc) {
-        return 1;
-    }*/
-
     const uint32_t format = desc->layers[0].format;
 
     if (!ctx->got_plane) {
@@ -179,28 +176,15 @@ int display_drm(vanilla_drm_ctx_t *ctx, AVFrame *frame)
         return 1;
     }*/
 
-    uint32_t handles[AV_DRM_MAX_PLANES];
-    uint32_t pitches[DRM_FORMAT_MAX_PLANES] = {0};
-    uint32_t offsets[DRM_FORMAT_MAX_PLANES] = {0};
-    uint32_t bo_handles[DRM_FORMAT_MAX_PLANES] = {0};
-    uint64_t modifiers[DRM_FORMAT_MAX_PLANES] = {0};
+    uint32_t pitches[AV_DRM_MAX_PLANES] = {0};
+    uint32_t offsets[AV_DRM_MAX_PLANES] = {0};
+    uint32_t bo_handles[AV_DRM_MAX_PLANES] = {0};
+    uint64_t modifiers[AV_DRM_MAX_PLANES] = {0};
 
-    // Free old handles
-    if (ctx->got_fb) {
-        drmModeRmFB(ctx->fd, ctx->fb_id);
-        ctx->fb_id = 0;
-
-        struct drm_gem_close gem_close = {0};
-        for (int i = 0; i < desc->nb_objects; i++) {
-            if (handles[i]) {
-                gem_close.handle = handles[i];
-                drmIoctl(ctx->fd, DRM_IOCTL_GEM_CLOSE, &gem_close);
-            }
-        }
-    }
+    uint32_t new_handles[AV_DRM_MAX_PLANES] = {0};
 
     for (int i = 0; i < desc->nb_objects; i++) {
-        if (drmPrimeFDToHandle(ctx->fd, desc->objects[i].fd, &handles[i]) != 0) {
+        if (drmPrimeFDToHandle(ctx->fd, desc->objects[i].fd, &new_handles[i]) != 0) {
             fprintf(stderr, "Failed to get handle from file descriptor: %s\n", strerror(errno));
             return 0;
         }
@@ -216,7 +200,7 @@ int display_drm(vanilla_drm_ctx_t *ctx, AVFrame *frame)
             pitches[n] = plane->pitch;
             offsets[n] = plane->offset;
             modifiers[n] = obj->format_modifier;
-            bo_handles[n] = handles[plane->object_index];
+            bo_handles[n] = new_handles[plane->object_index];
 
             n++;
         }
@@ -245,23 +229,41 @@ int display_drm(vanilla_drm_ctx_t *ctx, AVFrame *frame)
                (long long)modifiers[3]
               );*/
 
-
+    uint32_t new_fb;
     if (drmModeAddFB2WithModifiers(ctx->fd,
                                    frame->width, frame->height, desc->layers[0].format,
                                    bo_handles, pitches, offsets, modifiers,
-                                   &ctx->fb_id, DRM_MODE_FB_MODIFIERS) != 0) {
+                                   &new_fb, DRM_MODE_FB_MODIFIERS) != 0) {
         fprintf(stderr, "Failed to create framebuffer: %s\n", strerror(errno));
         return 0;
     }
 
-    ctx->got_fb = 1;
-
-    if (drmModeSetPlane(ctx->fd, ctx->plane_id, ctx->crtc, ctx->fb_id, 0,
+    if (drmModeSetPlane(ctx->fd, ctx->plane_id, ctx->crtc, new_fb, 0,
                     0, 0, frame->width, frame->height,
                     0, 0, frame->width << 16, frame->height << 16) != 0) {
         fprintf(stderr, "Failed to set plane: %s\n", strerror(errno));
         return 0;
     }
+
+    // Free old framebuffer
+    if (ctx->got_fb) {
+        drmModeRmFB(ctx->fd, ctx->fb_id);
+    }
+    ctx->fb_id = new_fb;
+    ctx->got_fb = 1;
+
+    if (ctx->got_handles) {
+        struct drm_gem_close gem_close = {0};
+        for (int i = 0; i < desc->nb_objects; i++) {
+            if (ctx->handles[i]) {
+                gem_close.handle = ctx->handles[i];
+                drmIoctl(ctx->fd, DRM_IOCTL_GEM_CLOSE, &gem_close);
+                ctx->handles[i] = 0;
+            }
+        }
+    }
+    memcpy(ctx->handles, new_handles, sizeof(ctx->handles));
+    ctx->got_handles = 1;
 
     return 1;
 }

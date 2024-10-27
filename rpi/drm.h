@@ -2,6 +2,7 @@
 #define VANILLA_PI_DRM_H
 
 #include <libavutil/frame.h>
+#include <libavutil/hwcontext_drm.h>
 #include <linux/kd.h>
 #include <stdint.h>
 
@@ -13,6 +14,8 @@ typedef struct {
 	int got_plane;
 	uint32_t fb_id;
 	int got_fb;
+	uint32_t handles[AV_DRM_MAX_PLANES];
+	int got_handles;
 } vanilla_drm_ctx_t;
 
 int set_tty(int mode);
