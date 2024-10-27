@@ -60,6 +60,7 @@ int vanilla_start_internal(uint32_t server_address)
 
         // Start other thread (which will set event loop to active)
         pthread_create(&other, NULL, start_gamepad, data);
+        name_thread(other, "vanilla-gamepad");
 
         // Wait for event loop to be set active before returning
         while (!event_loop.active) {

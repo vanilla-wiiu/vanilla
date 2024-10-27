@@ -281,8 +281,8 @@ int main(int argc, const char **argv)
 	pthread_cond_init(&decoding_wait_cond, NULL);
 
 	// Start background threads
-	SDL_Thread *backend_thread = SDL_CreateThread(run_backend, "Backend", NULL);
-	SDL_Thread *display_thread = SDL_CreateThread(display_loop, "Display", &drm_ctx);
+	SDL_Thread *backend_thread = SDL_CreateThread(run_backend, "vanilla-pi-backend", NULL);
+	SDL_Thread *display_thread = SDL_CreateThread(display_loop, "vanilla-pi-display", &drm_ctx);
 
 	SDL_GameController *controller = find_valid_controller();
 
