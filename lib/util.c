@@ -1,9 +1,11 @@
 #include "util.h"
 
 #include <dlfcn.h>
+#include <math.h>
 #include <signal.h>
 #include <stdlib.h>
 #include <sys/stat.h>
+#include <time.h>
 #include <unistd.h>
 
 #include "status.h"
@@ -77,4 +79,22 @@ void name_thread(pthread_t thread, const char *name)
     if (ppthread_setname_np) {
         ppthread_setname_np(thread, name);
     }
+}
+
+size_t get_millis()
+{
+    size_t            ms; // Milliseconds
+    size_t          s;  // Seconds
+    struct timespec spec;
+
+    clock_gettime(CLOCK_REALTIME, &spec);
+
+    s  = spec.tv_sec;
+    ms = round(spec.tv_nsec / 1.0e6); // Convert nanoseconds to milliseconds
+    if (ms > 999) {
+        s++;
+        ms = 0;
+    }
+
+    return (s * 1000) + ms;
 }
