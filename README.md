@@ -37,9 +37,10 @@ Vanilla currently requires the following dependencies:
   # apk add qt6-qtbase-dev qt6-qtmultimedia-dev ffmpeg-dev libnl3-dev sdl2-dev dhclient build-base cmake
   ```
 
+### CMake
 The build process is otherwise normal for a CMake program:
 
-```
+```sh
 git clone --recursive https://github.com/vanilla-wiiu/vanilla.git
 cd vanilla
 mkdir build && cd build
@@ -49,6 +50,24 @@ cmake --build .
 
 Optionally, to install the program:
 
-```
+```sh
 sudo cmake --install .
+```
+
+### Meson
+Alternatively, there is an option to build with Meson instead.
+You will of course need to install it first.
+
+```sh
+git clone --recursive https://github.com/vanilla-wiiu/vanilla.git
+cd vanilla
+meson setup build
+cd build
+meson compile
+```
+
+Optionally, to install the program:
+
+```sh
+meson install
 ```
