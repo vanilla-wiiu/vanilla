@@ -4,6 +4,8 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <sys/types.h>
+#include <systemd/sd-bus.h>
+#include <systemd/sd-event.h>
 
 struct wpa_ctrl;
 extern const char *wpa_ctrl_interface;
@@ -13,9 +15,9 @@ int start_wpa_supplicant(const char *wireless_interface, const char *config_file
 
 int call_dhcp(const char *network_interface, pid_t *dhclient_pid);
 
-int is_networkmanager_managing_device(const char *wireless_interface, int *is_managed);
-int disable_networkmanager_on_device(const char *wireless_interface);
-int enable_networkmanager_on_device(const char *wireless_interface);
+int is_networkmanager_managing_device(sd_bus *bus, const char *wireless_interface, int *is_managed);
+int disable_networkmanager_on_device(sd_bus *bus, sd_event* loop, const char *wireless_interface, char **ret_connection);
+int enable_networkmanager_on_device(sd_bus *bus, sd_event* loop, const char *wireless_interface, const char *resume_connection);
 
 void pprint(const char *fmt, ...);
 

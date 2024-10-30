@@ -5,6 +5,7 @@
 #include <libgen.h>
 #include <pthread.h>
 #include <signal.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -16,6 +17,7 @@
 #include <sys/wait.h>
 #include <systemd/sd-bus-protocol.h>
 #include <systemd/sd-bus.h>
+#include <systemd/sd-event.h>
 #include <unistd.h>
 #include <wpa_ctrl.h>
 
@@ -29,6 +31,7 @@
 #define DBUS_PROP_IFACE "org.freedesktop.DBus.Properties"
 #define NM_BUS_NAME "org.freedesktop.NetworkManager"
 #define NM_BUS_DEVICE_IFACE NM_BUS_NAME ".Device"
+#define NM_BUS_PATH "/org/freedesktop/NetworkManager"
 
 const char *wpa_ctrl_interface = "/var/run/wpa_supplicant_drc";
 
@@ -345,25 +348,63 @@ void *read_stdin(void *)
     return NULL;
 }
 
+static int get_networkmanager_device_path(sd_bus *bus, const char *wireless_interface, char **ret_path)
+{
+    int r;
+    
+    CLEANUP(sd_bus_message_unrefp) sd_bus_message *response = NULL;
+    if ((r = sd_bus_call_method(bus, NM_BUS_NAME, NM_BUS_PATH, NM_BUS_NAME, "GetDeviceByIpIface", NULL, &response, "s", wireless_interface)) < 0)
+        return r;
+
+    char *path;
+    if ((r = sd_bus_message_read_basic(response, SD_BUS_TYPE_OBJECT_PATH, &path)) < 0)
+        return r;
+
+    if ((*ret_path = strdup(path)) == NULL) {
+        return -ENOMEM;
+    }
+
+    return 0;
+}
+
 void *wpa_setup_environment(void *data)
 {
     void *ret = THREADRESULT(VANILLA_ERROR);
 
     struct sync_args *args = (struct sync_args *) data;
 
-    // Check status of interface with NetworkManager
-    int is_managed = 0;
-    if (is_networkmanager_managing_device(args->wireless_interface, &is_managed) != VANILLA_SUCCESS) {
-        print_info("FAILED TO DETERMINE MANAGED STATE OF WIRELESS INTERFACE");
-        //goto die;
-    }
+    CLEANUP(sd_event_unrefp) sd_event *bus_loop = NULL;
+    if (sd_event_new(&bus_loop) < 0)
+        print_info("FAILED TO CREATE EVENT LOOP");
 
-    // If NetworkManager is managing this device, temporarily stop it from doing so
-    if (is_managed) {
-        if (disable_networkmanager_on_device(args->wireless_interface) != VANILLA_SUCCESS) {
-            print_info("FAILED TO SET %s TO UNMANAGED, RESULTS MAY BE UNPREDICTABLE");
+    CLEANUP(sd_bus_unrefp) sd_bus *bus = NULL;
+    if (bus_loop && sd_bus_default_system(&bus) < 0)
+        print_info("FAILED TO CONNECT TO SYSTEM BUS, EXPECT THINGS TO NOT WORK");
+
+    if (bus && sd_bus_attach_event(bus, bus_loop, SD_EVENT_PRIORITY_NORMAL) < 0)
+        print_info("FAILED TO ATTACH BUS TO EVENT LOOP");
+
+    CLEANUP(freep) char *connection = NULL;
+    CLEANUP(freep) char *nm_device = NULL;
+    int is_managed = 0;
+    
+    if (bus) {
+        if (get_networkmanager_device_path(bus, args->wireless_interface, &nm_device) < 0) {
+            print_info("FAILED TO CONNECT TO NETWORKMANAGER, RESULTS MAY BE UNPREDICTABLE");
         } else {
-            print_info("TEMPORARILY SET %s TO UNMANAGED", args->wireless_interface);
+            // Check status of interface with NetworkManager
+            if (is_networkmanager_managing_device(bus, nm_device, &is_managed) != VANILLA_SUCCESS) {
+                print_info("FAILED TO DETERMINE MANAGED STATE OF WIRELESS INTERFACE");
+            }
+
+            // If NetworkManager is managing this device, temporarily stop it from doing so
+            if (is_managed) {
+                if (disable_networkmanager_on_device(bus, bus_loop, nm_device, &connection) != VANILLA_SUCCESS) {
+                    print_info("FAILED TO SET %s TO UNMANAGED, RESULTS MAY BE UNPREDICTABLE");
+                } else {
+                    print_info("TEMPORARILY SET %s TO UNMANAGED", args->wireless_interface);
+                }
+            }
         }
     }
 
@@ -408,7 +449,7 @@ die_and_kill:
 die_and_reenable_managed:
     if (is_managed) {
         print_info("SETTING %s BACK TO MANAGED", args->wireless_interface);
-        enable_networkmanager_on_device(args->wireless_interface);
+        enable_networkmanager_on_device(bus, bus_loop, nm_device, connection);
     }
 
 die:
@@ -456,87 +497,198 @@ int call_dhcp(const char *network_interface, pid_t *dhclient_pid)
     }
 }
 
-static int get_networkmanager_device_path(sd_bus *bus, const char *wireless_interface, char **ret_path, sd_bus_error *ret_error)
+int is_networkmanager_managing_device(sd_bus *bus, const char *nm_device, int *is_managed)
+{
+    CLEANUP(sd_bus_error_free) sd_bus_error err = SD_BUS_ERROR_NULL;
+
+    if (sd_bus_get_property_trivial(bus, NM_BUS_NAME, nm_device, NM_BUS_DEVICE_IFACE, "Managed", &err, SD_BUS_TYPE_BOOLEAN, is_managed) < 0) {
+        print_info("FAILED TO DETERMINE WHETHER NETWORKMANAGER IS MANAGING %s: %s", nm_device, err.message);
+        return VANILLA_ERROR;
+    }
+
+    return VANILLA_SUCCESS;
+}
+
+static int bus_get_property_opath(sd_bus *bus, const char *destination, const char *path, const char *interface, const char *member, sd_bus_error *err, char **ret)
 {
     int r;
-    
-    CLEANUP(sd_bus_message_unrefp) sd_bus_message *response = NULL;
-    if ((r = sd_bus_call_method(bus, NM_BUS_NAME, "/org/freedesktop/NetworkManager", NM_BUS_NAME, "GetDeviceByIpIface", ret_error, &response, "s", wireless_interface)) < 0)
+
+    CLEANUP(sd_bus_message_unrefp) sd_bus_message *reply = NULL;
+    if ((r = sd_bus_get_property(bus, destination, path, interface, member, err, &reply, "o")) < 0)
         return r;
 
-    char *path;
-    r = sd_bus_message_read_basic(response, SD_BUS_TYPE_OBJECT_PATH, &path);
-    if ((*ret_path = strdup(path)) == NULL) {
-        print_info("FAILED TO ALLOCATE MEMORY");
-        return sd_bus_error_set_errno(ret_error, ENOMEM);
-    }
-    return r;
-}
-
-int is_networkmanager_managing_device(const char *wireless_interface, int *is_managed)
-{
-    int r;
-    CLEANUP(sd_bus_error_free) sd_bus_error err = SD_BUS_ERROR_NULL;
-
-    CLEANUP(sd_bus_unrefp) sd_bus *bus = NULL;
-    if ((r = sd_bus_default_system(&bus)) < 0) {
-        print_info("FAILED TO CONNECT TO SYSTEM BUS: %i", -r);
-        return VANILLA_ERROR;
-    }
-
-    CLEANUP(freep) char *path = NULL;
-    if ((r = get_networkmanager_device_path(bus, wireless_interface, &path, &err)) == -EHOSTUNREACH) {
-        // NetworkManager doesn't seem to be running
-        print_info("FAILED TO CONNECT TO NETWORKMANAGER, RESULTS MAY BE UNPREDICTABLE");
-        *is_managed = 0;
-        return VANILLA_SUCCESS;
-    } else if (r < 0)
+    const char *s;
+    if ((r = sd_bus_message_read_basic(reply, SD_BUS_TYPE_OBJECT_PATH, &s)) < 0)
         goto fail;
 
-    if (sd_bus_get_property_trivial(bus, NM_BUS_NAME, path, NM_BUS_DEVICE_IFACE, "Managed", &err, SD_BUS_TYPE_BOOLEAN, is_managed) < 0)
+    if (!(*ret = strdup(s))) {
+        r = errno;
+        goto fail;
+    }
+
+    return 0;
+
+fail:
+    return sd_bus_error_set_errno(err, r);
+}
+
+#define NM_DEVICE_STATE_DISCONNECTED 30
+#define NM_DEVICE_STATE_DEACTIVATING 110
+
+static int _nm_bus_state_signal_cb(sd_bus_message *msg, void *data, sd_bus_error *err, bool connecting)
+{
+    bool *complete = data;
+    uint32_t state;
+    int r;
+
+    r = sd_bus_message_read(msg, "u", &state);
+    if (r < 0)
+        return sd_bus_error_set_errno(err, r);
+
+    if (connecting && state == NM_DEVICE_STATE_DISCONNECTED) {
+        print_info("remanaged!");
+        *complete = true;
+        return 0;
+    } else if (connecting)
+        goto fail;
+    else if (state == NM_DEVICE_STATE_DISCONNECTED) {
+        print_info("disconnected!");
+        *complete = true;
+        return 0;
+    } else if (state == NM_DEVICE_STATE_DEACTIVATING)
+        /* It's still disconnecting, let's wait */
+        return 0;
+    else
+        goto fail;
+
+fail:
+    print_info("UNEXPECTED NM STATUS: %u", state);
+    return sd_bus_error_set_errno(err, EINVAL);
+}
+
+static int nm_bus_state_signal_disconn_cb(sd_bus_message *msg, void *data, sd_bus_error *err)
+{
+    return _nm_bus_state_signal_cb(msg, data, err, false);
+}
+
+static int nm_bus_state_signal_conn_cb(sd_bus_message *msg, void *data, sd_bus_error *err)
+{
+    return _nm_bus_state_signal_cb(msg, data, err, true);
+}
+
+static int nm_bus_register_state_signal(sd_bus *bus, const char *path, bool *complete, sd_bus_message_handler_t callback, sd_bus_error *err, sd_bus_slot **ret_slot)
+{
+    int r;
+
+    r = sd_bus_match_signal(bus, ret_slot, NM_BUS_NAME, path, NM_BUS_DEVICE_IFACE, "StateChanged", callback, complete);
+    if (r < 0)
+        return sd_bus_error_set_errno(err, r);
+
+    return 0;
+}
+
+static uint64_t get_time_µsecs()
+{
+    struct timespec cur_time;
+    clock_gettime(CLOCK_MONOTONIC_COARSE, &cur_time);
+    return cur_time.tv_sec * 1000 * 1000 + cur_time.tv_nsec / 1000;
+}
+
+static int nm_bus_await_signal(sd_bus *bus, sd_event *loop, bool *complete, sd_bus_slot *slot, sd_bus_error *err)
+{
+    /* Give it ten seconds, should it be longer? */
+    const uint64_t time_allowed = 10 * 1000 * 1000;
+
+    const uint64_t deadline = get_time_µsecs() + time_allowed;
+    int r = 0;
+
+    while (!complete) {
+        const uint64_t timeout = (deadline - get_time_µsecs());
+        if (timeout > time_allowed)
+            /* underflow occured, i.e. we timed out */
+            return sd_bus_error_set_errno(err, ETIMEDOUT);
+
+        r = sd_event_run(loop, timeout);
+        if (r < 0)
+            return sd_bus_error_set_errno(err, r);
+    }
+
+    return 0;
+}
+
+int disable_networkmanager_on_device(sd_bus *bus, sd_event* loop, const char *nm_device, char **ret_connection)
+{
+    CLEANUP(sd_bus_error_free) sd_bus_error err = SD_BUS_ERROR_NULL;
+    CLEANUP(sd_bus_slot_unrefp) sd_bus_slot *bus_slot = NULL;
+    CLEANUP(freep) char *active_conn = NULL;
+
+    /* Get the active connection object of the Wi-Fi adapter */
+    if (bus_get_property_opath(bus, NM_BUS_NAME, nm_device, NM_BUS_DEVICE_IFACE, "ActiveConnection", &err, &active_conn) < 0)
+        goto fail;
+
+    /* Get the *actual* connection object from the active connection object */
+    if (bus_get_property_opath(bus, NM_BUS_NAME, active_conn, NM_BUS_NAME ".Connection.Active", "Connection", &err, ret_connection) < 0)
+        goto fail;
+
+    /* We have to wait for NetworkManager to fully "unmanage" the device before
+     * we tell it to disconnect the device, otherwise it will ignore the latter
+     * request, so iwd won't disconnect on systems where it is used. */
+
+    bool disconnect_done = false;
+
+    /* Set up signal handler so we can know exactly when NetworkManager has
+     * finished disconnecting the device. */
+    if (nm_bus_register_state_signal(bus, nm_device, &disconnect_done, nm_bus_state_signal_disconn_cb, &err, &bus_slot) < 0)
+        goto fail;
+
+    /* Tell NM to disconnect the device */
+    if (sd_bus_call_method(bus, NM_BUS_NAME, nm_device, NM_BUS_DEVICE_IFACE, "Disconnect", &err, NULL, "") < 0)
+        goto fail;
+
+    /* Wait for NM to have disconnected the device */
+    if (nm_bus_await_signal(bus, loop, &disconnect_done, bus_slot, &err) < 0)
+        goto fail;
+
+    /* Tell NM to unmanage the device */
+    if (sd_bus_set_property(bus, NM_BUS_NAME, nm_device, NM_BUS_DEVICE_IFACE, "Managed", &err, "b", 0) < 0)
         goto fail;
 
     return VANILLA_SUCCESS;
 
 fail:
-    print_info("FAILED TO DETERMINE WHETHER NETWORKMANAGER IS MANAGING %s: %s", wireless_interface, err.message);
+    print_info("FAILED TO DISABLE NETWORKMANAGER ON INTERFACE %s: %s", nm_device, err.message);
     return VANILLA_ERROR;
 }
 
-static int set_networkmanager_on_device(const char *wireless_interface, int on)
+int enable_networkmanager_on_device(sd_bus *bus, sd_event* loop, const char *nm_device, const char *resume_connection)
 {
-    int r;
     CLEANUP(sd_bus_error_free) sd_bus_error err = SD_BUS_ERROR_NULL;
-    CLEANUP(sd_bus_message_unrefp) sd_bus_message *call = NULL;
+    CLEANUP(sd_bus_slot_unrefp) sd_bus_slot *bus_slot = NULL;
+    CLEANUP(freep) char *active_conn = NULL;
+    bool manage_done = false;
 
-    CLEANUP(sd_bus_unrefp) sd_bus *bus = NULL;
-    if ((r = sd_bus_default_system(&bus)) < 0) {
-        print_info("FAILED TO CONNECT TO SYSTEM BUS: %i", -r);
-        return VANILLA_ERROR;
-    }
-
-    CLEANUP(freep) char *path = NULL;
-    if (get_networkmanager_device_path(bus, wireless_interface, &path, &err) < 0)
+    /* Set up signal handler so we can know exactly when NetworkManager has
+     * finished managing the device. */
+    if (nm_bus_register_state_signal(bus, nm_device, &manage_done, nm_bus_state_signal_conn_cb, &err, &bus_slot) < 0)
         goto fail;
 
-    if (sd_bus_set_property(bus, NM_BUS_NAME, path, NM_BUS_DEVICE_IFACE, "Managed", &err, "b", on) < 0)
+    /* Tell NM to manage the device */
+    if (sd_bus_set_property(bus, NM_BUS_NAME, nm_device, NM_BUS_DEVICE_IFACE, "Managed", &err, "b", 1) < 0)
+        goto fail;
+
+    /* Wait for NM to have started managing the device */
+    if (nm_bus_await_signal(bus, loop, &manage_done, bus_slot, &err) < 0)
+        goto fail;
+
+    /* Finally, reconnect the device if it was originally connected */
+    if (strcmp(resume_connection, "/") && sd_bus_call_method(bus, NM_BUS_NAME, NM_BUS_PATH, NM_BUS_NAME, "ActivateConnection", &err, NULL, "ooo", resume_connection, nm_device, "/") < 0)
         goto fail;
 
     return VANILLA_SUCCESS;
 
 fail:
-    print_info("FAILED TO SET MANAGEMENT OVER NETWORKMANAGER INTERFACE %s: %s", wireless_interface, err.message);
+    print_info("FAILED TO ENABLE NETWORKMANAGER ON INTERFACE %s: %s", nm_device, err.message);
     return VANILLA_ERROR;
-}
-
-int disable_networkmanager_on_device(const char *wireless_interface)
-{
-    return set_networkmanager_on_device(wireless_interface, 0);
-}
-
-int enable_networkmanager_on_device(const char *wireless_interface)
-{
-    return set_networkmanager_on_device(wireless_interface, 1);
 }
 
 void *do_relay(void *data)
