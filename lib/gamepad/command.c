@@ -298,6 +298,7 @@ void handle_generic_packet(int skt, GenericPacket *request)
     case SERVICE_ID_SYSTEM:
         switch (gen_cmd->method_id) {
         case METHOD_ID_SYSTEM_GET_INFO:
+        {
             SystemInfo *info = (SystemInfo *)&response.payload[0];
             info->board_ver = htonl(BOARD_VERSION_MASS);
             info->chip_ver = htonl(CHIP_VERSION_ES3);
@@ -309,6 +310,7 @@ void handle_generic_packet(int skt, GenericPacket *request)
             response.generic_cmd_header.payload_size = htons(sizeof(SystemInfo));
             response.generic_cmd_header.error_code = 0;
             break;
+        }
         }
         break;
     case SERVICE_ID_PERIPHERAL:
