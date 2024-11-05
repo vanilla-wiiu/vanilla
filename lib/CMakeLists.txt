@@ -23,7 +23,7 @@ install(TARGETS vanilla)
 
 if (VANILLA_BUILD_TESTS)
     add_executable(bittest
-        tests/bittest.c
+        test/bittest.c
     )
 
     target_link_libraries(bittest PRIVATE vanilla m)
