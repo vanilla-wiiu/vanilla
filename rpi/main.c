@@ -27,6 +27,10 @@ AVCodecParserContext *video_parser;
 AVPacket *video_packet;
 int running = 0;
 
+static int button_map[SDL_CONTROLLER_BUTTON_MAX] = {-1};
+static int axis_map[SDL_CONTROLLER_AXIS_MAX] = {-1};
+static int vibrate = 0;
+
 // HACK: Easy macro to test between desktop and RPi (even though ARM doesn't necessarily mean RPi)
 #ifdef __arm__
 #define RASPBERRY_PI
@@ -55,11 +59,13 @@ int decode(const void *data, size_t size)
 		return 0;
 	}
 
+	int64_t ticks = SDL_GetTicks64();
+
 	// Send packet to decoder
 	err = avcodec_send_packet(video_codec_ctx, video_packet);
 	if (err < 0) {
 		fprintf(stderr, "Failed to send packet to decoder: %s (%i)\n", av_err2str(err), err);
-		return 1;
+		return 0;
 	}
 
 	int ret = 1;
@@ -97,13 +103,31 @@ int decode(const void *data, size_t size)
 
 int run_backend(void *data)
 {
+	/*SDL_AudioSpec desired = {0};
+	desired.freq = 48000;
+	desired.format = AUDIO_S16LSB;
+	desired.channels = 2;
+
+	SDL_AudioDeviceID audio = SDL_OpenAudioDevice(NULL, 0, &desired, NULL, 0);
+	if (!audio) {
+		printf("Failed to open audio device\n");
+	}*/
+
 	vanilla_event_t event;
 
 	while (vanilla_wait_event(&event)) {
 		if (event.type == VANILLA_EVENT_VIDEO) {
 			decode(event.data, event.size);
+		} else if (event.type == VANILLA_EVENT_AUDIO) {
+			/*if (audio) {
+				SDL_QueueAudio(audio, event.data, event.size);
+			}*/
+		} else if (event.type == VANILLA_EVENT_VIBRATE) {
+			vibrate = event.data[0];
 		}
 	}
+
+	//SDL_CloseAudioDevice(audio);
 
 	return 0;
 }
@@ -196,6 +220,41 @@ void sigint_handler(int signum)
 	SDL_PushEvent((SDL_Event *) &ev);
 }
 
+void init_gamepad()
+{
+	vibrate = 0;
+
+    button_map[SDL_CONTROLLER_BUTTON_A] = VANILLA_BTN_A;
+    button_map[SDL_CONTROLLER_BUTTON_B] = VANILLA_BTN_B;
+    button_map[SDL_CONTROLLER_BUTTON_X] = VANILLA_BTN_X;
+    button_map[SDL_CONTROLLER_BUTTON_Y] = VANILLA_BTN_Y;
+    button_map[SDL_CONTROLLER_BUTTON_BACK] = VANILLA_BTN_MINUS;
+    button_map[SDL_CONTROLLER_BUTTON_GUIDE] = VANILLA_BTN_HOME;
+    button_map[SDL_CONTROLLER_BUTTON_MISC1] = VANILLA_BTN_TV;
+    button_map[SDL_CONTROLLER_BUTTON_START] = VANILLA_BTN_PLUS;
+    button_map[SDL_CONTROLLER_BUTTON_LEFTSTICK] = VANILLA_BTN_L3;
+    button_map[SDL_CONTROLLER_BUTTON_RIGHTSTICK] = VANILLA_BTN_R3;
+    button_map[SDL_CONTROLLER_BUTTON_LEFTSHOULDER] = VANILLA_BTN_L;
+    button_map[SDL_CONTROLLER_BUTTON_RIGHTSHOULDER] = VANILLA_BTN_R;
+    button_map[SDL_CONTROLLER_BUTTON_DPAD_UP] = VANILLA_BTN_UP;
+    button_map[SDL_CONTROLLER_BUTTON_DPAD_DOWN] = VANILLA_BTN_DOWN;
+    button_map[SDL_CONTROLLER_BUTTON_DPAD_LEFT] = VANILLA_BTN_LEFT;
+    button_map[SDL_CONTROLLER_BUTTON_DPAD_RIGHT] = VANILLA_BTN_RIGHT;
+    axis_map[SDL_CONTROLLER_AXIS_LEFTX] = VANILLA_AXIS_L_X;
+    axis_map[SDL_CONTROLLER_AXIS_LEFTY] = VANILLA_AXIS_L_Y;
+    axis_map[SDL_CONTROLLER_AXIS_RIGHTX] = VANILLA_AXIS_R_X;
+    axis_map[SDL_CONTROLLER_AXIS_RIGHTY] = VANILLA_AXIS_R_Y;
+    axis_map[SDL_CONTROLLER_AXIS_TRIGGERLEFT] = VANILLA_BTN_ZL;
+    axis_map[SDL_CONTROLLER_AXIS_TRIGGERRIGHT] = VANILLA_BTN_ZR;
+}
+
+int32_t pack_float(float f)
+{
+    int32_t x;
+    memcpy(&x, &f, sizeof(int32_t));
+    return x;
+}
+
 int main(int argc, const char **argv)
 {
 	vanilla_drm_ctx_t drm_ctx;
@@ -273,6 +332,9 @@ int main(int argc, const char **argv)
 	vanilla_start(ntohl(inet_addr("127.0.0.1")));
 #endif
 
+	// Initialize gamepad lookup tables
+	init_gamepad();
+
 	// Create variable for background threads to run
 	running = 1;
 	signal(SIGINT, sigint_handler);
@@ -309,43 +371,39 @@ int main(int argc, const char **argv)
 				break;
 			case SDL_CONTROLLERBUTTONDOWN:
 			case SDL_CONTROLLERBUTTONUP:
-				printf("Button: %i - Pressed: %i\n", event.cbutton.button, event.type == SDL_CONTROLLERBUTTONDOWN);
-				break;
-			/*case SDL_CONTROLLERBUTTONDOWN:
-			case SDL_CONTROLLERBUTTONUP:
-				if (m_controller && event.cdevice.which == SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(m_controller))) {
-					int vanilla_btn = g_buttonMap[event.cbutton.button];
-					if (vanilla_btn != -1) {
-						emit buttonStateChanged(vanilla_btn, event.type == SDL_CONTROLLERBUTTONDOWN ? INT16_MAX : 0);
-					}
-				}
+				if (controller && event.cdevice.which == SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(controller))) {
+                    int vanilla_btn = button_map[event.cbutton.button];
+                    if (vanilla_btn != -1) {
+						vanilla_set_button(vanilla_btn, event.type == SDL_CONTROLLERBUTTONDOWN ? INT16_MAX : 0);
+                    }
+                }
 				break;
 			case SDL_CONTROLLERAXISMOTION:
-				if (m_controller && event.cdevice.which == SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(m_controller))) {
-					int vanilla_axis = g_axisMap[event.caxis.axis];
+				if (controller && event.cdevice.which == SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(controller))) {
+					int vanilla_axis = axis_map[event.caxis.axis];
 					Sint16 axis_value = event.caxis.value;
 					if (vanilla_axis != -1) {
-						emit buttonStateChanged(vanilla_axis, axis_value);
+						vanilla_set_button(vanilla_axis, axis_value);
 					}
 				}
 				break;
 			case SDL_CONTROLLERSENSORUPDATE:
 				if (event.csensor.sensor == SDL_SENSOR_ACCEL) {
-					emit buttonStateChanged(VANILLA_SENSOR_ACCEL_X, packFloat(event.csensor.data[0]));
-					emit buttonStateChanged(VANILLA_SENSOR_ACCEL_Y, packFloat(event.csensor.data[1]));
-					emit buttonStateChanged(VANILLA_SENSOR_ACCEL_Z, packFloat(event.csensor.data[2]));
+					vanilla_set_button(VANILLA_SENSOR_ACCEL_X, pack_float(event.csensor.data[0]));
+					vanilla_set_button(VANILLA_SENSOR_ACCEL_Y, pack_float(event.csensor.data[1]));
+					vanilla_set_button(VANILLA_SENSOR_ACCEL_Z, pack_float(event.csensor.data[2]));
 				} else if (event.csensor.sensor == SDL_SENSOR_GYRO) {
-					emit buttonStateChanged(VANILLA_SENSOR_GYRO_PITCH, packFloat(event.csensor.data[0]));
-					emit buttonStateChanged(VANILLA_SENSOR_GYRO_YAW, packFloat(event.csensor.data[1]));
-					emit buttonStateChanged(VANILLA_SENSOR_GYRO_ROLL, packFloat(event.csensor.data[2]));
+					vanilla_set_button(VANILLA_SENSOR_GYRO_PITCH, pack_float(event.csensor.data[0]));
+					vanilla_set_button(VANILLA_SENSOR_GYRO_YAW, pack_float(event.csensor.data[1]));
+					vanilla_set_button(VANILLA_SENSOR_GYRO_ROLL, pack_float(event.csensor.data[2]));
 				}
-				break;*/
+				break;
 			}
     
-			/*if (m_controller) {
-				uint16_t amount = m_vibrate ? 0xFFFF : 0;
-				SDL_GameControllerRumble(m_controller, amount, amount, 0);
-			}*/
+			if (controller) {
+				uint16_t amount = vibrate ? 0xFFFF : 0;
+				SDL_GameControllerRumble(controller, amount, amount, 0);
+			}
 		}
 	}
 
