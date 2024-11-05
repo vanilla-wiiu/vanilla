@@ -21,9 +21,9 @@ endif()
 
 install(TARGETS vanilla)
 
-if (0)
+if (VANILLA_BUILD_TESTS)
     add_executable(bittest
-        bittest.c
+        tests/bittest.c
     )
 
     target_link_libraries(bittest PRIVATE vanilla m)
