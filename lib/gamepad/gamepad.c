@@ -63,7 +63,7 @@ int create_socket(int *socket_out, uint16_t port)
     address.sin_addr.s_addr = INADDR_ANY;
     address.sin_port = htons(port);
 
-    int skt = socket(AF_INET, SOCK_DGRAM, 0);\
+    int skt = socket(AF_INET, SOCK_DGRAM, 0);
     if (skt == -1) {
         print_info("FAILED TO CREATE SOCKET FOR PORT %i", port);
         return 0;
