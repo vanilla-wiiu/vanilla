@@ -27,4 +27,5 @@ target_link_libraries(vanilla-pi PRIVATE
     FFmpeg::swscale
 
     drm
+    m
 )
