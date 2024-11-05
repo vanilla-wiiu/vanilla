@@ -1,11 +1,14 @@
 #include "video.h"
 
+#include <assert.h>
+#include <math.h>
 #include <pthread.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <sys/types.h>
+#include <sys/time.h>
 #include <unistd.h>
 
 #include "gamepad.h"
@@ -36,6 +39,8 @@ static int idr_is_queued = 0;
 static VideoPacket video_packet_cache[VIDEO_PACKET_CACHE_MAX];
 static size_t video_packet_cache_index = 0;
 static uint8_t video_packet[100000];
+
+static size_t generated_sps_params_size = 0;
 
 void request_idr()
 {
@@ -130,7 +135,7 @@ void handle_video_packet(gamepad_context_t *ctx, VideoPacket *vp, size_t size, i
         if (is_streaming) {
             // Encapsulate packet data into NAL unit
             static int frame_decode_num = 0;
-            uint8_t *nals_current = video_packet + sizeof(VANILLA_SPS_PARAMS) + sizeof(VANILLA_PPS_PARAMS);
+            uint8_t *nals_current = video_packet + generated_sps_params_size + sizeof(VANILLA_PPS_PARAMS);
 
             int slice_header = is_idr ? 0x25b804ff : (0x21e003ff | ((frame_decode_num & 0xff) << 13));
             frame_decode_num++;
@@ -176,7 +181,7 @@ void handle_video_packet(gamepad_context_t *ctx, VideoPacket *vp, size_t size, i
             }
 
             // Skip IDR parameters if not an IDR frame
-            uint8_t *nals = (is_idr) ? video_packet : (video_packet + sizeof(VANILLA_SPS_PARAMS) + sizeof(VANILLA_PPS_PARAMS));
+            uint8_t *nals = (is_idr) ? video_packet : (video_packet + generated_sps_params_size + sizeof(VANILLA_PPS_PARAMS));
             push_event(ctx->event_loop, VANILLA_EVENT_VIDEO, nals, (nals_current - nals));
         } else {
             // We didn't receive the complete frame so we'll skip it here
@@ -192,8 +197,16 @@ void *listen_video(void *x)
 
     // Set up IDR nals on video_packet
     uint8_t *nals_current = video_packet;
-    memcpy(nals_current, VANILLA_SPS_PARAMS, sizeof(VANILLA_SPS_PARAMS));
-    nals_current += sizeof(VANILLA_SPS_PARAMS);
+
+    static const char *frame_start_word = "\x00\x00\x00\x01";
+    memcpy(nals_current, frame_start_word, 4);
+    nals_current += 4;
+    generated_sps_params_size += 4;
+
+    size_t generated_sps = generate_sps_params(nals_current, sizeof(video_packet));
+    nals_current += generated_sps;
+    generated_sps_params_size += generated_sps;
+
     memcpy(nals_current, VANILLA_PPS_PARAMS, sizeof(VANILLA_PPS_PARAMS));
     nals_current += sizeof(VANILLA_PPS_PARAMS);
 
@@ -216,4 +229,255 @@ void *listen_video(void *x)
     pthread_exit(NULL);
 
     return NULL;
+}
+
+void write_bits(void *data, size_t buffer_size, size_t *bit_index, uint8_t value, size_t bit_width)
+{
+    const size_t size_of_byte = 8;
+
+    assert(bit_width <= size_of_byte);
+    
+    // Calculate offsets
+    size_t offset = *bit_index;
+    uint8_t *bytes = (uint8_t *) data;
+    size_t byte_offset = offset / size_of_byte;
+
+    // NOTE: If this was big endian, the value would need to be shifted to the upper most 8 bits manually
+
+    // Shift to the right for placing into buffer
+    size_t local_bit_offset = offset - (byte_offset * size_of_byte);
+    size_t remainder = size_of_byte - local_bit_offset;
+
+    // Put bits into the right place in the uint16
+    // Promote value to a 16-bit buffer (in case it crosses an 8-bit alignment boundary)
+    uint16_t shifted = value << (size_of_byte - bit_width) >> local_bit_offset;
+
+    // Clear any non-zero bits if necessary
+    bytes[byte_offset] = (bytes[byte_offset] >> remainder) << remainder;
+
+    // Put bits into buffer
+    if (buffer_size - byte_offset > 1) {
+        bytes[byte_offset + 1] = 0;
+        uint16_t *words = (uint16_t *) (&bytes[byte_offset]);
+        *words |= shifted;
+    } else {
+        uint8_t shifted_byte = shifted;
+        // NOTE: If this was big endian, we'd need to get the upper 8 bits manually
+        bytes[byte_offset] |= shifted_byte;
+    }
+
+    // Increment bit counter by bits
+    offset += bit_width;
+    *bit_index = offset;
+}
+
+void write_exp_golomb(void *data, size_t buffer_size, size_t *bit_index, uint64_t value)
+{
+    const size_t size_of_byte = 8;
+
+    // x + 1
+    uint64_t exp_golomb_value = value + 1;
+
+    exp_golomb_value = exp_golomb_value;
+
+    // Count how many bits are in this byte
+    int leading_zeros = __builtin_clzl(exp_golomb_value);
+    int bit_width = ((sizeof(value) * size_of_byte) - leading_zeros);
+
+    int exp_golomb_leading_zeros = bit_width - 1;
+    
+    for (int i = 0; i < exp_golomb_leading_zeros; i++) {
+        write_bits(data, buffer_size, bit_index, 0, 1);
+        // TODO: Could optimize this by writing 8 bits at a time
+    }
+
+    uint8_t *bytes = (uint8_t *) &exp_golomb_value;
+    int total_bytes = (bit_width / size_of_byte);
+    if (bit_width % size_of_byte != 0) {
+        total_bytes++;
+    }
+    for (int i = 0; i < total_bytes; i++) {
+        //
+        // NOTE: This must be changed for big endian
+        //
+        int real_index = total_bytes - 1 - i;
+
+        int write_count;
+        if (i == 0 && bit_width % size_of_byte != 0) {
+            write_count = bit_width % size_of_byte;
+        } else {
+            write_count = MIN(bit_width, size_of_byte);
+        }
+        write_bits(data, buffer_size, bit_index, bytes[real_index], write_count);
+    }
+}
+
+size_t generate_sps_params(void *data, size_t size)
+{
+    //
+    // Reference: https://www.cardinalpeak.com/blog/the-h-264-sequence-parameter-set
+    //
+
+    size_t bit_index = 0;
+
+    // forbidden_zero_bit
+    write_bits(data, size, &bit_index, 0, 1);
+
+    // nal_ref_idc = 3 (important/SPS)
+    write_bits(data, size, &bit_index, 3, 2);
+
+    // nal_unit_type = 7 (SPS)
+    write_bits(data, size, &bit_index, 7, 5);
+
+    // profile_idc = 100 (not sure if this is correct, seems to work)
+    write_bits(data, size, &bit_index, 100, 8);
+
+    // constraint_set0_flag
+    write_bits(data, size, &bit_index, 0, 1);
+
+    // constraint_set1_flag
+    write_bits(data, size, &bit_index, 0, 1);
+
+    // constraint_set2_flag
+    write_bits(data, size, &bit_index, 0, 1);
+
+    // constraint_set3_flag
+    write_bits(data, size, &bit_index, 0, 1);
+
+    // constraint_set4_flag
+    write_bits(data, size, &bit_index, 0, 1);
+
+    // constraint_set5_flag
+    write_bits(data, size, &bit_index, 0, 1);
+
+    // reserved_zero_2bits
+    write_bits(data, size, &bit_index, 0, 2);
+
+    // level_idc (not sure if this is correct, seems to work)
+    write_bits(data, size, &bit_index, 0x20, 8);
+
+    // seq_parameter_set_id
+    write_exp_golomb(data, size, &bit_index, 0);
+
+    // chroma_format_idc
+    write_exp_golomb(data, size, &bit_index, 1);
+
+    // bit_depth_luma_minus8
+    write_exp_golomb(data, size, &bit_index, 0);
+
+    // bit_depth_chroma_minus8
+    write_exp_golomb(data, size, &bit_index, 0);
+
+    // qpprime_y_zero_transform_bypass_flag
+    write_bits(data, size, &bit_index, 0, 1);
+
+    // seq_scaling_matrix_present_flag
+    write_bits(data, size, &bit_index, 0, 1);
+    
+    // log2_max_frame_num_minus4
+    write_exp_golomb(data, size, &bit_index, 4);
+
+    // pic_order_cnt_type
+    write_exp_golomb(data, size, &bit_index, 2);
+
+    // max_num_ref_frames
+    write_exp_golomb(data, size, &bit_index, 1);
+
+    // gaps_in_frame_num_value_allowed_flag
+    write_bits(data, size, &bit_index, 0, 1);
+
+    // pic_width_in_mbs_minus1
+    write_exp_golomb(data, size, &bit_index, 53);
+
+    // pic_height_in_map_units_minus1
+    write_exp_golomb(data, size, &bit_index, 29);
+
+    // frame_mbs_only_flag
+    write_bits(data, size, &bit_index, 1, 1);
+
+    // direct_8x8_inference_flag
+    write_bits(data, size, &bit_index, 1, 1);
+
+    // frame_cropping_flag
+    write_bits(data, size, &bit_index, 1, 1);
+
+    // frame_crop_left_offset
+    write_exp_golomb(data, size, &bit_index, 0);
+
+    // frame_crop_right_offset
+    write_exp_golomb(data, size, &bit_index, 5);
+
+    // frame_crop_top_offset
+    write_exp_golomb(data, size, &bit_index, 0);
+
+    // frame_crop_bottom_offset
+    write_exp_golomb(data, size, &bit_index, 0);
+
+    // vui_parameters_present_flag
+    int enable_vui = 1;
+    write_bits(data, size, &bit_index, enable_vui, 1);
+
+    if (enable_vui) {
+        // aspect_ratio_info_present_flag
+        write_bits(data, size, &bit_index, 0, 1);
+
+        // overscan_info_present_flag
+        write_bits(data, size, &bit_index, 0, 1);
+
+        // video_signal_type_present_flag
+        write_bits(data, size, &bit_index, 0, 1);
+
+        // chroma_loc_info_present_flag
+        write_bits(data, size, &bit_index, 0, 1);
+
+        // timing_info_present_flag
+        write_bits(data, size, &bit_index, 0, 1);
+
+        // nal_hrd_parameters_present_flag
+        write_bits(data, size, &bit_index, 0, 1);
+
+        // vcl_hrd_parameters_present_flag
+        write_bits(data, size, &bit_index, 0, 1);
+
+        // pic_struct_present_flag
+        write_bits(data, size, &bit_index, 0, 1);
+
+        // bitstream_restriction_flag
+        write_bits(data, size, &bit_index, 1, 1);
+
+        // bitstream_restriction:
+        {
+            // motion_vectors_over_pic_boundaries_flag
+            write_bits(data, size, &bit_index, 1, 1);
+
+            // max_bytes_per_pic_denom
+            write_exp_golomb(data, size, &bit_index, 2);
+
+            // max_bits_per_mb_denom
+            write_exp_golomb(data, size, &bit_index, 1);
+
+            // log2_max_mv_length_horizontal
+            write_exp_golomb(data, size, &bit_index, 16);
+
+            // log2_max_mv_length_vertical
+            write_exp_golomb(data, size, &bit_index, 16);
+
+            // max_num_reorder_frames
+            write_exp_golomb(data, size, &bit_index, 0);
+
+            // max_dec_frame_buffering
+            write_exp_golomb(data, size, &bit_index, 1);
+        }
+    }
+
+    // RBSP trailing stop bit
+    write_bits(data, size, &bit_index, 1, 1);
+    
+    // Alignment
+    const int align = 8;
+    if (bit_index % align != 0) {
+        write_bits(data, size, &bit_index, 0, align - (bit_index % align));
+    }
+
+    return bit_index / align;
 }
