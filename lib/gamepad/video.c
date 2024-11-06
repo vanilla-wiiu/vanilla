@@ -278,10 +278,17 @@ void write_exp_golomb(void *data, size_t buffer_size, size_t *bit_index, uint64_
     // x + 1
     uint64_t exp_golomb_value = value + 1;
 
-    exp_golomb_value = exp_golomb_value;
-
     // Count how many bits are in this byte
-    int leading_zeros = __builtin_clzl(exp_golomb_value);
+    int leading_zeros = 0;
+    const size_t num_bits = sizeof(value)*size_of_byte;
+    for (size_t i = 0; i < num_bits; i++) {
+        if (exp_golomb_value & (1ULL << (num_bits - i - 1))) {
+            break;
+        } else {
+            leading_zeros++;
+        }
+    }
+
     int bit_width = ((sizeof(value) * size_of_byte) - leading_zeros);
 
     int exp_golomb_leading_zeros = bit_width - 1;
