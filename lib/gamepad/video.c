@@ -293,9 +293,8 @@ void write_exp_golomb(void *data, size_t buffer_size, size_t *bit_index, uint64_
 
     int exp_golomb_leading_zeros = bit_width - 1;
     
-    for (int i = 0; i < exp_golomb_leading_zeros; i++) {
-        write_bits(data, buffer_size, bit_index, 0, 1);
-        // TODO: Could optimize this by writing 8 bits at a time
+    for (int i = 0; i < exp_golomb_leading_zeros; i += size_of_byte) {
+        write_bits(data, buffer_size, bit_index, 0, MIN(size_of_byte, exp_golomb_leading_zeros - i));
     }
 
     int total_bytes = (bit_width / size_of_byte);
