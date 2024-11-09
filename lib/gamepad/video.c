@@ -298,24 +298,21 @@ void write_exp_golomb(void *data, size_t buffer_size, size_t *bit_index, uint64_
         // TODO: Could optimize this by writing 8 bits at a time
     }
 
-    uint8_t *bytes = (uint8_t *) &exp_golomb_value;
     int total_bytes = (bit_width / size_of_byte);
     if (bit_width % size_of_byte != 0) {
         total_bytes++;
     }
     for (int i = 0; i < total_bytes; i++) {
-        //
-        // NOTE: This must be changed for big endian
-        //
-        int real_index = total_bytes - 1 - i;
-
         int write_count;
         if (i == 0 && bit_width % size_of_byte != 0) {
             write_count = bit_width % size_of_byte;
         } else {
             write_count = MIN(bit_width, size_of_byte);
         }
-        write_bits(data, buffer_size, bit_index, bytes[real_index], write_count);
+
+        uint8_t byte = exp_golomb_value >> ((total_bytes - 1 - i) * size_of_byte);
+
+        write_bits(data, buffer_size, bit_index, byte, write_count);
     }
 }
 
