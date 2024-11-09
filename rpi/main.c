@@ -103,15 +103,19 @@ int decode(const void *data, size_t size)
 
 int run_backend(void *data)
 {
-	/*SDL_AudioSpec desired = {0};
+	SDL_AudioSpec desired = {0};
 	desired.freq = 48000;
 	desired.format = AUDIO_S16LSB;
 	desired.channels = 2;
 
 	SDL_AudioDeviceID audio = SDL_OpenAudioDevice(NULL, 0, &desired, NULL, 0);
-	if (!audio) {
+	if (audio) {
+		SDL_PauseAudioDevice(audio, 0);
+	} else {
 		printf("Failed to open audio device\n");
-	}*/
+	}
+
+	
 
 	vanilla_event_t event;
 
@@ -119,15 +123,17 @@ int run_backend(void *data)
 		if (event.type == VANILLA_EVENT_VIDEO) {
 			decode(event.data, event.size);
 		} else if (event.type == VANILLA_EVENT_AUDIO) {
-			/*if (audio) {
-				SDL_QueueAudio(audio, event.data, event.size);
-			}*/
+			if (audio) {
+				if (SDL_QueueAudio(audio, event.data, event.size) < 0) {
+					printf("Failed to queue audio\n", event.size);
+				}
+			}
 		} else if (event.type == VANILLA_EVENT_VIBRATE) {
 			vibrate = event.data[0];
 		}
 	}
 
-	//SDL_CloseAudioDevice(audio);
+	SDL_CloseAudioDevice(audio);
 
 	return 0;
 }
