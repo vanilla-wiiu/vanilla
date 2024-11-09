@@ -1,6 +1,5 @@
 #include "util.h"
 
-#include <dlfcn.h>
 #include <math.h>
 #include <signal.h>
 #include <stdlib.h>
@@ -64,21 +63,6 @@ uint16_t crc16(const void *data, size_t len)
     }
 
     return crc;
-}
-
-static int (*ppthread_setname_np)(pthread_t, const char*) = NULL;
-static int checked_for_pthread_setname_np = 0;
-void name_thread(pthread_t thread, const char *name)
-{
-    if (!checked_for_pthread_setname_np) {
-        void *fn = dlsym(RTLD_DEFAULT, "pthread_setname_np");
-        ppthread_setname_np = (int(*)(pthread_t, const char*)) fn;
-        checked_for_pthread_setname_np = 1;
-    }
-
-    if (ppthread_setname_np) {
-        ppthread_setname_np(thread, name);
-    }
 }
 
 size_t get_millis()

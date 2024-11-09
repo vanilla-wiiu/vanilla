@@ -1,3 +1,5 @@
+#define _GNU_SOURCE
+
 #include "gamepad.h"
 
 #include <arpa/inet.h>
@@ -232,16 +234,16 @@ int connect_as_gamepad_internal(event_loop_t *event_loop, uint32_t server_addres
     pthread_t video_thread, audio_thread, input_thread, msg_thread, cmd_thread;
 
     pthread_create(&video_thread, NULL, listen_video, &info);
-    name_thread(video_thread, "vanilla-video");
+    pthread_setname_np(video_thread, "vanilla-video");
 
     pthread_create(&audio_thread, NULL, listen_audio, &info);
-    name_thread(audio_thread, "vanilla-audio");
+    pthread_setname_np(audio_thread, "vanilla-audio");
 
     pthread_create(&input_thread, NULL, listen_input, &info);
-    name_thread(input_thread, "vanilla-input");
+    pthread_setname_np(input_thread, "vanilla-input");
     
     pthread_create(&cmd_thread, NULL, listen_command, &info);
-    name_thread(cmd_thread, "vanilla-cmd");
+    pthread_setname_np(cmd_thread, "vanilla-cmd");
 
     while (1) {
         usleep(250 * 1000);
