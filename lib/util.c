@@ -82,3 +82,14 @@ size_t get_millis()
 
     return (s * 1000) + ms;
 }
+
+unsigned int reverse_bits(unsigned int b, int bit_count)
+{
+    unsigned int result = 0;
+
+    for (int i = 0; i < bit_count; i++) {
+        result |= ((b >> i) & 1) << (bit_count - 1 -i );
+    }
+
+    return result;
+}

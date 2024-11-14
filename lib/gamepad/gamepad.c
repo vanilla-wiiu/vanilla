@@ -31,17 +31,6 @@ uint16_t PORT_AUD;
 uint16_t PORT_HID;
 uint16_t PORT_CMD;
 
-unsigned int reverse_bits(unsigned int b, int bit_count)
-{
-    unsigned int result = 0;
-
-    for (int i = 0; i < bit_count; i++) {
-        result |= ((b >> i) & 1) << (bit_count - 1 -i );
-    }
-
-    return result;
-}
-
 void send_to_console(int fd, const void *data, size_t data_size, int port)
 {
     struct sockaddr_in address;
