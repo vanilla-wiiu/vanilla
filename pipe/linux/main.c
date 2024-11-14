@@ -1,12 +1,18 @@
 #include <arpa/inet.h>
 #include <stdio.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "vanilla.h"
 #include "wpa.h"
 
 int main(int argc, const char **argv)
 {
+    if (geteuid() != 0) {
+        pprint("vanilla-pipe must be run as root\n");
+        return 1;
+    }
+
     if (argc < 2) {
         pprint("vanilla-pipe - brokers a connection between Vanilla and the Wii U\n");
         pprint("--------------------------------------------------------------------------------\n");
