@@ -4,3 +4,6 @@ build/
 .cache/
 *.AppImage
 squashfs-root/
+
+buildpi/
+rpi-ffmpeg/

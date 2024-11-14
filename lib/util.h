@@ -19,6 +19,8 @@ int is_interrupted();
 void force_interrupt();
 void install_interrupt_handler();
 void uninstall_interrupt_handler();
+size_t get_millis();
+unsigned int reverse_bits(unsigned int b, int bit_count);
 
 uint16_t crc16(const void* data, size_t len);
 

@@ -1,3 +1,5 @@
+#define _GNU_SOURCE
+
 #include "gamepad.h"
 
 #include <arpa/inet.h>
@@ -29,30 +31,19 @@ uint16_t PORT_AUD;
 uint16_t PORT_HID;
 uint16_t PORT_CMD;
 
-unsigned int reverse_bits(unsigned int b, int bit_count)
-{
-    unsigned int result = 0;
-
-    for (int i = 0; i < bit_count; i++) {
-        result |= ((b >> i) & 1) << (bit_count - 1 -i );
-    }
-
-    return result;
-}
-
 void send_to_console(int fd, const void *data, size_t data_size, int port)
 {
     struct sockaddr_in address;
     address.sin_family = AF_INET;
     address.sin_addr.s_addr = SERVER_ADDRESS;
     address.sin_port = htons((uint16_t) (port - 100));
-
-    char ip[20];
-    inet_ntop(AF_INET, &address.sin_addr, ip, sizeof(ip));
+    
+    char ip[INET_ADDRSTRLEN];
+    inet_ntop(AF_INET, &address.sin_addr, ip, INET_ADDRSTRLEN);
 
     ssize_t sent = sendto(fd, data, data_size, 0, (const struct sockaddr *) &address, sizeof(address));
     if (sent == -1) {
-        print_info("Failed to send to Wii U socket: fd - %d; port - %d", fd, port - 100);
+        print_info("Failed to send to Wii U socket: address: %s, fd: %d, port: %d, errno: %i", ip, fd, port - 100, errno);
     }
 }
 
@@ -62,13 +53,21 @@ int create_socket(int *socket_out, uint16_t port)
     address.sin_family = AF_INET;
     address.sin_addr.s_addr = INADDR_ANY;
     address.sin_port = htons(port);
-    (*socket_out) = socket(AF_INET, SOCK_DGRAM, 0);
+
+    int skt = socket(AF_INET, SOCK_DGRAM, 0);
+    if (skt == -1) {
+        print_info("FAILED TO CREATE SOCKET FOR PORT %i", port);
+        return 0;
+    }
+
+    (*socket_out) = skt;
     
     if (bind((*socket_out), (const struct sockaddr *) &address, sizeof(address)) == -1) {
         print_info("FAILED TO BIND PORT %u: %i", port, errno);
         return 0;
     }
 
+    print_info("SUCCESSFULLY BOUND SOCKET %i on PORT %i", skt, port);
     return 1;
 }
 
@@ -145,13 +144,14 @@ int sync_internal(uint16_t code, uint32_t server_address)
         SERVER_ADDRESS = htonl(server_address);
     }
 
-    int skt;
-    int ret = connect_to_backend(&skt, VANILLA_PIPE_SYNC_CODE(code));
-    if (ret != VANILLA_SUCCESS) {
-        goto exit;
+    int skt = 0;
+    int ret = VANILLA_ERROR;
+    if (server_address != 0) {
+        ret = connect_to_backend(&skt, VANILLA_PIPE_SYNC_CODE(code));
+        if (ret != VANILLA_SUCCESS) {
+            goto exit;
+        }
     }
-
-    ret = VANILLA_ERROR;
 
     // Wait for sync result from pipe
     uint32_t recv_cc;
@@ -172,13 +172,14 @@ int sync_internal(uint16_t code, uint32_t server_address)
     }
 
 exit_pipe:
-    close(skt);
+    if (skt)
+        close(skt);
 
 exit:
     return ret;
 }
 
-int connect_as_gamepad_internal(vanilla_event_handler_t event_handler, void *context, uint32_t server_address)
+int connect_as_gamepad_internal(event_loop_t *event_loop, uint32_t server_address)
 {
     clear_interrupt();
 
@@ -199,16 +200,17 @@ int connect_as_gamepad_internal(vanilla_event_handler_t event_handler, void *con
         PORT_CMD += 200;
     }
 
-    struct gamepad_thread_context info;
-    info.event_handler = event_handler;
-    info.context = context;
+    gamepad_context_t info;
+    info.event_loop = event_loop;
 
     int ret = VANILLA_ERROR;
 
-    int pipe_cc_skt;
-    ret = connect_to_backend(&pipe_cc_skt, VANILLA_PIPE_CC_CONNECT);
-    if (ret != VANILLA_SUCCESS) {
-        goto exit;
+    int pipe_cc_skt = 0;
+    if (server_address != 0) {
+        ret = connect_to_backend(&pipe_cc_skt, VANILLA_PIPE_CC_CONNECT);
+        if (ret != VANILLA_SUCCESS) {
+            goto exit;
+        }
     }
 
     // Open all required sockets
@@ -221,9 +223,16 @@ int connect_as_gamepad_internal(vanilla_event_handler_t event_handler, void *con
     pthread_t video_thread, audio_thread, input_thread, msg_thread, cmd_thread;
 
     pthread_create(&video_thread, NULL, listen_video, &info);
+    pthread_setname_np(video_thread, "vanilla-video");
+
     pthread_create(&audio_thread, NULL, listen_audio, &info);
+    pthread_setname_np(audio_thread, "vanilla-audio");
+
     pthread_create(&input_thread, NULL, listen_input, &info);
+    pthread_setname_np(input_thread, "vanilla-input");
+    
     pthread_create(&cmd_thread, NULL, listen_command, &info);
+    pthread_setname_np(cmd_thread, "vanilla-cmd");
 
     while (1) {
         usleep(250 * 1000);
@@ -241,7 +250,9 @@ int connect_as_gamepad_internal(vanilla_event_handler_t event_handler, void *con
     pthread_join(input_thread, NULL);
     pthread_join(cmd_thread, NULL);
 
-    send_pipe_cc(pipe_cc_skt, VANILLA_PIPE_CC_UNBIND, 0);
+    if (server_address != 0) {
+        send_pipe_cc(pipe_cc_skt, VANILLA_PIPE_CC_UNBIND, 0);
+    }
 
     ret = VANILLA_SUCCESS;
 
@@ -261,7 +272,8 @@ exit_vid:
     close(info.socket_vid);
 
 exit_pipe:
-    close(pipe_cc_skt);
+    if (pipe_cc_skt)
+        close(pipe_cc_skt);
 
 exit:
     return ret;
@@ -270,4 +282,58 @@ exit:
 int is_stop_code(const char *data, size_t data_length)
 {
     return (data_length == sizeof(STOP_CODE) && !memcmp(data, &STOP_CODE, sizeof(STOP_CODE)));
+}
+
+int push_event(event_loop_t *loop, int type, const void *data, size_t size)
+{
+
+    pthread_mutex_lock(&loop->mutex);
+
+    vanilla_event_t *ev = &loop->events[loop->new_index % VANILLA_MAX_EVENT_COUNT];
+
+    if (size <= sizeof(ev->data)) {
+        ev->type = type;
+        memcpy(ev->data, data, size);
+        ev->size = size;
+
+        loop->new_index++;
+
+        // Prevent rollover by skipping oldest event if necessary
+        if (loop->new_index > loop->used_index + VANILLA_MAX_EVENT_COUNT) {
+            print_info("SKIPPED EVENT TO PREVENT ROLLOVER (%lu > %lu + %lu)", loop->new_index, loop->used_index, VANILLA_MAX_EVENT_COUNT);
+            loop->used_index++;
+        }
+
+        pthread_cond_broadcast(&loop->waitcond);
+    } else {
+        print_info("FAILED TO PUSH EVENT: wanted %lu, only had %lu. This is a bug, please report to developers.\n", size, sizeof(ev->data));
+    }
+
+    pthread_mutex_unlock(&loop->mutex);
+}
+
+int get_event(event_loop_t *loop, vanilla_event_t *event, int wait)
+{
+    int ret = 0;
+
+    pthread_mutex_lock(&loop->mutex);
+
+    if (loop->active) {
+        if (wait) {
+            while (loop->active && loop->used_index == loop->new_index) {
+                pthread_cond_wait(&loop->waitcond, &loop->mutex);
+            }
+        }
+
+        if (loop->active && loop->used_index < loop->new_index) {
+            // Output data to pointer
+            *event = loop->events[loop->used_index % VANILLA_MAX_EVENT_COUNT];
+            loop->used_index++;
+            ret = 1;
+        }
+    }
+
+    pthread_mutex_unlock(&loop->mutex);
+    
+    return ret;
 }

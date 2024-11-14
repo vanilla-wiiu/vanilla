@@ -243,7 +243,7 @@ void send_input(int socket_hid)
 
 void *listen_input(void *x)
 {
-    struct gamepad_thread_context *info = (struct gamepad_thread_context *) x;
+    gamepad_context_t *info = (gamepad_context_t *) x;
 
     pthread_mutex_init(&button_mtx, NULL);
 

@@ -18,20 +18,20 @@ add_custom_target(
 )
 add_custom_target(
     wpa_supplicant_build
-    COMMAND make -j$$(nproc) && cp wpa_supplicant wpa_supplicant_drc
+    COMMAND make -j$$(nproc)
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/hostap/wpa_supplicant"
-    BYPRODUCTS "${CMAKE_CURRENT_SOURCE_DIR}/hostap/wpa_supplicant/wpa_supplicant_drc"
+    BYPRODUCTS "${CMAKE_CURRENT_SOURCE_DIR}/hostap/wpa_supplicant/wpa_supplicant"
     USES_TERMINAL
     DEPENDS wpa_supplicant_configure
 )
 add_executable(wpa_supplicant IMPORTED)
 add_dependencies(wpa_supplicant wpa_supplicant_build)
 set_target_properties(wpa_supplicant PROPERTIES
-    IMPORTED_LOCATION "${CMAKE_CURRENT_SOURCE_DIR}/hostap/wpa_supplicant/wpa_supplicant_drc"
+    IMPORTED_LOCATION "${CMAKE_CURRENT_SOURCE_DIR}/hostap/wpa_supplicant/wpa_supplicant"
 )
 add_custom_command(
     TARGET wpa_supplicant_build POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_CURRENT_SOURCE_DIR}/hostap/wpa_supplicant/wpa_supplicant_drc" "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_CURRENT_SOURCE_DIR}/hostap/wpa_supplicant/wpa_supplicant" "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/wpa_supplicant_drc"
     DEPENDS wpa_supplicant_build
 )
 

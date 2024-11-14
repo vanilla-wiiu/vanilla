@@ -20,3 +20,12 @@ if (NOT ANDROID)
 endif()
 
 install(TARGETS vanilla)
+
+if (VANILLA_BUILD_TESTS)
+    add_executable(bittest
+        test/bittest.c
+    )
+
+    target_link_libraries(bittest PRIVATE vanilla m)
+    target_include_directories(bittest PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+endif()
