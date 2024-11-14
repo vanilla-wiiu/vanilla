@@ -101,6 +101,33 @@ int decode(const void *data, size_t size)
 	return ret;
 }
 
+static SDL_mutex *decode_loop_mutex;
+static SDL_cond *decode_loop_cond;
+static int decode_loop_running = 0;
+static int decode_pkt_ready = 0;
+static vanilla_event_t decode_event;
+int decode_loop(void *)
+{
+	vanilla_event_t our_pkt;
+
+	SDL_LockMutex(decode_loop_mutex);
+	while (decode_loop_running) {
+		while (!decode_pkt_ready) {
+			SDL_CondWait(decode_loop_cond, decode_loop_mutex);
+		}
+
+		our_pkt = decode_event;
+		decode_pkt_ready = 0;
+		
+		SDL_UnlockMutex(decode_loop_mutex);
+
+		decode(our_pkt.data, our_pkt.size);
+
+		SDL_LockMutex(decode_loop_mutex);
+	}
+	SDL_UnlockMutex(decode_loop_mutex);
+}
+
 int run_backend(void *data)
 {
 	SDL_AudioSpec desired = {0};
@@ -115,13 +142,22 @@ int run_backend(void *data)
 		printf("Failed to open audio device\n");
 	}
 
-	
-
 	vanilla_event_t event;
+
+	decode_loop_mutex = SDL_CreateMutex();
+	decode_loop_cond = SDL_CreateCond();
+	decode_loop_running = 1;
+
+	SDL_Thread *decode_thread = SDL_CreateThread(decode_loop, "vanilla-decode", NULL);
 
 	while (vanilla_wait_event(&event)) {
 		if (event.type == VANILLA_EVENT_VIDEO) {
-			decode(event.data, event.size);
+			SDL_LockMutex(decode_loop_mutex);
+			decode_event = event;
+			decode_pkt_ready = 1;
+			SDL_CondBroadcast(decode_loop_cond);
+			SDL_UnlockMutex(decode_loop_mutex);
+			// decode(event.data, event.size);
 		} else if (event.type == VANILLA_EVENT_AUDIO) {
 			if (audio) {
 				if (SDL_QueueAudio(audio, event.data, event.size) < 0) {
@@ -132,6 +168,15 @@ int run_backend(void *data)
 			vibrate = event.data[0];
 		}
 	}
+
+	SDL_LockMutex(decode_loop_mutex);
+	decode_loop_running = 0;
+	SDL_CondBroadcast(decode_loop_cond);
+	SDL_UnlockMutex(decode_loop_mutex);
+
+	SDL_WaitThread(decode_thread, NULL);
+	SDL_DestroyCond(decode_loop_cond);
+	SDL_DestroyMutex(decode_loop_mutex);
 
 	SDL_CloseAudioDevice(audio);
 
@@ -402,6 +447,11 @@ int main(int argc, const char **argv)
 					vanilla_set_button(VANILLA_SENSOR_GYRO_PITCH, pack_float(event.csensor.data[0]));
 					vanilla_set_button(VANILLA_SENSOR_GYRO_YAW, pack_float(event.csensor.data[1]));
 					vanilla_set_button(VANILLA_SENSOR_GYRO_ROLL, pack_float(event.csensor.data[2]));
+				}
+				break;
+			case SDL_KEYDOWN:
+				if (event.key.keysym.sym == SDLK_ESCAPE) {
+					running = 0;
 				}
 				break;
 			}
