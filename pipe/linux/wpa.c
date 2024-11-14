@@ -863,7 +863,10 @@ void *sync_with_console_internal(void *data)
 
                     actual_buf_len = buf_len;
                     wpa_ctrl_recv(args->ctrl, buf, &actual_buf_len);
-                    print_info("CRED RECV: %.*s", buf_len, buf);
+                    if (!strstr(buf, "CTRL-EVENT-BSS-ADDED")
+                        && !strstr(buf, "CTRL-EVENT-BSS-REMOVED")) {
+                        print_info("CRED RECV: %.*s", buf_len, buf);
+                    }
 
                     if (!memcmp("<3>WPS-CRED-RECEIVED", buf, 20)) {
                         print_info("RECEIVED AUTHENTICATION FROM CONSOLE");
@@ -907,7 +910,10 @@ void *do_connect(void *data)
         char buf[1024];
         size_t actual_buf_len = sizeof(buf);
         wpa_ctrl_recv(args->ctrl, buf, &actual_buf_len);
-        print_info("CONN RECV: %.*s", actual_buf_len, buf);
+        if (!strstr(buf, "CTRL-EVENT-BSS-ADDED")
+            && !strstr(buf, "CTRL-EVENT-BSS-REMOVED")) {
+            print_info("CONN RECV: %.*s", actual_buf_len, buf);
+        }
 
         if (memcmp(buf, "<3>CTRL-EVENT-CONNECTED", 23) == 0) {
             break;
