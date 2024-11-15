@@ -276,6 +276,7 @@ int start_wpa_supplicant(const char *wireless_interface, const char *config_file
     int pipe;
 
     r = start_process(argv, pid, &pipe, NULL);
+    g_wpa_pid = *pid;  // Store pid globally
     free(wpa_buf);
 
     if (r != VANILLA_SUCCESS) {
@@ -341,16 +342,19 @@ void *read_stdin(void *)
 
 void *wpa_setup_environment(void *data)
 {
-    void *ret = THREADRESULT(VANILLA_ERROR);
-
     struct sync_args *args = (struct sync_args *) data;
+
+    // Store wireless interface name globally
+    strncpy(g_wireless_interface, args->wireless_interface, sizeof(g_wireless_interface) - 1);
 
     // Check status of interface with NetworkManager
     int is_managed = 0;
     if (is_networkmanager_managing_device(args->wireless_interface, &is_managed) != VANILLA_SUCCESS) {
         print_info("FAILED TO DETERMINE MANAGED STATE OF WIRELESS INTERFACE");
-        //goto die;
     }
+    g_was_managed = is_managed;  // Store managed state globally
+
+    void *ret = THREADRESULT(VANILLA_ERROR);
 
     // If NetworkManager is managing this device, temporarily stop it from doing so
     if (is_managed) {
@@ -402,7 +406,9 @@ die_and_kill:
 die_and_reenable_managed:
     if (is_managed) {
         print_info("SETTING %s BACK TO MANAGED", args->wireless_interface);
-        enable_networkmanager_on_device(args->wireless_interface);
+        if (enable_networkmanager_on_device(args->wireless_interface) != VANILLA_SUCCESS) {
+            print_info("FAILED TO RE-ENABLE NETWORK MANAGER");
+        }
     }
 
 die:
@@ -431,6 +437,7 @@ int call_dhcp(const char *network_interface, pid_t *dhclient_pid)
 
     int dhclient_pipe;
     int r = start_process(argv, dhclient_pid, NULL, &dhclient_pipe);
+    g_dhcp_pid = *dhclient_pid;  // Store pid globally
 
     free(dhclient_buf);
     free(dhclient_script);
@@ -989,8 +996,10 @@ void vanilla_listen(const char *wireless_interface)
     pthread_mutex_init(&main_loop_mutex, NULL);
     pthread_mutex_init(&sync_mutex, NULL);
 
-    signal(SIGINT, sigint_handler);
-    signal(SIGTERM, sigint_handler);
+    signal(SIGINT, cleanup_handler);
+    signal(SIGTERM, cleanup_handler);
+    signal(SIGABRT, cleanup_handler);
+    signal(SIGSEGV, cleanup_handler);
 
     pthread_t stdin_thread;
     pthread_create(&stdin_thread, NULL, read_stdin, NULL);
@@ -1073,4 +1082,39 @@ repeat_loop:
 int vanilla_has_config()
 {
     return (access(get_wireless_connect_config_filename(), F_OK) == 0);
+}
+
+// Add near the top with other global variables
+static pid_t g_wpa_pid = 0;
+static pid_t g_dhcp_pid = 0;
+static char g_wireless_interface[256] = {0};
+static int g_was_managed = 0;
+
+// Add this new cleanup function
+void cleanup_handler(int signum) {
+    print_info("CLEANUP: Received signal %d, performing cleanup...", signum);
+
+    // Kill any running processes
+    if (g_dhcp_pid > 0) {
+        print_info("CLEANUP: Terminating DHCP client");
+        kill(g_dhcp_pid, SIGTERM);
+        g_dhcp_pid = 0;
+    }
+
+    if (g_wpa_pid > 0) {
+        print_info("CLEANUP: Terminating WPA supplicant");
+        kill(g_wpa_pid, SIGTERM);
+        g_wpa_pid = 0;
+    }
+
+    // Re-enable NetworkManager if it was previously managing the interface
+    if (g_was_managed && g_wireless_interface[0] != '\0') {
+        print_info("CLEANUP: Re-enabling NetworkManager for %s", g_wireless_interface);
+        enable_networkmanager_on_device(g_wireless_interface);
+    }
+
+    quit_loop();
+    
+    // Reset signal handler to default
+    signal(signum, SIG_DFL);
 }
