@@ -327,7 +327,12 @@ int get_event(event_loop_t *loop, vanilla_event_t *event, int wait)
 
         if (loop->active && loop->used_index < loop->new_index) {
             // Output data to pointer
-            *event = loop->events[loop->used_index % VANILLA_MAX_EVENT_COUNT];
+            vanilla_event_t *pull_event = &loop->events[loop->used_index % VANILLA_MAX_EVENT_COUNT];
+
+            event->type = pull_event->type;
+            memcpy(event->data, pull_event->data, pull_event->size);
+            event->size = pull_event->size;
+
             loop->used_index++;
             ret = 1;
         }
