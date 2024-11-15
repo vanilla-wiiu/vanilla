@@ -14,8 +14,6 @@ public:
     
     static QString getConfigFilename();
 
-    static KeyMap instance;
-
 };
 
 #endif

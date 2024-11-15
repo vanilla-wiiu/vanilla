@@ -6,8 +6,6 @@
 #include <QXmlStreamWriter>
 #include <vanilla.h>
 
-KeyMap KeyMap::instance;
-
 KeyMap::KeyMap()
 {
     KeyMap &ref = *this;
@@ -39,7 +37,7 @@ KeyMap::KeyMap()
     ref[Qt::Key_J] = VANILLA_BTN_ZR;
 }
 
-int g_serializationVersion = 1;
+static int g_serializationVersion = 1;
 
 bool KeyMap::load(const QString &filename)
 {

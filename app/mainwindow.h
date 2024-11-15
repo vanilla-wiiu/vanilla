@@ -11,6 +11,7 @@
 #include "audiohandler.h"
 #include "backend.h"
 #include "gamepadhandler.h"
+#include "keymap.h"
 #include "videodecoder.h"
 #include "viewer.h"
 
@@ -58,6 +59,7 @@ private:
     VideoDecoder *m_videoDecoder;
     GamepadHandler *m_gamepadHandler;
     AudioHandler *m_audioHandler;
+    KeyMap m_keyMap;
 
     QMap<QObject *, QThread *> m_threadMap;
 

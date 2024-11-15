@@ -27,7 +27,6 @@
 
 #include "backendinitdialog.h"
 #include "inputconfigdialog.h"
-#include "keymap.h"
 #include "syncdialog.h"
 #include "udpaddressdialog.h"
 
@@ -218,6 +217,7 @@ MainWindow::MainWindow(QWidget *parent) : QWidget(parent)
     startObjectOnThread(m_videoDecoder);
 
     m_gamepadHandler = new GamepadHandler();
+    m_gamepadHandler->setKeyMap(&m_keyMap);
     startObjectOnThread(m_gamepadHandler);
     QMetaObject::invokeMethod(m_gamepadHandler, &GamepadHandler::run, Qt::QueuedConnection);
 
@@ -236,7 +236,7 @@ MainWindow::MainWindow(QWidget *parent) : QWidget(parent)
     populateMicrophones();
     populateControllers();
 
-    KeyMap::instance.load(KeyMap::getConfigFilename());
+    m_keyMap.load(KeyMap::getConfigFilename());
 
     setWindowTitle(tr("Vanilla"));
 }
@@ -422,7 +422,6 @@ void MainWindow::setConnectedState(bool on)
 
 void MainWindow::setJoystick(int index)
 {
-    m_controllerMappingButton->setEnabled(index == 0); // Currently we only allow configuring keyboard controls
     m_gamepadHandler->setController(index - 1);
 }
 
@@ -453,7 +452,12 @@ void MainWindow::volumeChanged(int v)
 
 void MainWindow::showInputConfigDialog()
 {
-    InputConfigDialog *d = new InputConfigDialog(this);
+    InputConfigDialog *d;
+    if (m_controllerComboBox->currentData().toInt() == -1) {
+        d = new InputConfigDialog(&m_keyMap, this);
+    } else {
+        d = new InputConfigDialog(m_gamepadHandler, this);
+    }
     d->open();
 }
 
