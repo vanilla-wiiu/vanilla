@@ -406,24 +406,21 @@ die:
 
 int call_dhcp(const char *network_interface, pid_t *dhclient_pid)
 {
-    const char *argv[] = {"dhclient", "-d", "--no-pid", network_interface, NULL, NULL, NULL};
+    // Modify dhclient arguments to prevent default route creation
+    const char *argv[] = {
+        "dhclient", "-d", "--no-pid",
+        "-cf", "/dev/null", // Use empty config to prevent default behavior
+        network_interface, 
+        NULL
+    };
 
     size_t buf_size = get_max_path_length();
     char *dhclient_buf = malloc(buf_size);
-    char *dhclient_script = NULL;
+    
     get_binary_in_working_directory("dhclient", dhclient_buf, buf_size);
 
     if (access(dhclient_buf, F_OK) == 0) {
-        // HACK: Assume we're working in our deployed environment
-        // TODO: Should probably just incorporate dhclient (or something like it) directly as a library
         argv[0] = dhclient_buf;
-        argv[4] = "-sf";
-
-        dhclient_script = malloc(buf_size);
-        get_binary_in_working_directory("../sbin/dhclient-script", dhclient_script, buf_size);
-        argv[5] = dhclient_script;
-        
-        print_info("Using custom dhclient at: %s", argv[0]);
     } else {
         print_info("Using system dhclient");
     }
@@ -433,19 +430,16 @@ int call_dhcp(const char *network_interface, pid_t *dhclient_pid)
     if (r != VANILLA_SUCCESS) {
         print_info("FAILED TO CALL DHCLIENT");
         free(dhclient_buf);
-        free(dhclient_script);
         return r;
     }
 
     free(dhclient_buf);
-    free(dhclient_script);
 
     if (wait_for_output(dhclient_pipe, "bound to")) {
         return VANILLA_SUCCESS;
     } else {
         print_info("FAILED TO ESTABLISH DHCP");
         kill(*dhclient_pid, SIGTERM);
-
         return VANILLA_ERROR;
     }
 }
@@ -934,8 +928,7 @@ void *do_connect(void *data)
         print_info("DHCP ESTABLISHED");
     }
 
-    call_ip((const char *[]){"ip", "route", "del", "default", "via", "192.168.1.1", "dev", args->wireless_interface, NULL});
-    call_ip((const char *[]){"ip", "route", "del", "192.168.1.0/24", "dev", args->wireless_interface, NULL});
+    // Only add the specific host route we need
     call_ip((const char *[]){"route", "add", "-host", "192.168.1.10", "dev", args->wireless_interface, NULL});
 
     create_all_relays();
