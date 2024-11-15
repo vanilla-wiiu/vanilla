@@ -17,16 +17,16 @@ At a minimum, you will need an adapter that supports 802.11n 5GHz. Newer standar
 In practice, not all hardware/drivers appear to work at this time. Check the [Wireless Compatibility](https://github.com/vanilla-wiiu/vanilla/wiki/Wireless-Compatibility) page on the wiki to check if a card is confirmed working or not.
 
 ## Compiling (Linux)
-#### Note: Qt 6.4 or later is required!
+#### Note: Currently Qt 6.4 or later is required
 Vanilla currently requires the following dependencies:
 
 - Debian/Ubuntu 
   ```
-  # apt install qt6-base-dev qt6-multimedia-dev libavcodec-dev libavutil-dev libavfilter-dev libsdl2-dev libnl-genl-3-dev isc-dhcp-client libssl-dev build-essential cmake
+  # apt install qt6-base-dev qt6-multimedia-dev qt6-svg-dev libavcodec-dev libavutil-dev libavfilter-dev libsdl2-dev libnl-genl-3-dev isc-dhcp-client libssl-dev build-essential cmake
   ```
 - Fedora
   ```
-  # dnf install qt6-qtbase-devel qt6-qtmultimedia-devel libavcodec-free-devel libavutil-free-devel libavfilter-free-devel libnl3-devel SDL2-devel openssl-devel make automake gcc gcc-c++ kernel-devel cmake
+  # dnf install qt6-qtbase-devel qt6-qtmultimedia-devel qt6-qtsvg-devel libavcodec-free-devel libavutil-free-devel libavfilter-free-devel libnl3-devel SDL2-devel openssl-devel make automake gcc gcc-c++ kernel-devel cmake
   ```
 - Arch
   ```
@@ -34,7 +34,7 @@ Vanilla currently requires the following dependencies:
   ```
 - Alpine/postmarketOS
   ```
-  # apk add qt6-qtbase-dev qt6-qtmultimedia-dev ffmpeg-dev libnl3-dev sdl2-dev dhclient build-base cmake
+  # apk add qt6-qtbase-dev qt6-qtmultimedia-dev qt6-qtsvg-dev ffmpeg-dev libnl3-dev sdl2-dev dhclient build-base cmake
   ```
 
 The build process is otherwise normal for a CMake program:
