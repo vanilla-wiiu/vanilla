@@ -1,4 +1,4 @@
-find_package(Qt6 REQUIRED COMPONENTS Core Widgets Multimedia OpenGLWidgets Network Concurrent)
+find_package(Qt6 REQUIRED COMPONENTS Core Widgets Multimedia OpenGLWidgets Network Concurrent Svg)
 find_package(SDL2 REQUIRED)
 find_package(FFmpeg REQUIRED COMPONENTS avformat avcodec avutil avfilter)
 
@@ -30,6 +30,7 @@ target_link_libraries(vanilla-gui PRIVATE
     Qt6::Multimedia
     Qt6::OpenGLWidgets
     Qt6::Concurrent
+    Qt6::Svg
     SDL2
     vanilla
     FFmpeg::avformat
