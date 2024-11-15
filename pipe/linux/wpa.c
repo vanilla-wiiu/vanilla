@@ -53,6 +53,11 @@ struct sync_args {
     struct wpa_ctrl *ctrl;
 };
 
+struct relay_info {
+    const char *wireless_interface;
+    in_port_t port;
+};
+
 #define THREADRESULT(x) ((void *) (uintptr_t) (x))
 
 void lpprint(const char *fmt, va_list args)
@@ -157,14 +162,14 @@ int wait_for_output(int pipe, const char *expected_output)
     static const int max_attempts = 5;
     int nbytes, attempts = 0, success = 0;
     const int expected_len = strlen(expected_output);
-    char buf[100];
+    char buf[256];
     int read_count = 0;
     int ret = 0;
     do {
         // Read line from child process
-        read_line_from_pipe(pipe, buf, sizeof(buf));
+        ssize_t read_sz = read_line_from_pipe(pipe, buf, sizeof(buf));
 
-        print_info("SUBPROCESS %s", buf);
+        print_info("SUBPROCESS %.*s", read_sz, buf);
 
         // We got success message!
         if (!memcmp(buf, expected_output, expected_len)) {
@@ -406,39 +411,34 @@ die:
 
 int call_dhcp(const char *network_interface, pid_t *dhclient_pid)
 {
-    const char *argv[] = {"dhclient", "-d", "--no-pid", network_interface, NULL, NULL, NULL};
-
+    // See if dhclient exists in our local directories    
     size_t buf_size = get_max_path_length();
     char *dhclient_buf = malloc(buf_size);
-    char *dhclient_script = NULL;
+    char *dhclient_script = malloc(buf_size);
     get_binary_in_working_directory("dhclient", dhclient_buf, buf_size);
+    get_binary_in_working_directory("../sbin/dhcp.sh", dhclient_script, buf_size);
 
     if (access(dhclient_buf, F_OK) == 0) {
-        // HACK: Assume we're working in our deployed environment
-        // TODO: Should probably just incorporate dhclient (or something like it) directly as a library
-        argv[0] = dhclient_buf;
-        argv[4] = "-sf";
-
-        dhclient_script = malloc(buf_size);
-        get_binary_in_working_directory("../sbin/dhclient-script", dhclient_script, buf_size);
-        argv[5] = dhclient_script;
-        
-        print_info("Using custom dhclient at: %s", argv[0]);
+        // Prefer our local dhclient if it's available
+        // TODO: dhclient is EOL and should be replaced with something else
+        print_info("Using custom dhclient at: %s", dhclient_buf);
     } else {
         print_info("Using system dhclient");
+        strncpy(dhclient_buf, "dhclient", buf_size);
     }
+
+    const char *argv[] = {dhclient_buf, "-d", "--no-pid", "-sf", dhclient_script, network_interface, NULL};
 
     int dhclient_pipe;
     int r = start_process(argv, dhclient_pid, NULL, &dhclient_pipe);
-    if (r != VANILLA_SUCCESS) {
-        print_info("FAILED TO CALL DHCLIENT");
-        free(dhclient_buf);
-        free(dhclient_script);
-        return r;
-    }
 
     free(dhclient_buf);
     free(dhclient_script);
+
+    if (r != VANILLA_SUCCESS) {
+        print_info("FAILED TO CALL DHCLIENT");
+        return r;
+    }
 
     if (wait_for_output(dhclient_pipe, "bound to")) {
         return VANILLA_SUCCESS;
@@ -581,7 +581,8 @@ int open_socket(in_port_t port)
 
 void *open_relay(void *data)
 {
-    in_port_t port = (in_port_t) (uintptr_t) data;
+    struct relay_info *info = (struct relay_info *) data;
+    in_port_t port = info->port;
     int ret = -1;
 
     // Open an incoming port from the console
@@ -589,6 +590,8 @@ void *open_relay(void *data)
     if (from_console == -1) {
         goto close;
     }
+
+    setsockopt(from_console, SOL_SOCKET, SO_BINDTODEVICE, info->wireless_interface, strlen(info->wireless_interface));
 
     // Open an incoming port from the frontend
     int from_frontend = open_socket(port + 100);
@@ -628,42 +631,31 @@ close:
     return THREADRESULT(ret);
 }
 
-void create_all_relays()
+void create_all_relays(const char *wireless_interface)
 {
     pthread_t vid_thread, aud_thread, msg_thread, cmd_thread, hid_thread;
+    struct relay_info vid_info, aud_info, msg_info, cmd_info, hid_info;
 
-    pthread_create(&vid_thread, NULL, open_relay, THREADRESULT(PORT_VID));
-    pthread_create(&aud_thread, NULL, open_relay, THREADRESULT(PORT_AUD));
-    pthread_create(&msg_thread, NULL, open_relay, THREADRESULT(PORT_MSG));
-    pthread_create(&cmd_thread, NULL, open_relay, THREADRESULT(PORT_CMD));
-    pthread_create(&hid_thread, NULL, open_relay, THREADRESULT(PORT_HID));
+    // Set wireless interface on all
+    vid_info.wireless_interface = aud_info.wireless_interface = msg_info.wireless_interface = cmd_info.wireless_interface = hid_info.wireless_interface = wireless_interface;
+    
+    vid_info.port = PORT_VID;
+    aud_info.port = PORT_AUD;
+    msg_info.port = PORT_MSG;
+    cmd_info.port = PORT_CMD;
+    hid_info.port = PORT_HID;
+
+    pthread_create(&vid_thread, NULL, open_relay, &vid_info);
+    pthread_create(&aud_thread, NULL, open_relay, &aud_info);
+    pthread_create(&msg_thread, NULL, open_relay, &msg_info);
+    pthread_create(&cmd_thread, NULL, open_relay, &cmd_info);
+    pthread_create(&hid_thread, NULL, open_relay, &hid_info);
 
     pthread_join(vid_thread, NULL);
     pthread_join(aud_thread, NULL);
     pthread_join(msg_thread, NULL);
     pthread_join(cmd_thread, NULL);
     pthread_join(hid_thread, NULL);
-}
-
-int call_ip(const char **argv)
-{
-    // Destroy default route that dhclient will have created
-    pid_t ip_pid;
-    int r = start_process(argv, &ip_pid, NULL, NULL);
-    if (r != VANILLA_SUCCESS) {
-        print_info("FAILED TO REMOVE CONSOLE ROUTE FROM SYSTEM");
-        return r;
-    }
-
-    int ip_status;
-    waitpid(ip_pid, &ip_status, 0);
-
-    if (!WIFEXITED(ip_status)) {
-        print_info("FAILED TO REMOVE CONSOLE ROUTE FROM SYSTEM");
-        return VANILLA_ERROR;
-    }
-
-    return VANILLA_SUCCESS;
 }
 
 void *thread_handler(void *data)
@@ -934,11 +926,7 @@ void *do_connect(void *data)
         print_info("DHCP ESTABLISHED");
     }
 
-    call_ip((const char *[]){"ip", "route", "del", "default", "via", "192.168.1.1", "dev", args->wireless_interface, NULL});
-    call_ip((const char *[]){"ip", "route", "del", "192.168.1.0/24", "dev", args->wireless_interface, NULL});
-    call_ip((const char *[]){"route", "add", "-host", "192.168.1.10", "dev", args->wireless_interface, NULL});
-
-    create_all_relays();
+    create_all_relays(args->wireless_interface);
 
     int kill_ret = kill(dhclient_pid, SIGTERM);
     print_info("KILLING DHCLIENT %i", dhclient_pid);

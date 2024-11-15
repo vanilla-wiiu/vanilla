@@ -35,6 +35,12 @@ add_custom_command(
     DEPENDS wpa_supplicant_build
 )
 
+# Install dhcp script
+add_custom_target(
+    dhcp_script ALL
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_CURRENT_SOURCE_DIR}/dhcp.sh" "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/../sbin/dhcp.sh"
+)
+
 # Build client library
 add_custom_target(
     wpa_client_build
