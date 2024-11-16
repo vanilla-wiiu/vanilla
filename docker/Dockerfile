@@ -44,9 +44,9 @@ RUN source /opt/rh/gcc-toolset-13/enable \
 RUN dnf -y install perl
 
 # Get Qt 6
-RUN git clone --branch 6.7.1 --depth 1 git://code.qt.io/qt/qt5.git qt6 \
+RUN git clone --branch 6.8.1 --depth 1 git://code.qt.io/qt/qt5.git qt6 \
 	&& cd qt6 \
-	&& perl init-repository --module-subset=qtbase,qtmultimedia,qtshadertools
+	&& perl init-repository --module-subset=qtbase,qtmultimedia,qtshadertools,qtsvg
 
 RUN dnf -y install pulseaudio-libs-devel mesa-libGL-devel \
         xcb-util-renderutil-devel xcb-util-cursor-devel xcb-util-image-devel \
