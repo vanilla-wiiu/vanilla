@@ -11,27 +11,6 @@
 
 #define ALIGN(x, a)		((x) + (a - 1)) & (~(a - 1))
 
-int set_tty(int mode)
-{
-    /*int tty_fd = open("/dev/tty0", O_RDWR);
-    if (tty_fd == -1) {
-        fprintf(stderr, "Failed to open /dev/tty\n");
-        return 0;
-    }
-    if (ioctl(tty_fd, KDSETMODE, mode) < 0) {
-        fprintf(stderr, "Failed to set KDSETMODE: %s (%i)\n", strerror(errno), errno);
-        return 0;
-    }
-    close(tty_fd);*/
-
-    /*if (ioctl(STDIN_FILENO, KDSETMODE, mode) < 0) {
-        fprintf(stderr, "Failed to set KDSETMODE: %s (%i)\n", strerror(errno), errno);
-        return 0;
-    }*/
-
-    return 1;
-}
-
 int initialize_drm(vanilla_drm_ctx_t *ctx)
 {
 	// Open DRM
@@ -39,10 +18,6 @@ int initialize_drm(vanilla_drm_ctx_t *ctx)
 	if (ctx->fd == -1) {
 		return 0;
 	}
-
-    if (!set_tty(KD_GRAPHICS)) {
-        return 0;
-    }
 
 	int ret = 0;
 
@@ -91,8 +66,6 @@ int free_drm(vanilla_drm_ctx_t *ctx)
     if (ctx->got_fb) {
         drmModeRmFB(ctx->fd, ctx->fb_id);
     }
-
-    set_tty(KD_TEXT);
 
 	// Close DRM
 	drmClose(ctx->fd);
