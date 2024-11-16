@@ -35,6 +35,7 @@ uint16_t PORT_CMD;
 #define EVENT_BUFFER_SIZE 65536
 #define EVENT_BUFFER_ARENA_SIZE VANILLA_MAX_EVENT_COUNT * 2
 uint8_t *EVENT_BUFFER_ARENA[EVENT_BUFFER_ARENA_SIZE] = {0};
+pthread_mutex_t event_buffer_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 void send_to_console(int fd, const void *data, size_t data_size, int port)
 {
@@ -361,6 +362,7 @@ void *get_event_buffer()
 {
     void *buf = NULL;
 
+    pthread_mutex_lock(&event_buffer_mutex);
     for (size_t i = 0; i < EVENT_BUFFER_ARENA_SIZE; i++) {
         if (EVENT_BUFFER_ARENA[i]) {
             buf = EVENT_BUFFER_ARENA[i];
@@ -368,18 +370,21 @@ void *get_event_buffer()
             break;
         }
     }
+    pthread_mutex_unlock(&event_buffer_mutex);
 
     return buf;
 }
 
 void release_event_buffer(void *buffer)
 {
+    pthread_mutex_lock(&event_buffer_mutex);
     for (size_t i = 0; i < EVENT_BUFFER_ARENA_SIZE; i++) {
         if (!EVENT_BUFFER_ARENA[i]) {
             EVENT_BUFFER_ARENA[i] = buffer;
             break;
         }
     }
+    pthread_mutex_unlock(&event_buffer_mutex);
 }
 
 void init_event_buffer_arena()
