@@ -265,8 +265,6 @@ SDL_GameController *find_valid_controller()
 
 void sigint_handler(int signum)
 {
-	set_tty(KD_TEXT);
-
 	printf("Received SIGINT...\n");
 	running = 0;
 
@@ -314,13 +312,18 @@ int32_t pack_float(float f)
 int main(int argc, const char **argv)
 {
 	vanilla_drm_ctx_t drm_ctx;
+	Uint32 sdl_flags = SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER;
+#ifdef RASPBERRY_PI
 	if (!initialize_drm(&drm_ctx)) {
 		fprintf(stderr, "Failed to find DRM output\n");
-		return 1;
+		//return 1;
 	}
+#else
+	sdl_flags |= SDL_INIT_VIDEO;
+#endif
 
 	// Initialize SDL2 for audio and input
-	if (SDL_Init(SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER) < 0) {
+	if (SDL_Init(sdl_flags) < 0) {
 		fprintf(stderr, "Failed to initialize SDL: %s\n", SDL_GetError());
 		return 1;
 	}
@@ -344,6 +347,7 @@ int main(int argc, const char **argv)
 
 	int ffmpeg_err;
 
+#ifdef RASPBERRY_PI
 	ffmpeg_err = av_hwdevice_ctx_create(&video_codec_ctx->hw_device_ctx, AV_HWDEVICE_TYPE_DRM, "/dev/dri/card0", NULL, 0);
 	if (ffmpeg_err < 0) {
 		fprintf(stderr, "Failed to create hwdevice context: %s (%i)\n", av_err2str(ffmpeg_err), ffmpeg_err);
@@ -352,6 +356,7 @@ int main(int argc, const char **argv)
 
 	// MAKE SURE WE GET DRM PRIME FRAMES BY OVERRIDING THE GET_FORMAT FUNCTION
 	video_codec_ctx->get_format = get_format;
+#endif
 
 	ffmpeg_err = avcodec_open2(video_codec_ctx, codec, NULL);
     if (ffmpeg_err < 0) {
@@ -400,7 +405,16 @@ int main(int argc, const char **argv)
 
 	// Start background threads
 	SDL_Thread *backend_thread = SDL_CreateThread(run_backend, "vanilla-pi-backend", NULL);
+
+#ifdef RASPBERRY_PI
 	SDL_Thread *display_thread = SDL_CreateThread(display_loop, "vanilla-pi-display", &drm_ctx);
+#else
+	SDL_Window *window = SDL_CreateWindow("vanilla-pi", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_RESIZABLE);
+	SDL_Renderer *renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+	SDL_Texture *texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_YV12, SDL_TEXTUREACCESS_STREAMING, SCREEN_WIDTH, SCREEN_HEIGHT);
+
+	AVFrame *frame = av_frame_alloc();
+#endif
 
 	SDL_GameController *controller = find_valid_controller();
 
@@ -466,6 +480,26 @@ int main(int argc, const char **argv)
 				SDL_GameControllerRumble(controller, amount, amount, 0);
 			}
 		}
+
+#ifndef RASPBERRY_PI
+		pthread_mutex_lock(&decoding_mutex);
+		if (present_frame->data[0]) {
+			av_frame_unref(frame);
+			av_frame_move_ref(frame, present_frame);
+		}
+		pthread_mutex_unlock(&decoding_mutex);
+		
+		if (frame->data[0]) {
+			printf("frame->format: %i\n", frame->format);
+			SDL_UpdateYUVTexture(texture, NULL,
+								 frame->data[0], frame->linesize[0],
+								 frame->data[1], frame->linesize[1],
+								 frame->data[2], frame->linesize[2]);
+			av_frame_unref(frame);
+			SDL_RenderCopy(renderer, texture, NULL, NULL);
+		}
+		SDL_RenderPresent(renderer);
+#endif
 	}
 
 	// Terminate background threads and wait for them to end gracefully
@@ -477,7 +511,16 @@ int main(int argc, const char **argv)
 	pthread_mutex_unlock(&decoding_mutex);
 
 	SDL_WaitThread(backend_thread, NULL);
+
+#ifdef RASPBERRY_PI
 	SDL_WaitThread(display_thread, NULL);
+#else
+	av_frame_free(&frame);
+
+	SDL_DestroyTexture(texture);
+	SDL_DestroyRenderer(renderer);
+	SDL_DestroyWindow(window);
+#endif
 
 	pthread_cond_destroy(&decoding_wait_cond);
 	pthread_mutex_destroy(&decoding_mutex);
