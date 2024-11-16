@@ -39,7 +39,7 @@ void handle_audio_packet(gamepad_context_t *ctx, unsigned char *data, size_t len
     // This for loop skips ap->format, ap->seq_id, and ap->timestamp to save processing.
     // If you want those, you'll have to adjust this loop.
     //
-    for (int byte = 0; byte < 4; byte++) {
+    for (int byte = 0; byte < 2; byte++) {
         data[byte] = (unsigned char) reverse_bits(data[byte], 8);
     }
 
@@ -47,7 +47,7 @@ void handle_audio_packet(gamepad_context_t *ctx, unsigned char *data, size_t len
 
     // ap->format = reverse_bits(ap->format, 3);
     // ap->seq_id = reverse_bits(ap->seq_id, 10);
-    ap->payload_size = reverse_bits(ap->payload_size, 16);
+    ap->payload_size = __bswap_16(ap->payload_size);
     // ap->timestamp = reverse_bits(ap->timestamp, 32);
 
     if (ap->type == TYPE_VIDEO) {
