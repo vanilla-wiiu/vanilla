@@ -48,7 +48,7 @@ enum AVPixelFormat get_format(AVCodecContext* ctx, const enum AVPixelFormat *pix
     return AV_PIX_FMT_NONE;
 }
 
-int decode(const void *data, size_t size)
+int decode(void *data, size_t size)
 {
 	int err;
 
@@ -56,13 +56,13 @@ int decode(const void *data, size_t size)
 	err = av_packet_from_data(video_packet, (uint8_t *) data, size);
 	if (err < 0) {
 		fprintf(stderr, "Failed to initialize AVPacket from data: %s (%i)\n", av_err2str(err), err);
+		av_free(data);
 		return 0;
 	}
 
-	int64_t ticks = SDL_GetTicks64();
-
 	// Send packet to decoder
 	err = avcodec_send_packet(video_codec_ctx, video_packet);
+	av_packet_unref(video_packet);
 	if (err < 0) {
 		fprintf(stderr, "Failed to send packet to decoder: %s (%i)\n", av_err2str(err), err);
 		return 0;
@@ -104,26 +104,29 @@ int decode(const void *data, size_t size)
 static SDL_mutex *decode_loop_mutex;
 static SDL_cond *decode_loop_cond;
 static int decode_loop_running = 0;
-static int decode_pkt_ready = 0;
-static uint8_t decode_data[65536];
+static uint8_t *decode_data = NULL;
 static size_t decode_size = 0;
 int decode_loop(void *)
 {
-	uint8_t our_data[65536];
-	size_t our_data_size = 0;
-
 	SDL_LockMutex(decode_loop_mutex);
 	while (decode_loop_running) {
-		while (!decode_pkt_ready) {
+		while (decode_loop_running && !decode_data) {
 			SDL_CondWait(decode_loop_cond, decode_loop_mutex);
 		}
-		
-		memcpy(our_data, decode_data, decode_size);
-		our_data_size = decode_size;
+
+		if (!decode_loop_running) {
+			break;
+		}
+
+		// Copy into av_malloc buffer
+		uint8_t *our_data = decode_data;
+		size_t our_size = decode_size;
+		decode_data = NULL;
+		decode_size = 0;
 		
 		SDL_UnlockMutex(decode_loop_mutex);
 
-		decode(our_data, decode_size);
+		decode(our_data, our_size);
 
 		SDL_LockMutex(decode_loop_mutex);
 	}
@@ -153,14 +156,24 @@ int run_backend(void *data)
 	SDL_Thread *decode_thread = SDL_CreateThread(decode_loop, "vanilla-decode", NULL);
 
 	while (vanilla_wait_event(&event)) {
+		printf("front end got event\n");
 		if (event.type == VANILLA_EVENT_VIDEO) {
 			SDL_LockMutex(decode_loop_mutex);
-			memcpy(decode_data, event.data, event.size);
+
+			if (decode_data) {
+				av_free(decode_data);
+				decode_data = NULL;
+			}
 			decode_size = event.size;
-			decode_pkt_ready = 1;
+			decode_data = av_malloc(event.size);
+			memcpy(decode_data, event.data, event.size);
+
 			SDL_CondBroadcast(decode_loop_cond);
 			SDL_UnlockMutex(decode_loop_mutex);
-			// decode(event.data, event.size);
+			
+			/*uint8_t *data = av_malloc(event.size);
+			memcpy(data, event.data, event.size);
+			decode(data, event.size);*/
 		} else if (event.type == VANILLA_EVENT_AUDIO) {
 			if (audio) {
 				if (SDL_QueueAudio(audio, event.data, event.size) < 0) {
@@ -411,16 +424,21 @@ int main(int argc, const char **argv)
 #else
 	SDL_Window *window = SDL_CreateWindow("vanilla-pi", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_RESIZABLE);
 	SDL_Renderer *renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
-	SDL_Texture *texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_YV12, SDL_TEXTUREACCESS_STREAMING, SCREEN_WIDTH, SCREEN_HEIGHT);
+	SDL_Texture *texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_IYUV, SDL_TEXTUREACCESS_STREAMING, SCREEN_WIDTH, SCREEN_HEIGHT);
 
 	AVFrame *frame = av_frame_alloc();
 #endif
 
 	SDL_GameController *controller = find_valid_controller();
 
+	Uint32 ticks = SDL_GetTicks();
 	while (running) {
 		SDL_Event event;
+#ifdef RASPBERRY_PI
 		if (SDL_WaitEvent(&event)) {
+#else
+		while (SDL_PollEvent(&event)) {
+#endif
 			switch (event.type) {
 			case SDL_QUIT:
 				// Exit loop
@@ -484,13 +502,11 @@ int main(int argc, const char **argv)
 #ifndef RASPBERRY_PI
 		pthread_mutex_lock(&decoding_mutex);
 		if (present_frame->data[0]) {
-			av_frame_unref(frame);
 			av_frame_move_ref(frame, present_frame);
 		}
 		pthread_mutex_unlock(&decoding_mutex);
 		
 		if (frame->data[0]) {
-			printf("frame->format: %i\n", frame->format);
 			SDL_UpdateYUVTexture(texture, NULL,
 								 frame->data[0], frame->linesize[0],
 								 frame->data[1], frame->linesize[1],
