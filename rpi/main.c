@@ -53,16 +53,11 @@ int decode(void *data, size_t size)
 	int err;
 
     // Parse this data for packets
-	err = av_packet_from_data(video_packet, (uint8_t *) data, size);
-	if (err < 0) {
-		fprintf(stderr, "Failed to initialize AVPacket from data: %s (%i)\n", av_err2str(err), err);
-		av_free(data);
-		return 0;
-	}
+	video_packet->data = data;
+	video_packet->size = size;
 
 	// Send packet to decoder
 	err = avcodec_send_packet(video_codec_ctx, video_packet);
-	av_packet_unref(video_packet);
 	if (err < 0) {
 		fprintf(stderr, "Failed to send packet to decoder: %s (%i)\n", av_err2str(err), err);
 		return 0;

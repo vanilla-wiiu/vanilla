@@ -68,17 +68,8 @@ void VideoDecoder::sendPacket(const QByteArray &data)
 {
     int ret;
 
-    // Copy data into buffer that FFmpeg will take ownership of
-    uint8_t *buffer = (uint8_t *) av_malloc(data.size());
-    memcpy(buffer, data.data(), data.size());
-
-    // Create AVPacket from this data
-    ret = av_packet_from_data(m_packet, buffer, data.size());
-    if (ret < 0) {
-        fprintf(stderr, "Failed to initialize packet from data: %i\n", ret);
-        av_free(buffer);
-        return;
-    }
+    m_packet->data = (uint8_t *) data.constData();
+    m_packet->size = data.size();
 
     // If recording, send packet to file
     if (m_recordingCtx) {
@@ -96,7 +87,6 @@ void VideoDecoder::sendPacket(const QByteArray &data)
 
     // Send packet to decoder
     ret = avcodec_send_packet(m_codecCtx, m_packet);
-    av_packet_unref(m_packet);
     if (ret < 0) {
         fprintf(stderr, "Failed to send packet to decoder: %i\n", ret);
         return;
@@ -134,30 +124,20 @@ void VideoDecoder::sendAudio(const QByteArray &data)
     if (m_recordingCtx) {
         int ret;
 
-        // Copy data into buffer that FFmpeg will take ownership of
-        uint8_t *buffer = (uint8_t *) av_malloc(data.size());
-        memcpy(buffer, data.data(), data.size());
-
         // Create AVPacket from this data
-        AVPacket *audPkt = av_packet_alloc();
-        int64_t ts;
-        ret = av_packet_from_data(audPkt, buffer, data.size());
-        if (ret < 0) {
-            fprintf(stderr, "Failed to initialize packet from data: %i\n", ret);
-            av_free(buffer);
-            goto free;
-        }
+        AVPacket audPkt = {0};
+        av_packet_unref(&audPkt);
 
-        ts = getCurrentTimestamp(m_audioStream->time_base);
+        audPkt.data = (uint8_t *) data.constData();
+        audPkt.size = data.size();
 
-        audPkt->stream_index = AUDIO_STREAM_INDEX;
-        audPkt->dts = ts;
-        audPkt->pts = ts;
+        int64_t ts = getCurrentTimestamp(m_audioStream->time_base);
 
-        av_interleaved_write_frame(m_recordingCtx, audPkt);
+        audPkt.stream_index = AUDIO_STREAM_INDEX;
+        audPkt.dts = ts;
+        audPkt.pts = ts;
 
-free:
-        av_packet_free(&audPkt);
+        av_interleaved_write_frame(m_recordingCtx, &audPkt);
     }
 }
 
