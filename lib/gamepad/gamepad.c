@@ -3,6 +3,7 @@
 #include "gamepad.h"
 
 #include <arpa/inet.h>
+#include <assert.h>
 #include <errno.h>
 #include <netinet/in.h>
 #include <pthread.h>
@@ -31,18 +32,21 @@ uint16_t PORT_AUD;
 uint16_t PORT_HID;
 uint16_t PORT_CMD;
 
+#define EVENT_BUFFER_SIZE 65536
+#define EVENT_BUFFER_ARENA_SIZE VANILLA_MAX_EVENT_COUNT * 2
+uint8_t *EVENT_BUFFER_ARENA[EVENT_BUFFER_ARENA_SIZE] = {0};
+
 void send_to_console(int fd, const void *data, size_t data_size, int port)
 {
     struct sockaddr_in address;
     address.sin_family = AF_INET;
     address.sin_addr.s_addr = SERVER_ADDRESS;
     address.sin_port = htons((uint16_t) (port - 100));
-    
-    char ip[INET_ADDRSTRLEN];
-    inet_ntop(AF_INET, &address.sin_addr, ip, INET_ADDRSTRLEN);
 
     ssize_t sent = sendto(fd, data, data_size, 0, (const struct sockaddr *) &address, sizeof(address));
     if (sent == -1) {
+        char ip[INET_ADDRSTRLEN];
+        inet_ntop(AF_INET, &address.sin_addr, ip, INET_ADDRSTRLEN);
         print_info("Failed to send to Wii U socket: address: %s, fd: %d, port: %d, errno: %i", ip, fd, port - 100, errno);
     }
 }
@@ -286,12 +290,19 @@ int is_stop_code(const char *data, size_t data_length)
 
 int push_event(event_loop_t *loop, int type, const void *data, size_t size)
 {
-
     pthread_mutex_lock(&loop->mutex);
 
     vanilla_event_t *ev = &loop->events[loop->new_index % VANILLA_MAX_EVENT_COUNT];
 
-    if (size <= sizeof(ev->data)) {
+    if (size <= EVENT_BUFFER_SIZE) {
+        assert(!ev->data);
+
+        ev->data = get_event_buffer();
+        if (!ev->data) {
+            print_info("OUT OF MEMORY FOR NEW EVENTS");
+            return VANILLA_ERROR;
+        }
+        
         ev->type = type;
         memcpy(ev->data, data, size);
         ev->size = size;
@@ -300,13 +311,14 @@ int push_event(event_loop_t *loop, int type, const void *data, size_t size)
 
         // Prevent rollover by skipping oldest event if necessary
         if (loop->new_index > loop->used_index + VANILLA_MAX_EVENT_COUNT) {
+            vanilla_free_event(&loop->events[loop->used_index % VANILLA_MAX_EVENT_COUNT]);
             print_info("SKIPPED EVENT TO PREVENT ROLLOVER (%lu > %lu + %lu)", loop->new_index, loop->used_index, VANILLA_MAX_EVENT_COUNT);
             loop->used_index++;
         }
 
         pthread_cond_broadcast(&loop->waitcond);
     } else {
-        print_info("FAILED TO PUSH EVENT: wanted %lu, only had %lu. This is a bug, please report to developers.\n", size, sizeof(ev->data));
+        print_info("FAILED TO PUSH EVENT: wanted %lu, only had %lu. This is a bug, please report to developers.\n", size, EVENT_BUFFER_SIZE);
     }
 
     pthread_mutex_unlock(&loop->mutex);
@@ -330,8 +342,10 @@ int get_event(event_loop_t *loop, vanilla_event_t *event, int wait)
             vanilla_event_t *pull_event = &loop->events[loop->used_index % VANILLA_MAX_EVENT_COUNT];
 
             event->type = pull_event->type;
-            memcpy(event->data, pull_event->data, pull_event->size);
+            event->data = pull_event->data;
             event->size = pull_event->size;
+
+            pull_event->data = NULL;
 
             loop->used_index++;
             ret = 1;
@@ -341,4 +355,52 @@ int get_event(event_loop_t *loop, vanilla_event_t *event, int wait)
     pthread_mutex_unlock(&loop->mutex);
     
     return ret;
+}
+
+void *get_event_buffer()
+{
+    void *buf = NULL;
+
+    for (size_t i = 0; i < EVENT_BUFFER_ARENA_SIZE; i++) {
+        if (EVENT_BUFFER_ARENA[i]) {
+            buf = EVENT_BUFFER_ARENA[i];
+            EVENT_BUFFER_ARENA[i] = NULL;
+            break;
+        }
+    }
+
+    return buf;
+}
+
+void release_event_buffer(void *buffer)
+{
+    for (size_t i = 0; i < EVENT_BUFFER_ARENA_SIZE; i++) {
+        if (!EVENT_BUFFER_ARENA[i]) {
+            EVENT_BUFFER_ARENA[i] = buffer;
+            break;
+        }
+    }
+}
+
+void init_event_buffer_arena()
+{
+    for (size_t i = 0; i < EVENT_BUFFER_ARENA_SIZE; i++) {
+        if (!EVENT_BUFFER_ARENA[i]) {
+            EVENT_BUFFER_ARENA[i] = malloc(EVENT_BUFFER_SIZE);
+        } else {
+            print_info("CRITICAL: Buffer wasn't returned to the arena");
+        }
+    }
+}
+
+void free_event_buffer_arena()
+{
+    for (size_t i = 0; i < EVENT_BUFFER_ARENA_SIZE; i++) {
+        if (EVENT_BUFFER_ARENA[i]) {
+            free(EVENT_BUFFER_ARENA[i]);
+            EVENT_BUFFER_ARENA[i] = NULL;
+        } else {
+            print_info("CRITICAL: Buffer wasn't returned to the arena");
+        }
+    }
 }

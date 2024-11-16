@@ -105,23 +105,25 @@ static SDL_mutex *decode_loop_mutex;
 static SDL_cond *decode_loop_cond;
 static int decode_loop_running = 0;
 static int decode_pkt_ready = 0;
-static vanilla_event_t decode_event;
+static uint8_t decode_data[65536];
+static size_t decode_size = 0;
 int decode_loop(void *)
 {
-	vanilla_event_t our_pkt;
+	uint8_t our_data[65536];
+	size_t our_data_size = 0;
 
 	SDL_LockMutex(decode_loop_mutex);
 	while (decode_loop_running) {
 		while (!decode_pkt_ready) {
 			SDL_CondWait(decode_loop_cond, decode_loop_mutex);
 		}
-
-		our_pkt = decode_event;
-		decode_pkt_ready = 0;
+		
+		memcpy(our_data, decode_data, decode_size);
+		our_data_size = decode_size;
 		
 		SDL_UnlockMutex(decode_loop_mutex);
 
-		decode(our_pkt.data, our_pkt.size);
+		decode(our_data, decode_size);
 
 		SDL_LockMutex(decode_loop_mutex);
 	}
@@ -153,7 +155,8 @@ int run_backend(void *data)
 	while (vanilla_wait_event(&event)) {
 		if (event.type == VANILLA_EVENT_VIDEO) {
 			SDL_LockMutex(decode_loop_mutex);
-			decode_event = event;
+			memcpy(decode_data, event.data, event.size);
+			decode_size = event.size;
 			decode_pkt_ready = 1;
 			SDL_CondBroadcast(decode_loop_cond);
 			SDL_UnlockMutex(decode_loop_mutex);
@@ -167,6 +170,8 @@ int run_backend(void *data)
 		} else if (event.type == VANILLA_EVENT_VIBRATE) {
 			vibrate = event.data[0];
 		}
+
+		vanilla_free_event(&event);
 	}
 
 	SDL_LockMutex(decode_loop_mutex);

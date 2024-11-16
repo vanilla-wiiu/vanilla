@@ -30,9 +30,13 @@ void *start_gamepad(void *arg)
     struct gamepad_data_t *data = (struct gamepad_data_t *) arg;
 
     pthread_mutex_lock(&event_loop.mutex);
+    init_event_buffer_arena();
     event_loop.active = 1;
     event_loop.new_index = 0;
     event_loop.used_index = 0;
+    for (int i = 0; i < VANILLA_MAX_EVENT_COUNT; i++) {
+        event_loop.events[i].data = NULL;
+    }
     pthread_cond_broadcast(&event_loop.waitcond);
     pthread_mutex_unlock(&event_loop.mutex);
     
@@ -42,6 +46,7 @@ void *start_gamepad(void *arg)
 
     pthread_mutex_lock(&event_loop.mutex);
     event_loop.active = 0;
+    free_event_buffer_arena();
     pthread_cond_broadcast(&event_loop.waitcond);
     pthread_mutex_unlock(&event_loop.mutex);
 
@@ -170,4 +175,12 @@ int vanilla_poll_event(vanilla_event_t *event)
 int vanilla_wait_event(vanilla_event_t *event)
 {
     return get_event(&event_loop, event, 1);
+}
+
+int vanilla_free_event(vanilla_event_t *event)
+{
+    if (event->data) {
+        release_event_buffer(event->data);
+        event->data = NULL;
+    }
 }

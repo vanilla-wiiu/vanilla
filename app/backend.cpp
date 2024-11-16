@@ -30,6 +30,8 @@ void Backend::vanillaEventHandler()
             emit vibrate(*event.data);
             break;
         }
+
+        vanilla_free_event(&event);
     }
 }
 

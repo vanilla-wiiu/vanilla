@@ -98,7 +98,7 @@ static const uint8_t VANILLA_PPS_PARAMS[] = {
 typedef struct
 {
     int type;
-    uint8_t data[65536];
+    uint8_t *data;
     size_t size;
 } vanilla_event_t;
 
@@ -110,6 +110,7 @@ int vanilla_sync(uint16_t code, uint32_t server_address);
 
 int vanilla_poll_event(vanilla_event_t *event);
 int vanilla_wait_event(vanilla_event_t *event);
+int vanilla_free_event(vanilla_event_t *event);
 
 /**
  * Attempt to stop the current action
