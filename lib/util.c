@@ -83,13 +83,19 @@ size_t get_millis()
     return (s * 1000) + ms;
 }
 
-unsigned int reverse_bits(unsigned int b, int bit_count)
+uint32_t reverse_bits(uint32_t b, int bit_count)
 {
-    unsigned int result = 0;
+    uint32_t mask = 0b11111111111111110000000000000000;
+    b = (b & mask) >> 16 | (b & ~mask) << 16;
+    mask = 0b11111111000000001111111100000000;
+    b = (b & mask) >> 8 | (b & ~mask) << 8;
+    mask = 0b11110000111100001111000011110000;
+    b = (b & mask) >> 4 | (b & ~mask) << 4;
+    mask = 0b11001100110011001100110011001100;
+    b = (b & mask) >> 2 | (b & ~mask) << 2;
+    mask = 0b10101010101010101010101010101010;
+    b = (b & mask) >> 1 | (b & ~mask) << 1;
 
-    for (int i = 0; i < bit_count; i++) {
-        result |= ((b >> i) & 1) << (bit_count - 1 -i );
-    }
-
-    return result;
+    b >>= 32 - bit_count;
+    return b;
 }
