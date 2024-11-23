@@ -97,7 +97,7 @@ int is_interrupted()
 
 void wpa_msg(char *msg, size_t len)
 {
-    print_info("%.*s", len, msg);
+    print_info("%.*s", (int) len, msg);
 }
 
 void wpa_ctrl_command(struct wpa_ctrl *ctrl, const char *cmd, char *buf, size_t *buf_len)
@@ -163,16 +163,15 @@ ssize_t read_line_from_pipe(int pipe, char *buf, size_t buf_len)
 int wait_for_output(int pipe, const char *expected_output)
 {
     static const int max_attempts = 5;
-    int nbytes, attempts = 0, success = 0;
+    int attempts = 0;
     const int expected_len = strlen(expected_output);
     char buf[256];
-    int read_count = 0;
     int ret = 0;
     do {
         // Read line from child process
         ssize_t read_sz = read_line_from_pipe(pipe, buf, sizeof(buf));
 
-        print_info("SUBPROCESS %.*s", read_sz, buf);
+        print_info("SUBPROCESS %.*s", (int) read_sz, buf);
 
         // We got success message!
         if (!memcmp(buf, expected_output, expected_len)) {
@@ -294,7 +293,6 @@ int start_wpa_supplicant(const char *wireless_interface, const char *config_file
         return VANILLA_SUCCESS;
     } else {
         // Give up
-give_up:
         kill((*pid), SIGTERM);
         return VANILLA_ERROR;
     }
@@ -358,7 +356,7 @@ void *wpa_setup_environment(void *data)
     // If NetworkManager is managing this device, temporarily stop it from doing so
     if (is_managed) {
         if (disable_networkmanager_on_device(args->wireless_interface) != VANILLA_SUCCESS) {
-            print_info("FAILED TO SET %s TO UNMANAGED, RESULTS MAY BE UNPREDICTABLE");
+            print_info("FAILED TO SET %s TO UNMANAGED, RESULTS MAY BE UNPREDICTABLE", args->wireless_interface);
         } else {
             print_info("TEMPORARILY SET %s TO UNMANAGED", args->wireless_interface);
         }
@@ -391,7 +389,7 @@ void *wpa_setup_environment(void *data)
     args->ctrl = ctrl;
     ret = args->start_routine(args);
 
-die_and_detach:
+// die_and_detach:
     wpa_ctrl_detach(ctrl);
 
 die_and_close:
@@ -408,7 +406,7 @@ die_and_reenable_managed:
         enable_networkmanager_on_device(args->wireless_interface);
     }
 
-die:
+// die:
     return ret;
 }
 
@@ -624,7 +622,7 @@ void *open_relay(void *data)
 
     ret = 0;
 
-close_frontend_connection:
+// close_frontend_connection:
     close(from_frontend);
 
 close_console_connection:
@@ -766,7 +764,7 @@ int create_connect_config(const char *input_config, const char *bssid)
 
     int len;
     char buf[150];
-    while (len = read_line_from_file(in_file, buf, sizeof(buf))) {
+    while ((len = read_line_from_file(in_file, buf, sizeof(buf)))) {
         if (memcmp("\tssid=", buf, 6) == 0) {
             fprintf(out_file, "\tscan_ssid=1\n\tbssid=%s\n", bssid);
         }
@@ -813,7 +811,7 @@ void *sync_with_console_internal(void *data)
             } else if (!memcmp(buf, "OK", 2)) {
                 break;
             } else {
-                print_info("UNKNOWN SCAN RESPONSE: %.*s (RETRYING)", actual_buf_len, buf);
+                print_info("UNKNOWN SCAN RESPONSE: %.*s (RETRYING)", (int) actual_buf_len, buf);
                 sleep(5);
             }
         }
@@ -860,7 +858,7 @@ void *sync_with_console_internal(void *data)
                     wpa_ctrl_recv(args->ctrl, buf, &actual_buf_len);
                     if (!strstr(buf, "CTRL-EVENT-BSS-ADDED")
                         && !strstr(buf, "CTRL-EVENT-BSS-REMOVED")) {
-                        print_info("CRED RECV: %.*s", buf_len, buf);
+                        print_info("CRED RECV: %.*s", (int) buf_len, buf);
                     }
 
                     if (!memcmp("<3>WPS-CRED-RECEIVED", buf, 20)) {
@@ -873,7 +871,7 @@ void *sync_with_console_internal(void *data)
                 if (cred_received) {
                     // Tell wpa_supplicant to save config
                     actual_buf_len = buf_len;
-                    print_info("SAVING CONFIG", actual_buf_len, buf);
+                    print_info("SAVING CONFIG");
                     wpa_ctrl_command(args->ctrl, "SAVE_CONFIG", buf, &actual_buf_len);
 
                     // Create connect config which needs a couple more parameters
@@ -907,7 +905,7 @@ void *do_connect(void *data)
         wpa_ctrl_recv(args->ctrl, buf, &actual_buf_len);
         if (!strstr(buf, "CTRL-EVENT-BSS-ADDED")
             && !strstr(buf, "CTRL-EVENT-BSS-REMOVED")) {
-            print_info("CONN RECV: %.*s", actual_buf_len, buf);
+            print_info("CONN RECV: %.*s", (int) actual_buf_len, buf);
         }
 
         if (memcmp(buf, "<3>CTRL-EVENT-CONNECTED", 23) == 0) {
@@ -931,8 +929,10 @@ void *do_connect(void *data)
 
     create_all_relays(args->wireless_interface);
 
-    int kill_ret = kill(dhclient_pid, SIGTERM);
     print_info("KILLING DHCLIENT %i", dhclient_pid);
+    if (kill(dhclient_pid, SIGTERM) == -1) {
+        print_info("FAILED TO KILL DHCLIENT: %s", strerror(errno));
+    }
 
     return THREADRESULT(VANILLA_SUCCESS);
 }
@@ -1039,7 +1039,6 @@ void vanilla_listen(const char *wireless_interface)
                 sendto(skt, &control_code, sizeof(control_code), 0, (struct sockaddr *) &addr, sizeof(addr));
 
                 pthread_t thread;
-                int thread_ret;
                 if (pthread_create(&thread, NULL, thread_handler, args) != 0) {
                     print_info("FAILED TO CREATE THREAD");
                     free(args);

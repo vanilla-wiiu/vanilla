@@ -75,7 +75,9 @@ int Backend::syncInternal(uint16_t code)
 void Backend::connectToConsole()
 {
     connectInternal();
-    QtConcurrent::run(&Backend::vanillaEventHandler, this);
+
+    // TODO: handle error
+    (void) QtConcurrent::run(&Backend::vanillaEventHandler, this);
 }
 
 int Backend::connectInternal()

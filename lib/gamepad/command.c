@@ -424,7 +424,7 @@ void *listen_command(void *x)
 {
     gamepad_context_t *info = (gamepad_context_t *)x;
 
-    unsigned char data[sizeof(CmdHeader) + 2048];
+    uint8_t data[sizeof(CmdHeader) + 2048];
     ssize_t size;
 
     do

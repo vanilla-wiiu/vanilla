@@ -131,6 +131,8 @@ int decode_loop(void *)
 		SDL_LockMutex(decode_loop_mutex);
 	}
 	SDL_UnlockMutex(decode_loop_mutex);
+
+	return 0;
 }
 
 int run_backend(void *data)
@@ -177,7 +179,7 @@ int run_backend(void *data)
 		} else if (event.type == VANILLA_EVENT_AUDIO) {
 			if (audio) {
 				if (SDL_QueueAudio(audio, event.data, event.size) < 0) {
-					printf("Failed to queue audio\n", event.size);
+					printf("Failed to queue audio with size %zu\n", event.size);
 				}
 			}
 		} else if (event.type == VANILLA_EVENT_VIBRATE) {
@@ -431,7 +433,7 @@ int main(int argc, const char **argv)
 
 	SDL_GameController *controller = find_valid_controller();
 
-	Uint32 ticks = SDL_GetTicks();
+	// Uint32 ticks = SDL_GetTicks();
 	while (running) {
 		SDL_Event event;
 #ifdef RASPBERRY_PI
