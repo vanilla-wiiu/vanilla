@@ -19,6 +19,7 @@ void print_status(int errno)
     vanilla_log("%s", VANILLA_STATUS_STRINGS[-errno]);
 }
 
+__attribute__((format(printf, 1, 2)))
 void print_info(const char *errstr, ...)
 {
     va_list args;
