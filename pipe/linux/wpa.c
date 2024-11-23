@@ -60,11 +60,13 @@ struct relay_info {
 
 #define THREADRESULT(x) ((void *) (uintptr_t) (x))
 
+__attribute__((format(printf, 1, 0)))
 void lpprint(const char *fmt, va_list args)
 {
     vfprintf(stderr, fmt, args);
 }
 
+__attribute__((format(printf, 1, 2)))
 void pprint(const char *fmt, ...)
 {
     va_list args;
@@ -73,6 +75,7 @@ void pprint(const char *fmt, ...)
     va_end(args);
 }
 
+__attribute__((format(printf, 1, 2)))
 void print_info(const char *errstr, ...)
 {
     va_list args;
