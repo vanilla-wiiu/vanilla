@@ -1,5 +1,6 @@
 <!DOCTYPE RCC><RCC version="1.0">
 <qresource prefix="/">
     <file>com.mattkc.vanilla.svg</file>
+    <file>gamepad-diagram.svg</file>
 </qresource>
 </RCC>
