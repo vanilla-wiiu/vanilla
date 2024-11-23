@@ -1,0 +1,30 @@
+name: Build and run tests
+on:
+  push:
+    paths-ignore:
+    - 'README.md'
+  pull_request:
+    paths-ignore:
+    - 'README.md'
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Install dependencies
+      run: sudo apt-get -yU install libavfilter-dev libnl-genl-3-dev libsdl2-dev ninja-build qt6-multimedia-dev qt6-svg-dev
+
+    - name: Build Vanilla
+      run: |
+        WERROR_FLAGS="" # need PR #110 to be merged first to enable -Wall -Werror
+        SANITIZE_FLAGS="-fsanitize=address,undefined"
+        CC_FLAGS="$WERROR_FLAGS $SANITIZE_FLAGS"
+        cmake -B ${{github.workspace}}/builddir -GNinja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_FLAGS="$CC_FLAGS" -DCMAKE_C_FLAGS="$CC_FLAGS" -DCMAKE_EXE_LINKER_FLAGS="$SANITIZE_FLAGS" -DCMAKE_SHARED_LINKER_FLAGS="$SANITIZE_FLAGS" -DVANILLA_BUILD_TESTS=ON -DVANILLA_BUILD_RPI=ON
+        cmake --build builddir -j
+
+    - name: Run unit tests
+      working-directory: ${{github.workspace}}/builddir/lib
+      run: ctest
