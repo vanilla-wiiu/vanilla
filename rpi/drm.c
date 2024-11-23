@@ -61,7 +61,7 @@ int initialize_drm(vanilla_drm_ctx_t *ctx)
 	return ret;
 }
 
-int free_drm(vanilla_drm_ctx_t *ctx)
+void free_drm(vanilla_drm_ctx_t *ctx)
 {
     if (ctx->got_fb) {
         drmModeRmFB(ctx->fd, ctx->fb_id);
@@ -126,7 +126,7 @@ int display_drm(vanilla_drm_ctx_t *ctx, AVFrame *frame)
 
     if (!ctx->got_plane) {
         if (find_plane(ctx->fd, ctx->crtc_index, format, &ctx->plane_id) < 0) {
-            fprintf(stderr, "Failed to find plane for format: %x\n", format, DRM_FORMAT_YUV420, frame->format);
+            fprintf(stderr, "Failed to find plane for format: %x\n", format);
             return 0;
         } else {
             ctx->got_plane = 1;

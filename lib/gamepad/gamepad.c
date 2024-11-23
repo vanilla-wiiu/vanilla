@@ -176,7 +176,7 @@ int sync_internal(uint16_t code, uint32_t server_address)
         }
     }
 
-exit_pipe:
+// exit_pipe:
     if (skt)
         close(skt);
 
@@ -225,7 +225,7 @@ int connect_as_gamepad_internal(event_loop_t *event_loop, uint32_t server_addres
     if (!create_socket(&info.socket_aud, PORT_AUD)) goto exit_hid;
     if (!create_socket(&info.socket_cmd, PORT_CMD)) goto exit_aud;
 
-    pthread_t video_thread, audio_thread, input_thread, msg_thread, cmd_thread;
+    pthread_t video_thread, audio_thread, input_thread, cmd_thread;
 
     pthread_create(&video_thread, NULL, listen_video, &info);
     pthread_setname_np(video_thread, "vanilla-video");
@@ -261,7 +261,7 @@ int connect_as_gamepad_internal(event_loop_t *event_loop, uint32_t server_addres
 
     ret = VANILLA_SUCCESS;
 
-exit_cmd:
+// exit_cmd:
     close(info.socket_cmd);
 
 exit_aud:
@@ -284,7 +284,7 @@ exit:
     return ret;
 }
 
-int is_stop_code(const char *data, size_t data_length)
+int is_stop_code(const uint8_t *data, size_t data_length)
 {
     return (data_length == sizeof(STOP_CODE) && !memcmp(data, &STOP_CODE, sizeof(STOP_CODE)));
 }
@@ -323,6 +323,8 @@ int push_event(event_loop_t *loop, int type, const void *data, size_t size)
     }
 
     pthread_mutex_unlock(&loop->mutex);
+
+    return VANILLA_SUCCESS;
 }
 
 int get_event(event_loop_t *loop, vanilla_event_t *event, int wait)

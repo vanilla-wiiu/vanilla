@@ -19,9 +19,9 @@ typedef struct {
     unsigned seq_id : 10;
     unsigned payload_size : 16;
     unsigned timestamp : 32;
-    unsigned char payload[2048];
+    uint8_t payload[2048];
 } AudioPacket;
-const static unsigned int TYPE_AUDIO = 0;
+// const static unsigned int TYPE_AUDIO = 0;
 const static unsigned int TYPE_VIDEO = 1;
 #pragma pack(pop)
 
@@ -71,7 +71,7 @@ void handle_audio_packet(gamepad_context_t *ctx, unsigned char *data, size_t len
 void *listen_audio(void *x)
 {
     gamepad_context_t *info = (gamepad_context_t *) x;
-    unsigned char data[2048];
+    uint8_t data[2048];
     ssize_t size;
     do {
         size = recv(info->socket_aud, data, sizeof(data), 0);

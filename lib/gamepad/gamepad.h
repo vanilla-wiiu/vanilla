@@ -38,7 +38,7 @@ typedef struct
 int sync_internal(uint16_t code, uint32_t server_address);
 int connect_as_gamepad_internal(event_loop_t *ctx, uint32_t server_address);
 void send_to_console(int fd, const void *data, size_t data_size, int port);
-int is_stop_code(const char *data, size_t data_length);
+int is_stop_code(const uint8_t *data, size_t data_length);
 int push_event(event_loop_t *loop, int type, const void *data, size_t size);
 int get_event(event_loop_t *loop, vanilla_event_t *event, int wait);
 

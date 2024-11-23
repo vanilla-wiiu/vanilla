@@ -140,7 +140,7 @@ int complex_bit_test()
 
 int full_test()
 {
-    const char *expected = "\x67\x64\x00\x20\xAC\x2B\x40\x6C\x1E\xF3\x68";
+    // const char *expected = "\x67\x64\x00\x20\xAC\x2B\x40\x6C\x1E\xF3\x68";
 
     //uint8_t buffer[0xB];
     uint8_t buffer[0x100];

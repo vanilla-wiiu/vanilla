@@ -18,7 +18,14 @@
 
 pthread_mutex_t main_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t gamepad_mutex = PTHREAD_MUTEX_INITIALIZER;
-event_loop_t event_loop = {{0}, 0, 0, 0, PTHREAD_MUTEX_INITIALIZER, PTHREAD_COND_INITIALIZER};
+event_loop_t event_loop = {
+    .events = {},
+    .new_index = 0,
+    .used_index = 0,
+    .active = 0,
+    .mutex = PTHREAD_MUTEX_INITIALIZER,
+    .waitcond = PTHREAD_COND_INITIALIZER
+};
 
 struct gamepad_data_t
 {
@@ -106,12 +113,15 @@ void vanilla_set_touch(int x, int y)
     set_touch_state(x, y);
 }
 
+__attribute__((format(printf, 1, 0)))
 void default_logger(const char *format, va_list args)
 {
     vprintf(format, args);
 }
 
 void (*custom_logger)(const char *, va_list) = default_logger;
+
+__attribute__((format(printf, 1, 2)))
 void vanilla_log(const char *format, ...)
 {
     va_list va;
@@ -125,6 +135,7 @@ void vanilla_log(const char *format, ...)
     va_end(va);
 }
 
+__attribute__((format(printf, 1, 2)))
 void vanilla_log_no_newline(const char *format, ...)
 {
     va_list va;
@@ -135,6 +146,7 @@ void vanilla_log_no_newline(const char *format, ...)
     va_end(va);
 }
 
+__attribute__((format(printf, 1, 0)))
 void vanilla_log_no_newline_va(const char *format, va_list args)
 {
     if (custom_logger) {
@@ -177,7 +189,7 @@ int vanilla_wait_event(vanilla_event_t *event)
     return get_event(&event_loop, event, 1);
 }
 
-int vanilla_free_event(vanilla_event_t *event)
+void vanilla_free_event(vanilla_event_t *event)
 {
     if (event->data) {
         release_event_buffer(event->data);

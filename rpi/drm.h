@@ -20,7 +20,7 @@ typedef struct {
 
 int set_tty(int mode);
 int initialize_drm(vanilla_drm_ctx_t *ctx);
-int free_drm(vanilla_drm_ctx_t *ctx);
+void free_drm(vanilla_drm_ctx_t *ctx);
 int display_drm(vanilla_drm_ctx_t *ctx, AVFrame *frame);
 
 #endif // VANILLA_PI_DRM_H

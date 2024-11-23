@@ -20,7 +20,7 @@ SyncProgressDialog::SyncProgressDialog(Backend *backend, uint16_t code, QWidget 
     layout->addLayout(animationLayout);
 
     animationLayout->addStretch();
-    for (int i = 0; i < sizeof(m_animationLabels)/sizeof(QLabel *); i++) {
+    for (size_t i = 0; i < sizeof(m_animationLabels)/sizeof(QLabel *); i++) {
         QLabel *l = new QLabel(this);
         l->setFixedWidth(l->sizeHint().height());
         l->setAlignment(Qt::AlignCenter);
