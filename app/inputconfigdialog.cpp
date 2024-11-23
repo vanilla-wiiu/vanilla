@@ -111,7 +111,7 @@ void InputConfigDialog::createLayout()
 
     QLabel *imageLbl = new QLabel(this);
     QPixmap imgPix;
-    imgPix.load(QStringLiteral(":/com.mattkc.vanilla.svg"));
+    imgPix.load(QStringLiteral(":/gamepad-diagram.svg"));
     imageLbl->setPixmap(imgPix);
     layout->addWidget(imageLbl, 4, 1, 10, 3);
 
