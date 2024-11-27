@@ -4,11 +4,18 @@
 #include <stddef.h>
 #include <stdio.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include <sys/types.h>
 
 #define MIN(a,b) (((a)<(b))?(a):(b))
 #define MAX(a,b) (((a)>(b))?(a):(b))
 #define CLAMP(x, min, max) (MIN(MAX(x, min), max))
+
+#define CLEANUP(x) __attribute__((__cleanup__(x)))
+static void freep(void *p) {
+    if (p)
+        free(*(void **) p);
+}
 
 size_t read_line_from_fd(int fd, char *output, size_t max_output_size);
 size_t read_line_from_file(FILE *file, char *output, size_t max_output_size);

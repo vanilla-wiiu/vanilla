@@ -120,7 +120,7 @@ RUN git clone --branch n7.0.1 --depth 1 https://github.com/FFmpeg/FFmpeg.git \
         && rm -rf FFmpeg
 
 # Other dependencies for Vanilla
-RUN dnf -y install libnl3-devel dhcp-client openssl-devel git \
+RUN dnf -y install libsystemd-devel libnl3-devel dhcp-client openssl-devel git \
         --forcearch ${PLATFORM} --releasever ${RELEASEVER} --installroot ${PREFIX}
 
 # HACK: This may have been removed by our earlier removal of glibc, but we want it back now
