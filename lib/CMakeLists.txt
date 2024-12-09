@@ -19,8 +19,6 @@ if (NOT ANDROID)
     )
 endif()
 
-install(TARGETS vanilla)
-
 if (VANILLA_BUILD_TESTS)
     function(add_test TEST_NAME TEST_FILES)
         add_executable(${TEST_NAME}

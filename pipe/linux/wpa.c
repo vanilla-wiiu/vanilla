@@ -3,6 +3,10 @@
 #include <arpa/inet.h>
 #include <errno.h>
 #include <libgen.h>
+#include <netlink/addr.h>
+#include <netlink/netlink.h>
+#include <netlink/route/addr.h>
+#include <netlink/route/link.h>
 #include <pthread.h>
 #include <signal.h>
 #include <stdio.h>
@@ -23,6 +27,12 @@
 #include "util.h"
 #include "vanilla.h"
 #include "wpa.h"
+
+#include <utils/common.h>
+#include <wpa_supplicant_i.h>
+#include <libnm/NetworkManager.h>
+
+extern int udhcpc_main(const char **argv);
 
 const char *wpa_ctrl_interface = "/var/run/wpa_supplicant_drc";
 
@@ -92,7 +102,7 @@ int is_interrupted()
     return r;
 }
 
-void wpa_msg(char *msg, size_t len)
+void vanilla_wpa_msg(char *msg, size_t len)
 {
     print_info("%.*s", len, msg);
 }
@@ -100,201 +110,6 @@ void wpa_msg(char *msg, size_t len)
 void wpa_ctrl_command(struct wpa_ctrl *ctrl, const char *cmd, char *buf, size_t *buf_len)
 {
     wpa_ctrl_request(ctrl, cmd, strlen(cmd), buf, buf_len, NULL /*wpa_msg*/);
-}
-
-int get_binary_in_working_directory(const char *bin_name, char *buf, size_t buf_size)
-{
-    size_t path_size = get_max_path_length();
-    char *path_buf = malloc(path_size);
-    if (!path_buf) {
-        // Failed to allocate buffer, terminate
-        return -1;
-    }
-
-    // Get current working directory
-    // TODO: This is Linux only and will require changes on other platforms
-    ssize_t link_len = readlink("/proc/self/exe", path_buf, path_size);
-    if (link_len < 0) {
-        print_info("READLINK ERROR: %i", errno);
-        free(path_buf);
-        return -1;
-    }
-
-    // Merge current working directory with wpa_supplicant name
-    path_buf[link_len] = 0;
-    dirname(path_buf);
-    int r = snprintf(buf, path_size, "%s/%s", path_buf, bin_name);
-    free(path_buf);
-
-    return r;
-}
-
-ssize_t read_line_from_pipe(int pipe, char *buf, size_t buf_len)
-{
-    int attempts = 0;
-    const static int max_attempts = 5;
-    ssize_t read_count = 0;
-    while (read_count < buf_len) {
-        ssize_t this_read = read(pipe, buf + read_count, 1);
-        if (this_read == 0) {
-            attempts++;
-            if (is_interrupted() || attempts == max_attempts) {
-                return -1;
-            }
-            sleep(1); // Wait for more output
-            continue;
-        }
-
-        attempts = 0;
-
-        if (buf[read_count] == '\n') {
-            buf[read_count] = 0;
-            break;
-        }
-
-        read_count++;
-    }
-    return read_count;
-}
-
-int wait_for_output(int pipe, const char *expected_output)
-{
-    static const int max_attempts = 5;
-    int nbytes, attempts = 0, success = 0;
-    const int expected_len = strlen(expected_output);
-    char buf[256];
-    int read_count = 0;
-    int ret = 0;
-    do {
-        // Read line from child process
-        ssize_t read_sz = read_line_from_pipe(pipe, buf, sizeof(buf));
-
-        print_info("SUBPROCESS %.*s", read_sz, buf);
-
-        // We got success message!
-        if (!memcmp(buf, expected_output, expected_len)) {
-            ret = 1;
-            break;
-        }
-
-        // Haven't gotten success message (yet), wait and try again
-    } while (attempts < max_attempts && !is_interrupted());
-    
-    return ret;
-}
-
-int start_process(const char **argv, pid_t *pid_out, int *stdout_pipe, int *stderr_pipe)
-{
-    // Set up pipes so child stdout can be read by the parent process
-    int out_pipes[2], err_pipes[2];
-    pipe(out_pipes);
-    pipe(err_pipes);
-
-    // Get parent pid (allows us to check if parent was terminated immediately after fork)
-    pid_t ppid_before_fork = getpid();
-
-    // Fork into parent/child processes
-    pid_t pid = fork();
-
-    if (pid == 0) {
-        // We are in the child. Set child to terminate when parent does.
-        int r = prctl(PR_SET_PDEATHSIG, SIGHUP);
-        if (r == -1) {
-            perror(0);
-            exit(1);
-        }
-
-        // See if parent pid is still the same. If not, it must have been terminated, so we will exit too.
-        if (getppid() != ppid_before_fork) {
-            exit(1);
-        }
-
-        // Set up pipes so our stdout can be read by the parent process
-        dup2(out_pipes[1], STDOUT_FILENO);
-        dup2(err_pipes[1], STDERR_FILENO);
-        close(out_pipes[0]);
-        close(out_pipes[1]);
-        close(err_pipes[0]);
-        close(err_pipes[1]);
-
-        setsid();
-
-        // Execute process (this will replace the running code)
-        r = execvp(argv[0], (char * const *) argv);
-
-        // Handle failure to execute, use _exit so we don't interfere with the host
-        _exit(1);
-    } else if (pid < 0) {
-        // Fork error
-        return VANILLA_ERROR;
-    } else {
-        // Continuation of parent
-        close(out_pipes[1]);
-        close(err_pipes[1]);
-        if (!stdout_pipe) {
-            // Caller is not interested in the stdout
-            close(out_pipes[0]);
-        } else {
-            // Caller is interested so we'll hand them the pipe
-            *stdout_pipe = out_pipes[0];
-        }
-        if (!stderr_pipe) {
-            close(err_pipes[0]);
-        } else {
-            *stderr_pipe = err_pipes[0];
-        }
-
-        // If caller wants the pid, send it to them
-        if (pid_out) {
-            *pid_out = pid;
-        }
-
-        return VANILLA_SUCCESS;
-    }
-}
-
-int start_wpa_supplicant(const char *wireless_interface, const char *config_file, pid_t *pid)
-{
-    // TODO: drc-sim has `rfkill unblock wlan`, should we do that too?
-
-    // Kill any potentially orphaned wpa_supplicant_drcs
-    const char *wpa_supplicant_drc = "wpa_supplicant_drc";
-    const char *kill_argv[] = {"killall", "-9", wpa_supplicant_drc, NULL};
-    pid_t kill_pid;
-    int kill_pipe;
-    int r = start_process(kill_argv, &kill_pid, &kill_pipe, NULL);
-    int status;
-    waitpid(kill_pid, &status, 0);
-
-    size_t path_size = get_max_path_length();
-    char *wpa_buf = malloc(path_size);
-
-    get_binary_in_working_directory(wpa_supplicant_drc, wpa_buf, path_size);
-
-    const char *argv[] = {wpa_buf, "-Dnl80211", "-i", wireless_interface, "-c", config_file, NULL};
-    print_info("USING WPA CONFIG: %s", config_file);
-    int pipe;
-
-    r = start_process(argv, pid, &pipe, NULL);
-    free(wpa_buf);
-
-    if (r != VANILLA_SUCCESS) {
-        return r;
-    }
-
-    // Wait for WPA supplicant to start
-    if (wait_for_output(pipe, "Successfully initialized wpa_supplicant")) {
-        // I'm not sure why, but closing this pipe breaks wpa_supplicant in subtle ways, so just leave it.
-        //close(pipe);
-
-        // WPA initialized correctly! Continue with action...
-        return VANILLA_SUCCESS;
-    } else {
-        // Give up
-give_up:
-        kill((*pid), SIGTERM);
-        return VANILLA_ERROR;
-    }
 }
 
 void quit_loop()
@@ -339,6 +154,11 @@ void *read_stdin(void *)
     return NULL;
 }
 
+void *start_wpa(void *arg)
+{
+    return THREADRESULT(wpa_supplicant_run((struct wpa_global *) arg));
+}
+
 void *wpa_setup_environment(void *data)
 {
     void *ret = THREADRESULT(VANILLA_ERROR);
@@ -346,28 +166,50 @@ void *wpa_setup_environment(void *data)
     struct sync_args *args = (struct sync_args *) data;
 
     // Check status of interface with NetworkManager
-    int is_managed = 0;
-    if (is_networkmanager_managing_device(args->wireless_interface, &is_managed) != VANILLA_SUCCESS) {
-        print_info("FAILED TO DETERMINE MANAGED STATE OF WIRELESS INTERFACE");
-        //goto die;
-    }
+    GError *nm_err;
+    NMClient *nmcli = nm_client_new(NULL, &nm_err);
+    NMDevice *nmdev = NULL;
+    gboolean is_managed = 0;
+    if (nmcli) {
+        nmdev = nm_client_get_device_by_iface(nmcli, args->wireless_interface);
+        if (!nmdev) {
+            pprint("FAILED TO GET STATUS OF DEVICE %s\n", args->wireless_interface);
+            goto die_and_close_nmcli;
+        }
 
-    // If NetworkManager is managing this device, temporarily stop it from doing so
-    if (is_managed) {
-        if (disable_networkmanager_on_device(args->wireless_interface) != VANILLA_SUCCESS) {
-            print_info("FAILED TO SET %s TO UNMANAGED, RESULTS MAY BE UNPREDICTABLE");
-        } else {
+        if ((is_managed = nm_device_get_managed(nmdev))) {
+            nm_device_set_managed(nmdev, FALSE);
             print_info("TEMPORARILY SET %s TO UNMANAGED", args->wireless_interface);
         }
+    } else {
+        // Failed to get NetworkManager, host may just not have it?
+        g_message("Failed to create NetworkManager client: %s", nm_err->message);
+        g_error_free(nm_err);
     }
 
     // Start modified WPA supplicant
-    pid_t pid;
-    int err = start_wpa_supplicant(args->wireless_interface, args->wireless_config, &pid);
-    if (err != VANILLA_SUCCESS || is_interrupted()) {
-        print_info("FAILED TO START WPA SUPPLICANT");
+    struct wpa_params params = {0};
+    params.wpa_debug_level = MSG_INFO;
+
+    struct wpa_interface interface = {0};
+    interface.driver = "nl80211";
+    interface.ifname = args->wireless_interface;
+    interface.confname = args->wireless_config;
+    
+    struct wpa_global *wpa = wpa_supplicant_init(&params);
+    if (!wpa) {
+        print_info("FAILED TO INIT WPA SUPPLICANT");
         goto die_and_reenable_managed;
     }
+
+    struct wpa_supplicant *wpa_s = wpa_supplicant_add_iface(wpa, &interface, NULL);
+    if (!wpa_s) {
+        print_info("FAILED TO ADD WPA IFACE");
+        goto die_and_kill;
+    }
+
+    pthread_t wpa_thread;
+    pthread_create(&wpa_thread, NULL, start_wpa, wpa);
 
     // Get control interface
     const size_t buf_len = 1048576;
@@ -375,7 +217,7 @@ void *wpa_setup_environment(void *data)
     snprintf(buf, buf_len, "%s/%s", wpa_ctrl_interface, args->wireless_interface);
     struct wpa_ctrl *ctrl;
     while (!(ctrl = wpa_ctrl_open(buf))) {
-        if (is_interrupted()) goto die_and_kill;
+        if (is_interrupted()) goto die_and_free_buf;
         print_info("WAITING FOR CTRL INTERFACE");
         sleep(1);
     }
@@ -394,129 +236,27 @@ die_and_detach:
 die_and_close:
     wpa_ctrl_close(ctrl);
 
-die_and_kill:
-    kill(pid, SIGTERM);
-
+die_and_free_buf:
     free(buf);
+
+die_and_kill:
+    pthread_kill(wpa_thread, SIGINT);
+    pthread_join(wpa_thread, NULL);
+    wpa_supplicant_deinit(wpa);
 
 die_and_reenable_managed:
     if (is_managed) {
         print_info("SETTING %s BACK TO MANAGED", args->wireless_interface);
-        enable_networkmanager_on_device(args->wireless_interface);
+        nm_device_set_managed(nmdev, TRUE);
+    }
+
+die_and_close_nmcli:
+    if (nmcli) {
+        g_object_unref(nmcli);
     }
 
 die:
     return ret;
-}
-
-int call_dhcp(const char *network_interface, pid_t *dhclient_pid)
-{
-    // See if dhclient exists in our local directories    
-    size_t buf_size = get_max_path_length();
-    char *dhclient_buf = malloc(buf_size);
-    char *dhclient_script = malloc(buf_size);
-    get_binary_in_working_directory("dhclient", dhclient_buf, buf_size);
-    get_binary_in_working_directory("../sbin/dhcp.sh", dhclient_script, buf_size);
-
-    if (access(dhclient_buf, F_OK) == 0) {
-        // Prefer our local dhclient if it's available
-        // TODO: dhclient is EOL and should be replaced with something else
-        print_info("Using custom dhclient at: %s", dhclient_buf);
-    } else {
-        print_info("Using system dhclient");
-        strncpy(dhclient_buf, "dhclient", buf_size);
-    }
-
-    const char *argv[] = {dhclient_buf, "-d", "--no-pid", "-sf", dhclient_script, network_interface, NULL};
-
-    int dhclient_pipe;
-    int r = start_process(argv, dhclient_pid, NULL, &dhclient_pipe);
-
-    free(dhclient_buf);
-    free(dhclient_script);
-
-    if (r != VANILLA_SUCCESS) {
-        print_info("FAILED TO CALL DHCLIENT");
-        return r;
-    }
-
-    if (wait_for_output(dhclient_pipe, "bound to")) {
-        return VANILLA_SUCCESS;
-    } else {
-        print_info("FAILED TO ESTABLISH DHCP");
-        kill(*dhclient_pid, SIGTERM);
-
-        return VANILLA_ERROR;
-    }
-}
-
-static const char *nmcli = "nmcli";
-int is_networkmanager_managing_device(const char *wireless_interface, int *is_managed)
-{
-    pid_t nmcli_pid;
-    int pipe;
-
-    const char *argv[] = {nmcli, "device", "show", wireless_interface, NULL};
-
-    int r = start_process(argv, &nmcli_pid, &pipe, NULL);
-    if (r != VANILLA_SUCCESS) {
-        // Assume nmcli is not installed so the host is not using NetworkManager
-        print_info("FAILED TO LAUNCH NMCLI, RESULTS MAY BE UNPREDICTABLE");
-        *is_managed = 0;
-        return VANILLA_SUCCESS;
-    }
-
-    int status;
-    waitpid(nmcli_pid, &status, 0);
-
-    if (!WIFEXITED(status)) {
-        // Something went wrong
-        print_info("NMCLI DID NOT EXIT NORMALLY");
-        return VANILLA_ERROR;
-    }
-
-    char buf[100];
-    int ret = VANILLA_ERROR;
-    while (read_line_from_fd(pipe, buf, sizeof(buf))) {
-        if (memcmp(buf, "GENERAL.STATE", 13) == 0) {
-            *is_managed = !strstr(buf, "unmanaged");
-            ret = VANILLA_SUCCESS;
-            goto exit;
-        }
-    }
-
-exit:
-    close(pipe);
-    return ret;
-}
-
-int set_networkmanager_on_device(const char *wireless_interface, int on)
-{
-    const char *argv[] = {nmcli, "device", "set", wireless_interface, "managed", on ? "on" : "off", NULL};
-
-    pid_t nmcli_pid;
-    int r = start_process(argv, &nmcli_pid, NULL, NULL);
-    if (r != VANILLA_SUCCESS) {
-        return r;
-    }
-
-    int status;
-    waitpid(nmcli_pid, &status, 0);
-    if (WIFEXITED(status)) {
-        return VANILLA_SUCCESS;
-    } else {
-        return VANILLA_ERROR;
-    }
-}
-
-int disable_networkmanager_on_device(const char *wireless_interface)
-{
-    return set_networkmanager_on_device(wireless_interface, 0);
-}
-
-int enable_networkmanager_on_device(const char *wireless_interface)
-{
-    return set_networkmanager_on_device(wireless_interface, 1);
 }
 
 void *do_relay(void *data)
@@ -887,6 +627,102 @@ exit_loop:
     return THREADRESULT(found_console ? VANILLA_SUCCESS : VANILLA_ERROR);
 }
 
+int apply_addr_on_intf(const char *wireless_interface, const char *addr_to_set)
+{
+    int ret = VANILLA_ERROR;
+
+    struct nl_sock* sk = nl_socket_alloc();
+
+    if (nl_connect(sk, NETLINK_ROUTE)) {
+        pprint("FAILED TO CONNECT TO NETLINK\n");
+        goto die_and_free_socket;
+    }
+
+    struct nl_cache *cache;
+    if (rtnl_link_alloc_cache(sk, AF_INET, &cache)) {
+        pprint("FAILED TO ALLOC LINK CACHE\n");
+        goto die_and_close_socket;
+    }
+
+    int ifindex = rtnl_link_name2i(cache, wireless_interface);
+    if (!ifindex) {
+        pprint("FAILED TO RESOLVE IFINDEX FROM NAME\n");
+        goto die_and_free_cache;
+    }
+
+    struct nl_addr *nla;
+    if (nl_addr_parse(addr_to_set, AF_INET, &nla)) {
+        pprint("FAILED TO PARSE ADDRESS\n");
+        goto die_and_free_cache;
+    }
+
+    struct rtnl_addr *addr = rtnl_addr_alloc();
+
+    rtnl_addr_set_ifindex(addr, ifindex);
+    rtnl_addr_set_local(addr, nla);
+    
+    if (rtnl_addr_add(sk, addr, 0)) {
+        pprint("FAILED TO ADD IP TO INTERFACE\n");
+    } else {
+        ret = VANILLA_SUCCESS;
+    }
+
+die_and_free_nl_addr:
+    nl_addr_put(nla);
+
+die_and_free_rtnl_addr:
+    rtnl_addr_put(addr);
+
+die_and_free_cache:
+    nl_cache_free(cache);
+
+die_and_close_socket:
+    nl_close(sk);
+
+die_and_free_socket:
+    nl_socket_free(sk);
+
+    return ret;
+}
+
+int do_dhcp(const char *wireless_interface)
+{
+    int dhcp_pipes[2];
+    if (pipe(dhcp_pipes)) {
+        print_info("FAILED TO CREATE DHCP PIPE: %i", errno);
+        return VANILLA_ERROR;
+    }
+
+    if (dup2(dhcp_pipes[1], STDOUT_FILENO) == -1) {
+        print_info("FAILED TO DUP2 STDOUT: %i", errno);
+        return VANILLA_ERROR;
+    }
+    const char *udhcpc_argv[] = {
+        "-i", wireless_interface,
+        "-v",
+        "-q",
+        "-f",
+        "-s", "/dev/null",
+        NULL};
+    int r = udhcpc_main(udhcpc_argv);
+    if (r) {
+        print_info("FAILED TO RUN DHCP ON %s", wireless_interface);
+        return VANILLA_ERROR;
+    }
+
+    print_info("DHCP ESTABLISHED");
+
+    char buf[1024];
+    read(dhcp_pipes[0], buf, sizeof(buf));
+    print_info("DHCP OUTPUT: %s", buf);
+
+    if (apply_addr_on_intf(wireless_interface, "192.168.1.11") != VANILLA_SUCCESS) {
+        return VANILLA_ERROR;
+    }
+
+    return VANILLA_SUCCESS;
+}
+
 void *do_connect(void *data)
 {
     struct sync_args *args = (struct sync_args *) data;
@@ -917,19 +753,11 @@ void *do_connect(void *data)
     print_info("CONNECTED TO CONSOLE");
 
     // Use DHCP on interface
-    pid_t dhclient_pid;
-    int r = call_dhcp(args->wireless_interface, &dhclient_pid);
-    if (r != VANILLA_SUCCESS) {
-        print_info("FAILED TO RUN DHCP ON %s", args->wireless_interface);
-        return THREADRESULT(r);
-    } else {
-        print_info("DHCP ESTABLISHED");
+    if (do_dhcp(args->wireless_interface) != VANILLA_SUCCESS) {
+        return THREADRESULT(VANILLA_ERROR);
     }
 
     create_all_relays(args->wireless_interface);
-
-    int kill_ret = kill(dhclient_pid, SIGTERM);
-    print_info("KILLING DHCLIENT %i", dhclient_pid);
 
     return THREADRESULT(VANILLA_SUCCESS);
 }
