@@ -687,8 +687,10 @@ die_and_free_socket:
 
 int do_dhcp(const char *wireless_interface)
 {
+    int old_stdout = dup(fileno(stdout));
+
     int dhcp_pipes[2];
-    if (pipe(dhcp_pipes)) {
+    if (pipe2(dhcp_pipes, 0)) {
         print_info("FAILED TO CREATE DHCP PIPE: %i", errno);
         return VANILLA_ERROR;
     }
@@ -704,13 +706,20 @@ int do_dhcp(const char *wireless_interface)
         "-f",
         "-s", "/dev/null",
         NULL};
+    
     int r = udhcpc_main(udhcpc_argv);
+
+    // Restore old stdout fileno
+    dup2(old_stdout, fileno(stdout));
+
     if (r) {
         print_info("FAILED TO RUN DHCP ON %s", wireless_interface);
         return VANILLA_ERROR;
     }
 
     print_info("DHCP ESTABLISHED");
+
+    fflush(stdout);
 
     char buf[1024];
     read(dhcp_pipes[0], buf, sizeof(buf));
