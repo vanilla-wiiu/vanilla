@@ -479,7 +479,7 @@ void MainWindow::recordingError(int err)
 void MainWindow::recordingFinished(const QString &filename)
 {
     while (1) {
-        QString s = QFileDialog::getSaveFileName(this, tr("Save Screenshot"), QString(), tr("MPEG-4 Video (*.mp4)"));
+        QString s = QFileDialog::getSaveFileName(this, tr("Save Recording"), QString(), tr("MPEG-4 Video (*.mp4)"));
         if (s.isEmpty()) {
             break;
         }
@@ -504,13 +504,47 @@ void MainWindow::takeScreenshot()
     // Make a copy of the current image
     QImage ss = m_viewer->image();
 
-    QString s = QFileDialog::getSaveFileName(this, tr("Save Screenshot"), QString(), tr("PNG (*.png)"));
+    // Check if there's actually an image to save
+    if (ss.isNull()) {
+        QMessageBox::warning(this, tr("Screenshot Error"),
+                             tr("Cannot take screenshot: No image is currently being displayed."));
+        return;
+    }
+
+    QString s = QFileDialog::getSaveFileName(this, tr("Save Screenshot"),
+                                             QString(), tr("PNG (*.png)"));
+
     if (!s.isEmpty()) {
         QString ext = QStringLiteral(".png");
         if (!s.endsWith(ext, Qt::CaseInsensitive)) {
             s = s.append(ext);
         }
-        ss.save(s);
+
+        // Check if file already exists
+        if (QFile::exists(s)) {
+            QMessageBox::StandardButton reply = QMessageBox::question(this,
+                                                                      tr("File Exists"),
+                                                                      tr("A file named '%1' already exists. Do you want to overwrite it?").arg(s),
+                                                                      QMessageBox::Yes | QMessageBox::No);
+
+            if (reply == QMessageBox::No) {
+                return;
+            }
+        }
+
+        // Attempt to save and handle any failures
+        if (!ss.save(s)) {
+            QMessageBox::critical(this, tr("Save Failed"),
+                                  tr("Failed to save screenshot to '%1'. Please check if you have write permissions or sufficient disk space.").arg(s));
+            return;
+        }
+
+        // Verify the file was actually created
+        if (!QFile::exists(s)) {
+            QMessageBox::critical(this, tr("Save Failed"),
+                                  tr("Failed to verify screenshot file was created at '%1'.").arg(s));
+            return;
+        }
     }
 }
 
