@@ -5,6 +5,7 @@ find_package(FFmpeg REQUIRED COMPONENTS avformat avcodec avutil avfilter swscale
 add_executable(vanilla-pi
     drm.c
     main.c
+    ui.c
 )
 
 install(TARGETS vanilla-pi)

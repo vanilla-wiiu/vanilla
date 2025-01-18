@@ -17,6 +17,7 @@
 #include <unistd.h>
 
 #include "drm.h"
+#include "ui.h"
 
 AVFrame *present_frame;
 AVFrame *decoding_frame;
@@ -156,7 +157,6 @@ int run_backend(void *data)
 	SDL_Thread *decode_thread = SDL_CreateThread(decode_loop, "vanilla-decode", NULL);
 
 	while (vanilla_wait_event(&event)) {
-		printf("front end got event\n");
 		if (event.type == VANILLA_EVENT_VIDEO) {
 			SDL_LockMutex(decode_loop_mutex);
 
@@ -170,10 +170,6 @@ int run_backend(void *data)
 
 			SDL_CondBroadcast(decode_loop_cond);
 			SDL_UnlockMutex(decode_loop_mutex);
-			
-			/*uint8_t *data = av_malloc(event.size);
-			memcpy(data, event.data, event.size);
-			decode(data, event.size);*/
 		} else if (event.type == VANILLA_EVENT_AUDIO) {
 			if (audio) {
 				if (SDL_QueueAudio(audio, event.data, event.size) < 0) {
@@ -431,8 +427,15 @@ int main(int argc, const char **argv)
 
 	SDL_GameController *controller = find_valid_controller();
 
+	vui_context_t *vui = vui_alloc();
+
 	Uint32 ticks = SDL_GetTicks();
 	while (running) {
+		vui_reset(vui);
+
+		int sync_btn = vui_draw_button(vui, 100, 100, 100, 100, "Sync");
+		int connect_btn = vui_draw_button(vui, 300, 100, 100, 100, "Connect");
+
 		SDL_Event event;
 #ifdef RASPBERRY_PI
 		if (SDL_WaitEvent(&event)) {
@@ -491,6 +494,18 @@ int main(int argc, const char **argv)
 					running = 0;
 				}
 				break;
+			case SDL_MOUSEBUTTONDOWN:
+			{
+				int btn = vui_process_click(vui, event.button.x, event.button.y);
+				if (btn != -1) {
+					if (btn == sync_btn) {
+						// Go to sync menu
+					} else if (btn == connect_btn) {
+						// Go to connect menu
+					}
+				}
+				break;
+			}
 			}
     
 			if (controller) {
@@ -517,6 +532,8 @@ int main(int argc, const char **argv)
 		SDL_RenderPresent(renderer);
 #endif
 	}
+
+	vui_free(vui);
 
 	// Terminate background threads and wait for them to end gracefully
 	vanilla_stop();
