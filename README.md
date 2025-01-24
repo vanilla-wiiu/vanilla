@@ -28,6 +28,10 @@ Vanilla currently requires the following dependencies:
   ```
   # dnf install qt6-qtbase-devel qt6-qtmultimedia-devel qt6-qtsvg-devel libavcodec-free-devel libavutil-free-devel libavfilter-free-devel libnl3-devel SDL2-devel openssl-devel make automake gcc gcc-c++ kernel-devel cmake
   ```
+- Fedora (with RPM Fusion multimedia packages)
+  ```
+  # dnf install qt6-qtbase-devel qt6-qtmultimedia-devel qt6-qtsvg-devel ffmpeg-devel libnl3-devel SDL2-devel openssl-devel make automake gcc gcc-c++ kernel-devel cmake
+  ```
 - Arch
   ```
   # pacman -S qt6 ffmpeg libnl sdl2 dhclient base-devel make cmake
