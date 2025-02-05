@@ -6,7 +6,10 @@ add_executable(vanilla-pi
     drm.c
     main2.c
     menu/menu.c
+    menu/menu_main.c
+    menu/menu_sync.c
     ui/ui.c
+    ui/ui_anim.c
     ui/ui_sdl2.c
 )
 

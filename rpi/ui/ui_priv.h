@@ -2,7 +2,23 @@
 #define VANILLA_PI_UI_PRIV_H
 
 #define MAX_BUTTON_COUNT 16
-#define MAX_BUTTON_TEXT 16
+#define MAX_BUTTON_TEXT 256
+
+typedef struct {
+    int x;
+    int y;
+    int w;
+    int h;
+    int sx;
+    int sy;
+    int sw;
+    int sh;
+    char text[MAX_BUTTON_TEXT];
+    vui_button_style style;
+    vui_button_callback_t onclick;
+    void *onclick_data;
+    int layer;
+} vui_button_t;
 
 typedef struct {
     int x;
@@ -10,10 +26,19 @@ typedef struct {
     int w;
     int h;
     char text[MAX_BUTTON_TEXT];
-    vui_button_style style;
-    vui_button_callback_t onclick;
-    void *onclick_data;
-} vui_button_t;
+    int layer;
+    vui_color_t color;
+} vui_label_t;
+
+typedef struct {
+    int x;
+    int y;
+    int w;
+    int h;
+    int border_radius;
+    vui_color_t color;
+    int layer;
+} vui_rect_priv_t;
 
 typedef struct {
     /// @brief System/game time that the animation starts
@@ -39,15 +64,21 @@ typedef struct {
 } vui_animation_t;
 
 typedef struct vui_context_t {
+    void *platform_data;
     vui_button_t buttons[MAX_BUTTON_COUNT];
     int button_count;
+    vui_label_t labels[MAX_BUTTON_COUNT];
+    int label_count;
+    vui_rect_priv_t rects[MAX_BUTTON_COUNT];
+    int rect_count;
     vui_animation_t animation;
     int animation_enabled;
-    float overlay_r;
-    float overlay_g;
-    float overlay_b;
-    float overlay_a;
-    int overlay_enabled;
+    int button_active;
+    int screen_width;
+    int screen_height;
+    int layers;
+    float layer_opacity[MAX_BUTTON_COUNT];
+    vui_color_t layer_color[MAX_BUTTON_COUNT];
 } vui_context_t;
 
 #endif // VANILLA_PI_UI_PRIV_H

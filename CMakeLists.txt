@@ -10,8 +10,8 @@ SET(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib")
 SET(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 set(CMAKE_C_STANDARD 23)
 
-OPTION(VANILLA_BUILD_DESKTOP "Build Qt app for Linux desktop" ON)
-OPTION(VANILLA_BUILD_RPI "Build SDL2 app for Raspberry Pi" OFF)
+OPTION(VANILLA_BUILD_DESKTOP "Build Qt app for Linux desktop" OFF)
+OPTION(VANILLA_BUILD_RPI "Build SDL2 app for Raspberry Pi" ON)
 OPTION(VANILLA_BUILD_TESTS "Build unit tests for Vanilla" OFF)
 
 add_subdirectory(lib)
