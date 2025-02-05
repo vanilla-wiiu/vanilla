@@ -22,7 +22,7 @@ Vanilla currently requires the following dependencies:
 
 - Debian/Ubuntu 
   ```
-  # apt install qt6-base-dev qt6-multimedia-dev qt6-svg-dev libavcodec-dev libavutil-dev libavfilter-dev libsdl2-dev libnl-genl-3-dev isc-dhcp-client libssl-dev build-essential cmake
+  # apt install qt6-base-dev qt6-multimedia-dev libqt6svg6-dev libavcodec-dev libavutil-dev libavfilter-dev libsdl2-dev libnl-genl-3-dev isc-dhcp-client libssl-dev build-essential cmake
   ```
 - Fedora
   ```
