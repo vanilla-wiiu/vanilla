@@ -6,6 +6,7 @@
 
 #include "ui_anim.h"
 #include "ui_priv.h"
+#include "ui_util.h"
 
 vui_context_t *vui_alloc(int width, int height)
 {
@@ -14,6 +15,7 @@ vui_context_t *vui_alloc(int width, int height)
     vui->platform_data = 0;
     vui->screen_width = width;
     vui->screen_height = height;
+    vui->background_image[0] = 0;
     return vui;
 }
 
@@ -28,6 +30,7 @@ int vui_reset(vui_context_t *ctx)
     ctx->button_count = 0;
     ctx->label_count = 0;
     ctx->rect_count = 0;
+    memset(ctx->images, 0, sizeof(ctx->images));
     ctx->animation_enabled = 0;
     ctx->button_active = -1;
     ctx->layers = 1;
@@ -40,7 +43,12 @@ void vui_get_screen_size(vui_context_t *ctx, int *width, int *height)
     if (height) *height = ctx->screen_height;
 }
 
-int vui_button_create(vui_context_t *ctx, int x, int y, int w, int h, const char *text, vui_button_style style, int layer, vui_button_callback_t callback, void *callback_data)
+void vui_set_background(vui_context_t *ctx, const char *background_image)
+{
+    vui_strcpy(ctx->background_image, background_image);
+}
+
+int vui_button_create(vui_context_t *ctx, int x, int y, int w, int h, const char *text, const char *icon, vui_button_style_t style, int layer, vui_button_callback_t callback, void *callback_data)
 {
     if (ctx->button_count == MAX_BUTTON_COUNT) {
         return -1;
@@ -58,13 +66,21 @@ int vui_button_create(vui_context_t *ctx, int x, int y, int w, int h, const char
     btn->w = w;
     btn->h = h;
 
-    int new_w = w * 10 / 11;
-    int new_h = h * 10 / 11;
-    int new_x = x + w / 2 - new_w / 2;
-    int new_y = y + h / 2 - new_h / 2;
+    int new_w = w;
+    int new_h = h;
+    int new_x = x;
+    int new_y = y;
+
+    if (style != VUI_BUTTON_STYLE_CORNER) {
+        new_w = w * 10 / 11;
+        new_h = h * 10 / 11;
+        new_x = x + w / 2 - new_w / 2;
+        new_y = y + h / 2 - new_h / 2;
+    }
 
     vui_button_update_geometry(ctx, index, new_x, new_y, new_w, new_h);
     vui_button_update_text(ctx, index, text);
+    vui_button_update_icon(ctx, index, icon);
     vui_button_update_style(ctx, index, style);
     vui_button_update_click_handler(ctx, index, callback, callback_data);
 
@@ -98,23 +114,19 @@ void vui_button_update_geometry(vui_context_t *ctx, int index, int x, int y, int
     btn->sh = h;
 }
 
-void vui_strcpy(char *dst, const char *src)
+void vui_button_update_icon(vui_context_t *ctx, int index, const char *icon)
 {
-    if (src)
-        strncpy(dst, src, MAX_BUTTON_TEXT);
-    else
-        dst[0] = 0;
-    dst[MAX_BUTTON_TEXT-1] = 0;
+    vui_button_t *btn = &ctx->buttons[index];
+    vui_strcpy(btn->icon, icon);
 }
 
 void vui_button_update_text(vui_context_t *ctx, int index, const char *text)
 {
-    // Copy text (enforce null terminator)
     vui_button_t *btn = &ctx->buttons[index];
     vui_strcpy(btn->text, text);
 }
 
-void vui_button_update_style(vui_context_t *ctx, int index, vui_button_style style)
+void vui_button_update_style(vui_context_t *ctx, int index, vui_button_style_t style)
 {
     vui_button_t *btn = &ctx->buttons[index];
     btn->style = style;
@@ -152,7 +164,7 @@ void vui_button_callback(vui_context_t *ctx, void *data)
     int index = (int) (intptr_t) data;
     vui_button_t *btn = &ctx->buttons[index];
     if (btn->onclick) {
-        btn->onclick(ctx, ctx->button_active, btn->onclick_data);
+        btn->onclick(ctx, index, btn->onclick_data);
     }
 }
 
@@ -204,7 +216,8 @@ void vui_start_animation(vui_context_t *ctx, int64_t length, vui_anim_step_callb
     ctx->animation.complete_data = complete_data;
     gettimeofday(&ctx->animation.start_time, NULL);
 
-    ctx->animation.step(ctx, 0, ctx->animation.step_data);
+    if (ctx->animation.step)
+        ctx->animation.step(ctx, 0, ctx->animation.step_data);
 }
 
 void vui_update(vui_context_t *ctx)
@@ -219,10 +232,12 @@ void vui_update(vui_context_t *ctx)
             diff = ctx->animation.length;
         }
         
-        ctx->animation.step(ctx, diff, ctx->animation.step_data);
+        if (ctx->animation.step)
+            ctx->animation.step(ctx, diff, ctx->animation.step_data);
 
         if (diff == ctx->animation.length) {
-            ctx->animation.step(ctx, ctx->animation.length, ctx->animation.step_data);
+            if (ctx->animation.step)
+                ctx->animation.step(ctx, ctx->animation.length, ctx->animation.step_data);
             ctx->animation_enabled = 0;
             if (ctx->animation.complete) {
                 ctx->animation.complete(ctx, ctx->animation.complete_data);
@@ -284,7 +299,7 @@ void vui_layer_set_bgcolor(vui_context_t *ctx, int layer, vui_color_t color)
     ctx->layer_color[layer] = color;
 }
 
-int vui_label_create(vui_context_t *ctx, int x, int y, int w, int h, const char *text, vui_color_t color, int layer)
+int vui_label_create(vui_context_t *ctx, int x, int y, int w, int h, const char *text, vui_color_t color, vui_font_size_t size, int layer)
 {
     if (ctx->label_count == MAX_BUTTON_COUNT) {
         return -1;
@@ -300,6 +315,7 @@ int vui_label_create(vui_context_t *ctx, int x, int y, int w, int h, const char 
     lbl->h = h;
 
     lbl->color = color;
+    lbl->size = size;
 
     lbl->layer = layer;
     vui_strcpy(lbl->text, text);
@@ -331,4 +347,40 @@ int vui_rect_create(vui_context_t *ctx, int x, int y, int w, int h, int border_r
     ctx->rect_count++;
 
     return index;
+}
+
+int vui_image_create(vui_context_t *ctx, int x, int y, int w, int h, const char *image, int layer)
+{
+    // Find next valid image
+    int index = -1;
+    for (int i = 0; i < MAX_BUTTON_COUNT; i++) {
+        if (!ctx->images[i].valid) {
+            index = i;
+            break;
+        }
+    }
+
+    if (index == -1) {
+        return -1;
+    }
+
+    // Fill image with information
+    vui_image_t *img = &ctx->images[index];
+
+    img->valid = 1;
+    img->x = x;
+    img->y = y;
+    img->w = w;
+    img->h = h;
+
+    vui_strcpy(img->image, image);
+
+    img->layer = layer;
+
+    return index;
+}
+
+void vui_image_destroy(vui_context_t *ctx, int image)
+{
+    ctx->images[image].valid = 0;
 }

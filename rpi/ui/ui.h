@@ -8,7 +8,12 @@ typedef enum {
     VUI_BUTTON_STYLE_BUTTON,
     VUI_BUTTON_STYLE_CORNER,
     VUI_BUTTON_STYLE_LIST
-} vui_button_style;
+} vui_button_style_t;
+
+typedef enum {
+    VUI_FONT_SIZE_NORMAL,
+    VUI_FONT_SIZE_SMALL
+} vui_font_size_t;
 
 typedef struct {
     float r;
@@ -42,6 +47,7 @@ void vui_update(vui_context_t *ctx);
  * Screen-related functions
  */
 void vui_get_screen_size(vui_context_t *ctx, int *width, int *height);
+void vui_set_background(vui_context_t *ctx, const char *background_image);
 
 /**
  * Layer-related functions
@@ -54,22 +60,29 @@ int vui_layer_destroy(vui_context_t *ctx);
 /**
  * Button-related functions
  */
-int vui_button_create(vui_context_t *ctx, int x, int y, int w, int h, const char *text, vui_button_style style, int layer, vui_button_callback_t callback, void *callback_data);
+int vui_button_create(vui_context_t *ctx, int x, int y, int w, int h, const char *text, const char *icon, vui_button_style_t style, int layer, vui_button_callback_t callback, void *callback_data);
 void vui_button_get_geometry(vui_context_t *ctx, int button, int *x, int *y, int *w, int *h);
 void vui_button_update_click_handler(vui_context_t *ctx, int index, vui_button_callback_t handler, void *userdata);
 void vui_button_update_geometry(vui_context_t *ctx, int button, int x, int y, int w, int h);
+void vui_button_update_icon(vui_context_t *ctx, int button, const char *icon);
 void vui_button_update_text(vui_context_t *ctx, int button, const char *text);
-void vui_button_update_style(vui_context_t *ctx, int button, vui_button_style style);
+void vui_button_update_style(vui_context_t *ctx, int button, vui_button_style_t style);
 
 /**
  * Label-related functions
  */
-int vui_label_create(vui_context_t *ctx, int x, int y, int w, int h, const char *text, vui_color_t color, int layer);
+int vui_label_create(vui_context_t *ctx, int x, int y, int w, int h, const char *text, vui_color_t color, vui_font_size_t size, int layer);
 
 /**
  * Rect-related functions
  */
 int vui_rect_create(vui_context_t *ctx, int x, int y, int w, int h, int border_radius, vui_color_t color, int layer);
+
+/**
+ * Image-related functions
+ */
+int vui_image_create(vui_context_t *ctx, int x, int y, int w, int h, const char *image, int layer);
+void vui_image_destroy(vui_context_t *ctx, int image);
 
 /**
  * Color-related functions

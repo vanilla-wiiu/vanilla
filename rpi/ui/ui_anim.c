@@ -148,3 +148,8 @@ void vui_transition_fade_black_out(vui_context_t *ctx, vui_callback_t callback, 
     vui_layer_set_bgcolor(ctx, layer, vui_color_create(0, 0, 0, 1));
     vui_transition_fade_layer(ctx, layer, fade_layer_out_step, callback, callback_data, 1);
 }
+
+void vui_timer(vui_context_t *ctx, uint32_t us, vui_callback_t callback, void *callback_data)
+{
+    vui_start_animation(ctx, us, 0, 0, callback, callback_data);
+}

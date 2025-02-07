@@ -1,6 +1,10 @@
 #ifndef VANILLA_PI_UI_PRIV_H
 #define VANILLA_PI_UI_PRIV_H
 
+#include <sys/time.h>
+
+#include "ui.h"
+
 #define MAX_BUTTON_COUNT 16
 #define MAX_BUTTON_TEXT 256
 
@@ -14,7 +18,8 @@ typedef struct {
     int sw;
     int sh;
     char text[MAX_BUTTON_TEXT];
-    vui_button_style style;
+    char icon[MAX_BUTTON_TEXT];
+    vui_button_style_t style;
     vui_button_callback_t onclick;
     void *onclick_data;
     int layer;
@@ -28,6 +33,7 @@ typedef struct {
     char text[MAX_BUTTON_TEXT];
     int layer;
     vui_color_t color;
+    vui_font_size_t size;
 } vui_label_t;
 
 typedef struct {
@@ -39,6 +45,16 @@ typedef struct {
     vui_color_t color;
     int layer;
 } vui_rect_priv_t;
+
+typedef struct {
+    int valid;
+    int x;
+    int y;
+    int w;
+    int h;
+    char image[MAX_BUTTON_TEXT];
+    int layer;
+} vui_image_t;
 
 typedef struct {
     /// @brief System/game time that the animation starts
@@ -71,6 +87,7 @@ typedef struct vui_context_t {
     int label_count;
     vui_rect_priv_t rects[MAX_BUTTON_COUNT];
     int rect_count;
+    vui_image_t images[MAX_BUTTON_COUNT];
     vui_animation_t animation;
     int animation_enabled;
     int button_active;
@@ -79,6 +96,7 @@ typedef struct vui_context_t {
     int layers;
     float layer_opacity[MAX_BUTTON_COUNT];
     vui_color_t layer_color[MAX_BUTTON_COUNT];
+    char background_image[MAX_BUTTON_TEXT];
 } vui_context_t;
 
 #endif // VANILLA_PI_UI_PRIV_H

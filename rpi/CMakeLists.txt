@@ -1,5 +1,6 @@
 find_package(SDL2 REQUIRED)
 find_package(SDL2_ttf REQUIRED)
+find_package(SDL2_image REQUIRED)
 find_package(FFmpeg REQUIRED COMPONENTS avformat avcodec avutil avfilter swscale)
 
 add_executable(vanilla-pi
@@ -10,7 +11,9 @@ add_executable(vanilla-pi
     menu/menu_sync.c
     ui/ui.c
     ui/ui_anim.c
-    ui/ui_sdl2.c
+    ui/ui_sdl.c
+    ui/ui_util.c
+    ui/ui_util.h
 )
 
 install(TARGETS vanilla-pi)
@@ -26,6 +29,7 @@ target_include_directories(vanilla-pi PRIVATE
 target_link_libraries(vanilla-pi PRIVATE
     SDL2::SDL2
     SDL2_ttf::SDL2_ttf
+    SDL2_image::SDL2_image
     vanilla
     FFmpeg::avfilter
     FFmpeg::avformat

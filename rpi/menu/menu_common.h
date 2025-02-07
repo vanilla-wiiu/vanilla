@@ -1,0 +1,6 @@
+#ifndef VANILLA_MENU_COMMON_H
+#define VANILLA_MENU_COMMON_H
+
+#define BTN_SZ 80
+
+#endif // VANILLA_MENU_COMMON_H

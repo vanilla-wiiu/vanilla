@@ -2,11 +2,11 @@
 
 #include <stdio.h>
 
+#include "menu_common.h"
 #include "menu_sync.h"
 #include "ui/ui_anim.h"
 
 #define MAIN_MENU_ENTRIES 3
-#define BTN_SZ 80
 
 static int main_menu_btns[MAIN_MENU_ENTRIES] = {0};
 
@@ -78,26 +78,26 @@ void vanilla_menu_main(vui_context_t *vui, void *v)
     console_menu_layer = vui_layer_create(vui);
 
     // Left arrow
-    vui_button_create(vui, 0, arrow_y, BTN_SZ, BTN_SZ, "<", VUI_BUTTON_STYLE_BUTTON, layer, vanilla_menu_main_left_arrow, (void *) (intptr_t) console_menu_layer);
+    vui_button_create(vui, 0, arrow_y, BTN_SZ, BTN_SZ, "<", NULL, VUI_BUTTON_STYLE_BUTTON, layer, vanilla_menu_main_left_arrow, (void *) (intptr_t) console_menu_layer);
 
     // Right arrow
-    vui_button_create(vui, SCREEN_WIDTH-BTN_SZ, arrow_y, BTN_SZ, BTN_SZ, ">", VUI_BUTTON_STYLE_BUTTON, layer, vanilla_menu_main_right_arrow, (void *) (intptr_t) console_menu_layer);
+    vui_button_create(vui, SCREEN_WIDTH-BTN_SZ, arrow_y, BTN_SZ, BTN_SZ, ">", NULL, VUI_BUTTON_STYLE_BUTTON, layer, vanilla_menu_main_right_arrow, (void *) (intptr_t) console_menu_layer);
 
     // Sync button
-    vui_button_create(vui, BTN_SZ, SCREEN_HEIGHT-BTN_SZ, (SCREEN_WIDTH-BTN_SZ*2)/2, BTN_SZ, "Sync", VUI_BUTTON_STYLE_BUTTON, layer, vanilla_menu_main_sync_action, (void *) (intptr_t) layer);
+    vui_button_create(vui, BTN_SZ, SCREEN_HEIGHT-BTN_SZ, (SCREEN_WIDTH-BTN_SZ*2)/2, BTN_SZ, "Sync", NULL, VUI_BUTTON_STYLE_BUTTON, layer, vanilla_menu_main_sync_action, (void *) (intptr_t) layer);
 
     // Connect button
-    vui_button_create(vui, BTN_SZ + (SCREEN_WIDTH-BTN_SZ*2)/2, SCREEN_HEIGHT-BTN_SZ, (SCREEN_WIDTH-BTN_SZ*2)/2, BTN_SZ, "Connect", VUI_BUTTON_STYLE_BUTTON, layer, NULL, NULL);
+    vui_button_create(vui, BTN_SZ + (SCREEN_WIDTH-BTN_SZ*2)/2, SCREEN_HEIGHT-BTN_SZ, (SCREEN_WIDTH-BTN_SZ*2)/2, BTN_SZ, "Connect", "/home/matt/src/vanilla/rpi/tex/red.png", VUI_BUTTON_STYLE_BUTTON, layer, NULL, NULL);
 
     // Delete button
-    vui_button_create(vui, 0, 0, BTN_SZ, BTN_SZ, "Edit", VUI_BUTTON_STYLE_CORNER, layer, NULL, NULL);
-    vui_button_create(vui, SCREEN_WIDTH-BTN_SZ, 0, BTN_SZ, BTN_SZ, "Settings", VUI_BUTTON_STYLE_CORNER, layer, NULL, NULL);
+    vui_button_create(vui, 0, 0, BTN_SZ, BTN_SZ, "Edit", NULL, VUI_BUTTON_STYLE_CORNER, layer, NULL, NULL);
+    vui_button_create(vui, SCREEN_WIDTH-BTN_SZ, 0, BTN_SZ, BTN_SZ, "Settings", NULL, VUI_BUTTON_STYLE_CORNER, layer, NULL, NULL);
 
     // Console list
     int list_item_width = SCREEN_WIDTH - BTN_SZ - BTN_SZ;
     int list_item_height = (SCREEN_HEIGHT - BTN_SZ - BTN_SZ) / MAIN_MENU_ENTRIES;
     for (int i = 0; i < MAIN_MENU_ENTRIES; i++) {
-        main_menu_btns[i] = vui_button_create(vui, BTN_SZ, BTN_SZ + list_item_height * i, list_item_width, list_item_height, NULL, VUI_BUTTON_STYLE_LIST, console_menu_layer, NULL, NULL);
+        main_menu_btns[i] = vui_button_create(vui, BTN_SZ, BTN_SZ + list_item_height * i, list_item_width, list_item_height, NULL, NULL, VUI_BUTTON_STYLE_LIST, console_menu_layer, NULL, NULL);
     }
     vanilla_menu_main_populate(vui);
 
