@@ -72,6 +72,7 @@ void vui_button_update_style(vui_context_t *ctx, int button, vui_button_style_t 
  * Label-related functions
  */
 int vui_label_create(vui_context_t *ctx, int x, int y, int w, int h, const char *text, vui_color_t color, vui_font_size_t size, int layer);
+int vui_label_update_text(vui_context_t *ctx, int label, const char *text);
 
 /**
  * Rect-related functions
@@ -94,6 +95,7 @@ vui_color_t vui_color_create(float r, float g, float b, float a);
  */
 void vui_start_animation(vui_context_t *ctx, int64_t length, vui_anim_step_callback_t step, void *step_data, vui_callback_t complete, void *complete_data);
 void vui_cancel_animation(vui_context_t *ctx);
+int vui_start_passive_animation(vui_context_t *ctx, vui_anim_step_callback_t step, void *step_data);
 
 /**
  * Input-related functions

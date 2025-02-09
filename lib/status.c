@@ -24,8 +24,8 @@ void print_info(const char *errstr, ...)
     va_list args;
     va_start(args, errstr);
 
-    vanilla_log_no_newline(VANILLA_STATUS_STRINGS[-VANILLA_INFO]);
-    vanilla_log_no_newline(" ");
+    // vanilla_log_no_newline(VANILLA_STATUS_STRINGS[-VANILLA_INFO]);
+    // vanilla_log_no_newline(" ");
     vanilla_log_no_newline_va(errstr, args);
     vanilla_log_no_newline("\n");
 

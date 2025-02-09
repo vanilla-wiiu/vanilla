@@ -20,14 +20,9 @@ pthread_mutex_t main_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t gamepad_mutex = PTHREAD_MUTEX_INITIALIZER;
 event_loop_t event_loop = {{0}, 0, 0, 0, PTHREAD_MUTEX_INITIALIZER, PTHREAD_COND_INITIALIZER};
 
-struct gamepad_data_t
+void *start_event_loop(void *arg)
 {
-    uint32_t server_address;
-};
-
-void *start_gamepad(void *arg)
-{
-    struct gamepad_data_t *data = (struct gamepad_data_t *) arg;
+    thread_data_t *data = (thread_data_t *) arg;
 
     pthread_mutex_lock(&event_loop.mutex);
     init_event_buffer_arena();
@@ -40,12 +35,22 @@ void *start_gamepad(void *arg)
     pthread_cond_broadcast(&event_loop.waitcond);
     pthread_mutex_unlock(&event_loop.mutex);
     
-    connect_as_gamepad_internal(&event_loop, data->server_address);
+    data->event_loop = &event_loop;
 
+    data->thread_start(data);
     free(data);
 
     pthread_mutex_lock(&event_loop.mutex);
     event_loop.active = 0;
+    
+    // Free any unconsumed events
+    while (event_loop.used_index < event_loop.new_index) {
+        // Output data to pointer
+        vanilla_event_t *pull_event = &event_loop.events[event_loop.used_index % VANILLA_MAX_EVENT_COUNT];
+        vanilla_free_event(pull_event);
+        event_loop.used_index++;
+    }
+
     free_event_buffer_arena();
     pthread_cond_broadcast(&event_loop.waitcond);
     pthread_mutex_unlock(&event_loop.mutex);
@@ -54,19 +59,21 @@ void *start_gamepad(void *arg)
     return 0;
 }
 
-int vanilla_start_internal(uint32_t server_address)
+int vanilla_start_internal(uint32_t server_address, thread_start_t thread_start, void *thread_data)
 {
     if (pthread_mutex_trylock(&main_mutex) == 0) {
         pthread_t other;
         
-        struct gamepad_data_t *data = malloc(sizeof(struct gamepad_data_t));
+        thread_data_t *data = malloc(sizeof(thread_data_t));
         data->server_address = server_address;
+        data->thread_start = thread_start;
+        data->thread_data = thread_data;
 
         // Lock event loop mutex so it can't be set to active until we're ready
         pthread_mutex_lock(&event_loop.mutex);
 
         // Start other thread (which will set event loop to active)
-        pthread_create(&other, NULL, start_gamepad, data);
+        pthread_create(&other, NULL, start_event_loop, data);
         pthread_setname_np(other, "vanilla-gamepad");
 
         // Wait for event loop to be set active before returning
@@ -77,13 +84,14 @@ int vanilla_start_internal(uint32_t server_address)
 
         return VANILLA_SUCCESS;
     } else {
-        return VANILLA_ERROR;
+        // We're already doing something
+        return VANILLA_ERR_BUSY;
     }
 }
 
 int vanilla_start(uint32_t server_address)
 {
-    return vanilla_start_internal(server_address);
+    return vanilla_start_internal(server_address, connect_as_gamepad_internal, 0);
 }
 
 void vanilla_stop()
@@ -164,7 +172,7 @@ void vanilla_set_battery_status(int battery_status)
 
 int vanilla_sync(uint16_t code, uint32_t server_address)
 {
-    return sync_internal(code, server_address);
+    return vanilla_start_internal(server_address, sync_internal, (void *) (uintptr_t) code);
 }
 
 int vanilla_poll_event(vanilla_event_t *event)

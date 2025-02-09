@@ -4,6 +4,7 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
 #include <SDL2/SDL_ttf.h>
+#include <vanilla.h>
 
 #include "ui_priv.h"
 #include "ui_util.h"
@@ -25,6 +26,7 @@ typedef struct {
     SDL_Rect dst_rect;
     SDL_Texture *background;
     SDL_Texture *layer_data[MAX_BUTTON_COUNT];
+    SDL_Texture *label_data[MAX_BUTTON_COUNT];
     vui_sdl_cached_texture_t button_cache[MAX_BUTTON_COUNT];
     vui_sdl_cached_texture_t image_cache[MAX_BUTTON_COUNT];
 } vui_sdl_context_t;
@@ -83,6 +85,7 @@ int vui_init_sdl(vui_context_t *ctx, int fullscreen)
 
     sdl_ctx->background = 0;
     memset(sdl_ctx->layer_data, 0, sizeof(sdl_ctx->layer_data));
+    memset(sdl_ctx->label_data, 0, sizeof(sdl_ctx->label_data));
     memset(sdl_ctx->button_cache, 0, sizeof(sdl_ctx->button_cache));
     memset(sdl_ctx->image_cache, 0, sizeof(sdl_ctx->image_cache));
 
@@ -343,33 +346,34 @@ void vui_draw_sdl(vui_context_t *ctx, SDL_Renderer *renderer)
     // Draw labels
     for (int i = 0; i < ctx->label_count; i++) {
         vui_label_t *lbl = &ctx->labels[i];
+        if (lbl->text[0]) {
+            SDL_SetRenderTarget(renderer, sdl_ctx->layer_data[lbl->layer]);
 
-        SDL_SetRenderTarget(renderer, sdl_ctx->layer_data[lbl->layer]);
+            SDL_Color c;
+            c.r = lbl->color.r * 0xFF;
+            c.g = lbl->color.g * 0xFF;
+            c.b = lbl->color.b * 0xFF;
+            c.a = lbl->color.a * 0xFF;
 
-        SDL_Color c;
-        c.r = lbl->color.r * 0xFF;
-        c.g = lbl->color.g * 0xFF;
-        c.b = lbl->color.b * 0xFF;
-        c.a = lbl->color.a * 0xFF;
+            SDL_Surface *surface = TTF_RenderUTF8_Blended_Wrapped(lbl->size == VUI_FONT_SIZE_SMALL ? sysfont_mini : sysfont, lbl->text, c, lbl->w);
 
-        SDL_Surface *surface = TTF_RenderUTF8_Blended_Wrapped(lbl->size == VUI_FONT_SIZE_SMALL ? sysfont_mini : sysfont, lbl->text, c, lbl->w);
+            SDL_Rect sr;
+            sr.x = 0;
+            sr.y = 0;
+            sr.w = intmin(lbl->w, surface->w);
+            sr.h = intmin(lbl->h, surface->h);
 
-        SDL_Rect sr;
-        sr.x = 0;
-        sr.y = 0;
-        sr.w = intmin(lbl->w, surface->w);
-        sr.h = intmin(lbl->h, surface->h);
-
-        SDL_Rect dr;
-        dr.x = lbl->x;
-        dr.y = lbl->y;
-        dr.w = sr.w;
-        dr.h = sr.h;
-        
-        SDL_Texture *texture = SDL_CreateTextureFromSurface(renderer, surface);
-        SDL_RenderCopy(renderer, texture, &sr, &dr);
-        SDL_DestroyTexture(texture);
-        SDL_FreeSurface(surface);
+            SDL_Rect dr;
+            dr.x = lbl->x;
+            dr.y = lbl->y;
+            dr.w = sr.w;
+            dr.h = sr.h;
+            
+            SDL_Texture *texture = SDL_CreateTextureFromSurface(renderer, surface);
+            SDL_RenderCopy(renderer, texture, &sr, &dr);
+            SDL_DestroyTexture(texture);
+            SDL_FreeSurface(surface);
+        }
     }
 
     // Draw buttons
@@ -452,6 +456,7 @@ int vui_update_sdl(vui_context_t *vui)
     SDL_Event ev;
     while (SDL_PollEvent(&ev)) {
         if (ev.type == SDL_QUIT) {
+            vanilla_stop();
             return 0;
         } else if (ev.type == SDL_MOUSEBUTTONDOWN || ev.type == SDL_MOUSEBUTTONUP) {
             if (dst_rect->w > 0 && dst_rect->h > 0) {

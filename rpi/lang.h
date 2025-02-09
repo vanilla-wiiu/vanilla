@@ -1,0 +1,22 @@
+#ifndef VANILLA_PI_LANG_H
+#define VANILLA_PI_LANG_H
+
+typedef enum {
+    VPI_LANG_SYNC_BTN,
+    VPI_LANG_CONNECT_BTN,
+    VPI_LANG_EDIT_BTN,
+    VPI_LANG_SETTINGS_BTN,
+    VPI_LANG_OK_BTN,
+    VPI_LANG_CANCEL_BTN,
+    VPI_LANG_SYNC_HELP_1,
+    VPI_LANG_SYNC_HELP_2,
+    VPI_LANG_SYNC_CONNECTING,
+    VPI_LANG_SYNC_FAILED,
+    VPI_LANG_SUDO_HELP_1,
+    VPI_LANG_SUDO_HELP_2,
+    __VPI_LANG_T_COUNT
+} vpi_lang_t;
+
+const char *lang(vpi_lang_t id);
+
+#endif // VANILLA_PI_LANG_H

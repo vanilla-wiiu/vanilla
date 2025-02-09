@@ -27,7 +27,7 @@ int main(int argc, const char **argv)
         goto exit;
     }
 
-    vanilla_menu_init(vui);
+    vpi_menu_init(vui);
 
     while (vui_update_sdl(vui)) {
     }

@@ -1,10 +1,15 @@
 #include "menu_sync.h"
 
+#include <math.h>
 #include <stdio.h>
 #include <stdint.h>
+#include <string.h>
+#include <vanilla.h>
 
+#include "lang.h"
 #include "menu_common.h"
 #include "menu_main.h"
+#include "menu_sudo.h"
 #include "ui/ui_anim.h"
 #include "ui/ui_util.h"
 
@@ -31,38 +36,157 @@ static const char *suit_icons_white[4] = {
     "club_white.svg",
 };
 
+void sync_return_to_main(vui_context_t *vui, int button, void *data)
+{
+    vui_transition_fade_layer_out(vui, sync_fglayer, vpi_menu_sync, (void *) (intptr_t) 1);
+}
+
+void sync_show_success(vui_context_t *vui, void *data)
+{
+    vui_reset(vui);
+
+    int bglayer = vui_layer_create(vui);
+
+    vui_rect_t bkg_rect;
+    int margin;
+    vpi_menu_create_background(vui, bglayer, &bkg_rect, &margin);
+
+    sync_fglayer = vui_layer_create(vui);
+
+    vui_label_create(vui, bkg_rect.x, bkg_rect.y + bkg_rect.h/4, bkg_rect.w, bkg_rect.h, "TEMP: Sync successful!", vui_color_create(1,1,1,1), VUI_FONT_SIZE_NORMAL, sync_fglayer);
+}
+
+void sync_show_error(vui_context_t *vui, void *data)
+{
+    vui_reset(vui);
+
+    int bglayer = vui_layer_create(vui);
+
+    vui_rect_t bkg_rect;
+    int margin;
+    vpi_menu_create_background(vui, bglayer, &bkg_rect, &margin);
+
+    sync_fglayer = vui_layer_create(vui);
+
+    vui_label_create(vui, bkg_rect.x, bkg_rect.y + bkg_rect.h/4, bkg_rect.w, bkg_rect.h, lang(VPI_LANG_SYNC_FAILED), vui_color_create(1,1,1,1), VUI_FONT_SIZE_NORMAL, sync_fglayer);
+
+    int ret = (int) (intptr_t) data;
+    char buf[20];
+    sprintf(buf, "%i", ret);
+    vui_label_create(vui, bkg_rect.x, bkg_rect.y + bkg_rect.h/2, bkg_rect.w, bkg_rect.h, buf, vui_color_create(1,0,0,1), VUI_FONT_SIZE_SMALL, sync_fglayer);
+
+    vui_button_create(vui, bkg_rect.x + bkg_rect.w/2 - BTN_SZ, bkg_rect.y + bkg_rect.h * 3 / 4, BTN_SZ*2, BTN_SZ, lang(VPI_LANG_OK_BTN), 0, VUI_BUTTON_STYLE_BUTTON, sync_fglayer, sync_return_to_main, 0);
+
+    vui_transition_fade_layer_in(vui, sync_fglayer, 0, 0);
+}
+
+void sync_success(void *data)
+{
+    vui_context_t *vui = data;
+    vui_transition_fade_layer_out(vui, sync_fglayer, sync_show_success, 0);
+}
+
+int intpow(int x, unsigned int p)
+{
+    if (p == 0) return 1;
+    if (p == 1) return x;
+
+    int tmp = intpow(x, p/2);
+    if (p%2 == 0) return tmp * tmp;
+    else return x * tmp * tmp;
+}
+
+void sync_animation_step(vui_context_t *ctx, int64_t time, void *userdata)
+{
+    int progress_lbl = (int) (intptr_t) userdata;
+    
+    static const int utf8_char_len = 3; // Somewhat hacky, but the important thing is that it works
+    static const int progress_txt_len = 9;
+    static const size_t progress_txt_sz = progress_txt_len * utf8_char_len + 1;
+
+    char progress_txt[progress_txt_sz];
+    progress_txt[progress_txt_sz-1] = 0;
+
+    int64_t m = int64min((sin(time * 0.000004) * 0.5 + 0.5) * progress_txt_len, progress_txt_len - 1);
+    for (int i = 0; i < progress_txt_len; i++) {
+        memcpy(progress_txt + utf8_char_len * i, (i == m) ? "\xE2\xAC\xA4" : "\xE2\x80\xA2", utf8_char_len);
+    }
+
+    vui_label_update_text(ctx, progress_lbl, progress_txt);
+
+    // Poll Vanilla for sync status
+    // if (time > 0) {
+        vanilla_event_t event;
+        while (vanilla_poll_event(&event)) {
+            if (event.type == VANILLA_EVENT_SYNC) {
+                int sync_ret;
+                memcpy(&sync_ret, event.data, sizeof(int));
+                vanilla_free_event(&event);
+                vanilla_stop();
+                vui_transition_fade_layer_out(ctx, sync_fglayer, sync_show_error, (void *) (intptr_t) sync_ret);
+            } else {
+                vanilla_free_event(&event);
+            }
+        }
+    // }
+}
+
+void cancel_sync(vui_context_t *vui, int button, void *v)
+{
+    vanilla_stop();
+    sync_return_to_main(vui, button, 0);
+}
+
 void start_syncing(vui_context_t *vui, void *v)
 {
     vui_reset(vui);
 
     int bglayer = vui_layer_create(vui);
-    int fglayer = vui_layer_create(vui);
+    sync_fglayer = vui_layer_create(vui);
 
-    int scrw, scrh;
-    vui_get_screen_size(vui, &scrw, &scrh);
-
-    const int margin = scrw/75;
     vui_rect_t bkg_rect;
-    bkg_rect.x = margin;
-    bkg_rect.y = margin;
-    bkg_rect.w = scrw-margin-margin;
-    bkg_rect.h = scrh-margin-margin;
-    
-    vui_rect_create(vui, bkg_rect.x, bkg_rect.y, bkg_rect.w, bkg_rect.h, scrh*2/10, vui_color_create(0, 0, 0, 0.66f), bglayer);
+    int margin;
+    vpi_menu_create_background(vui, bglayer, &bkg_rect, &margin);
 
-    vui_label_create(vui, bkg_rect.x, bkg_rect.y + bkg_rect.h/4, bkg_rect.w, bkg_rect.h, "Connecting to the Wii U console...", vui_color_create(1,1,1,1), VUI_FONT_SIZE_NORMAL, fglayer);
+    vui_label_create(vui, bkg_rect.x, bkg_rect.y + bkg_rect.h*1/5, bkg_rect.w, bkg_rect.h, lang(VPI_LANG_SYNC_CONNECTING), vui_color_create(1,1,1,1), VUI_FONT_SIZE_NORMAL, sync_fglayer);
 
-    vui_transition_fade_layer_in(vui, fglayer, 0, 0);
+    uint16_t code = 0;
+    for (int i = 0; i < SYNC_BTN_COUNT; i++) {
+        code += sync_str[i] * intpow(10, SYNC_BTN_COUNT - 1 - i);
+    }
+
+    int progress_lbl = vui_label_create(vui, bkg_rect.x, bkg_rect.y + bkg_rect.h*2/5, bkg_rect.w, bkg_rect.h, "", vui_color_create(1,1,1,1), VUI_FONT_SIZE_NORMAL, sync_fglayer);
+    sync_animation_step(vui, 0, (void *) (intptr_t) progress_lbl);
+
+    vui_button_create(vui, bkg_rect.x + bkg_rect.w/2 - BTN_SZ*3/2, bkg_rect.y + bkg_rect.h * 3 / 4, BTN_SZ*3, BTN_SZ, lang(VPI_LANG_CANCEL_BTN), 0, VUI_BUTTON_STYLE_BUTTON, sync_fglayer, cancel_sync, 0);
+
+    int ret = vanilla_sync(code, VANILLA_ADDRESS_LOCAL);
+    if (ret == VANILLA_SUCCESS) {
+        vui_transition_fade_layer_in(vui, sync_fglayer, 0, 0);
+        vui_start_passive_animation(vui, sync_animation_step, (void *) (intptr_t) progress_lbl);
+    } else {
+        sync_show_error(vui, (void *) (intptr_t) ret);
+    }
+}
+
+void start_syncing_or_sudo(vui_context_t *vui, void *v)
+{
+    const int sudo_required = 1;
+    if (sudo_required) {
+        vpi_menu_sudo(vui, start_syncing, v, vpi_menu_sync, (void *) (intptr_t) 1);
+    } else {
+        start_syncing(vui, v);
+    }
 }
 
 void transition_to_sync_window(vui_context_t *vui, void *v)
 {
-    vui_transition_fade_layer_out(vui, sync_fglayer, start_syncing, 0);
+    vui_transition_fade_layer_out(vui, sync_fglayer, start_syncing_or_sudo, 0);
 }
 
-void vanilla_sync_menu_back_action(vui_context_t *vui, int btn, void *v)
+void vpi_sync_menu_back_action(vui_context_t *vui, int btn, void *v)
 {
-    vui_transition_fade_layer_out(vui, (int) (intptr_t) v, vanilla_menu_main, 0);
+    vui_transition_fade_layer_out(vui, (int) (intptr_t) v, vpi_menu_main, 0);
 }
 
 void sync_btn_clicked(vui_context_t *vui, int button, void *data)
@@ -115,7 +239,7 @@ void create_sync_btn(vui_context_t *vui, int x, int data, int layer, int origin_
     sync_btns[data] = btn;
 }
 
-void vanilla_menu_sync(vui_context_t *vui, void *d)
+void vpi_menu_sync(vui_context_t *vui, void *d)
 {
     // Clears all extra layers
     vui_reset(vui);
@@ -129,23 +253,18 @@ void vanilla_menu_sync(vui_context_t *vui, void *d)
     sync_bglayer = vui_layer_create(vui);
     sync_fglayer = vui_layer_create(vui);
 
+    vui_rect_t bkg_rect;
+    int margin;
+    vpi_menu_create_background(vui, sync_bglayer, &bkg_rect, &margin);
+
     int scrw, scrh;
     vui_get_screen_size(vui, &scrw, &scrh);
 
-    const int margin = scrw/75;
-    vui_rect_t bkg_rect;
-    bkg_rect.x = margin;
-    bkg_rect.y = margin;
-    bkg_rect.w = scrw-margin-margin;
-    bkg_rect.h = scrh-margin-margin;
-
-    vui_rect_create(vui, bkg_rect.x, bkg_rect.y, bkg_rect.w, bkg_rect.h, scrh*2/10, vui_color_create(0, 0, 0, 0.66f), sync_bglayer);
-
     const int lbl_margin = margin * 3;
-    vui_label_create(vui, bkg_rect.x + lbl_margin, bkg_rect.y + lbl_margin, bkg_rect.w - lbl_margin - lbl_margin, bkg_rect.h - lbl_margin - lbl_margin, "Touch the symbols in the order they are displayed on the TV screen from left to right.", vui_color_create(1,1,1,1), VUI_FONT_SIZE_NORMAL, sync_fglayer);
+    vui_label_create(vui, bkg_rect.x + lbl_margin, bkg_rect.y + lbl_margin, bkg_rect.w - lbl_margin - lbl_margin, bkg_rect.h - lbl_margin - lbl_margin, lang(VPI_LANG_SYNC_HELP_1), vui_color_create(1,1,1,1), VUI_FONT_SIZE_NORMAL, sync_fglayer);
 
     const int lbl2_width = scrw/2;
-    vui_label_create(vui, scrw/2 - lbl2_width/2, bkg_rect.y + lbl_margin + scrh/5, lbl2_width, bkg_rect.h - lbl_margin - lbl_margin, "If the symbols are not displayed on the TV screen, press the SYNC Button on the Wii U console.", vui_color_create(0.66f,0.66f,0.66f,1), VUI_FONT_SIZE_SMALL, sync_fglayer);
+    vui_label_create(vui, scrw/2 - lbl2_width/2, bkg_rect.y + lbl_margin + scrh/5, lbl2_width, bkg_rect.h - lbl_margin - lbl_margin, lang(VPI_LANG_SYNC_HELP_2), vui_color_create(0.66f,0.66f,0.66f,1), VUI_FONT_SIZE_SMALL, sync_fglayer);
 
     // Create 4 symbol buttons
     const int sync_btn_x = scrw/2 - (BTN_SZ*SYNC_BTN_COUNT)/2;
@@ -170,7 +289,7 @@ void vanilla_menu_sync(vui_context_t *vui, void *d)
     vui_button_create(vui, sync_btn_x + BTN_SZ * 3, sync_entry_rect.y, BTN_SZ, sync_entry_rect.h, 0, "backspace_black.svg", VUI_BUTTON_STYLE_BUTTON, sync_fglayer, bksp_btn_clicked, 0);
 
     int back_btn_h = scrh/6;
-    vui_button_create(vui, 0, scrh-back_btn_h, scrw/4, back_btn_h, "Cancel", 0, VUI_BUTTON_STYLE_CORNER, sync_fglayer, vanilla_sync_menu_back_action, (void *) (intptr_t) sync_bglayer);
+    vui_button_create(vui, 0, scrh-back_btn_h, scrw/4, back_btn_h, lang(VPI_LANG_CANCEL_BTN), 0, VUI_BUTTON_STYLE_CORNER, sync_fglayer, vpi_sync_menu_back_action, (void *) (intptr_t) sync_bglayer);
 
-    vui_transition_fade_layer_in(vui, sync_bglayer, 0, 0);
+    vui_transition_fade_layer_in(vui, d ? sync_fglayer : sync_bglayer, 0, 0);
 }

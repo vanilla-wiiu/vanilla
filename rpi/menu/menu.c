@@ -6,8 +6,8 @@
 
 #include "menu_main.h"
 
-void vanilla_menu_init(vui_context_t *vui)
+void vpi_menu_init(vui_context_t *vui)
 {
     // Start with main menu
-    vanilla_menu_main(vui, 0);
+    vpi_menu_main(vui, 0);
 }

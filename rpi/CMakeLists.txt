@@ -5,9 +5,12 @@ find_package(FFmpeg REQUIRED COMPONENTS avformat avcodec avutil avfilter swscale
 
 add_executable(vanilla-pi
     drm.c
+    lang.c
     main2.c
     menu/menu.c
+    menu/menu_common.c
     menu/menu_main.c
+    menu/menu_sudo.c
     menu/menu_sync.c
     ui/ui.c
     ui/ui_anim.c
@@ -21,6 +24,7 @@ install(TARGETS vanilla-pi)
 target_include_directories(vanilla-pi PRIVATE
     "${CMAKE_SOURCE_DIR}/lib"
     "${CMAKE_CURRENT_SOURCE_DIR}"
+    "${CMAKE_SOURCE_DIR}"
 
     # xf86drm.h needs this
     /usr/include/libdrm

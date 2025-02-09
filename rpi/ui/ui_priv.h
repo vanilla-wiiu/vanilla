@@ -60,9 +60,6 @@ typedef struct {
     /// @brief System/game time that the animation starts
     struct timeval start_time;
 
-    /// @brief Progress stored in microseconds
-    int64_t progress;
-
     /// @brief Length stored in microseconds
     int64_t length;
 
@@ -90,6 +87,8 @@ typedef struct vui_context_t {
     vui_image_t images[MAX_BUTTON_COUNT];
     vui_animation_t animation;
     int animation_enabled;
+    vui_animation_t passive_animations[MAX_BUTTON_COUNT];
+    int passive_animation_count;
     int button_active;
     int screen_width;
     int screen_height;

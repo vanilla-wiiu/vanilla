@@ -6,11 +6,7 @@
 #include <pthread.h>
 #include <stdint.h>
 
-extern uint16_t PORT_MSG;
-extern uint16_t PORT_VID;
-extern uint16_t PORT_AUD;
-extern uint16_t PORT_HID;
-extern uint16_t PORT_CMD;
+#include "../pipe/ports.h"
 
 struct wpa_ctrl;
 
@@ -35,9 +31,19 @@ typedef struct
     int socket_cmd;
 } gamepad_context_t;
 
-int sync_internal(uint16_t code, uint32_t server_address);
-int connect_as_gamepad_internal(event_loop_t *ctx, uint32_t server_address);
-void send_to_console(int fd, const void *data, size_t data_size, int port);
+typedef struct thread_data_t thread_data_t;
+typedef void (*thread_start_t)(thread_data_t *);
+typedef struct thread_data_t
+{
+    uint32_t server_address;
+    event_loop_t *event_loop;
+    thread_start_t thread_start;
+    void *thread_data;
+} thread_data_t;
+
+void sync_internal(thread_data_t *data);
+void connect_as_gamepad_internal(thread_data_t *data);
+void send_to_console(int fd, const void *data, size_t data_size, uint16_t port);
 int is_stop_code(const char *data, size_t data_length);
 int push_event(event_loop_t *loop, int type, const void *data, size_t size);
 int get_event(event_loop_t *loop, vanilla_event_t *event, int wait);

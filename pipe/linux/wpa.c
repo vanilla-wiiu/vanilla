@@ -13,12 +13,13 @@
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <sys/types.h>
+#include <sys/un.h>
 #include <sys/wait.h>
 #include <unistd.h>
 #include <wpa_ctrl.h>
 
 #include "../def.h"
-#include "ports.h"
+#include "../ports.h"
 #include "status.h"
 #include "util.h"
 #include "vanilla.h"
@@ -51,10 +52,13 @@ struct sync_args {
     uint16_t code;
     void *(*start_routine)(void *);
     struct wpa_ctrl *ctrl;
+    int local;
+    int skt;
 };
 
 struct relay_info {
     const char *wireless_interface;
+    int local;
     in_port_t port;
 };
 
@@ -226,7 +230,7 @@ int start_process(const char **argv, pid_t *pid_out, int *stdout_pipe, int *stde
         _exit(1);
     } else if (pid < 0) {
         // Fork error
-        return VANILLA_ERROR;
+        return VANILLA_ERR_GENERIC;
     } else {
         // Continuation of parent
         close(out_pipes[1]);
@@ -293,7 +297,7 @@ int start_wpa_supplicant(const char *wireless_interface, const char *config_file
         // Give up
 give_up:
         kill((*pid), SIGTERM);
-        return VANILLA_ERROR;
+        return VANILLA_ERR_GENERIC;
     }
 }
 
@@ -304,6 +308,13 @@ void quit_loop()
     running = 0;
     main_loop = 0;
     pthread_mutex_unlock(&main_loop_mutex);
+    pthread_mutex_unlock(&running_mutex);
+}
+
+void interrupt()
+{
+    pthread_mutex_lock(&running_mutex);
+    running = 0;
     pthread_mutex_unlock(&running_mutex);
 }
 
@@ -341,7 +352,7 @@ void *read_stdin(void *)
 
 void *wpa_setup_environment(void *data)
 {
-    void *ret = THREADRESULT(VANILLA_ERROR);
+    void *ret = THREADRESULT(VANILLA_ERR_GENERIC);
 
     struct sync_args *args = (struct sync_args *) data;
 
@@ -446,7 +457,7 @@ int call_dhcp(const char *network_interface, pid_t *dhclient_pid)
         print_info("FAILED TO ESTABLISH DHCP");
         kill(*dhclient_pid, SIGTERM);
 
-        return VANILLA_ERROR;
+        return VANILLA_ERR_GENERIC;
     }
 }
 
@@ -472,11 +483,11 @@ int is_networkmanager_managing_device(const char *wireless_interface, int *is_ma
     if (!WIFEXITED(status)) {
         // Something went wrong
         print_info("NMCLI DID NOT EXIT NORMALLY");
-        return VANILLA_ERROR;
+        return VANILLA_ERR_GENERIC;
     }
 
     char buf[100];
-    int ret = VANILLA_ERROR;
+    int ret = VANILLA_ERR_GENERIC;
     while (read_line_from_fd(pipe, buf, sizeof(buf))) {
         if (memcmp(buf, "GENERAL.STATE", 13) == 0) {
             *is_managed = !strstr(buf, "unmanaged");
@@ -505,7 +516,7 @@ int set_networkmanager_on_device(const char *wireless_interface, int on)
     if (WIFEXITED(status)) {
         return VANILLA_SUCCESS;
     } else {
-        return VANILLA_ERROR;
+        return VANILLA_ERR_GENERIC;
     }
 }
 
@@ -554,14 +565,29 @@ relay_ports create_ports(int from_socket, in_port_t from_port, int to_socket, in
     return ports;
 }
 
-int open_socket(in_port_t port)
+int open_socket(int local, in_port_t port)
 {
     struct sockaddr_in in = {0};
-    in.sin_family = AF_INET;
-    in.sin_addr.s_addr = INADDR_ANY;
-    in.sin_port = htons(port);
-    
-    int skt = socket(AF_INET, SOCK_DGRAM, 0);
+    struct sockaddr_un un = {0};
+
+    const struct sockaddr *sa;
+    size_t sa_size;
+
+    int skt;
+    if (local) {
+        skt = socket(AF_UNIX, SOCK_STREAM, 0);
+        un.sun_family = AF_UNIX;
+        snprintf(un.sun_path, sizeof(un.sun_path) - 1, VANILLA_PIPE_LOCAL_SOCKET, port);
+        sa = (const struct sockaddr *) &un;
+        sa_size = sizeof(un);
+    } else {
+        skt = socket(AF_INET, SOCK_DGRAM, 0);
+        in.sin_family = AF_INET;
+        in.sin_addr.s_addr = INADDR_ANY;
+        in.sin_port = htons(port);
+        sa = (const struct sockaddr *) &in;
+        sa_size = sizeof(in);
+    }
     if (skt == -1) {
         return -1;
     }
@@ -570,10 +596,16 @@ int open_socket(in_port_t port)
     tv.tv_usec = 250000;
     setsockopt(skt, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
     
-    if (bind(skt, (const struct sockaddr *) &in, sizeof(in)) == -1) {
-        print_info("FAILED TO BIND PORT %u: %i\n", port, errno);
+    if (bind(skt, sa, sa_size) == -1) {
+        print_info("FAILED TO BIND PORT %u: %i", port, errno);
         close(skt);
         return -1;
+    }
+
+    if (local) {
+        if (listen(skt, 20) == -1) {
+            print_info("FAILED TO LISTEN ON LOCAL SOCKET: %i", errno);
+        }
     }
 
     return skt;
@@ -586,7 +618,7 @@ void *open_relay(void *data)
     int ret = -1;
 
     // Open an incoming port from the console
-    int from_console = open_socket(port);
+    int from_console = open_socket(0, port);
     if (from_console == -1) {
         goto close;
     }
@@ -594,7 +626,7 @@ void *open_relay(void *data)
     setsockopt(from_console, SOL_SOCKET, SO_BINDTODEVICE, info->wireless_interface, strlen(info->wireless_interface));
 
     // Open an incoming port from the frontend
-    int from_frontend = open_socket(port + 100);
+    int from_frontend = open_socket(info->local, port + 100);
     if (from_frontend == -1) {
         goto close_console_connection;
     }
@@ -631,13 +663,14 @@ close:
     return THREADRESULT(ret);
 }
 
-void create_all_relays(const char *wireless_interface)
+void create_all_relays(int local, const char *wireless_interface)
 {
     pthread_t vid_thread, aud_thread, msg_thread, cmd_thread, hid_thread;
     struct relay_info vid_info, aud_info, msg_info, cmd_info, hid_info;
 
-    // Set wireless interface on all
+    // Set common info for all
     vid_info.wireless_interface = aud_info.wireless_interface = msg_info.wireless_interface = cmd_info.wireless_interface = hid_info.wireless_interface = wireless_interface;
+    vid_info.local = aud_info.local = msg_info.local = cmd_info.local = hid_info.local = local;
     
     vid_info.port = PORT_VID;
     aud_info.port = PORT_AUD;
@@ -670,9 +703,7 @@ void *thread_handler(void *data)
     
     free(args);
 
-    pthread_mutex_lock(&running_mutex);
-    running = 0;
-    pthread_mutex_unlock(&running_mutex);
+    interrupt();
 
     // Locked by calling thread
     pthread_mutex_unlock(&action_mutex);
@@ -751,14 +782,14 @@ int create_connect_config(const char *input_config, const char *bssid)
     FILE *in_file = fopen(input_config, "r");
     if (!in_file) {
         print_info("FAILED TO OPEN INPUT CONFIG FILE");
-        return VANILLA_ERROR;
+        return VANILLA_ERR_GENERIC;
     }
     
     FILE *out_file = fopen(get_wireless_connect_config_filename(), "w");
     if (!out_file) {
         print_info("FAILED TO OPEN OUTPUT CONFIG FILE");
         fclose(in_file);
-        return VANILLA_ERROR;
+        return VANILLA_ERR_GENERIC;
     }
 
     int len;
@@ -799,6 +830,13 @@ void *sync_with_console_internal(void *data)
         // Request scan from hardware
         while (1) {
             if (is_interrupted()) goto exit_loop;
+
+            uint32_t cc = htonl(VANILLA_PIPE_CC_SYNC_PING);
+            if (send(args->skt, &cc, sizeof(cc), MSG_NOSIGNAL) == -1) {
+                // Client has probably disconnected
+                interrupt();
+                goto exit_loop;
+            }
 
             // print_info("SCANNING");
             actual_buf_len = buf_len;
@@ -884,7 +922,7 @@ void *sync_with_console_internal(void *data)
     } while (!found_console);
 
 exit_loop:
-    return THREADRESULT(found_console ? VANILLA_SUCCESS : VANILLA_ERROR);
+    return THREADRESULT(found_console ? VANILLA_SUCCESS : VANILLA_ERR_GENERIC);
 }
 
 void *do_connect(void *data)
@@ -896,7 +934,7 @@ void *do_connect(void *data)
             sleep(2);
             print_info("WAITING FOR CONNECTION");
 
-            if (is_interrupted()) return THREADRESULT(VANILLA_ERROR);
+            if (is_interrupted()) return THREADRESULT(VANILLA_ERR_GENERIC);
         }
 
         char buf[1024];
@@ -911,7 +949,7 @@ void *do_connect(void *data)
             break;
         }
 
-        if (is_interrupted()) return THREADRESULT(VANILLA_ERROR);
+        if (is_interrupted()) return THREADRESULT(VANILLA_ERR_GENERIC);
     }
 
     print_info("CONNECTED TO CONSOLE");
@@ -926,7 +964,7 @@ void *do_connect(void *data)
         print_info("DHCP ESTABLISHED");
     }
 
-    create_all_relays(args->wireless_interface);
+    create_all_relays(args->local, args->wireless_interface);
 
     int kill_ret = kill(dhclient_pid, SIGTERM);
     print_info("KILLING DHCLIENT %i", dhclient_pid);
@@ -945,7 +983,7 @@ void *vanilla_sync_with_console(void *data)
     config = fopen(wireless_conf_file, "w");
     if (!config) {
         print_info("FAILED TO WRITE TEMP CONFIG: %s", wireless_conf_file);
-        return THREADRESULT(VANILLA_ERROR);
+        return THREADRESULT(VANILLA_ERR_GENERIC);
     }
 
     fprintf(config, "ctrl_interface=%s\nupdate_config=1\n", wpa_ctrl_interface);
@@ -972,9 +1010,12 @@ void *vanilla_connect_to_console(void *data)
     return wpa_setup_environment(args);
 }
 
-void vanilla_listen(const char *wireless_interface)
+void vanilla_listen(int local, const char *wireless_interface)
 {
-    int skt = open_socket(VANILLA_PIPE_CMD_SERVER_PORT);
+    // Ensure local domain sockets can be written to by everyone
+    umask(0000);
+
+    int skt = open_socket(local, VANILLA_PIPE_CMD_PORT);
     if (skt == -1) {
         pprint("Failed to open server socket\n");
         return;
@@ -1013,45 +1054,69 @@ void vanilla_listen(const char *wireless_interface)
         }
         pthread_mutex_unlock(&sync_mutex);
 
-        ssize_t r = recvfrom(skt, &control_code, sizeof(control_code), 0, (struct sockaddr *) &addr, &addr_size);
-        if (r <= 0) {
+        int data_socket = accept(skt, 0, 0);
+        if (data_socket == -1) {
+            if (errno != EAGAIN)
+                print_info("Failed to accept: %i", errno);
             goto repeat_loop;
         }
 
-        control_code = ntohl(control_code);
+        pthread_mutex_lock(&main_loop_mutex);
 
-        if ((control_code >> 16) == (VANILLA_PIPE_CC_SYNC >> 16) || control_code == VANILLA_PIPE_CC_CONNECT) {
-            print_info("RECEIVED SYNC/CONNECT SIGNAL");
-            
-            if (pthread_mutex_trylock(&action_mutex) == 0) {
-                struct sync_args *args = malloc(sizeof(struct sync_args));
-                args->wireless_interface = wireless_interface;
-                args->code = control_code & 0xFFFF;
-                args->start_routine = (control_code == VANILLA_PIPE_CC_CONNECT) ? vanilla_connect_to_console : vanilla_sync_with_console;
-            
-                client_address = addr.sin_addr;
+        while (main_loop) {
+            pthread_mutex_unlock(&main_loop_mutex);
 
-                // Acknowledge
-                control_code = htonl(VANILLA_PIPE_CC_BIND_ACK);
-                sendto(skt, &control_code, sizeof(control_code), 0, (struct sockaddr *) &addr, sizeof(addr));
-
-                pthread_t thread;
-                int thread_ret;
-                if (pthread_create(&thread, NULL, thread_handler, args) != 0) {
-                    print_info("FAILED TO CREATE THREAD");
-                    free(args);
-                }
-            } else {
-                // Busy
-                control_code = htonl(VANILLA_PIPE_CC_BUSY);
-                sendto(skt, &control_code, sizeof(control_code), 0, (struct sockaddr *) &addr, sizeof(addr));
+            // ssize_t r = recvfrom(skt, &control_code, sizeof(control_code), 0, (struct sockaddr *) &addr, &addr_size);
+            ssize_t r = read(data_socket, &control_code, sizeof(control_code));
+            if (r <= 0) {
+                break;
             }
-        } else if (control_code == VANILLA_PIPE_CC_UNBIND) {
-            print_info("RECEIVED UNBIND SIGNAL");
-            pthread_mutex_lock(&running_mutex);
-            running = 0;
-            pthread_mutex_unlock(&running_mutex);
+
+            control_code = ntohl(control_code);
+
+            if ((control_code >> 16) == (VANILLA_PIPE_CC_SYNC >> 16) || control_code == VANILLA_PIPE_CC_CONNECT) {
+                if (pthread_mutex_trylock(&action_mutex) == 0) {
+                    struct sync_args *args = malloc(sizeof(struct sync_args));
+                    args->wireless_interface = wireless_interface;
+                    args->code = control_code & 0xFFFF;
+                    args->local = local;
+                    args->start_routine = (control_code == VANILLA_PIPE_CC_CONNECT) ? vanilla_connect_to_console : vanilla_sync_with_console;
+                    args->skt = data_socket;
+                
+                    client_address = addr.sin_addr;
+
+                    // Acknowledge
+                    control_code = htonl(VANILLA_PIPE_CC_BIND_ACK);
+                    // sendto(skt, &control_code, sizeof(control_code), 0, (struct sockaddr *) &addr, sizeof(addr));
+                    write(data_socket, &control_code, sizeof(control_code));
+
+                    pthread_t thread;
+                    int thread_ret;
+                    if (pthread_create(&thread, NULL, thread_handler, args) != 0) {
+                        print_info("FAILED TO CREATE THREAD");
+                        free(args);
+                    }
+                } else {
+                    // Busy
+                    control_code = htonl(VANILLA_PIPE_CC_BUSY);
+                    // sendto(skt, &control_code, sizeof(control_code), 0, (struct sockaddr *) &addr, sizeof(addr));
+                    write(data_socket, &control_code, sizeof(control_code));
+                }
+            } else if (control_code == VANILLA_PIPE_CC_UNBIND) {
+                print_info("RECEIVED UNBIND SIGNAL");
+                interrupt();
+            }
+
+repeat_read_loop:
+            pthread_mutex_lock(&main_loop_mutex);
         }
+
+        if (data_socket != -1) {
+            close(data_socket);
+            data_socket = -1;
+        }
+
+        pthread_mutex_unlock(&main_loop_mutex);
 
 repeat_loop:
         pthread_mutex_lock(&main_loop_mutex);

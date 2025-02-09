@@ -30,6 +30,7 @@ int vui_reset(vui_context_t *ctx)
     ctx->button_count = 0;
     ctx->label_count = 0;
     ctx->rect_count = 0;
+    ctx->passive_animation_count = 0;
     memset(ctx->images, 0, sizeof(ctx->images));
     ctx->animation_enabled = 0;
     ctx->button_active = -1;
@@ -203,12 +204,29 @@ void vui_cancel_animation(vui_context_t *ctx)
     }
 }
 
+int vui_start_passive_animation(vui_context_t *ctx, vui_anim_step_callback_t step, void *step_data)
+{
+    int cur_anim = ctx->passive_animation_count;
+    if (cur_anim == MAX_BUTTON_COUNT) {
+        return -1;
+    }
+
+    ctx->passive_animation_count++;
+    
+    // Set layer defaults
+    vui_animation_t *a = &ctx->passive_animations[cur_anim];
+    a->step = step;
+    a->step_data = step_data;
+    gettimeofday(&a->start_time, NULL);
+    
+    return cur_anim;
+}
+
 void vui_start_animation(vui_context_t *ctx, int64_t length, vui_anim_step_callback_t step, void *step_data, vui_callback_t complete, void *complete_data)
 {
     vui_cancel_animation(ctx);
 
     ctx->animation_enabled = 1;
-    ctx->animation.progress = 0;
     ctx->animation.length = length;
     ctx->animation.step = step;
     ctx->animation.step_data = step_data;
@@ -222,10 +240,10 @@ void vui_start_animation(vui_context_t *ctx, int64_t length, vui_anim_step_callb
 
 void vui_update(vui_context_t *ctx)
 {
-    if (ctx->animation_enabled) {
-        struct timeval now;
-        gettimeofday(&now, NULL);
+    struct timeval now;
+    gettimeofday(&now, NULL);
 
+    if (ctx->animation_enabled) {
         int64_t diff = (now.tv_sec - ctx->animation.start_time.tv_sec) * 1000000 + (now.tv_usec - ctx->animation.start_time.tv_usec);
         
         if (diff > ctx->animation.length) {
@@ -242,6 +260,14 @@ void vui_update(vui_context_t *ctx)
             if (ctx->animation.complete) {
                 ctx->animation.complete(ctx, ctx->animation.complete_data);
             }
+        }
+    }
+
+    for (int i = 0; i < ctx->passive_animation_count; i++) {
+        vui_animation_t *a = &ctx->passive_animations[i];
+        int64_t diff = (now.tv_sec - a->start_time.tv_sec) * 1000000 + (now.tv_usec - a->start_time.tv_usec);
+        if (a->step) {
+            a->step(ctx, diff, a->step_data);
         }
     }
 }
@@ -318,11 +344,17 @@ int vui_label_create(vui_context_t *ctx, int x, int y, int w, int h, const char 
     lbl->size = size;
 
     lbl->layer = layer;
-    vui_strcpy(lbl->text, text);
+    vui_label_update_text(ctx, index, text);
 
     ctx->label_count++;
 
     return index;
+}
+
+int vui_label_update_text(vui_context_t *ctx, int index, const char *text)
+{
+    vui_label_t *lbl = &ctx->labels[index];
+    vui_strcpy(lbl->text, text);
 }
 
 int vui_rect_create(vui_context_t *ctx, int x, int y, int w, int h, int border_radius, vui_color_t color, int layer)

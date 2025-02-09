@@ -12,6 +12,7 @@
 #include <string.h>
 #include <sys/time.h>
 #include <sys/wait.h>
+#include <sys/un.h>
 #include <unistd.h>
 
 #include "audio.h"
@@ -25,83 +26,142 @@
 
 static const uint32_t STOP_CODE = 0xCAFEBABE;
 static uint32_t SERVER_ADDRESS = 0;
-
-uint16_t PORT_MSG;
-uint16_t PORT_VID;
-uint16_t PORT_AUD;
-uint16_t PORT_HID;
-uint16_t PORT_CMD;
+static const int MAX_PIPE_RETRY = 5;
 
 #define EVENT_BUFFER_SIZE 65536
 #define EVENT_BUFFER_ARENA_SIZE VANILLA_MAX_EVENT_COUNT * 2
 uint8_t *EVENT_BUFFER_ARENA[EVENT_BUFFER_ARENA_SIZE] = {0};
 pthread_mutex_t event_buffer_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-void send_to_console(int fd, const void *data, size_t data_size, int port)
+in_addr_t get_real_server_address()
 {
-    struct sockaddr_in address;
-    address.sin_family = AF_INET;
-    address.sin_addr.s_addr = SERVER_ADDRESS;
-    address.sin_port = htons((uint16_t) (port - 100));
+    if (SERVER_ADDRESS == VANILLA_ADDRESS_DIRECT) {
+        // The Wii U always places itself at this address
+        return inet_addr("192.168.1.10");
+    } else if (SERVER_ADDRESS != VANILLA_ADDRESS_LOCAL) {
+        // If there's a remote pipe, we send to that
+        return htonl(SERVER_ADDRESS);
+    }
 
-    ssize_t sent = sendto(fd, data, data_size, 0, (const struct sockaddr *) &address, sizeof(address));
-    if (sent == -1) {
-        char ip[INET_ADDRSTRLEN];
-        inet_ntop(AF_INET, &address.sin_addr, ip, INET_ADDRSTRLEN);
-        print_info("Failed to send to Wii U socket: address: %s, fd: %d, port: %d, errno: %i", ip, fd, port - 100, errno);
+    // Must be local, in which case we don't care
+    return INADDR_ANY;
+}
+
+void create_sockaddr(struct sockaddr_in *in, struct sockaddr_un *un, const struct sockaddr **addr, size_t *size, in_addr_t inaddr, uint16_t port)
+{
+    if (SERVER_ADDRESS == VANILLA_ADDRESS_LOCAL) {
+        memset(un, 0, sizeof(struct sockaddr_un));
+        un->sun_family = AF_UNIX;
+        snprintf(un->sun_path, sizeof(un->sun_path) - 1, VANILLA_PIPE_LOCAL_SOCKET, port);
+
+        if (size) *size = sizeof(struct sockaddr_un);
+        if (addr) *addr = (const struct sockaddr *) un;
+    } else {
+        memset(in, 0, sizeof(struct sockaddr_in));
+        in->sin_family = AF_INET;
+        in->sin_port = htons(port);
+        in->sin_addr.s_addr = inaddr;
+        
+        if (size) *size = sizeof(struct sockaddr_in);
+        if (addr) *addr = (const struct sockaddr *) in;
     }
 }
 
-int create_socket(int *socket_out, uint16_t port)
+void send_to_console(int fd, const void *data, size_t data_size, uint16_t port)
 {
-    struct sockaddr_in address;
-    address.sin_family = AF_INET;
-    address.sin_addr.s_addr = INADDR_ANY;
-    address.sin_port = htons(port);
+    struct sockaddr_in in;
+    struct sockaddr_un un;
+    const struct sockaddr *addr;
+    size_t addr_size;
 
-    int skt = socket(AF_INET, SOCK_DGRAM, 0);
-    if (skt == -1) {
-        print_info("FAILED TO CREATE SOCKET FOR PORT %i", port);
-        return 0;
+    in_port_t console_port = port - 100;
+
+    create_sockaddr(&in, &un, &addr, &addr_size, get_real_server_address(), console_port);
+
+    ssize_t sent = sendto(fd, data, data_size, 0, addr, addr_size);
+    if (sent == -1) {
+        print_info("Failed to send to Wii U socket: fd: %d, port: %d, errno: %i", fd, console_port, errno);
     }
+}
 
+int create_socket(int *socket_out, in_port_t port)
+{
+    int skt = -1;
+    struct sockaddr_un un;
+    struct sockaddr_in in;
+    
+    create_sockaddr(&in, &un, 0, 0, INADDR_ANY, port);
+    
+    if (SERVER_ADDRESS == VANILLA_ADDRESS_LOCAL) {
+        skt = socket(AF_UNIX, SOCK_STREAM, 0);
+        if (skt == -1) {
+            print_info("FAILED TO CREATE SOCKET: %i", errno);
+            return VANILLA_ERR_BAD_SOCKET;
+        }
+
+        if (connect(skt, (const struct sockaddr *) &un, sizeof(un)) == -1) {
+            print_info("FAILED TO CONNECT TO LOCAL SOCKET %u: %i", port, errno);
+            close(skt);
+            return VANILLA_ERR_PIPE_UNRESPONSIVE;
+        }
+
+        print_info("SUCCESSFULLY CONNECTED SOCKET TO PATH %s", un.sun_path);
+    } else {
+        in.sin_addr.s_addr = INADDR_ANY;
+        skt = socket(AF_INET, SOCK_DGRAM, 0);
+        if (skt == -1) {
+            print_info("FAILED TO CREATE SOCKET: %i", errno);
+            return VANILLA_ERR_BAD_SOCKET;
+        }
+
+        if (bind(skt, (const struct sockaddr *) &in, sizeof(in)) == -1) {
+            print_info("FAILED TO BIND PORT %u: %i", port, errno);
+            close(skt);
+            return VANILLA_ERR_BAD_SOCKET;
+        }
+
+        print_info("SUCCESSFULLY BOUND SOCKET ON PORT %i", port);
+    }
+    
     (*socket_out) = skt;
     
-    if (bind((*socket_out), (const struct sockaddr *) &address, sizeof(address)) == -1) {
-        print_info("FAILED TO BIND PORT %u: %i", port, errno);
-        return 0;
-    }
-
-    print_info("SUCCESSFULLY BOUND SOCKET %i on PORT %i", skt, port);
-    return 1;
+    return VANILLA_SUCCESS;
 }
 
 void send_stop_code(int from_socket, in_port_t port)
 {
-    struct sockaddr_in address;
-    address.sin_family = AF_INET;
-    address.sin_addr.s_addr = inet_addr("127.0.0.1");
+    struct sockaddr_in in;
+    struct sockaddr_un un;
+    const struct sockaddr *addr;
+    size_t addr_size;
 
-    address.sin_port = htons(port);
-    sendto(from_socket, &STOP_CODE, sizeof(STOP_CODE), 0, (struct sockaddr *)&address, sizeof(address));
+    // FIXME: There are probably better ways of stopping the sockets than this
+
+    create_sockaddr(&in, &un, &addr, &addr_size, inet_addr("127.0.0.1"), htons(port));
+    sendto(from_socket, &STOP_CODE, sizeof(STOP_CODE), 0, addr, addr_size);
 }
 
 int send_pipe_cc(int skt, uint32_t cc, int wait_for_reply)
 {
-    struct sockaddr_in addr = {0};
+    struct sockaddr_in in;
+    struct sockaddr_un un;
+    const struct sockaddr *addr;
+    size_t addr_size;
 
-    addr.sin_family = AF_INET;
-    addr.sin_addr.s_addr = SERVER_ADDRESS;
-    addr.sin_port = htons(VANILLA_PIPE_CMD_SERVER_PORT);
+    create_sockaddr(&in, &un, &addr, &addr_size, get_real_server_address(), VANILLA_PIPE_CMD_PORT);
 
     ssize_t read_size;
     uint32_t send_cc = htonl(cc);
     uint32_t recv_cc;
 
-    do {
-        sendto(skt, &send_cc, sizeof(send_cc), 0, (struct sockaddr *) &addr, sizeof(addr));
+    for (int retries = 0; retries < MAX_PIPE_RETRY; retries++) {
+        // sendto(skt, &send_cc, sizeof(send_cc), 0, addr, addr_size);
+        if (write(skt, &send_cc, sizeof(send_cc)) == -1) {
+            print_info("Failed to write control code to socket");
+            return 0;
+        }
 
-        if (!wait_for_reply) {
+        if (!wait_for_reply || is_interrupted()) {
             return 1;
         }
         
@@ -110,8 +170,10 @@ int send_pipe_cc(int skt, uint32_t cc, int wait_for_reply)
             return 1;
         }
 
+        print_info("STILL WAITING FOR REPLY");
+
         sleep(1);
-    } while (!is_interrupted());
+    }
     
     return 0;
 }
@@ -119,9 +181,10 @@ int send_pipe_cc(int skt, uint32_t cc, int wait_for_reply)
 int connect_to_backend(int *socket, uint32_t cc)
 {
     // Try to bind with backend
-    int pipe_cc_skt;
-    if (!create_socket(&pipe_cc_skt, VANILLA_PIPE_CMD_CLIENT_PORT)) {
-        return VANILLA_ERROR;
+    int pipe_cc_skt = -1;
+    int ret = create_socket(&pipe_cc_skt, VANILLA_PIPE_CMD_PORT);
+    if (ret != VANILLA_SUCCESS) {
+        return ret;
     }
 
     struct timeval tv = {0};
@@ -131,7 +194,7 @@ int connect_to_backend(int *socket, uint32_t cc)
     if (!send_pipe_cc(pipe_cc_skt, cc, 1)) {
         print_info("FAILED TO BIND TO PIPE");
         close(pipe_cc_skt);
-        return VANILLA_ERROR;
+        return VANILLA_ERR_PIPE_UNRESPONSIVE;
     }
 
     *socket = pipe_cc_skt;
@@ -139,79 +202,67 @@ int connect_to_backend(int *socket, uint32_t cc)
     return VANILLA_SUCCESS;
 }
 
-int sync_internal(uint16_t code, uint32_t server_address)
+void sync_internal(thread_data_t *data)
 {
     clear_interrupt();
-    
-    if (server_address == 0) {
-        SERVER_ADDRESS = inet_addr("192.168.1.10");
-    } else {
-        SERVER_ADDRESS = htonl(server_address);
-    }
 
-    int skt = 0;
-    int ret = VANILLA_ERROR;
-    if (server_address != 0) {
-        ret = connect_to_backend(&skt, VANILLA_PIPE_SYNC_CODE(code));
-        if (ret != VANILLA_SUCCESS) {
-            goto exit;
-        }
-    }
+    SERVER_ADDRESS = data->server_address;
 
-    // Wait for sync result from pipe
-    uint32_t recv_cc;
-    while (1) {
-        ssize_t read_size = recv(skt, &recv_cc, sizeof(recv_cc), 0);
-        if (read_size == sizeof(recv_cc)) {
-            recv_cc = ntohl(recv_cc);
-            if (recv_cc >> 8 == VANILLA_PIPE_CC_SYNC_STATUS >> 8) {
-                ret = recv_cc & 0xFF;
+    uint16_t code = (uintptr_t) data->thread_data;
+
+    int skt = -1;
+    int ret = connect_to_backend(&skt, VANILLA_PIPE_SYNC_CODE(code));
+
+    if (ret == VANILLA_SUCCESS) {
+        // Wait for sync result from pipe
+        uint32_t recv_cc;
+        ret = VANILLA_ERR_PIPE_UNRESPONSIVE;
+        for (int retries = 0; retries < MAX_PIPE_RETRY; retries++) {
+            ssize_t read_size = recv(skt, &recv_cc, sizeof(recv_cc), 0);
+            if (read_size == sizeof(recv_cc)) {
+                recv_cc = ntohl(recv_cc);
+                if (recv_cc >> 8 == VANILLA_PIPE_CC_SYNC_STATUS >> 8) {
+                    ret = recv_cc & 0xFF;
+                    break;
+                } else if (recv_cc == VANILLA_PIPE_CC_SYNC_PING) {
+                    // Pipe is still responsive but hasn't found anything yet
+                    printf("received ping from pipe\n");
+                    retries = -1;
+                }
+            }
+
+            if (is_interrupted()) {
+                send_pipe_cc(skt, VANILLA_PIPE_CC_UNBIND, 0);
                 break;
             }
         }
+    }
 
-        if (is_interrupted()) {
-            send_pipe_cc(skt, VANILLA_PIPE_CC_UNBIND, 0);
-            break;
-        }
+    push_event(data->event_loop, VANILLA_EVENT_SYNC, &ret, sizeof(ret));
+
+    // Wait for interrupt so frontend has a chance to receive event
+    while (!is_interrupted()) {
+        usleep(100000);
     }
 
 exit_pipe:
-    if (skt)
+    if (skt != -1)
         close(skt);
-
-exit:
-    return ret;
 }
 
-int connect_as_gamepad_internal(event_loop_t *event_loop, uint32_t server_address)
+void connect_as_gamepad_internal(thread_data_t *data)
 {
     clear_interrupt();
 
-    PORT_MSG = 50110;
-    PORT_VID = 50120;
-    PORT_AUD = 50121;
-    PORT_HID = 50122;
-    PORT_CMD = 50123;
-
-    if (server_address == 0) {
-        SERVER_ADDRESS = inet_addr("192.168.1.10");
-    } else {
-        SERVER_ADDRESS = htonl(server_address);
-        PORT_MSG += 200;
-        PORT_VID += 200;
-        PORT_AUD += 200;
-        PORT_HID += 200;
-        PORT_CMD += 200;
-    }
+    SERVER_ADDRESS = data->server_address;
 
     gamepad_context_t info;
-    info.event_loop = event_loop;
+    info.event_loop = data->event_loop;
 
-    int ret = VANILLA_ERROR;
+    int ret = VANILLA_ERR_GENERIC;
 
     int pipe_cc_skt = 0;
-    if (server_address != 0) {
+    if (SERVER_ADDRESS != 0) {
         ret = connect_to_backend(&pipe_cc_skt, VANILLA_PIPE_CC_CONNECT);
         if (ret != VANILLA_SUCCESS) {
             goto exit;
@@ -219,11 +270,11 @@ int connect_as_gamepad_internal(event_loop_t *event_loop, uint32_t server_addres
     }
 
     // Open all required sockets
-    if (!create_socket(&info.socket_vid, PORT_VID)) goto exit_pipe;
-    if (!create_socket(&info.socket_msg, PORT_MSG)) goto exit_vid;
-    if (!create_socket(&info.socket_hid, PORT_HID)) goto exit_msg;
-    if (!create_socket(&info.socket_aud, PORT_AUD)) goto exit_hid;
-    if (!create_socket(&info.socket_cmd, PORT_CMD)) goto exit_aud;
+    if (create_socket(&info.socket_vid, PORT_VID) != VANILLA_SUCCESS) goto exit_pipe;
+    if (create_socket(&info.socket_msg, PORT_MSG) != VANILLA_SUCCESS) goto exit_vid;
+    if (create_socket(&info.socket_hid, PORT_HID) != VANILLA_SUCCESS) goto exit_msg;
+    if (create_socket(&info.socket_aud, PORT_AUD) != VANILLA_SUCCESS) goto exit_hid;
+    if (create_socket(&info.socket_cmd, PORT_CMD) != VANILLA_SUCCESS) goto exit_aud;
 
     pthread_t video_thread, audio_thread, input_thread, msg_thread, cmd_thread;
 
@@ -255,7 +306,7 @@ int connect_as_gamepad_internal(event_loop_t *event_loop, uint32_t server_addres
     pthread_join(input_thread, NULL);
     pthread_join(cmd_thread, NULL);
 
-    if (server_address != 0) {
+    if (SERVER_ADDRESS != 0) {
         send_pipe_cc(pipe_cc_skt, VANILLA_PIPE_CC_UNBIND, 0);
     }
 
@@ -281,7 +332,7 @@ exit_pipe:
         close(pipe_cc_skt);
 
 exit:
-    return ret;
+    // TODO: Return error code to frontend?
 }
 
 int is_stop_code(const char *data, size_t data_length)
@@ -301,7 +352,7 @@ int push_event(event_loop_t *loop, int type, const void *data, size_t size)
         ev->data = get_event_buffer();
         if (!ev->data) {
             print_info("OUT OF MEMORY FOR NEW EVENTS");
-            return VANILLA_ERROR;
+            return VANILLA_ERR_OUT_OF_MEMORY;
         }
         
         ev->type = type;

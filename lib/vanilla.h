@@ -9,12 +9,17 @@ extern "C" {
 #include <stddef.h>
 #include <stdint.h>
 
-static const int VANILLA_SUCCESS           =  0;
-static const int VANILLA_ERROR             = -1;
-static const int VANILLA_READY             = -2;
-static const int VANILLA_INFO              = -3;
-static const int VANILLA_UNKNOWN_COMMAND   = -4;
-static const int VANILLA_INVALID_ARGUMENT  = -5;
+static const int VANILLA_SUCCESS                    =  0;
+static const int VANILLA_ERR_GENERIC                = -1;
+static const int VANILLA_ERR_UNKNOWN_COMMAND        = -2;
+static const int VANILLA_ERR_INVALID_ARGUMENT       = -3;
+static const int VANILLA_ERR_PIPE_UNRESPONSIVE      = -4;
+static const int VANILLA_ERR_OUT_OF_MEMORY          = -5;
+static const int VANILLA_ERR_BUSY                   = -6;
+static const int VANILLA_ERR_BAD_SOCKET             = -7;
+
+static const uint32_t VANILLA_ADDRESS_LOCAL = 0xFFFFFFFF;
+static const uint32_t VANILLA_ADDRESS_DIRECT = 0x0;
 
 enum VanillaGamepadButtons
 {
@@ -63,7 +68,8 @@ enum VanillaEvent
     VANILLA_EVENT_NONE,
     VANILLA_EVENT_VIDEO,
     VANILLA_EVENT_AUDIO,
-    VANILLA_EVENT_VIBRATE
+    VANILLA_EVENT_VIBRATE,
+    VANILLA_EVENT_SYNC
 };
 
 enum VanillaRegion
@@ -136,7 +142,7 @@ void vanilla_set_button(int button, int32_t value);
  *
  * This can be called from another thread to change the button state while vanilla_connect_to_console() is running.
  *
- * `x` and `y` are expected to be in gamepad screen coordinates (0x0 to 853x479).
+ * `x` and `y` are expected to be in gamepad screen coordinates (0x0 to 853x479 inclusive).
  * If either `x` or `y` are -1, this point will be disabled.
  */
 void vanilla_set_touch(int x, int y);
