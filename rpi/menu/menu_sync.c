@@ -171,7 +171,7 @@ void start_syncing(vui_context_t *vui, void *v)
 
 void start_syncing_or_sudo(vui_context_t *vui, void *v)
 {
-    const int sudo_required = 1;
+    const int sudo_required = 0;
     if (sudo_required) {
         vpi_menu_sudo(vui, start_syncing, v, vpi_menu_sync, (void *) (intptr_t) 1);
     } else {

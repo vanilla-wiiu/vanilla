@@ -30,11 +30,8 @@ const char *wpa_ctrl_interface = "/var/run/wpa_supplicant_drc";
 pthread_mutex_t running_mutex;
 pthread_mutex_t main_loop_mutex;
 pthread_mutex_t action_mutex;
-pthread_mutex_t sync_mutex;
 int running = 0;
 int main_loop = 0;
-int sync_result_ready = 0;
-uint8_t sync_result = 0;
 
 typedef struct {
     int from_socket;
@@ -50,6 +47,8 @@ struct sync_args {
     const char *wireless_interface;
     const char *wireless_config;
     uint16_t code;
+    unsigned char bssid[6];
+    unsigned char psk[32];
     void *(*start_routine)(void *);
     struct wpa_ctrl *ctrl;
     int local;
@@ -714,24 +713,9 @@ void *thread_handler(void *data)
 char wireless_authenticate_config_filename[1024] = {0};
 char wireless_connect_config_filename[1024] = {0};
 
-size_t get_home_directory(char *buf, size_t buf_size)
-{
-    size_t ret = snprintf(buf, buf_size, "%s/%s", getenv("HOME"), ".vanilla");
-    if (ret <= buf_size) {
-        mkdir(buf, 0755);
-    }
-    return ret;
-}
-
 size_t get_home_directory_file(const char *filename, char *buf, size_t buf_size)
 {
-    size_t max_path_length = get_max_path_length();
-    char *dir = malloc(max_path_length);
-    get_home_directory(dir, max_path_length);
-
-    size_t ret = snprintf(buf, buf_size, "%s/%s", dir, filename);
-    free(dir);
-    return ret;
+    return snprintf(buf, buf_size, "/tmp/%s", filename);
 }
 
 size_t get_max_path_length()
@@ -777,37 +761,71 @@ size_t read_line_from_file(FILE *file, char *output, size_t max_output_size)
     return read_line_from_fd(fileno(file), output, max_output_size);
 }
 
-int create_connect_config(const char *input_config, const char *bssid)
+void str_to_bytes(const char *str, int advance, unsigned char *output, size_t output_size)
 {
-    FILE *in_file = fopen(input_config, "r");
-    if (!in_file) {
-        print_info("FAILED TO OPEN INPUT CONFIG FILE");
-        return VANILLA_ERR_GENERIC;
+    char c[3];
+    c[2] = 0;
+    for (size_t i = 0; i < output_size; i++) {
+        memcpy(c, str + i * (2 + advance), 2);
+        output[i] = strtoul(c, 0, 16);
     }
-    
-    FILE *out_file = fopen(get_wireless_connect_config_filename(), "w");
+}
+
+void bytes_to_str(unsigned char *data, size_t data_size, const char *separator, char *output)
+{
+    size_t output_advance = 0;
+    size_t separator_size = separator ? strlen(separator) : 0;
+    for (size_t i = 0; i < data_size; i++) {
+        unsigned char byte = data[i];
+        sprintf(output + output_advance, "%x", byte & 0xFF);
+        output_advance += 2;
+        if (separator_size > 0) {
+            memcpy(output + output_advance, separator, separator_size);
+            output_advance += separator_size;
+        }
+    }
+    output[output_advance] = 0;
+}
+
+int create_connect_config(const char *filename, unsigned char *bssid, unsigned char *psk)
+{   
+    FILE *out_file = fopen(filename, "w");
     if (!out_file) {
         print_info("FAILED TO OPEN OUTPUT CONFIG FILE");
-        fclose(in_file);
         return VANILLA_ERR_GENERIC;
     }
 
-    int len;
-    char buf[150];
-    while (len = read_line_from_file(in_file, buf, sizeof(buf))) {
-        if (memcmp("\tssid=", buf, 6) == 0) {
-            fprintf(out_file, "\tscan_ssid=1\n\tbssid=%s\n", bssid);
-        }
+    static const char *template =
+        "ctrl_interface=/var/run/wpa_supplicant_drc\n"
+        "update_config=1\n"
+        "ap_scan=1\n"
+        "\n"
+        "network={\n"
+        "	scan_ssid=1\n"
+        "	bssid=%s\n"
+        "	ssid=\"%s\"\n"
+        "	psk=%s\n"
+        "	proto=RSN\n"
+        "	key_mgmt=WPA-PSK\n"
+        "	pairwise=CCMP GCMP\n"
+        "	group=CCMP GCMP TKIP\n"
+        "	auth_alg=OPEN\n"
+        "	pbss=2\n"
+        "}\n"
+        "\n";
+    
+    char bssid_str[18];
+    char ssid_str[17];
+    char psk_str[65];
 
-        fwrite(buf, len, 1, out_file);
+    memcpy(ssid_str, "WiiU", 4);
 
-        if (memcmp(buf, "update_config=1", 15) == 0) {
-            static const char *ap_scan_line = "ap_scan=1\n";
-            fwrite(ap_scan_line, strlen(ap_scan_line), 1, out_file);
-        }
-    }
+    // FIXME: Hardcoded sizes
+    bytes_to_str(bssid, 6, 0, ssid_str + 4);
+    bytes_to_str(bssid, 6, ":", bssid_str);
+    bytes_to_str(psk, 32, 0, psk_str);
 
-    fclose(in_file);
+    fprintf(out_file, template, bssid_str, ssid_str, psk_str);
     fclose(out_file);
 
     return VANILLA_SUCCESS;
@@ -820,9 +838,9 @@ void *sync_with_console_internal(void *data)
     char buf[16384];
     const size_t buf_len = sizeof(buf);
 
-    int found_console = 0;
+    int ret = VANILLA_ERR_GENERIC;
     char bssid[18];
-    do {
+    while (1) {
         size_t actual_buf_len;
 
         if (is_interrupted()) goto exit_loop;
@@ -831,8 +849,10 @@ void *sync_with_console_internal(void *data)
         while (1) {
             if (is_interrupted()) goto exit_loop;
 
-            uint32_t cc = htonl(VANILLA_PIPE_CC_SYNC_PING);
-            if (send(args->skt, &cc, sizeof(cc), MSG_NOSIGNAL) == -1) {
+            vanilla_pipe_command_t cmd;
+            cmd.control_code = VANILLA_PIPE_CC_PING;
+
+            if (send(args->skt, &cmd, sizeof(cmd.control_code), MSG_NOSIGNAL) == -1) {
                 // Client has probably disconnected
                 interrupt();
                 goto exit_loop;
@@ -906,23 +926,49 @@ void *sync_with_console_internal(void *data)
                 }
 
                 if (cred_received) {
-                    // Tell wpa_supplicant to save config
+                    vanilla_pipe_command_t cmd;
+                    cmd.control_code = VANILLA_PIPE_CC_SYNC_SUCCESS;
+
+                    // Tell wpa_supplicant to save config (this seems to be the only way to retrieve the PSK)
                     actual_buf_len = buf_len;
                     print_info("SAVING CONFIG", actual_buf_len, buf);
                     wpa_ctrl_command(args->ctrl, "SAVE_CONFIG", buf, &actual_buf_len);
 
-                    // Create connect config which needs a couple more parameters
-                    create_connect_config(get_wireless_authenticate_config_filename(), bssid);
+                    // Retrieve BSSID and PSK from saved config
+                    FILE *in_file = fopen(get_wireless_authenticate_config_filename(), "r");
+                    if (in_file) {
+                        // Convert PSK from string to bytes
+                        int len;
+                        char buf[150];
+                        while (len = read_line_from_file(in_file, buf, sizeof(buf))) {
+                            if (memcmp("\tpsk=", buf, 5) == 0) {
+                                str_to_bytes(buf + 5, 0, cmd.connection.psk, sizeof(cmd.connection.psk));
+                                break;
+                            }
+                        }
 
-                    found_console = 1;
+                        fclose(in_file);
+
+                        // Convert BSSID from string to bytes
+                        str_to_bytes(bssid, 1, cmd.connection.bssid, sizeof(cmd.connection.bssid));
+
+                        write(args->skt, &cmd, sizeof(cmd.control_code) + sizeof(cmd.connection));
+
+                        ret = VANILLA_SUCCESS;
+                    } else {
+                        // TODO: Return error to the frontend
+                        print_info("FAILED TO OPEN INPUT CONFIG FILE TO RETRIEVE PSK");
+                    }
+
+                    goto exit_loop;
                 }
             }
             line = strtok(NULL, "\n");
         }
-    } while (!found_console);
+    }
 
 exit_loop:
-    return THREADRESULT(found_console ? VANILLA_SUCCESS : VANILLA_ERR_GENERIC);
+    return THREADRESULT(ret);
 }
 
 void *do_connect(void *data)
@@ -992,21 +1038,18 @@ void *vanilla_sync_with_console(void *data)
     args->start_routine = sync_with_console_internal;
     args->wireless_config = wireless_conf_file;
 
-    void *ret = wpa_setup_environment(args);
-
-    pthread_mutex_lock(&sync_mutex);
-    sync_result_ready = 1;
-    sync_result = (uint8_t) (uintptr_t) ret;
-    pthread_mutex_unlock(&sync_mutex);
-
-    return ret;
+    return wpa_setup_environment(args);
 }
 
 void *vanilla_connect_to_console(void *data)
 {
     struct sync_args *args = (struct sync_args *) data;
+
     args->start_routine = do_connect;
     args->wireless_config = get_wireless_connect_config_filename();
+
+    create_connect_config(args->wireless_config, args->bssid, args->psk);
+
     return wpa_setup_environment(args);
 }
 
@@ -1020,7 +1063,8 @@ void vanilla_listen(int local, const char *wireless_interface)
         pprint("Failed to open server socket\n");
         return;
     }
-    uint32_t control_code;
+
+    vanilla_pipe_command_t cmd;
 
     struct sockaddr_in addr = {0};
     socklen_t addr_size = sizeof(addr);
@@ -1028,7 +1072,6 @@ void vanilla_listen(int local, const char *wireless_interface)
     pthread_mutex_init(&running_mutex, NULL);
     pthread_mutex_init(&action_mutex, NULL);
     pthread_mutex_init(&main_loop_mutex, NULL);
-    pthread_mutex_init(&sync_mutex, NULL);
 
     signal(SIGINT, sigint_handler);
     signal(SIGTERM, sigint_handler);
@@ -1045,15 +1088,6 @@ void vanilla_listen(int local, const char *wireless_interface)
     while (main_loop) {
         pthread_mutex_unlock(&main_loop_mutex);
 
-        // If we got a sync result
-        pthread_mutex_lock(&sync_mutex);
-        if (sync_result_ready) {
-            control_code = htonl(VANILLA_PIPE_CC_SYNC_STATUS | (sync_result & 0xFF));
-            sendto(skt, &control_code, sizeof(control_code), 0, (struct sockaddr *) &addr, sizeof(addr));
-            sync_result_ready = 0;
-        }
-        pthread_mutex_unlock(&sync_mutex);
-
         int data_socket = accept(skt, 0, 0);
         if (data_socket == -1) {
             if (errno != EAGAIN)
@@ -1067,28 +1101,33 @@ void vanilla_listen(int local, const char *wireless_interface)
             pthread_mutex_unlock(&main_loop_mutex);
 
             // ssize_t r = recvfrom(skt, &control_code, sizeof(control_code), 0, (struct sockaddr *) &addr, &addr_size);
-            ssize_t r = read(data_socket, &control_code, sizeof(control_code));
+            ssize_t r = read(data_socket, &cmd, sizeof(cmd));
             if (r <= 0) {
                 break;
             }
 
-            control_code = ntohl(control_code);
-
-            if ((control_code >> 16) == (VANILLA_PIPE_CC_SYNC >> 16) || control_code == VANILLA_PIPE_CC_CONNECT) {
+            if (cmd.control_code == VANILLA_PIPE_CC_SYNC || cmd.control_code == VANILLA_PIPE_CC_CONNECT) {
                 if (pthread_mutex_trylock(&action_mutex) == 0) {
                     struct sync_args *args = malloc(sizeof(struct sync_args));
                     args->wireless_interface = wireless_interface;
-                    args->code = control_code & 0xFFFF;
                     args->local = local;
-                    args->start_routine = (control_code == VANILLA_PIPE_CC_CONNECT) ? vanilla_connect_to_console : vanilla_sync_with_console;
                     args->skt = data_socket;
+
+                    if (cmd.control_code == VANILLA_PIPE_CC_SYNC) {
+                        args->code = ntohs(cmd.sync.code);
+                        args->start_routine = vanilla_sync_with_console;
+                    } else {
+                        memcpy(args->bssid, cmd.connection.bssid, sizeof(cmd.connection.bssid));
+                        memcpy(args->psk, cmd.connection.psk, sizeof(cmd.connection.psk));
+                        args->start_routine = vanilla_connect_to_console;
+                    }
                 
                     client_address = addr.sin_addr;
 
                     // Acknowledge
-                    control_code = htonl(VANILLA_PIPE_CC_BIND_ACK);
+                    cmd.control_code = VANILLA_PIPE_CC_BIND_ACK;
                     // sendto(skt, &control_code, sizeof(control_code), 0, (struct sockaddr *) &addr, sizeof(addr));
-                    write(data_socket, &control_code, sizeof(control_code));
+                    write(data_socket, &cmd, sizeof(cmd.control_code));
 
                     pthread_t thread;
                     int thread_ret;
@@ -1098,11 +1137,11 @@ void vanilla_listen(int local, const char *wireless_interface)
                     }
                 } else {
                     // Busy
-                    control_code = htonl(VANILLA_PIPE_CC_BUSY);
+                    cmd.control_code = VANILLA_PIPE_CC_BUSY;
                     // sendto(skt, &control_code, sizeof(control_code), 0, (struct sockaddr *) &addr, sizeof(addr));
-                    write(data_socket, &control_code, sizeof(control_code));
+                    write(data_socket, &cmd, sizeof(cmd.control_code));
                 }
-            } else if (control_code == VANILLA_PIPE_CC_UNBIND) {
+            } else if (cmd.control_code == VANILLA_PIPE_CC_UNBIND) {
                 print_info("RECEIVED UNBIND SIGNAL");
                 interrupt();
             }
@@ -1129,7 +1168,6 @@ repeat_loop:
     signal(SIGTERM, SIG_DFL);
     pthread_kill(stdin_thread, SIGINT);
 
-    pthread_mutex_destroy(&sync_mutex);
     pthread_mutex_destroy(&main_loop_mutex);
     pthread_mutex_destroy(&action_mutex);
     pthread_mutex_destroy(&running_mutex);

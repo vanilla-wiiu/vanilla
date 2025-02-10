@@ -141,7 +141,7 @@ void send_stop_code(int from_socket, in_port_t port)
     sendto(from_socket, &STOP_CODE, sizeof(STOP_CODE), 0, addr, addr_size);
 }
 
-int send_pipe_cc(int skt, uint32_t cc, int wait_for_reply)
+int send_pipe_cc(int skt, vanilla_pipe_command_t *cmd, size_t cmd_size, int wait_for_reply)
 {
     struct sockaddr_in in;
     struct sockaddr_un un;
@@ -151,12 +151,11 @@ int send_pipe_cc(int skt, uint32_t cc, int wait_for_reply)
     create_sockaddr(&in, &un, &addr, &addr_size, get_real_server_address(), VANILLA_PIPE_CMD_PORT);
 
     ssize_t read_size;
-    uint32_t send_cc = htonl(cc);
     uint32_t recv_cc;
 
     for (int retries = 0; retries < MAX_PIPE_RETRY; retries++) {
         // sendto(skt, &send_cc, sizeof(send_cc), 0, addr, addr_size);
-        if (write(skt, &send_cc, sizeof(send_cc)) == -1) {
+        if (write(skt, cmd, cmd_size) == -1) {
             print_info("Failed to write control code to socket");
             return 0;
         }
@@ -166,7 +165,7 @@ int send_pipe_cc(int skt, uint32_t cc, int wait_for_reply)
         }
         
         read_size = recv(skt, &recv_cc, sizeof(recv_cc), 0);
-        if (read_size == sizeof(recv_cc) && ntohl(recv_cc) == VANILLA_PIPE_CC_BIND_ACK) {
+        if (recv_cc == VANILLA_PIPE_CC_BIND_ACK) {
             return 1;
         }
 
@@ -178,7 +177,14 @@ int send_pipe_cc(int skt, uint32_t cc, int wait_for_reply)
     return 0;
 }
 
-int connect_to_backend(int *socket, uint32_t cc)
+int send_unbind_cc(int skt)
+{
+    vanilla_pipe_command_t cmd;
+    cmd.control_code = VANILLA_PIPE_CC_UNBIND;
+    return send_pipe_cc(skt, &cmd, sizeof(cmd.control_code), 0);
+}
+
+int connect_to_backend(int *socket, vanilla_pipe_command_t *cmd, size_t cmd_size)
 {
     // Try to bind with backend
     int pipe_cc_skt = -1;
@@ -191,7 +197,7 @@ int connect_to_backend(int *socket, uint32_t cc)
     tv.tv_sec = 2;
     setsockopt(pipe_cc_skt, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
 
-    if (!send_pipe_cc(pipe_cc_skt, cc, 1)) {
+    if (!send_pipe_cc(pipe_cc_skt, cmd, cmd_size, 1)) {
         print_info("FAILED TO BIND TO PIPE");
         close(pipe_cc_skt);
         return VANILLA_ERR_PIPE_UNRESPONSIVE;
@@ -210,29 +216,39 @@ void sync_internal(thread_data_t *data)
 
     uint16_t code = (uintptr_t) data->thread_data;
 
+    vanilla_pipe_command_t cmd;
+    cmd.control_code = VANILLA_PIPE_CC_SYNC;
+    cmd.sync.code = htons(code);
+
     int skt = -1;
-    int ret = connect_to_backend(&skt, VANILLA_PIPE_SYNC_CODE(code));
+    int ret = connect_to_backend(&skt, &cmd, sizeof(cmd.control_code) + sizeof(cmd.sync));
 
     if (ret == VANILLA_SUCCESS) {
         // Wait for sync result from pipe
-        uint32_t recv_cc;
+        vanilla_pipe_command_t recv_cmd;
         ret = VANILLA_ERR_PIPE_UNRESPONSIVE;
         for (int retries = 0; retries < MAX_PIPE_RETRY; retries++) {
-            ssize_t read_size = recv(skt, &recv_cc, sizeof(recv_cc), 0);
-            if (read_size == sizeof(recv_cc)) {
-                recv_cc = ntohl(recv_cc);
-                if (recv_cc >> 8 == VANILLA_PIPE_CC_SYNC_STATUS >> 8) {
-                    ret = recv_cc & 0xFF;
-                    break;
-                } else if (recv_cc == VANILLA_PIPE_CC_SYNC_PING) {
-                    // Pipe is still responsive but hasn't found anything yet
-                    printf("received ping from pipe\n");
-                    retries = -1;
-                }
+            ssize_t read_size = recv(skt, &recv_cmd, sizeof(recv_cmd), 0);
+
+            if (recv_cmd.control_code == VANILLA_PIPE_CC_STATUS) {
+                ret = (int32_t) ntohl(recv_cmd.status.status);
+                break;
+            } else if (recv_cmd.control_code == VANILLA_PIPE_CC_SYNC_SUCCESS) {
+                ret = VANILLA_SUCCESS;
+                printf("Got BSSID: ");
+                for (int i = 0; i < sizeof(recv_cmd.connection.bssid); i++) printf("%02X", recv_cmd.connection.bssid[i]);
+                printf("\nGot PSK: ");
+                for (int i = 0; i < sizeof(recv_cmd.connection.psk); i++) printf("%02X", recv_cmd.connection.psk[i]);
+                printf("\n");
+                break;
+            } else if (recv_cmd.control_code == VANILLA_PIPE_CC_PING) {
+                // Pipe is still responsive but hasn't found anything yet
+                printf("received ping from pipe\n");
+                retries = -1;
             }
 
             if (is_interrupted()) {
-                send_pipe_cc(skt, VANILLA_PIPE_CC_UNBIND, 0);
+                send_unbind_cc(skt);
                 break;
             }
         }
@@ -263,7 +279,14 @@ void connect_as_gamepad_internal(thread_data_t *data)
 
     int pipe_cc_skt = 0;
     if (SERVER_ADDRESS != 0) {
-        ret = connect_to_backend(&pipe_cc_skt, VANILLA_PIPE_CC_CONNECT);
+        vanilla_pipe_command_t cmd;
+        cmd.control_code = VANILLA_PIPE_CC_CONNECT;
+
+        // TODO: Implement
+        // cmd.connection.bssid;
+        // cmd.connection.psk;
+        
+        ret = connect_to_backend(&pipe_cc_skt, &cmd, sizeof(cmd.control_code) + sizeof(cmd.connection));
         if (ret != VANILLA_SUCCESS) {
             goto exit;
         }
@@ -307,7 +330,7 @@ void connect_as_gamepad_internal(thread_data_t *data)
     pthread_join(cmd_thread, NULL);
 
     if (SERVER_ADDRESS != 0) {
-        send_pipe_cc(pipe_cc_skt, VANILLA_PIPE_CC_UNBIND, 0);
+        send_unbind_cc(pipe_cc_skt);
     }
 
     ret = VANILLA_SUCCESS;
