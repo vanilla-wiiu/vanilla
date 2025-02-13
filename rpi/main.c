@@ -24,7 +24,6 @@ AVFrame *decoding_frame;
 pthread_mutex_t decoding_mutex;
 pthread_cond_t decoding_wait_cond;
 AVCodecContext *video_codec_ctx;
-AVCodecParserContext *video_parser;
 AVPacket *video_packet;
 int running = 0;
 
@@ -386,12 +385,6 @@ int main(int argc, const char **argv)
 		return 1;
 	}
 
-	video_parser = av_parser_init(codec->id);
-	if (!video_parser) {
-        fprintf(stderr, "Failed to create codec parser\n");
-        exit(1);
-    }
-
 	// Install logging debugger
 	vanilla_install_logger(logger);
 
@@ -558,7 +551,6 @@ int main(int argc, const char **argv)
 	pthread_cond_destroy(&decoding_wait_cond);
 	pthread_mutex_destroy(&decoding_mutex);
 
-	av_parser_close(video_parser);
 	av_frame_free(&present_frame);
 	av_frame_free(&decoding_frame);
 	av_packet_free(&video_packet);

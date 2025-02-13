@@ -24,7 +24,6 @@
 #include "status.h"
 #include "util.h"
 
-static const uint32_t STOP_CODE = 0xCAFEBABE;
 static uint32_t SERVER_ADDRESS = 0;
 static const int MAX_PIPE_RETRY = 5;
 
@@ -32,6 +31,11 @@ static const int MAX_PIPE_RETRY = 5;
 #define EVENT_BUFFER_ARENA_SIZE VANILLA_MAX_EVENT_COUNT * 2
 uint8_t *EVENT_BUFFER_ARENA[EVENT_BUFFER_ARENA_SIZE] = {0};
 pthread_mutex_t event_buffer_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+typedef union {
+    struct sockaddr_in in;
+    struct sockaddr_un un;
+} sockaddr_u;
 
 in_addr_t get_real_server_address()
 {
@@ -47,38 +51,34 @@ in_addr_t get_real_server_address()
     return INADDR_ANY;
 }
 
-void create_sockaddr(struct sockaddr_in *in, struct sockaddr_un *un, const struct sockaddr **addr, size_t *size, in_addr_t inaddr, uint16_t port)
+void create_sockaddr(sockaddr_u *addr, size_t *size, in_addr_t inaddr, uint16_t port)
 {
     if (SERVER_ADDRESS == VANILLA_ADDRESS_LOCAL) {
-        memset(un, 0, sizeof(struct sockaddr_un));
-        un->sun_family = AF_UNIX;
-        snprintf(un->sun_path, sizeof(un->sun_path) - 1, VANILLA_PIPE_LOCAL_SOCKET, port);
+        memset(&addr->un, 0, sizeof(addr->un));
+        addr->un.sun_family = AF_UNIX;
+        snprintf(addr->un.sun_path, sizeof(addr->un.sun_path) - 1, VANILLA_PIPE_LOCAL_SOCKET, port);
 
         if (size) *size = sizeof(struct sockaddr_un);
-        if (addr) *addr = (const struct sockaddr *) un;
     } else {
-        memset(in, 0, sizeof(struct sockaddr_in));
-        in->sin_family = AF_INET;
-        in->sin_port = htons(port);
-        in->sin_addr.s_addr = inaddr;
+        memset(&addr->in, 0, sizeof(addr->in));
+        addr->in.sin_family = AF_INET;
+        addr->in.sin_port = htons(port);
+        addr->in.sin_addr.s_addr = inaddr;
         
         if (size) *size = sizeof(struct sockaddr_in);
-        if (addr) *addr = (const struct sockaddr *) in;
     }
 }
 
 void send_to_console(int fd, const void *data, size_t data_size, uint16_t port)
 {
-    struct sockaddr_in in;
-    struct sockaddr_un un;
-    const struct sockaddr *addr;
+    sockaddr_u addr;
     size_t addr_size;
 
     in_port_t console_port = port - 100;
 
-    create_sockaddr(&in, &un, &addr, &addr_size, get_real_server_address(), console_port);
+    create_sockaddr(&addr, &addr_size, get_real_server_address(), console_port);
 
-    ssize_t sent = sendto(fd, data, data_size, 0, addr, addr_size);
+    ssize_t sent = sendto(fd, data, data_size, 0, (const struct sockaddr *) &addr, addr_size);
     if (sent == -1) {
         print_info("Failed to send to Wii U socket: fd: %d, port: %d, errno: %i", fd, console_port, errno);
     }
@@ -86,76 +86,48 @@ void send_to_console(int fd, const void *data, size_t data_size, uint16_t port)
 
 int create_socket(int *socket_out, in_port_t port)
 {
-    int skt = -1;
-    struct sockaddr_un un;
-    struct sockaddr_in in;
+    sockaddr_u addr;
+    size_t addr_size;
     
-    create_sockaddr(&in, &un, 0, 0, INADDR_ANY, port);
-    
-    if (SERVER_ADDRESS == VANILLA_ADDRESS_LOCAL) {
-        skt = socket(AF_UNIX, SOCK_STREAM, 0);
-        if (skt == -1) {
-            print_info("FAILED TO CREATE SOCKET: %i", errno);
-            return VANILLA_ERR_BAD_SOCKET;
-        }
+    create_sockaddr(&addr, &addr_size, INADDR_ANY, port);
 
-        if (connect(skt, (const struct sockaddr *) &un, sizeof(un)) == -1) {
-            print_info("FAILED TO CONNECT TO LOCAL SOCKET %u: %i", port, errno);
-            close(skt);
-            return VANILLA_ERR_PIPE_UNRESPONSIVE;
-        }
-
-        print_info("SUCCESSFULLY CONNECTED SOCKET TO PATH %s", un.sun_path);
-    } else {
-        in.sin_addr.s_addr = INADDR_ANY;
-        skt = socket(AF_INET, SOCK_DGRAM, 0);
-        if (skt == -1) {
-            print_info("FAILED TO CREATE SOCKET: %i", errno);
-            return VANILLA_ERR_BAD_SOCKET;
-        }
-
-        if (bind(skt, (const struct sockaddr *) &in, sizeof(in)) == -1) {
-            print_info("FAILED TO BIND PORT %u: %i", port, errno);
-            close(skt);
-            return VANILLA_ERR_BAD_SOCKET;
-        }
-
-        print_info("SUCCESSFULLY BOUND SOCKET ON PORT %i", port);
+    int domain = (SERVER_ADDRESS == VANILLA_ADDRESS_LOCAL) ? AF_UNIX : AF_INET;
+        
+    int skt = socket(domain, SOCK_DGRAM, 0);
+    if (skt == -1) {
+        print_info("FAILED TO CREATE SOCKET: %i", errno);
+        return VANILLA_ERR_BAD_SOCKET;
     }
+
+    if (bind(skt, (const struct sockaddr *) &addr, addr_size) == -1) {
+        print_info("FAILED TO BIND PORT %u: %i", port, errno);
+        close(skt);
+        return VANILLA_ERR_BAD_SOCKET;
+    }
+
+    print_info("SUCCESSFULLY BOUND SOCKET %i ON PORT %i", skt, port);
     
     (*socket_out) = skt;
+
+    struct timeval tv = {0};
+    tv.tv_usec = 250000;
+    setsockopt(skt, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
     
     return VANILLA_SUCCESS;
 }
 
-void send_stop_code(int from_socket, in_port_t port)
-{
-    struct sockaddr_in in;
-    struct sockaddr_un un;
-    const struct sockaddr *addr;
-    size_t addr_size;
-
-    // FIXME: There are probably better ways of stopping the sockets than this
-
-    create_sockaddr(&in, &un, &addr, &addr_size, inet_addr("127.0.0.1"), htons(port));
-    sendto(from_socket, &STOP_CODE, sizeof(STOP_CODE), 0, addr, addr_size);
-}
-
 int send_pipe_cc(int skt, vanilla_pipe_command_t *cmd, size_t cmd_size, int wait_for_reply)
 {
-    struct sockaddr_in in;
-    struct sockaddr_un un;
-    const struct sockaddr *addr;
+    sockaddr_u addr;
     size_t addr_size;
 
-    create_sockaddr(&in, &un, &addr, &addr_size, get_real_server_address(), VANILLA_PIPE_CMD_PORT);
+    create_sockaddr(&addr, &addr_size, get_real_server_address(), VANILLA_PIPE_CMD_SERVER_PORT);
 
     ssize_t read_size;
-    uint32_t recv_cc;
+    uint8_t recv_cc;
 
     for (int retries = 0; retries < MAX_PIPE_RETRY; retries++) {
-        // sendto(skt, &send_cc, sizeof(send_cc), 0, addr, addr_size);
-        if (write(skt, cmd, cmd_size) == -1) {
+        if (sendto(skt, cmd, cmd_size, 0, (const struct sockaddr *) &addr, addr_size) == -1) {
             print_info("Failed to write control code to socket");
             return 0;
         }
@@ -188,7 +160,7 @@ int connect_to_backend(int *socket, vanilla_pipe_command_t *cmd, size_t cmd_size
 {
     // Try to bind with backend
     int pipe_cc_skt = -1;
-    int ret = create_socket(&pipe_cc_skt, VANILLA_PIPE_CMD_PORT);
+    int ret = create_socket(&pipe_cc_skt, VANILLA_PIPE_CMD_CLIENT_PORT);
     if (ret != VANILLA_SUCCESS) {
         return ret;
     }
@@ -208,6 +180,13 @@ int connect_to_backend(int *socket, vanilla_pipe_command_t *cmd, size_t cmd_size
     return VANILLA_SUCCESS;
 }
 
+void wait_for_interrupt()
+{
+    while (!is_interrupted()) {
+        usleep(100000);
+    }
+}
+
 void sync_internal(thread_data_t *data)
 {
     clear_interrupt();
@@ -221,29 +200,28 @@ void sync_internal(thread_data_t *data)
     cmd.sync.code = htons(code);
 
     int skt = -1;
-    int ret = connect_to_backend(&skt, &cmd, sizeof(cmd.control_code) + sizeof(cmd.sync));
 
-    if (ret == VANILLA_SUCCESS) {
+    vanilla_sync_event_t syncdata;
+
+    syncdata.status = connect_to_backend(&skt, &cmd, sizeof(cmd.control_code) + sizeof(cmd.sync));
+
+    if (syncdata.status == VANILLA_SUCCESS) {
         // Wait for sync result from pipe
         vanilla_pipe_command_t recv_cmd;
-        ret = VANILLA_ERR_PIPE_UNRESPONSIVE;
+        syncdata.status = VANILLA_ERR_PIPE_UNRESPONSIVE;
         for (int retries = 0; retries < MAX_PIPE_RETRY; retries++) {
             ssize_t read_size = recv(skt, &recv_cmd, sizeof(recv_cmd), 0);
 
             if (recv_cmd.control_code == VANILLA_PIPE_CC_STATUS) {
-                ret = (int32_t) ntohl(recv_cmd.status.status);
+                syncdata.status = (int32_t) ntohl(recv_cmd.status.status);
                 break;
             } else if (recv_cmd.control_code == VANILLA_PIPE_CC_SYNC_SUCCESS) {
-                ret = VANILLA_SUCCESS;
-                printf("Got BSSID: ");
-                for (int i = 0; i < sizeof(recv_cmd.connection.bssid); i++) printf("%02X", recv_cmd.connection.bssid[i]);
-                printf("\nGot PSK: ");
-                for (int i = 0; i < sizeof(recv_cmd.connection.psk); i++) printf("%02X", recv_cmd.connection.psk[i]);
-                printf("\n");
+                syncdata.status = VANILLA_SUCCESS;
+                syncdata.data.bssid = recv_cmd.connection.bssid;
+                syncdata.data.psk = recv_cmd.connection.psk;
                 break;
             } else if (recv_cmd.control_code == VANILLA_PIPE_CC_PING) {
                 // Pipe is still responsive but hasn't found anything yet
-                printf("received ping from pipe\n");
                 retries = -1;
             }
 
@@ -254,12 +232,14 @@ void sync_internal(thread_data_t *data)
         }
     }
 
-    push_event(data->event_loop, VANILLA_EVENT_SYNC, &ret, sizeof(ret));
+    if (syncdata.status == VANILLA_SUCCESS) {
+        push_event(data->event_loop, VANILLA_EVENT_SYNC, &syncdata, sizeof(syncdata));
+    } else {
+        push_event(data->event_loop, VANILLA_EVENT_ERROR, &syncdata.status, sizeof(syncdata.status));
+    }
 
     // Wait for interrupt so frontend has a chance to receive event
-    while (!is_interrupted()) {
-        usleep(100000);
-    }
+    wait_for_interrupt();
 
 exit_pipe:
     if (skt != -1)
@@ -275,65 +255,74 @@ void connect_as_gamepad_internal(thread_data_t *data)
     gamepad_context_t info;
     info.event_loop = data->event_loop;
 
-    int ret = VANILLA_ERR_GENERIC;
+    int ret = VANILLA_SUCCESS;
 
-    int pipe_cc_skt = 0;
-    if (SERVER_ADDRESS != 0) {
+    int pipe_cc_skt = -1;
+    if (SERVER_ADDRESS != VANILLA_ADDRESS_DIRECT) {
         vanilla_pipe_command_t cmd;
         cmd.control_code = VANILLA_PIPE_CC_CONNECT;
-
-        // TODO: Implement
-        // cmd.connection.bssid;
-        // cmd.connection.psk;
         
+        cmd.connection.bssid = data->bssid;
+        cmd.connection.psk = data->psk;
+        
+        // Connect to backend pipe
         ret = connect_to_backend(&pipe_cc_skt, &cmd, sizeof(cmd.control_code) + sizeof(cmd.connection));
-        if (ret != VANILLA_SUCCESS) {
-            goto exit;
+        // if (ret == VANILLA_SUCCESS) {
+        //     // Wait for backend to be available
+        //     vanilla_pipe_command_t connected_state;
+        //     ret = VANILLA_ERR_NO_CONNECTION;
+        //     while (!is_interrupted()) {
+        //         ssize_t read_size = recv(pipe_cc_skt, &connected_state, sizeof(connected_state), 0);
+        //         if (read_size < 0) {
+        //             if (errno != EAGAIN) {
+        //                 ret = VANILLA_ERR_PIPE_UNRESPONSIVE;
+        //                 break;
+        //             }
+        //         } else if (connected_state.control_code == VANILLA_PIPE_CC_CONNECTED) {
+        //             ret = VANILLA_SUCCESS;
+        //             sleep(1);
+        //             break;
+        //         }
+
+        //         print_info("STILL WAITING FOR CONNECTED STATE");
+
+        //         sleep(1);
+        //     }
+        // }
+    }
+
+    if (ret == VANILLA_SUCCESS) {
+        // Open all required sockets
+        if (create_socket(&info.socket_vid, PORT_VID) != VANILLA_SUCCESS) goto exit_pipe;
+        if (create_socket(&info.socket_msg, PORT_MSG) != VANILLA_SUCCESS) goto exit_vid;
+        if (create_socket(&info.socket_hid, PORT_HID) != VANILLA_SUCCESS) goto exit_msg;
+        if (create_socket(&info.socket_aud, PORT_AUD) != VANILLA_SUCCESS) goto exit_hid;
+        if (create_socket(&info.socket_cmd, PORT_CMD) != VANILLA_SUCCESS) goto exit_aud;
+
+        pthread_t video_thread, audio_thread, input_thread, msg_thread, cmd_thread;
+
+        pthread_create(&video_thread, NULL, listen_video, &info);
+        pthread_setname_np(video_thread, "vanilla-video");
+
+        pthread_create(&audio_thread, NULL, listen_audio, &info);
+        pthread_setname_np(audio_thread, "vanilla-audio");
+
+        pthread_create(&input_thread, NULL, listen_input, &info);
+        pthread_setname_np(input_thread, "vanilla-input");
+        
+        pthread_create(&cmd_thread, NULL, listen_command, &info);
+        pthread_setname_np(cmd_thread, "vanilla-cmd");
+
+        while (!is_interrupted()) {
+            // TODO: Should use a wake condition instead
+            usleep(250 * 1000);
         }
+
+        pthread_join(video_thread, NULL);
+        pthread_join(audio_thread, NULL);
+        pthread_join(input_thread, NULL);
+        pthread_join(cmd_thread, NULL);
     }
-
-    // Open all required sockets
-    if (create_socket(&info.socket_vid, PORT_VID) != VANILLA_SUCCESS) goto exit_pipe;
-    if (create_socket(&info.socket_msg, PORT_MSG) != VANILLA_SUCCESS) goto exit_vid;
-    if (create_socket(&info.socket_hid, PORT_HID) != VANILLA_SUCCESS) goto exit_msg;
-    if (create_socket(&info.socket_aud, PORT_AUD) != VANILLA_SUCCESS) goto exit_hid;
-    if (create_socket(&info.socket_cmd, PORT_CMD) != VANILLA_SUCCESS) goto exit_aud;
-
-    pthread_t video_thread, audio_thread, input_thread, msg_thread, cmd_thread;
-
-    pthread_create(&video_thread, NULL, listen_video, &info);
-    pthread_setname_np(video_thread, "vanilla-video");
-
-    pthread_create(&audio_thread, NULL, listen_audio, &info);
-    pthread_setname_np(audio_thread, "vanilla-audio");
-
-    pthread_create(&input_thread, NULL, listen_input, &info);
-    pthread_setname_np(input_thread, "vanilla-input");
-    
-    pthread_create(&cmd_thread, NULL, listen_command, &info);
-    pthread_setname_np(cmd_thread, "vanilla-cmd");
-
-    while (1) {
-        usleep(250 * 1000);
-        if (is_interrupted()) {
-            // Wake up any threads that might be blocked on `recv`
-            send_stop_code(info.socket_msg, PORT_VID);
-            send_stop_code(info.socket_msg, PORT_AUD);
-            send_stop_code(info.socket_msg, PORT_CMD);
-            break;
-        }
-    }
-
-    pthread_join(video_thread, NULL);
-    pthread_join(audio_thread, NULL);
-    pthread_join(input_thread, NULL);
-    pthread_join(cmd_thread, NULL);
-
-    if (SERVER_ADDRESS != 0) {
-        send_unbind_cc(pipe_cc_skt);
-    }
-
-    ret = VANILLA_SUCCESS;
 
 exit_cmd:
     close(info.socket_cmd);
@@ -351,25 +340,35 @@ exit_vid:
     close(info.socket_vid);
 
 exit_pipe:
-    if (pipe_cc_skt)
+    if (pipe_cc_skt != -1) {
+        // Disconnect from pipe if necessary
+        send_unbind_cc(pipe_cc_skt);
         close(pipe_cc_skt);
+    }
 
 exit:
-    // TODO: Return error code to frontend?
-}
+    if (ret != VANILLA_SUCCESS) {
+        push_event(info.event_loop, VANILLA_EVENT_ERROR, &ret, sizeof(ret));
+    }
 
-int is_stop_code(const char *data, size_t data_length)
-{
-    return (data_length == sizeof(STOP_CODE) && !memcmp(data, &STOP_CODE, sizeof(STOP_CODE)));
+    // Wait for interrupt so frontend has a chance to receive event
+    wait_for_interrupt();
 }
 
 int push_event(event_loop_t *loop, int type, const void *data, size_t size)
 {
     pthread_mutex_lock(&loop->mutex);
 
-    vanilla_event_t *ev = &loop->events[loop->new_index % VANILLA_MAX_EVENT_COUNT];
-
     if (size <= EVENT_BUFFER_SIZE) {
+        // Prevent rollover by skipping oldest event if necessary
+        if (loop->new_index == loop->used_index + VANILLA_MAX_EVENT_COUNT) {
+            vanilla_free_event(&loop->events[loop->used_index % VANILLA_MAX_EVENT_COUNT]);
+            print_info("SKIPPED EVENT TO PREVENT ROLLOVER (%lu > %lu + %lu)", loop->new_index, loop->used_index, VANILLA_MAX_EVENT_COUNT);
+            loop->used_index++;
+        }
+
+        vanilla_event_t *ev = &loop->events[loop->new_index % VANILLA_MAX_EVENT_COUNT];
+
         assert(!ev->data);
 
         ev->data = get_event_buffer();
@@ -383,13 +382,6 @@ int push_event(event_loop_t *loop, int type, const void *data, size_t size)
         ev->size = size;
 
         loop->new_index++;
-
-        // Prevent rollover by skipping oldest event if necessary
-        if (loop->new_index > loop->used_index + VANILLA_MAX_EVENT_COUNT) {
-            vanilla_free_event(&loop->events[loop->used_index % VANILLA_MAX_EVENT_COUNT]);
-            print_info("SKIPPED EVENT TO PREVENT ROLLOVER (%lu > %lu + %lu)", loop->new_index, loop->used_index, VANILLA_MAX_EVENT_COUNT);
-            loop->used_index++;
-        }
 
         pthread_cond_broadcast(&loop->waitcond);
     } else {
@@ -442,8 +434,8 @@ void *get_event_buffer()
             buf = EVENT_BUFFER_ARENA[i];
             EVENT_BUFFER_ARENA[i] = NULL;
             break;
-        }
     }
+        }
     pthread_mutex_unlock(&event_buffer_mutex);
 
     return buf;

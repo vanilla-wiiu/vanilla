@@ -33,15 +33,17 @@ pthread_mutex_t action_mutex;
 int running = 0;
 int main_loop = 0;
 
+typedef union {
+    struct sockaddr_in in;
+    struct sockaddr_un un;
+} sockaddr_u;
+
 typedef struct {
     int from_socket;
-    in_port_t from_port;
     int to_socket;
-    in_addr_t to_address;
-    in_port_t to_port;
+    sockaddr_u to_address;
+    size_t to_address_size;
 } relay_ports;
-
-struct in_addr client_address = {0};
 
 struct sync_args {
     const char *wireless_interface;
@@ -53,11 +55,15 @@ struct sync_args {
     struct wpa_ctrl *ctrl;
     int local;
     int skt;
+    sockaddr_u client;
+    size_t client_size;
 };
 
 struct relay_info {
     const char *wireless_interface;
     int local;
+    sockaddr_u client;
+    size_t client_size;
     in_port_t port;
 };
 
@@ -532,60 +538,56 @@ int enable_networkmanager_on_device(const char *wireless_interface)
 void *do_relay(void *data)
 {
     relay_ports *ports = (relay_ports *) data;
-    char buf[2048];
+    char buf[4096];
     ssize_t read_size;
-    while (!is_interrupted() && client_address.s_addr != 0) {
+    while (!is_interrupted()) {
         read_size = recv(ports->from_socket, buf, sizeof(buf), 0);
         if (read_size <= 0) {
             continue;
         }
 
-        struct sockaddr_in forward = {0};
-        forward.sin_family = AF_INET;
-        forward.sin_addr.s_addr = ports->to_address;
-        forward.sin_port = htons(ports->to_port);
-
-        char ip[20];
-        inet_ntop(AF_INET, &forward.sin_addr, ip, sizeof(ip));
-        // printf("received packet on port %i, forwarding to address %s:%i\n", ports->from_port, ip, ports->to_port);
-        sendto(ports->to_socket, buf, read_size, 0, (const struct sockaddr *) &forward, sizeof(forward));
+        if (sendto(ports->to_socket, buf, read_size, 0, (const struct sockaddr *) &ports->to_address, ports->to_address_size) == -1) {
+            if (ports->to_address_size == sizeof(struct sockaddr_un)) {
+                print_info("FAILED TO SENDTO \"%s\" (%i)", ports->to_address.un.sun_path, errno);
+            } else if (ports->to_address_size == sizeof(struct sockaddr_in)) {
+                char ip[20];
+                inet_ntop(AF_INET, &ports->to_address.in.sin_addr, ip, sizeof(ip));
+                print_info("FAILED TO SENDTO %s:%u (%i)", ip, ports->to_address.in.sin_port, errno);
+            } else {
+                print_info("FAILED TO SENDTO - INVALID SIZE: %zu", ports->to_address_size);
+            }
+        }
     }
     return NULL;
 }
 
-relay_ports create_ports(int from_socket, in_port_t from_port, int to_socket, in_addr_t to_addr, in_port_t to_port)
+relay_ports create_ports(int from_socket, int to_socket, const sockaddr_u *to_addr, size_t to_addr_size)
 {
     relay_ports ports;
     ports.from_socket = from_socket;
-    ports.from_port = from_port;
     ports.to_socket = to_socket;
-    ports.to_address = to_addr;
-    ports.to_port = to_port;
+    ports.to_address = *to_addr;
+    ports.to_address_size = to_addr_size;
     return ports;
 }
 
 int open_socket(int local, in_port_t port)
 {
-    struct sockaddr_in in = {0};
-    struct sockaddr_un un = {0};
-
-    const struct sockaddr *sa;
+    sockaddr_u sa;
     size_t sa_size;
 
     int skt;
     if (local) {
-        skt = socket(AF_UNIX, SOCK_STREAM, 0);
-        un.sun_family = AF_UNIX;
-        snprintf(un.sun_path, sizeof(un.sun_path) - 1, VANILLA_PIPE_LOCAL_SOCKET, port);
-        sa = (const struct sockaddr *) &un;
-        sa_size = sizeof(un);
+        skt = socket(AF_UNIX, SOCK_DGRAM, 0);
+        sa.un.sun_family = AF_UNIX;
+        snprintf(sa.un.sun_path, sizeof(sa.un.sun_path) - 1, VANILLA_PIPE_LOCAL_SOCKET, port);
+        sa_size = sizeof(struct sockaddr_un);
     } else {
         skt = socket(AF_INET, SOCK_DGRAM, 0);
-        in.sin_family = AF_INET;
-        in.sin_addr.s_addr = INADDR_ANY;
-        in.sin_port = htons(port);
-        sa = (const struct sockaddr *) &in;
-        sa_size = sizeof(in);
+        sa.in.sin_family = AF_INET;
+        sa.in.sin_addr.s_addr = INADDR_ANY;
+        sa.in.sin_port = htons(port);
+        sa_size = sizeof(struct sockaddr_in);
     }
     if (skt == -1) {
         return -1;
@@ -595,16 +597,10 @@ int open_socket(int local, in_port_t port)
     tv.tv_usec = 250000;
     setsockopt(skt, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
     
-    if (bind(skt, sa, sa_size) == -1) {
+    if (bind(skt, (const struct sockaddr *) &sa, sa_size) == -1) {
         print_info("FAILED TO BIND PORT %u: %i", port, errno);
         close(skt);
         return -1;
-    }
-
-    if (local) {
-        if (listen(skt, 20) == -1) {
-            print_info("FAILED TO LISTEN ON LOCAL SOCKET: %i", errno);
-        }
     }
 
     return skt;
@@ -625,27 +621,45 @@ void *open_relay(void *data)
     setsockopt(from_console, SOL_SOCKET, SO_BINDTODEVICE, info->wireless_interface, strlen(info->wireless_interface));
 
     // Open an incoming port from the frontend
-    int from_frontend = open_socket(info->local, port + 100);
+    int from_frontend = open_socket(info->local, port - 100);
     if (from_frontend == -1) {
         goto close_console_connection;
     }
 
+    struct sockaddr_in console_addr = {0};
+    console_addr.sin_family = AF_INET;
+    console_addr.sin_addr.s_addr = inet_addr("192.168.1.10");
+    console_addr.sin_port = htons(port - 100);
+
+    sockaddr_u frontend_addr;
+    size_t frontend_addr_size;
+    if (info->local) {
+        memset(&frontend_addr.un, 0, sizeof(frontend_addr.un));
+        frontend_addr.un.sun_family = AF_UNIX;
+        snprintf(frontend_addr.un.sun_path, sizeof(frontend_addr.un.sun_path), VANILLA_PIPE_LOCAL_SOCKET, port);
+        frontend_addr_size = sizeof(frontend_addr.un);
+    } else {
+        memset(&frontend_addr.in, 0, sizeof(frontend_addr.in));
+        frontend_addr.in.sin_family = AF_INET;
+        frontend_addr.in.sin_addr = info->client.in.sin_addr;
+        frontend_addr.in.sin_port = htons(port);
+        frontend_addr_size = sizeof(frontend_addr.in);
+    }
+
     // print_info("ENTERING MAIN LOOP");
     while (!is_interrupted()) {
-        if (client_address.s_addr != 0) {
-            print_info("STARTED RELAYS");
-            relay_ports console_to_frontend = create_ports(from_console, port, from_frontend, client_address.s_addr, port + 200);
-            relay_ports frontend_to_console = create_ports(from_frontend, port + 100, from_console, inet_addr("192.168.1.10"), port - 100);
+        print_info("STARTED RELAYS");
+        relay_ports console_to_frontend = create_ports(from_console, from_frontend, &frontend_addr, frontend_addr_size);
+        relay_ports frontend_to_console = create_ports(from_frontend, from_console, (sockaddr_u *) &console_addr, sizeof(struct sockaddr_in));
 
-            pthread_t a_thread, b_thread;
-            pthread_create(&a_thread, NULL, do_relay, &console_to_frontend);
-            pthread_create(&b_thread, NULL, do_relay, &frontend_to_console);
+        pthread_t a_thread, b_thread;
+        pthread_create(&a_thread, NULL, do_relay, &console_to_frontend);
+        pthread_create(&b_thread, NULL, do_relay, &frontend_to_console);
 
-            pthread_join(a_thread, NULL);
-            pthread_join(b_thread, NULL);
+        pthread_join(a_thread, NULL);
+        pthread_join(b_thread, NULL);
 
-            print_info("STOPPED RELAYS");
-        }
+        print_info("STOPPED RELAYS");
 
         // print_info("RELAY EXITED");
     }
@@ -662,7 +676,7 @@ close:
     return THREADRESULT(ret);
 }
 
-void create_all_relays(int local, const char *wireless_interface)
+void create_all_relays(int skt, int local, const char *wireless_interface, sockaddr_u client, size_t client_size)
 {
     pthread_t vid_thread, aud_thread, msg_thread, cmd_thread, hid_thread;
     struct relay_info vid_info, aud_info, msg_info, cmd_info, hid_info;
@@ -670,6 +684,8 @@ void create_all_relays(int local, const char *wireless_interface)
     // Set common info for all
     vid_info.wireless_interface = aud_info.wireless_interface = msg_info.wireless_interface = cmd_info.wireless_interface = hid_info.wireless_interface = wireless_interface;
     vid_info.local = aud_info.local = msg_info.local = cmd_info.local = hid_info.local = local;
+    vid_info.client = aud_info.client = msg_info.client = cmd_info.client = hid_info.client = client;
+    vid_info.client_size = aud_info.client_size = msg_info.client_size = cmd_info.client_size = hid_info.client_size = client_size;
     
     vid_info.port = PORT_VID;
     aud_info.port = PORT_AUD;
@@ -682,6 +698,11 @@ void create_all_relays(int local, const char *wireless_interface)
     pthread_create(&msg_thread, NULL, open_relay, &msg_info);
     pthread_create(&cmd_thread, NULL, open_relay, &cmd_info);
     pthread_create(&hid_thread, NULL, open_relay, &hid_info);
+
+    // Notify client that we are connected
+    vanilla_pipe_command_t cmd;
+    cmd.control_code = VANILLA_PIPE_CC_CONNECTED;
+    sendto(skt, &cmd, sizeof(cmd.control_code), 0, (const struct sockaddr *) &client, client_size);
 
     pthread_join(vid_thread, NULL);
     pthread_join(aud_thread, NULL);
@@ -776,15 +797,14 @@ void bytes_to_str(unsigned char *data, size_t data_size, const char *separator, 
     size_t output_advance = 0;
     size_t separator_size = separator ? strlen(separator) : 0;
     for (size_t i = 0; i < data_size; i++) {
-        unsigned char byte = data[i];
-        sprintf(output + output_advance, "%x", byte & 0xFF);
-        output_advance += 2;
-        if (separator_size > 0) {
-            memcpy(output + output_advance, separator, separator_size);
+        if (separator_size > 0 && i > 0) {
+            strncpy(output + output_advance, separator, separator_size);
             output_advance += separator_size;
         }
+        unsigned char byte = data[i];
+        sprintf(output + output_advance, "%02x", byte & 0xFF);
+        output_advance += 2;
     }
-    output[output_advance] = 0;
 }
 
 int create_connect_config(const char *filename, unsigned char *bssid, unsigned char *psk)
@@ -820,10 +840,9 @@ int create_connect_config(const char *filename, unsigned char *bssid, unsigned c
 
     memcpy(ssid_str, "WiiU", 4);
 
-    // FIXME: Hardcoded sizes
-    bytes_to_str(bssid, 6, 0, ssid_str + 4);
-    bytes_to_str(bssid, 6, ":", bssid_str);
-    bytes_to_str(psk, 32, 0, psk_str);
+    bytes_to_str(bssid, sizeof(vanilla_bssid_t), 0, ssid_str + 4);
+    bytes_to_str(bssid, sizeof(vanilla_bssid_t), ":", bssid_str);
+    bytes_to_str(psk, sizeof(vanilla_psk_t), 0, psk_str);
 
     fprintf(out_file, template, bssid_str, ssid_str, psk_str);
     fclose(out_file);
@@ -852,7 +871,7 @@ void *sync_with_console_internal(void *data)
             vanilla_pipe_command_t cmd;
             cmd.control_code = VANILLA_PIPE_CC_PING;
 
-            if (send(args->skt, &cmd, sizeof(cmd.control_code), MSG_NOSIGNAL) == -1) {
+            if (sendto(args->skt, &cmd, sizeof(cmd.control_code), 0, (const struct sockaddr *) &args->client, args->client_size) == -1) {
                 // Client has probably disconnected
                 interrupt();
                 goto exit_loop;
@@ -882,7 +901,7 @@ void *sync_with_console_internal(void *data)
         while (line) {
             if (is_interrupted()) goto exit_loop;
 
-            if (strstr(line, "WiiU")) {
+            if (strstr(line, "WiiU") && strstr(line, "_STA1")) {
                 print_info("FOUND WII U, TESTING WPS PIN");
 
                 // Make copy of bssid for later
@@ -942,7 +961,7 @@ void *sync_with_console_internal(void *data)
                         char buf[150];
                         while (len = read_line_from_file(in_file, buf, sizeof(buf))) {
                             if (memcmp("\tpsk=", buf, 5) == 0) {
-                                str_to_bytes(buf + 5, 0, cmd.connection.psk, sizeof(cmd.connection.psk));
+                                str_to_bytes(buf + 5, 0, cmd.connection.psk.psk, sizeof(cmd.connection.psk.psk));
                                 break;
                             }
                         }
@@ -950,9 +969,9 @@ void *sync_with_console_internal(void *data)
                         fclose(in_file);
 
                         // Convert BSSID from string to bytes
-                        str_to_bytes(bssid, 1, cmd.connection.bssid, sizeof(cmd.connection.bssid));
+                        str_to_bytes(bssid, 1, cmd.connection.bssid.bssid, sizeof(cmd.connection.bssid.bssid));
 
-                        write(args->skt, &cmd, sizeof(cmd.control_code) + sizeof(cmd.connection));
+                        sendto(args->skt, &cmd, sizeof(cmd.control_code) + sizeof(cmd.connection), 0, (const struct sockaddr *) &args->client, args->client_size);
 
                         ret = VANILLA_SUCCESS;
                     } else {
@@ -1010,7 +1029,7 @@ void *do_connect(void *data)
         print_info("DHCP ESTABLISHED");
     }
 
-    create_all_relays(args->local, args->wireless_interface);
+    create_all_relays(args->skt, args->local, args->wireless_interface, args->client, args->client_size);
 
     int kill_ret = kill(dhclient_pid, SIGTERM);
     print_info("KILLING DHCLIENT %i", dhclient_pid);
@@ -1058,7 +1077,7 @@ void vanilla_listen(int local, const char *wireless_interface)
     // Ensure local domain sockets can be written to by everyone
     umask(0000);
 
-    int skt = open_socket(local, VANILLA_PIPE_CMD_PORT);
+    int skt = open_socket(local, VANILLA_PIPE_CMD_SERVER_PORT);
     if (skt == -1) {
         pprint("Failed to open server socket\n");
         return;
@@ -1066,8 +1085,7 @@ void vanilla_listen(int local, const char *wireless_interface)
 
     vanilla_pipe_command_t cmd;
 
-    struct sockaddr_in addr = {0};
-    socklen_t addr_size = sizeof(addr);
+    sockaddr_u addr;
 
     pthread_mutex_init(&running_mutex, NULL);
     pthread_mutex_init(&action_mutex, NULL);
@@ -1088,74 +1106,54 @@ void vanilla_listen(int local, const char *wireless_interface)
     while (main_loop) {
         pthread_mutex_unlock(&main_loop_mutex);
 
-        int data_socket = accept(skt, 0, 0);
-        if (data_socket == -1) {
-            if (errno != EAGAIN)
-                print_info("Failed to accept: %i", errno);
-            goto repeat_loop;
+        socklen_t addr_size = sizeof(addr);
+        ssize_t r = recvfrom(skt, &cmd, sizeof(cmd), 0, (struct sockaddr *) &addr, &addr_size);
+        // ssize_t r = read(skt, &cmd, sizeof(cmd));
+        if (r <= 0) {
+            continue;
         }
 
-        pthread_mutex_lock(&main_loop_mutex);
+        if (cmd.control_code == VANILLA_PIPE_CC_SYNC || cmd.control_code == VANILLA_PIPE_CC_CONNECT) {
+            if (pthread_mutex_trylock(&action_mutex) == 0) {
+                struct sync_args *args = malloc(sizeof(struct sync_args));
+                args->wireless_interface = wireless_interface;
+                args->local = local;
+                args->skt = skt;
+                args->client = addr;
+                args->client_size = addr_size;
 
-        while (main_loop) {
-            pthread_mutex_unlock(&main_loop_mutex);
-
-            // ssize_t r = recvfrom(skt, &control_code, sizeof(control_code), 0, (struct sockaddr *) &addr, &addr_size);
-            ssize_t r = read(data_socket, &cmd, sizeof(cmd));
-            if (r <= 0) {
-                break;
-            }
-
-            if (cmd.control_code == VANILLA_PIPE_CC_SYNC || cmd.control_code == VANILLA_PIPE_CC_CONNECT) {
-                if (pthread_mutex_trylock(&action_mutex) == 0) {
-                    struct sync_args *args = malloc(sizeof(struct sync_args));
-                    args->wireless_interface = wireless_interface;
-                    args->local = local;
-                    args->skt = data_socket;
-
-                    if (cmd.control_code == VANILLA_PIPE_CC_SYNC) {
-                        args->code = ntohs(cmd.sync.code);
-                        args->start_routine = vanilla_sync_with_console;
-                    } else {
-                        memcpy(args->bssid, cmd.connection.bssid, sizeof(cmd.connection.bssid));
-                        memcpy(args->psk, cmd.connection.psk, sizeof(cmd.connection.psk));
-                        args->start_routine = vanilla_connect_to_console;
-                    }
-                
-                    client_address = addr.sin_addr;
-
-                    // Acknowledge
-                    cmd.control_code = VANILLA_PIPE_CC_BIND_ACK;
-                    // sendto(skt, &control_code, sizeof(control_code), 0, (struct sockaddr *) &addr, sizeof(addr));
-                    write(data_socket, &cmd, sizeof(cmd.control_code));
-
-                    pthread_t thread;
-                    int thread_ret;
-                    if (pthread_create(&thread, NULL, thread_handler, args) != 0) {
-                        print_info("FAILED TO CREATE THREAD");
-                        free(args);
-                    }
+                if (cmd.control_code == VANILLA_PIPE_CC_SYNC) {
+                    args->code = ntohs(cmd.sync.code);
+                    args->start_routine = vanilla_sync_with_console;
                 } else {
-                    // Busy
-                    cmd.control_code = VANILLA_PIPE_CC_BUSY;
-                    // sendto(skt, &control_code, sizeof(control_code), 0, (struct sockaddr *) &addr, sizeof(addr));
-                    write(data_socket, &cmd, sizeof(cmd.control_code));
+                    memcpy(args->bssid, cmd.connection.bssid.bssid, sizeof(cmd.connection.bssid.bssid));
+                    memcpy(args->psk, cmd.connection.psk.psk, sizeof(cmd.connection.psk.psk));
+                    args->start_routine = vanilla_connect_to_console;
                 }
-            } else if (cmd.control_code == VANILLA_PIPE_CC_UNBIND) {
-                print_info("RECEIVED UNBIND SIGNAL");
-                interrupt();
+            
+                // Acknowledge
+                cmd.control_code = VANILLA_PIPE_CC_BIND_ACK;
+                if (sendto(skt, &cmd, sizeof(cmd.control_code), 0, (const struct sockaddr *) &addr, addr_size) == -1) {
+                    print_info("FAILED TO SEND ACK: %i", errno);
+                }
+
+                pthread_t thread;
+                int thread_ret;
+                if (pthread_create(&thread, NULL, thread_handler, args) != 0) {
+                    print_info("FAILED TO CREATE THREAD");
+                    free(args);
+                }
+            } else {
+                // Busy
+                cmd.control_code = VANILLA_PIPE_CC_BUSY;
+                if (sendto(skt, &cmd, sizeof(cmd.control_code), 0, (const struct sockaddr *) &addr, addr_size) == -1) {
+                    print_info("FAILED TO SEND BUSY: %i", errno);
+                }
             }
-
-repeat_read_loop:
-            pthread_mutex_lock(&main_loop_mutex);
+        } else if (cmd.control_code == VANILLA_PIPE_CC_UNBIND) {
+            print_info("RECEIVED UNBIND SIGNAL");
+            interrupt();
         }
-
-        if (data_socket != -1) {
-            close(data_socket);
-            data_socket = -1;
-        }
-
-        pthread_mutex_unlock(&main_loop_mutex);
 
 repeat_loop:
         pthread_mutex_lock(&main_loop_mutex);

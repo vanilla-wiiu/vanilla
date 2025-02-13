@@ -2,6 +2,7 @@
 #define VANILLA_PI_UI_H
 
 #include <stdint.h>
+#include <stddef.h>
 
 typedef enum {
     VUI_BUTTON_STYLE_NONE,
@@ -35,6 +36,14 @@ typedef void (*vui_callback_t)(vui_context_t *ctx, void *userdata);
 typedef void (*vui_button_callback_t)(vui_context_t *ctx, int button, void *userdata);
 typedef void (*vui_anim_step_callback_t)(vui_context_t *ctx, int64_t time, void *userdata);
 
+typedef enum {
+    VUI_DIR_NONE,
+    VUI_DIR_LEFT,
+    VUI_DIR_RIGHT,
+    VUI_DIR_UP,
+    VUI_DIR_DOWN,
+} vui_direction_t;
+
 /**
  * Context-related functions
  */
@@ -42,11 +51,18 @@ vui_context_t *vui_alloc(int width, int height);
 int vui_reset(vui_context_t *ctx);
 void vui_free(vui_context_t *ctx);
 void vui_update(vui_context_t *ctx);
+void vui_game_mode_set(vui_context_t *ctx, int enabled);
+
+/**
+ * Audio-related functions
+ */
+void vui_audio_push(vui_context_t *ctx, const void *data, size_t size);
 
 /**
  * Screen-related functions
  */
 void vui_get_screen_size(vui_context_t *ctx, int *width, int *height);
+void vui_enable_background(vui_context_t *ctx, int enabled);
 void vui_set_background(vui_context_t *ctx, const char *background_image);
 
 /**
@@ -62,17 +78,23 @@ int vui_layer_destroy(vui_context_t *ctx);
  */
 int vui_button_create(vui_context_t *ctx, int x, int y, int w, int h, const char *text, const char *icon, vui_button_style_t style, int layer, vui_button_callback_t callback, void *callback_data);
 void vui_button_get_geometry(vui_context_t *ctx, int button, int *x, int *y, int *w, int *h);
+int vui_button_get_checked(vui_context_t *ctx, int button);
 void vui_button_update_click_handler(vui_context_t *ctx, int index, vui_button_callback_t handler, void *userdata);
 void vui_button_update_geometry(vui_context_t *ctx, int button, int x, int y, int w, int h);
 void vui_button_update_icon(vui_context_t *ctx, int button, const char *icon);
 void vui_button_update_text(vui_context_t *ctx, int button, const char *text);
 void vui_button_update_style(vui_context_t *ctx, int button, vui_button_style_t style);
+void vui_button_update_visible(vui_context_t *ctx, int button, int visible);
+void vui_button_update_enabled(vui_context_t *ctx, int button, int enabled);
+void vui_button_update_checked(vui_context_t *ctx, int button, int checked);
+void vui_button_set_cancel(vui_context_t *ctx, int button);
 
 /**
  * Label-related functions
  */
 int vui_label_create(vui_context_t *ctx, int x, int y, int w, int h, const char *text, vui_color_t color, vui_font_size_t size, int layer);
-int vui_label_update_text(vui_context_t *ctx, int label, const char *text);
+void vui_label_update_text(vui_context_t *ctx, int label, const char *text);
+void vui_label_update_visible(vui_context_t *ctx, int label, int visible);
 
 /**
  * Rect-related functions
@@ -102,5 +124,8 @@ int vui_start_passive_animation(vui_context_t *ctx, vui_anim_step_callback_t ste
  */
 void vui_process_mousedown(vui_context_t *ctx, int x, int y);
 void vui_process_mouseup(vui_context_t *ctx, int x, int y);
+void vui_process_keydown(vui_context_t *ctx, int button);
+void vui_process_keyup(vui_context_t *ctx, int button);
+void vui_vibrate_set(vui_context_t *ctx, uint8_t val);
 
 #endif // VANILLA_PI_UI_H

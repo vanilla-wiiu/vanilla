@@ -76,7 +76,6 @@ void *listen_audio(void *x)
     do {
         size = recv(info->socket_aud, data, sizeof(data), 0);
         if (size > 0) {
-            if (is_stop_code(data, size)) break;
             handle_audio_packet(info, data, size);
         }
     } while (!is_interrupted());

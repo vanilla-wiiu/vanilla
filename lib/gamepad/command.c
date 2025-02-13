@@ -430,11 +430,7 @@ void *listen_command(void *x)
     do
     {
         size = recv(info->socket_cmd, data, sizeof(data), 0);
-        if (size > 0)
-        {
-            if (is_stop_code(data, size))
-                break;
-
+        if (size > 0) {
             CmdHeader *header = (CmdHeader *)data;
             handle_command_packet(info->socket_cmd, header);
         }

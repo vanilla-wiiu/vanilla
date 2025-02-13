@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "config.h"
 #include "menu/menu.h"
 #include "ui/ui.h"
 #include "ui/ui_sdl.h"
@@ -16,6 +17,9 @@ int main(int argc, const char **argv)
             fs = 1;
         }
     }
+
+    // Load config
+    vpi_config_init();
 
     // Initialize UI system
     vui_context_t *vui = vui_alloc(SCREEN_WIDTH, SCREEN_HEIGHT);
@@ -38,6 +42,8 @@ exit:
     vui_close_sdl(vui);
 
     vui_free(vui);
+
+    vpi_config_free();
 
     return ret;
 }

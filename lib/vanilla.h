@@ -17,6 +17,7 @@ static const int VANILLA_ERR_PIPE_UNRESPONSIVE      = -4;
 static const int VANILLA_ERR_OUT_OF_MEMORY          = -5;
 static const int VANILLA_ERR_BUSY                   = -6;
 static const int VANILLA_ERR_BAD_SOCKET             = -7;
+static const int VANILLA_ERR_NO_CONNECTION          = -8;
 
 static const uint32_t VANILLA_ADDRESS_LOCAL = 0xFFFFFFFF;
 static const uint32_t VANILLA_ADDRESS_DIRECT = 0x0;
@@ -69,7 +70,8 @@ enum VanillaEvent
     VANILLA_EVENT_VIDEO,
     VANILLA_EVENT_AUDIO,
     VANILLA_EVENT_VIBRATE,
-    VANILLA_EVENT_SYNC
+    VANILLA_EVENT_SYNC,
+    VANILLA_EVENT_ERROR,
 };
 
 enum VanillaRegion
@@ -108,10 +110,23 @@ typedef struct
     size_t size;
 } vanilla_event_t;
 
+#pragma pack(push, 1)
+typedef struct { unsigned char bssid[6]; } vanilla_bssid_t;
+typedef struct { unsigned char psk[32]; } vanilla_psk_t;
+typedef struct {
+    vanilla_bssid_t bssid;
+    vanilla_psk_t psk;
+} vanilla_connection_t;
+typedef struct {
+    int status;
+    vanilla_connection_t data;
+} vanilla_sync_event_t;
+#pragma pack(pop)
+
 /**
  * Start listening for gamepad commands
  */
-int vanilla_start(uint32_t server_address);
+int vanilla_start(uint32_t server_address, vanilla_bssid_t bssid, vanilla_psk_t psk);
 int vanilla_sync(uint16_t code, uint32_t server_address);
 
 int vanilla_poll_event(vanilla_event_t *event);

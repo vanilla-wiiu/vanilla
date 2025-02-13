@@ -23,6 +23,9 @@ typedef struct {
     vui_button_callback_t onclick;
     void *onclick_data;
     int layer;
+    int visible;
+    int enabled;
+    int checked;
 } vui_button_t;
 
 typedef struct {
@@ -34,6 +37,7 @@ typedef struct {
     int layer;
     vui_color_t color;
     vui_font_size_t size;
+    int visible;
 } vui_label_t;
 
 typedef struct {
@@ -76,6 +80,9 @@ typedef struct {
     void *complete_data;
 } vui_animation_t;
 
+typedef void (*vui_audio_handler_t)(const void *data, size_t size, void *userdata);
+typedef void (*vui_vibrate_handler_t)(uint8_t vibrate, void *userdata);
+
 typedef struct vui_context_t {
     void *platform_data;
     vui_button_t buttons[MAX_BUTTON_COUNT];
@@ -96,6 +103,14 @@ typedef struct vui_context_t {
     float layer_opacity[MAX_BUTTON_COUNT];
     vui_color_t layer_color[MAX_BUTTON_COUNT];
     char background_image[MAX_BUTTON_TEXT];
+    int background_enabled;
+    vui_audio_handler_t audio_handler;
+    void *audio_handler_data;
+    vui_vibrate_handler_t vibrate_handler;
+    void *vibrate_handler_data;
+    int game_mode;
+    int selected_button;
+    int cancel_button;
 } vui_context_t;
 
 #endif // VANILLA_PI_UI_PRIV_H

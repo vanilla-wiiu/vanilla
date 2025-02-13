@@ -59,7 +59,7 @@ void *start_event_loop(void *arg)
     return 0;
 }
 
-int vanilla_start_internal(uint32_t server_address, thread_start_t thread_start, void *thread_data)
+int vanilla_start_internal(uint32_t server_address, vanilla_bssid_t bssid, vanilla_psk_t psk, thread_start_t thread_start, void *thread_data)
 {
     if (pthread_mutex_trylock(&main_mutex) == 0) {
         pthread_t other;
@@ -68,6 +68,8 @@ int vanilla_start_internal(uint32_t server_address, thread_start_t thread_start,
         data->server_address = server_address;
         data->thread_start = thread_start;
         data->thread_data = thread_data;
+        data->bssid = bssid;
+        data->psk = psk;
 
         // Lock event loop mutex so it can't be set to active until we're ready
         pthread_mutex_lock(&event_loop.mutex);
@@ -89,9 +91,9 @@ int vanilla_start_internal(uint32_t server_address, thread_start_t thread_start,
     }
 }
 
-int vanilla_start(uint32_t server_address)
+int vanilla_start(uint32_t server_address, vanilla_bssid_t bssid, vanilla_psk_t psk)
 {
-    return vanilla_start_internal(server_address, connect_as_gamepad_internal, 0);
+    return vanilla_start_internal(server_address, bssid, psk, connect_as_gamepad_internal, 0);
 }
 
 void vanilla_stop()
@@ -172,7 +174,7 @@ void vanilla_set_battery_status(int battery_status)
 
 int vanilla_sync(uint16_t code, uint32_t server_address)
 {
-    return vanilla_start_internal(server_address, sync_internal, (void *) (uintptr_t) code);
+    return vanilla_start_internal(server_address, (vanilla_bssid_t){.bssid = {0}}, (vanilla_psk_t){.psk = {0}}, sync_internal, (void *) (uintptr_t) code);
 }
 
 int vanilla_poll_event(vanilla_event_t *event)

@@ -39,12 +39,13 @@ typedef struct thread_data_t
     event_loop_t *event_loop;
     thread_start_t thread_start;
     void *thread_data;
+    vanilla_bssid_t bssid;
+    vanilla_psk_t psk;
 } thread_data_t;
 
 void sync_internal(thread_data_t *data);
 void connect_as_gamepad_internal(thread_data_t *data);
 void send_to_console(int fd, const void *data, size_t data_size, uint16_t port);
-int is_stop_code(const char *data, size_t data_length);
 int push_event(event_loop_t *loop, int type, const void *data, size_t size);
 int get_event(event_loop_t *loop, vanilla_event_t *event, int wait);
 

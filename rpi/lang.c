@@ -13,6 +13,19 @@ static const char *lang_str[__VPI_LANG_T_COUNT] = {
     "Sync Failed",
     "Vanilla needs root permission to configure the wireless interface for connection.",
     "Please enter your \"sudo\" password here.",
+    "Error",
+    "No consoles synced",
+    "Connecting to \"%s\"...",
+    "Are you sure you want to delete \"%s\"?",
+    "Successfully deleted \"%s\"",
+    "Rename",
+    "Delete",
+    "Back",
+    "More",
+    "Gamepad",
+    "Audio",
+    "Connection",
+    "Webcam",
 };
 
 const char *lang(vpi_lang_t id)

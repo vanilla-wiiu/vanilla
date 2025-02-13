@@ -1,7 +1,10 @@
 #ifndef VANILLA_PIPE_DEF_H
 #define VANILLA_PIPE_DEF_H
 
-#define VANILLA_PIPE_CMD_PORT 51000
+#include <vanilla.h>
+
+#define VANILLA_PIPE_CMD_SERVER_PORT 51000
+#define VANILLA_PIPE_CMD_CLIENT_PORT 51100
 
 #define VANILLA_PIPE_CC_SYNC 0x80
 #define VANILLA_PIPE_CC_CONNECT 0x81
@@ -11,8 +14,9 @@
 #define VANILLA_PIPE_CC_BUSY 0x85
 #define VANILLA_PIPE_CC_UNBIND 0x86
 #define VANILLA_PIPE_CC_SYNC_SUCCESS 0x87
+#define VANILLA_PIPE_CC_CONNECTED 0x88
 
-#define VANILLA_PIPE_LOCAL_SOCKET "/tmp/vanilla-pipe.%i"
+#define VANILLA_PIPE_LOCAL_SOCKET "/tmp/vanilla-pipe_%i.sock"
 
 #pragma pack(push, 1)
 typedef struct {
@@ -24,15 +28,10 @@ typedef struct {
 } vanilla_pipe_status_info_t;
 
 typedef struct {
-    unsigned char bssid[6];
-    unsigned char psk[32];
-} vanilla_pipe_connection_info_t;
-
-typedef struct {
     uint8_t control_code;
     union{
         vanilla_pipe_sync_info_t sync;
-        vanilla_pipe_connection_info_t connection;
+        vanilla_connection_t connection;
         vanilla_pipe_status_info_t status;
     };
 } vanilla_pipe_command_t;

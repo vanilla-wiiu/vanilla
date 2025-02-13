@@ -53,6 +53,7 @@ void send_idr_request_to_console(int socket_msg)
 {
     // Make an IDR request to the Wii U?
     unsigned char idr_request[] = {1, 0, 0, 0}; // Undocumented
+    print_info("SENDING IDR");
     send_to_console(socket_msg, idr_request, sizeof(idr_request), PORT_MSG);
 }
 
@@ -219,7 +220,6 @@ void *listen_video(void *x)
 
         size = recv(info->socket_vid, data, sizeof(VideoPacket), 0);
         if (size > 0) {
-            if (is_stop_code(data, size)) break;
             handle_video_packet(info, vp, size, info->socket_msg);
         }
     } while (!is_interrupted());

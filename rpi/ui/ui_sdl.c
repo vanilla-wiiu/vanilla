@@ -4,13 +4,12 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
 #include <SDL2/SDL_ttf.h>
+#include <pthread.h>
 #include <vanilla.h>
 
+#include "game/game_decode.h"
 #include "ui_priv.h"
 #include "ui_util.h"
-
-static TTF_Font *sysfont = 0;
-static TTF_Font *sysfont_mini = 0;
 
 typedef struct {
     SDL_Texture *texture;
@@ -18,6 +17,7 @@ typedef struct {
     int h;
     char text[MAX_BUTTON_TEXT];
     char icon[MAX_BUTTON_TEXT];
+    int checked;
 } vui_sdl_cached_texture_t;
 
 typedef struct {
@@ -29,7 +29,109 @@ typedef struct {
     SDL_Texture *label_data[MAX_BUTTON_COUNT];
     vui_sdl_cached_texture_t button_cache[MAX_BUTTON_COUNT];
     vui_sdl_cached_texture_t image_cache[MAX_BUTTON_COUNT];
+    TTF_Font *sysfont;
+    TTF_Font *sysfont_small;
+    TTF_Font *sysfont_tiny;
+    SDL_AudioDeviceID audio;
+    SDL_GameController *controller;
+    SDL_Texture *game_tex;
+    AVFrame *frame;
 } vui_sdl_context_t;
+
+static int button_map[SDL_CONTROLLER_BUTTON_MAX];
+static int axis_map[SDL_CONTROLLER_AXIS_MAX];
+static int key_map[SDL_NUM_SCANCODES];
+static int vibrate = 0;
+
+void init_gamepad()
+{
+	vibrate = 0;
+
+    // Initialize arrays to -1
+    for (int i = 0; i < SDL_CONTROLLER_BUTTON_MAX; i++) button_map[i] = -1;
+    for (int i = 0; i < SDL_CONTROLLER_AXIS_MAX; i++) axis_map[i] = -1;
+    for (int i = 0; i < SDL_NUM_SCANCODES; i++) key_map[i] = -1;
+
+    button_map[SDL_CONTROLLER_BUTTON_A] = VANILLA_BTN_A;
+    button_map[SDL_CONTROLLER_BUTTON_B] = VANILLA_BTN_B;
+    button_map[SDL_CONTROLLER_BUTTON_X] = VANILLA_BTN_X;
+    button_map[SDL_CONTROLLER_BUTTON_Y] = VANILLA_BTN_Y;
+    button_map[SDL_CONTROLLER_BUTTON_BACK] = VANILLA_BTN_MINUS;
+    button_map[SDL_CONTROLLER_BUTTON_GUIDE] = VANILLA_BTN_HOME;
+    button_map[SDL_CONTROLLER_BUTTON_MISC1] = VANILLA_BTN_TV;
+    button_map[SDL_CONTROLLER_BUTTON_START] = VANILLA_BTN_PLUS;
+    button_map[SDL_CONTROLLER_BUTTON_LEFTSTICK] = VANILLA_BTN_L3;
+    button_map[SDL_CONTROLLER_BUTTON_RIGHTSTICK] = VANILLA_BTN_R3;
+    button_map[SDL_CONTROLLER_BUTTON_LEFTSHOULDER] = VANILLA_BTN_L;
+    button_map[SDL_CONTROLLER_BUTTON_RIGHTSHOULDER] = VANILLA_BTN_R;
+    button_map[SDL_CONTROLLER_BUTTON_DPAD_UP] = VANILLA_BTN_UP;
+    button_map[SDL_CONTROLLER_BUTTON_DPAD_DOWN] = VANILLA_BTN_DOWN;
+    button_map[SDL_CONTROLLER_BUTTON_DPAD_LEFT] = VANILLA_BTN_LEFT;
+    button_map[SDL_CONTROLLER_BUTTON_DPAD_RIGHT] = VANILLA_BTN_RIGHT;
+    axis_map[SDL_CONTROLLER_AXIS_LEFTX] = VANILLA_AXIS_L_X;
+    axis_map[SDL_CONTROLLER_AXIS_LEFTY] = VANILLA_AXIS_L_Y;
+    axis_map[SDL_CONTROLLER_AXIS_RIGHTX] = VANILLA_AXIS_R_X;
+    axis_map[SDL_CONTROLLER_AXIS_RIGHTY] = VANILLA_AXIS_R_Y;
+    axis_map[SDL_CONTROLLER_AXIS_TRIGGERLEFT] = VANILLA_BTN_ZL;
+    axis_map[SDL_CONTROLLER_AXIS_TRIGGERRIGHT] = VANILLA_BTN_ZR;
+
+    key_map[SDL_SCANCODE_UP] = VANILLA_BTN_UP;
+    key_map[SDL_SCANCODE_DOWN] = VANILLA_BTN_DOWN;
+    key_map[SDL_SCANCODE_LEFT] = VANILLA_BTN_LEFT;
+    key_map[SDL_SCANCODE_RIGHT] = VANILLA_BTN_RIGHT;
+    key_map[SDL_SCANCODE_Z] = VANILLA_BTN_A;
+    key_map[SDL_SCANCODE_X] = VANILLA_BTN_B;
+    key_map[SDL_SCANCODE_C] = VANILLA_BTN_X;
+    key_map[SDL_SCANCODE_V] = VANILLA_BTN_Y;
+    key_map[SDL_SCANCODE_RETURN] = VANILLA_BTN_PLUS;
+    key_map[SDL_SCANCODE_LCTRL] = VANILLA_BTN_MINUS;
+    key_map[SDL_SCANCODE_H] = VANILLA_BTN_HOME;
+    key_map[SDL_SCANCODE_Y] = VANILLA_BTN_TV;
+    key_map[SDL_SCANCODE_W] = VANILLA_AXIS_L_UP;
+    key_map[SDL_SCANCODE_A] = VANILLA_AXIS_L_LEFT;
+    key_map[SDL_SCANCODE_S] = VANILLA_AXIS_L_DOWN;
+    key_map[SDL_SCANCODE_D] = VANILLA_AXIS_L_RIGHT;
+    key_map[SDL_SCANCODE_E] = VANILLA_BTN_L3;
+    key_map[SDL_SCANCODE_KP_8] = VANILLA_AXIS_R_UP;
+    key_map[SDL_SCANCODE_KP_4] = VANILLA_AXIS_R_LEFT;
+    key_map[SDL_SCANCODE_KP_2] = VANILLA_AXIS_R_DOWN;
+    key_map[SDL_SCANCODE_KP_6] = VANILLA_AXIS_R_RIGHT;
+    key_map[SDL_SCANCODE_KP_5] = VANILLA_BTN_R3;
+    key_map[SDL_SCANCODE_T] = VANILLA_BTN_L;
+    key_map[SDL_SCANCODE_G] = VANILLA_BTN_ZL;
+    key_map[SDL_SCANCODE_U] = VANILLA_BTN_R;
+    key_map[SDL_SCANCODE_J] = VANILLA_BTN_ZR;
+}
+
+SDL_GameController *find_valid_controller()
+{
+	for (int i = 0; i < SDL_NumJoysticks(); i++) {
+		SDL_GameController *c = SDL_GameControllerOpen(i);
+		if (c) {
+			return c;
+		}
+	}
+
+	return NULL;
+}
+
+void vui_sdl_audio_handler(const void *data, size_t size, void *userdata)
+{
+    vui_sdl_context_t *sdl_ctx = (vui_sdl_context_t *) userdata;
+
+    if (SDL_QueueAudio(sdl_ctx->audio, data, size) < 0) {
+        printf("Failed to queue audio (data: %p, size: %zu)\n", data, size);
+    }
+}
+
+void vui_sdl_vibrate_handler(uint8_t vibrate, void *userdata)
+{
+    vui_sdl_context_t *sdl_ctx = (vui_sdl_context_t *) userdata;
+    if (sdl_ctx->controller) {
+        uint16_t amount = vibrate ? 0xFFFF : 0;
+		SDL_GameControllerRumble(sdl_ctx->controller, amount, amount, 0);
+    }
+}
 
 int vui_init_sdl(vui_context_t *ctx, int fullscreen)
 {
@@ -64,30 +166,65 @@ int vui_init_sdl(vui_context_t *ctx, int fullscreen)
         return -1;
     }
 
+    SDL_AudioSpec desired = {0};
+	desired.freq = 48000;
+	desired.format = AUDIO_S16LSB;
+	desired.channels = 2;
+
+	sdl_ctx->audio = SDL_OpenAudioDevice(NULL, 0, &desired, NULL, 0);
+	if (sdl_ctx->audio) {
+		SDL_PauseAudioDevice(sdl_ctx->audio, 0);
+        
+        ctx->audio_handler = vui_sdl_audio_handler;
+        ctx->audio_handler_data = sdl_ctx;
+	} else {
+		printf("Failed to open audio device\n");
+	}
+
+    ctx->vibrate_handler = vui_sdl_vibrate_handler;
+    ctx->vibrate_handler_data = sdl_ctx;
+
     if (TTF_Init()) {
         return -1;
     }
 
     const char *font_filename = "/home/matt/src/vanilla/rpi/font/system.ttf";
 
-    sysfont = TTF_OpenFont(font_filename, 36);
-    if (!sysfont) {
+    sdl_ctx->sysfont = TTF_OpenFont(font_filename, 36);
+    if (!sdl_ctx->sysfont) {
         return -1;
     }
 
-    sysfont_mini = TTF_OpenFont(font_filename, 24);
-    if (!sysfont_mini) {
+    sdl_ctx->sysfont_small = TTF_OpenFont(font_filename, 24);
+    if (!sdl_ctx->sysfont_small) {
         return -1;
     }
 
-    TTF_SetFontWrappedAlign(sysfont, TTF_WRAPPED_ALIGN_CENTER);
-    TTF_SetFontWrappedAlign(sysfont_mini, TTF_WRAPPED_ALIGN_CENTER);
+    sdl_ctx->sysfont_tiny = TTF_OpenFont(font_filename, 16);
+    if (!sdl_ctx->sysfont_tiny) {
+        return -1;
+    }
+
+    TTF_SetFontWrappedAlign(sdl_ctx->sysfont, TTF_WRAPPED_ALIGN_CENTER);
+    TTF_SetFontWrappedAlign(sdl_ctx->sysfont_small, TTF_WRAPPED_ALIGN_CENTER);
+    TTF_SetFontWrappedAlign(sdl_ctx->sysfont_tiny, TTF_WRAPPED_ALIGN_CENTER);
+
+    sdl_ctx->game_tex = SDL_CreateTexture(sdl_ctx->renderer, SDL_PIXELFORMAT_IYUV, SDL_TEXTUREACCESS_STREAMING, ctx->screen_width, ctx->screen_height);
+    SDL_SetRenderTarget(sdl_ctx->renderer, sdl_ctx->game_tex);
+    SDL_SetRenderDrawColor(sdl_ctx->renderer, 0, 0, 0, 0);
+    SDL_RenderClear(sdl_ctx->renderer);
 
     sdl_ctx->background = 0;
     memset(sdl_ctx->layer_data, 0, sizeof(sdl_ctx->layer_data));
     memset(sdl_ctx->label_data, 0, sizeof(sdl_ctx->label_data));
     memset(sdl_ctx->button_cache, 0, sizeof(sdl_ctx->button_cache));
     memset(sdl_ctx->image_cache, 0, sizeof(sdl_ctx->image_cache));
+    sdl_ctx->controller = find_valid_controller();
+
+    sdl_ctx->frame = av_frame_alloc();
+
+	// Initialize gamepad lookup tables
+	init_gamepad();
 
     return 0;
 }
@@ -99,16 +236,46 @@ void vui_close_sdl(vui_context_t *ctx)
         return;
     }
 
+    av_frame_free(&sdl_ctx->frame);
+
+    if (sdl_ctx->controller) {
+        SDL_GameControllerClose(sdl_ctx->controller);
+    }
+
+    SDL_DestroyTexture(sdl_ctx->game_tex);
+    SDL_DestroyTexture(sdl_ctx->background);
+
     for (int i = 0; i < MAX_BUTTON_COUNT; i++) {
         if (sdl_ctx->layer_data[i]) {
             SDL_DestroyTexture(sdl_ctx->layer_data[i]);
         }
     }
 
-    TTF_CloseFont(sysfont_mini);
-    TTF_CloseFont(sysfont);
+    for (int i = 0; i < MAX_BUTTON_COUNT; i++) {
+        if (sdl_ctx->button_cache[i].texture) {
+            SDL_DestroyTexture(sdl_ctx->button_cache[i].texture);
+        }
+    }
+
+    for (int i = 0; i < MAX_BUTTON_COUNT; i++) {
+        if (sdl_ctx->image_cache[i].texture) {
+            SDL_DestroyTexture(sdl_ctx->image_cache[i].texture);
+        }
+    }
+
+    for (int i = 0; i < MAX_BUTTON_COUNT; i++) {
+        if (sdl_ctx->image_cache[i].texture) {
+            SDL_DestroyTexture(sdl_ctx->image_cache[i].texture);
+        }
+    }
+
+    TTF_CloseFont(sdl_ctx->sysfont_tiny);
+    TTF_CloseFont(sdl_ctx->sysfont_small);
+    TTF_CloseFont(sdl_ctx->sysfont);
 
     TTF_Quit();
+
+	SDL_CloseAudioDevice(sdl_ctx->audio);
 
     SDL_DestroyRenderer(sdl_ctx->renderer);
 
@@ -142,13 +309,27 @@ SDL_Texture *vui_sdl_load_texture(SDL_Renderer *renderer, const char *filename)
     return IMG_LoadTexture(renderer, buf);
 }
 
-void vui_sdl_draw_button(vui_sdl_context_t *sdl_ctx, vui_button_t *btn)
+float calculate_x_inset(float y, float h, float radius)
+{
+    float x_inset = 0;
+    if (y < radius) {
+        float yb = y - radius;
+        x_inset = radius - sqrtf(radius*radius - yb*yb);
+    } else {
+        if (y >= h - radius) {
+            float yb = (h - y) - radius;
+            x_inset = radius - sqrtf(radius*radius - yb*yb);
+        }
+    }
+    return x_inset;
+}
+
+void vui_sdl_draw_button(vui_context_t *vui, vui_sdl_context_t *sdl_ctx, vui_button_t *btn)
 {
     SDL_SetRenderDrawColor(sdl_ctx->renderer, 0, 0, 0, 0);
     SDL_RenderClear(sdl_ctx->renderer);
 
     SDL_Color text_color;
-    TTF_Font *text_font = btn->style != VUI_BUTTON_STYLE_CORNER ? sysfont : sysfont_mini;
 
     SDL_Rect rect;
     rect.x = 0;
@@ -182,13 +363,45 @@ void vui_sdl_draw_button(vui_sdl_context_t *sdl_ctx, vui_button_t *btn)
         0xE0,
         0xF0,
     };
+    static const uint8_t button_checked_y_gradient_colors[] = {
+        0xFF, 0x00, 0x00,
+        0xFF, 0x80, 0x00,
+        0xFF, 0xFF, 0x00,
+        0x00, 0xFF, 0x00,
+        0x00, 0x00, 0xFF,
+    };
+
+    int scrw, scrh;
+    vui_get_screen_size(vui, &scrw, &scrh);
+
+    // Load icon if exists
+    int icon_x;
+    int icon_y;
+    int icon_size = btn->style == VUI_BUTTON_STYLE_CORNER ? rect.h * 1 / 3 : rect.h * 3 / 4;
+    SDL_Texture *icon = 0;
+    if (btn->icon[0]) {
+        icon = vui_sdl_load_texture(sdl_ctx->renderer, btn->icon);
+    }
+
+    TTF_Font *text_font;
+    if (btn->style == VUI_BUTTON_STYLE_CORNER) {
+        if (!icon) {
+            text_font = sdl_ctx->sysfont_small;
+        } else {
+            text_font = sdl_ctx->sysfont_tiny;
+        }
+    } else {
+        text_font = sdl_ctx->sysfont;
+    }
 
     const int btn_radius = rect.h * 2 / 10;
     for (int y = 0; y < rect.h; y++) {
         int coord = rect.y + y;
 
         // Determine color
-        float l = 0;
+        float lr = 0;
+        float lg = 0;
+        float lb = 0;
         {
             float yf = y / (float) rect.h;
             for (size_t j = 1; j < sizeof(button_y_gradient_positions)/sizeof(float); j++) {
@@ -198,9 +411,19 @@ void vui_sdl_draw_button(vui_sdl_context_t *sdl_ctx, vui_button_t *btn)
                     yf -= min;
                     yf /= max - min;
 
-                    uint8_t minc = button_y_gradient_colors[j - 1];
-                    uint8_t maxc = button_y_gradient_colors[j];
-                    l = lerp(minc, maxc, yf);
+                    if (btn->checked) {
+                        const uint8_t *minrgb = button_checked_y_gradient_colors + (j - 1) * 3;
+                        const uint8_t *maxrgb = button_checked_y_gradient_colors + j * 3;
+                        lr = lerp(minrgb[0], maxrgb[0], yf);
+                        lg = lerp(minrgb[1], maxrgb[1], yf);
+                        lb = lerp(minrgb[2], maxrgb[2], yf);
+                    } else {
+                        uint8_t minc = button_y_gradient_colors[j - 1];
+                        uint8_t maxc = button_y_gradient_colors[j];
+                        lr = lerp(minc, maxc, yf);
+                        lg = lerp(minc, maxc, yf);
+                        lb = lerp(minc, maxc, yf);
+                    }
                     break;
                 }
             }
@@ -208,32 +431,29 @@ void vui_sdl_draw_button(vui_sdl_context_t *sdl_ctx, vui_button_t *btn)
 
         // Handle rounded corners
         float x_inset = 0;
+        float w_inset = 0;
         if (btn->style != VUI_BUTTON_STYLE_CORNER) {
-            if (y < btn_radius) {
-                int yb = y - btn_radius;
-                x_inset = btn_radius - sqrtf(btn_radius*btn_radius - yb*yb);
+            x_inset = w_inset = calculate_x_inset(y, rect.h, btn_radius);
+        } else {
+            float inset_y = y;
+            if (btn->y < scrh/2) {
+                inset_y += rect.h;
+            }
+
+            float hor_inset = calculate_x_inset(inset_y, rect.h*2, rect.h);
+            if (btn->x < scrw/2) {
+                w_inset = hor_inset;
             } else {
-                if (y >= rect.h - btn_radius) {
-                    int yb = (rect.h - y) - btn_radius;
-                    x_inset = btn_radius - sqrtf(btn_radius*btn_radius - yb*yb);
-                }
+                x_inset = hor_inset;
             }
         }
 
-        SDL_SetRenderDrawColor(sdl_ctx->renderer, l, l, l, 0xFF);
-        SDL_RenderDrawLineF(sdl_ctx->renderer, rect.x + x_inset, coord, rect.x + rect.w - x_inset, coord);
+        SDL_SetRenderDrawColor(sdl_ctx->renderer, lr, lg, lb, 0xFF);
+        SDL_RenderDrawLineF(sdl_ctx->renderer, rect.x + x_inset, coord, rect.x + rect.w - w_inset, coord);
     }
 
     text_color.r = text_color.g = text_color.b = 0x40;
     text_color.a = 0xFF;
-
-    // Load icon if exists
-    int icon_x;
-    int icon_size = rect.h * 3 / 4;
-    SDL_Texture *icon = 0;
-    if (btn->icon[0]) {
-        icon = vui_sdl_load_texture(sdl_ctx->renderer, btn->icon);
-    }
     
     // Draw text
     if (btn->text[0]) {
@@ -245,21 +465,29 @@ void vui_sdl_draw_button(vui_sdl_context_t *sdl_ctx, vui_button_t *btn)
         text_rect.w = surface->w;
         text_rect.h = surface->h;
 
-        if (icon) {
-            const int btn_padding = 5;
+        const int btn_padding = 8;
+        if (icon && btn->style != VUI_BUTTON_STYLE_CORNER) {
             icon_x = rect.x + rect.w / 2 - (text_rect.w + icon_size) / 2;
+            icon_y = rect.y + rect.h/2 - icon_size/2;
             text_rect.x = icon_x + icon_size + btn_padding;
         } else {
             text_rect.x = rect.x + rect.w / 2 - text_rect.w / 2;
         }
-        
-        text_rect.y = rect.y + rect.h / 2 - text_rect.h / 2;
+
+        if (icon && btn->style == VUI_BUTTON_STYLE_CORNER) {
+            text_rect.y = rect.y + rect.h/2 - (text_rect.h + icon_size + btn_padding)/2;
+            icon_x = rect.x + rect.w/2 - icon_size/2;
+            icon_y = text_rect.y + text_rect.h + btn_padding;
+        } else {
+            text_rect.y = rect.y + rect.h / 2 - text_rect.h / 2;
+        }
 
         SDL_RenderCopy(sdl_ctx->renderer, texture, NULL, &text_rect);
         SDL_DestroyTexture(texture);
         SDL_FreeSurface(surface);
     } else {
         icon_x = rect.x + rect.w/2 - icon_size/2;
+        icon_y = rect.y + rect.h/2 - icon_size/2;
     }
 
     // Draw icon
@@ -267,7 +495,7 @@ void vui_sdl_draw_button(vui_sdl_context_t *sdl_ctx, vui_button_t *btn)
         SDL_Rect icon_rect;
         icon_rect.w = icon_rect.h = icon_size;
         icon_rect.x = icon_x;
-        icon_rect.y = rect.y + rect.h/2 - icon_rect.h/2;
+        icon_rect.y = icon_y;
 
         SDL_RenderCopy(sdl_ctx->renderer, icon, 0, &icon_rect);
         SDL_DestroyTexture(icon);
@@ -312,7 +540,7 @@ void vui_draw_sdl(vui_context_t *ctx, SDL_Renderer *renderer)
         }
         SDL_SetRenderTarget(renderer, sdl_ctx->layer_data[layer]);
 
-        if (layer == 0) {
+        if (layer == 0 && ctx->background_enabled) {
             // Draw background
             if (!sdl_ctx->background) {
                 sdl_ctx->background = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_TARGET, ctx->screen_width, ctx->screen_height);
@@ -323,7 +551,7 @@ void vui_draw_sdl(vui_context_t *ctx, SDL_Renderer *renderer)
             }
             SDL_RenderCopy(renderer, sdl_ctx->background, 0, 0);
         } else {
-            // vui_sdl_set_render_color(renderer, ctx->layer_color[layer]);
+            vui_sdl_set_render_color(renderer, ctx->layer_color[layer]);
             SDL_RenderClear(renderer);
         }
     }
@@ -340,13 +568,22 @@ void vui_draw_sdl(vui_context_t *ctx, SDL_Renderer *renderer)
         sr.w = rect->w;
         sr.h = rect->h;
         vui_sdl_set_render_color(renderer, rect->color);
-        SDL_RenderFillRect(renderer, &sr);
+
+        if (rect->border_radius == 0) {
+            SDL_RenderFillRect(renderer, &sr);
+        } else {
+            for (int y = 0; y < sr.h; y++) {
+                float x_inset = calculate_x_inset(y, sr.h, rect->border_radius);
+                float draw_y = sr.y + y;
+                SDL_RenderDrawLineF(renderer, sr.x + x_inset, draw_y, sr.x + sr.w - x_inset, draw_y);
+            }
+        }
     }
 
     // Draw labels
     for (int i = 0; i < ctx->label_count; i++) {
         vui_label_t *lbl = &ctx->labels[i];
-        if (lbl->text[0]) {
+        if (lbl->text[0] && lbl->visible) {
             SDL_SetRenderTarget(renderer, sdl_ctx->layer_data[lbl->layer]);
 
             SDL_Color c;
@@ -355,7 +592,7 @@ void vui_draw_sdl(vui_context_t *ctx, SDL_Renderer *renderer)
             c.b = lbl->color.b * 0xFF;
             c.a = lbl->color.a * 0xFF;
 
-            SDL_Surface *surface = TTF_RenderUTF8_Blended_Wrapped(lbl->size == VUI_FONT_SIZE_SMALL ? sysfont_mini : sysfont, lbl->text, c, lbl->w);
+            SDL_Surface *surface = TTF_RenderUTF8_Blended_Wrapped(lbl->size == VUI_FONT_SIZE_SMALL ? sdl_ctx->sysfont_small : sdl_ctx->sysfont, lbl->text, c, lbl->w);
 
             SDL_Rect sr;
             sr.x = 0;
@@ -380,11 +617,15 @@ void vui_draw_sdl(vui_context_t *ctx, SDL_Renderer *renderer)
     for (int i = 0; i < ctx->button_count; i++) {
         vui_button_t *btn = &ctx->buttons[i];
 
+        if (!btn->visible) {
+            continue;
+        }
+
         SDL_SetRenderTarget(renderer, sdl_ctx->layer_data[btn->layer]);
 
         // Check if button needs to be redrawn
         vui_sdl_cached_texture_t *btn_tex = &sdl_ctx->button_cache[i];
-        if (!btn_tex->texture || btn_tex->w != btn->w || btn_tex->h != btn->h || strcmp(btn_tex->text, btn->text) || strcmp(btn_tex->icon, btn->icon)) {
+        if (!btn_tex->texture || btn_tex->w != btn->w || btn_tex->h != btn->h || strcmp(btn_tex->text, btn->text) || strcmp(btn_tex->icon, btn->icon) || btn_tex->checked != btn->checked) {
             // Must re-draw texture
             if (btn_tex->texture && (btn_tex->w != btn->w || btn_tex->h != btn->h)) {
                 SDL_DestroyTexture(btn_tex->texture);
@@ -397,13 +638,15 @@ void vui_draw_sdl(vui_context_t *ctx, SDL_Renderer *renderer)
 
             SDL_Texture *old_target = SDL_GetRenderTarget(renderer);
             SDL_SetRenderTarget(renderer, btn_tex->texture);
-            vui_sdl_draw_button(sdl_ctx, btn);
+            vui_sdl_draw_button(ctx, sdl_ctx, btn);
             SDL_SetRenderTarget(renderer, old_target);
 
             btn_tex->w = btn->w;
             btn_tex->h = btn->h;
             strcpy(btn_tex->text, btn->text);
             strcpy(btn_tex->icon, btn->icon);
+
+            btn_tex->checked = btn->checked;
         }
 
         // Draw cached texture onto screen
@@ -413,7 +656,60 @@ void vui_draw_sdl(vui_context_t *ctx, SDL_Renderer *renderer)
         rect.w = btn->sw;
         rect.h = btn->sh;
         
+        uint8_t f = (btn->enabled ? 1 : 0.5f) * 0xFF;
+        SDL_SetTextureAlphaMod(btn_tex->texture, f);
+        SDL_SetTextureColorMod(btn_tex->texture, f, f, f);
+
         SDL_RenderCopy(renderer, btn_tex->texture, 0, &rect);
+
+        if (i == ctx->selected_button) {
+            const int btn_select_short_sz = 8;
+            const int btn_select_long_sz = 24;
+
+            const int tlx = btn->sx;
+            const int tly = btn->sy;
+            const int trx = btn->sx + btn->sw;
+            const int try = tly;
+            const int blx = tlx;
+            const int bly = btn->sy + btn->sh;
+            const int brx = trx;
+            const int bry = bly;
+
+            SDL_SetRenderDrawColor(renderer, 0x17, 0xCB, 0xD1, 0xFF);
+
+            SDL_Rect r;
+
+            r.x = tlx;
+            r.y = tly;
+            r.w = btn_select_long_sz;
+            r.h = btn_select_short_sz;
+
+            SDL_RenderFillRect(renderer, &r);
+
+            r.x = trx - btn_select_long_sz;
+            SDL_RenderFillRect(renderer, &r);
+
+            r.y = bly - btn_select_short_sz;
+            SDL_RenderFillRect(renderer, &r);
+
+            r.x = tlx;
+            SDL_RenderFillRect(renderer, &r);
+
+            r.w = btn_select_short_sz;
+            r.h = btn_select_long_sz;
+            
+            r.y = tly;
+            SDL_RenderFillRect(renderer, &r);
+
+            r.x = trx - btn_select_short_sz;
+            SDL_RenderFillRect(renderer, &r);
+
+            r.y = bry - btn_select_long_sz;
+            SDL_RenderFillRect(renderer, &r);
+
+            r.x = blx;
+            SDL_RenderFillRect(renderer, &r);
+        }
     }
 
     // Draw images
@@ -447,6 +743,13 @@ void vui_draw_sdl(vui_context_t *ctx, SDL_Renderer *renderer)
     }
 }
 
+int32_t pack_float(float f)
+{
+    int32_t x;
+    memcpy(&x, &f, sizeof(int32_t));
+    return x;
+}
+
 int vui_update_sdl(vui_context_t *vui)
 {
     vui_sdl_context_t *sdl_ctx = (vui_sdl_context_t *) vui->platform_data;
@@ -455,36 +758,161 @@ int vui_update_sdl(vui_context_t *vui)
 
     SDL_Event ev;
     while (SDL_PollEvent(&ev)) {
-        if (ev.type == SDL_QUIT) {
+        switch (ev.type) {
+        case SDL_QUIT:
             vanilla_stop();
             return 0;
-        } else if (ev.type == SDL_MOUSEBUTTONDOWN || ev.type == SDL_MOUSEBUTTONUP) {
+        case SDL_MOUSEMOTION:
+        case SDL_MOUSEBUTTONDOWN:
+        case SDL_MOUSEBUTTONUP:
+            // Ensure dst_rect is initialized
             if (dst_rect->w > 0 && dst_rect->h > 0) {
+                // Translate screen coords to logical coords
                 int tr_x, tr_y;
                 tr_x = (ev.button.x - dst_rect->x) * vui->screen_width / dst_rect->w;
                 tr_y = (ev.button.y - dst_rect->y) * vui->screen_height / dst_rect->h;
-                if (ev.type == SDL_MOUSEBUTTONDOWN)
-                    vui_process_mousedown(vui, tr_x, tr_y);
-                else
-                    vui_process_mouseup(vui, tr_x, tr_y);
+
+                if (vui->game_mode) {
+                    // In game mode, pass clicks directly to Vanilla
+                    int x, y;
+                    if (ev.button.button == SDL_BUTTON_LEFT && (ev.type == SDL_MOUSEBUTTONDOWN || ev.type == SDL_MOUSEMOTION)) {
+                        x = tr_x;
+                        y = tr_y;
+                    } else {
+                        x = -1;
+                        y = -1;
+                    }
+                    vanilla_set_touch(x, y);
+                } else {
+                    // Otherwise, handle ourselves
+                    if (ev.type == SDL_MOUSEBUTTONDOWN)
+                        vui_process_mousedown(vui, tr_x, tr_y);
+                    else if (ev.type == SDL_MOUSEBUTTONUP)
+                        vui_process_mouseup(vui, tr_x, tr_y);
+                }
             }
+            break;
+        case SDL_CONTROLLERDEVICEADDED:
+            // Attempt to find controller if one doesn't exist already
+            if (!sdl_ctx->controller) {
+                sdl_ctx->controller = find_valid_controller();
+            }
+            break;
+        case SDL_CONTROLLERDEVICEREMOVED:
+            // Handle current controller being removed
+            if (sdl_ctx->controller && ev.cdevice.which == SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(sdl_ctx->controller))) {
+                SDL_GameControllerClose(sdl_ctx->controller);
+                sdl_ctx->controller = find_valid_controller();
+            }
+            break;
+        case SDL_CONTROLLERBUTTONDOWN:
+        case SDL_CONTROLLERBUTTONUP:
+            if (sdl_ctx->controller && ev.cdevice.which == SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(sdl_ctx->controller))) {
+                int vanilla_btn = button_map[ev.cbutton.button];
+                if (vanilla_btn != -1) {
+                    if (vui->game_mode) {
+                        vanilla_set_button(vanilla_btn, ev.type == SDL_CONTROLLERBUTTONDOWN ? INT16_MAX : 0);
+                    } else if (ev.type == SDL_CONTROLLERBUTTONDOWN) {
+                        vui_process_keydown(vui, vanilla_btn);
+                    } else {
+                        vui_process_keyup(vui, vanilla_btn);
+                    }
+                }
+            }
+            break;
+        case SDL_CONTROLLERAXISMOTION:
+            if (sdl_ctx->controller && ev.cdevice.which == SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(sdl_ctx->controller))) {
+                int vanilla_axis = axis_map[ev.caxis.axis];
+                Sint16 axis_value = ev.caxis.value;
+                if (vanilla_axis != -1) {
+                    if (vui->game_mode) {
+                        vanilla_set_button(vanilla_axis, axis_value);
+                    } else if (vanilla_axis == SDL_CONTROLLER_AXIS_LEFTX) {
+                        if (axis_value < 0)
+                            vui_process_keydown(vui, VANILLA_AXIS_L_LEFT);
+                        else if (axis_value > 0)
+                            vui_process_keydown(vui, VANILLA_AXIS_L_RIGHT);
+                        else {
+                            vui_process_keyup(vui, VANILLA_AXIS_L_LEFT);
+                            vui_process_keyup(vui, VANILLA_AXIS_L_RIGHT);
+                        }
+                    } else if (vanilla_axis == SDL_CONTROLLER_AXIS_LEFTY) {
+                        if (axis_value < 0)
+                            vui_process_keydown(vui, VANILLA_AXIS_L_UP);
+                        else if (axis_value > 0)
+                            vui_process_keydown(vui, VANILLA_AXIS_L_DOWN);
+                        else {
+                            vui_process_keyup(vui, VANILLA_AXIS_L_UP);
+                            vui_process_keyup(vui, VANILLA_AXIS_L_DOWN);
+                        }
+                    }
+                }
+            }
+            break;
+        case SDL_CONTROLLERSENSORUPDATE:
+            if (ev.csensor.sensor == SDL_SENSOR_ACCEL) {
+                vanilla_set_button(VANILLA_SENSOR_ACCEL_X, pack_float(ev.csensor.data[0]));
+                vanilla_set_button(VANILLA_SENSOR_ACCEL_Y, pack_float(ev.csensor.data[1]));
+                vanilla_set_button(VANILLA_SENSOR_ACCEL_Z, pack_float(ev.csensor.data[2]));
+            } else if (ev.csensor.sensor == SDL_SENSOR_GYRO) {
+                vanilla_set_button(VANILLA_SENSOR_GYRO_PITCH, pack_float(ev.csensor.data[0]));
+                vanilla_set_button(VANILLA_SENSOR_GYRO_YAW, pack_float(ev.csensor.data[1]));
+                vanilla_set_button(VANILLA_SENSOR_GYRO_ROLL, pack_float(ev.csensor.data[2]));
+            }
+            break;
+        case SDL_KEYDOWN:
+        case SDL_KEYUP:
+        {
+            int vanilla_btn = key_map[ev.key.keysym.scancode];
+            if (vanilla_btn != -1) {
+                if (vui->game_mode) {
+                    vanilla_set_button(vanilla_btn, ev.type == SDL_KEYDOWN ? INT16_MAX : 0);
+                } else if (ev.type == SDL_KEYDOWN) {
+                    vui_process_keydown(vui, vanilla_btn);
+                } else {
+                    vui_process_keyup(vui, vanilla_btn);
+                }
+            }
+            break;
+        }
         }
     }
 
     vui_update(vui);
 
-    // Draw vui to a custom texture
-    vui_draw_sdl(vui, sdl_ctx->renderer);
+    SDL_Texture *main_tex;
 
-    // Flatten layers
-    for (int i = vui->layers - 1; i > 0; i--) {
-        SDL_Texture *bg = sdl_ctx->layer_data[i-1];
-        SDL_Texture *fg = sdl_ctx->layer_data[i];
+    if (!vui->game_mode) {
+        // Draw vui to a custom texture
+        vui_draw_sdl(vui, sdl_ctx->renderer);
 
-        SDL_SetRenderTarget(sdl_ctx->renderer, bg);
-        SDL_SetTextureColorMod(fg, vui->layer_opacity[i] * 0xFF, vui->layer_opacity[i] * 0xFF, vui->layer_opacity[i] * 0xFF);
-        SDL_SetTextureAlphaMod(fg, vui->layer_opacity[i] * 0xFF);
-        SDL_RenderCopy(sdl_ctx->renderer, fg, NULL, NULL);
+        // Flatten layers
+        for (int i = vui->layers - 1; i > 0; i--) {
+            SDL_Texture *bg = sdl_ctx->layer_data[i-1];
+            SDL_Texture *fg = sdl_ctx->layer_data[i];
+
+            SDL_SetRenderTarget(sdl_ctx->renderer, bg);
+            SDL_SetTextureColorMod(fg, vui->layer_opacity[i] * 0xFF, vui->layer_opacity[i] * 0xFF, vui->layer_opacity[i] * 0xFF);
+            SDL_SetTextureAlphaMod(fg, vui->layer_opacity[i] * 0xFF);
+            SDL_RenderCopy(sdl_ctx->renderer, fg, NULL, NULL);
+        }
+
+        main_tex = sdl_ctx->layer_data[0];
+    } else {
+        pthread_mutex_lock(&vpi_decoding_mutex);
+		if (vpi_present_frame && vpi_present_frame->data[0]) {
+			av_frame_move_ref(sdl_ctx->frame, vpi_present_frame);
+		}
+		pthread_mutex_unlock(&vpi_decoding_mutex);
+		
+		if (sdl_ctx->frame->data[0]) {
+			SDL_UpdateYUVTexture(sdl_ctx->game_tex, NULL,
+								 sdl_ctx->frame->data[0], sdl_ctx->frame->linesize[0],
+								 sdl_ctx->frame->data[1], sdl_ctx->frame->linesize[1],
+								 sdl_ctx->frame->data[2], sdl_ctx->frame->linesize[2]);
+			av_frame_unref(sdl_ctx->frame);
+		}
+        main_tex = sdl_ctx->game_tex;
     }
 
     // Calculate our destination rectangle
@@ -513,7 +941,7 @@ int vui_update_sdl(vui_context_t *vui)
     SDL_SetRenderTarget(sdl_ctx->renderer, NULL);
     SDL_SetRenderDrawColor(sdl_ctx->renderer, 0, 0, 0, 0);
     SDL_RenderClear(sdl_ctx->renderer);
-    SDL_RenderCopy(sdl_ctx->renderer, sdl_ctx->layer_data[0], NULL, dst_rect);
+    SDL_RenderCopy(sdl_ctx->renderer, main_tex, NULL, dst_rect);
 
     // Flip surfaces
     SDL_RenderPresent(sdl_ctx->renderer);

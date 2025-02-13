@@ -1,8 +1,11 @@
 #include "ui.h"
 
+#include <limits.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/time.h>
+#include <vanilla.h>
 
 #include "ui_anim.h"
 #include "ui_priv.h"
@@ -16,6 +19,9 @@ vui_context_t *vui_alloc(int width, int height)
     vui->screen_width = width;
     vui->screen_height = height;
     vui->background_image[0] = 0;
+    vui->background_enabled = 0;
+    vui->audio_handler = 0;
+    vui->vibrate_handler = 0;
     return vui;
 }
 
@@ -30,18 +36,26 @@ int vui_reset(vui_context_t *ctx)
     ctx->button_count = 0;
     ctx->label_count = 0;
     ctx->rect_count = 0;
+    ctx->game_mode = 0;
     ctx->passive_animation_count = 0;
     memset(ctx->images, 0, sizeof(ctx->images));
     ctx->animation_enabled = 0;
     ctx->button_active = -1;
     ctx->layers = 1;
     ctx->layer_opacity[0] = 1;
+    ctx->selected_button = -1;
+    ctx->cancel_button = -1;
 }
 
 void vui_get_screen_size(vui_context_t *ctx, int *width, int *height)
 {
     if (width) *width = ctx->screen_width;
     if (height) *height = ctx->screen_height;
+}
+
+void vui_enable_background(vui_context_t *ctx, int enabled)
+{
+    ctx->background_enabled = enabled;
 }
 
 void vui_set_background(vui_context_t *ctx, const char *background_image)
@@ -84,10 +98,42 @@ int vui_button_create(vui_context_t *ctx, int x, int y, int w, int h, const char
     vui_button_update_icon(ctx, index, icon);
     vui_button_update_style(ctx, index, style);
     vui_button_update_click_handler(ctx, index, callback, callback_data);
+    vui_button_update_visible(ctx, index, 1);
+    vui_button_update_enabled(ctx, index, 1);
+    vui_button_update_checked(ctx, index, 0);
 
     ctx->button_count++;
 
     return index;
+}
+
+void vui_button_update_visible(vui_context_t *ctx, int index, int visible)
+{
+    vui_button_t *btn = &ctx->buttons[index];
+    btn->visible = visible;
+    if (!visible && ctx->selected_button == index) {
+        ctx->selected_button = -1;
+    }
+}
+
+void vui_button_update_enabled(vui_context_t *ctx, int index, int enabled)
+{
+    vui_button_t *btn = &ctx->buttons[index];
+    btn->enabled = enabled;
+    if (!enabled && ctx->selected_button == index) {
+        ctx->selected_button = -1;
+    }
+}
+
+void vui_button_update_checked(vui_context_t *ctx, int index, int checked)
+{
+    vui_button_t *btn = &ctx->buttons[index];
+    btn->checked = checked;
+}
+
+void vui_button_set_cancel(vui_context_t *ctx, int button)
+{
+    ctx->cancel_button = button;
 }
 
 void vui_button_update_click_handler(vui_context_t *ctx, int index, vui_button_callback_t handler, void *userdata)
@@ -104,6 +150,12 @@ void vui_button_get_geometry(vui_context_t *ctx, int index, int *x, int *y, int 
     *y = btn->sy;
     *w = btn->sw;
     *h = btn->sh;
+}
+
+int vui_button_get_checked(vui_context_t *ctx, int index)
+{
+    vui_button_t *btn = &ctx->buttons[index];
+    return btn->checked;
 }
 
 void vui_button_update_geometry(vui_context_t *ctx, int index, int x, int y, int w, int h)
@@ -133,9 +185,141 @@ void vui_button_update_style(vui_context_t *ctx, int index, vui_button_style_t s
     btn->style = style;
 }
 
+void vui_select_direction(vui_context_t *ctx, vui_direction_t dir)
+{
+    int cx, cy;
+    if (ctx->selected_button == -1) {
+        int sw, sh;
+        vui_get_screen_size(ctx, &sw, &sh);
+        switch (dir) {
+        case VUI_DIR_LEFT:
+            cx = sw+sw;
+            cy = sh/2;
+            break;
+        case VUI_DIR_RIGHT:
+            cx = -sw;
+            cy = sh/2;
+            break;
+        case VUI_DIR_UP:
+            cx = sw/2;
+            cy = sh+sh;
+            break;
+        case VUI_DIR_DOWN:
+            cx = sw/2;
+            cy = -sh;
+            break;
+        }
+    } else {
+        vui_button_t *sel_btn = &ctx->buttons[ctx->selected_button];
+        cx = sel_btn->x + sel_btn->w / 2;
+        cy = sel_btn->y + sel_btn->h / 2;
+    }
+
+    int new_sel = -1;
+    int diff = INT_MAX;
+
+    for (int i = 0; i < ctx->button_count; i++) {
+        vui_button_t *b = &ctx->buttons[i];
+        if (b->visible && b->enabled) {
+            int valid = 0;
+
+            // Determine what "direction" this button is in
+            int ccx = b->x + b->w / 2;
+            int ccy = b->y + b->h / 2;
+
+            int diffx = ccx - cx;
+            int diffy = ccy - cy;
+
+            if (diffx == 0 && diffy == 0) {
+                // Don't know how to navigate here
+                continue;
+            }
+
+            vui_direction_t btn_dir;
+            int btn_dist;
+
+            int diffx_abs = abs(diffx);
+            int diffy_abs = abs(diffy);
+
+            if (diffx_abs > diffy_abs) {
+                btn_dist = diffx_abs;
+                if (diffx > 0) {
+                    btn_dir = VUI_DIR_RIGHT;
+                } else {
+                    btn_dir = VUI_DIR_LEFT;
+                }
+            } else {
+                btn_dist = diffy_abs;
+                if (diffy > 0) {
+                    btn_dir = VUI_DIR_DOWN;
+                } else {
+                    btn_dir = VUI_DIR_UP;
+                }
+            }
+
+            if (btn_dir == dir) {
+                if (btn_dist < diff) {
+                    diff = btn_dist;
+                    new_sel = i;
+                }
+            }
+        }
+    }
+
+    if (new_sel != -1) {
+        ctx->selected_button = new_sel;
+    }
+}
+
 int point_inside_button(vui_button_t *btn, int x, int y)
 {
     return x >= btn->x && y >= btn->y && x < btn->x + btn->w && y < btn->y + btn->h;
+}
+
+void vui_button_callback(vui_context_t *ctx, void *data)
+{
+    int index = (int) (intptr_t) data;
+    vui_button_t *btn = &ctx->buttons[index];
+    if (btn->onclick) {
+        btn->onclick(ctx, index, btn->onclick_data);
+    }
+}
+
+void press_button(vui_context_t *ctx, int index)
+{
+    if (ctx->button_active != -1) {
+        // Button already mousedown'd, ignore this
+        return;
+    }
+
+    if (ctx->animation_enabled) {
+        return;
+    }
+
+    vui_animation_button_mousedown(ctx, index, 0, 0);
+    ctx->button_active = index;
+}
+
+void release_button(vui_context_t *ctx, int and_click)
+{
+    if (ctx->button_active == -1) {
+        // No button was mousedown'd, do nothing here
+        return;
+    }
+
+    vui_button_t *btn = &ctx->buttons[ctx->button_active];
+
+    // Only do action if mouse is still inside button's rect
+    vui_callback_t callback = 0;
+    void *callback_data = 0;
+    if (and_click) {
+        callback = vui_button_callback;
+        callback_data = (void *) (intptr_t) ctx->button_active;
+    }
+
+    vui_animation_button_mouseup(ctx, ctx->button_active, callback, callback_data);
+
+    ctx->button_active = -1;
 }
 
 void vui_process_mousedown(vui_context_t *ctx, int x, int y)
@@ -149,23 +333,15 @@ void vui_process_mousedown(vui_context_t *ctx, int x, int y)
         return;
     }
 
+    ctx->selected_button = -1;
+
     for (int i = 0; i < ctx->button_count; i++) {
         vui_button_t *btn = &ctx->buttons[i];
 
-        if (point_inside_button(btn, x, y)) {
-            vui_animation_button_mousedown(ctx, i, 0, 0);
-            ctx->button_active = i;
+        if (btn->visible && btn->enabled && point_inside_button(btn, x, y)) {
+            press_button(ctx, i);
             break;
         }
-    }
-}
-
-void vui_button_callback(vui_context_t *ctx, void *data)
-{
-    int index = (int) (intptr_t) data;
-    vui_button_t *btn = &ctx->buttons[index];
-    if (btn->onclick) {
-        btn->onclick(ctx, index, btn->onclick_data);
     }
 }
 
@@ -175,20 +351,8 @@ void vui_process_mouseup(vui_context_t *ctx, int x, int y)
         // No button was mousedown'd, do nothing here
         return;
     }
-
-    vui_button_t *btn = &ctx->buttons[ctx->button_active];
-
-    // Only do action if mouse is still inside button's rect
-    vui_callback_t callback = 0;
-    void *callback_data = 0;
-    if (point_inside_button(btn, x, y)) {
-        callback = vui_button_callback;
-        callback_data = (void *) (intptr_t) ctx->button_active;
-    }
-
-    vui_animation_button_mouseup(ctx, ctx->button_active, callback, callback_data);
-
-    ctx->button_active = -1;
+    
+    release_button(ctx, point_inside_button(&ctx->buttons[ctx->button_active], x, y));
 }
 
 void vui_cancel_animation(vui_context_t *ctx)
@@ -272,6 +436,25 @@ void vui_update(vui_context_t *ctx)
     }
 }
 
+void vui_game_mode_set(vui_context_t *ctx, int enabled)
+{
+    ctx->game_mode = enabled;
+}
+
+void vui_audio_push(vui_context_t *ctx, const void *data, size_t size)
+{
+    if (ctx->audio_handler) {
+        ctx->audio_handler(data, size, ctx->audio_handler_data);
+    }
+}
+
+void vui_vibrate_set(vui_context_t *ctx, uint8_t val)
+{
+    if (ctx->vibrate_handler) {
+        ctx->vibrate_handler(val, ctx->vibrate_handler_data);
+    }
+}
+
 int vui_layer_create(vui_context_t *ctx)
 {
     int cur_layer = ctx->layers;
@@ -345,16 +528,23 @@ int vui_label_create(vui_context_t *ctx, int x, int y, int w, int h, const char 
 
     lbl->layer = layer;
     vui_label_update_text(ctx, index, text);
+    vui_label_update_visible(ctx, index, 1);
 
     ctx->label_count++;
 
     return index;
 }
 
-int vui_label_update_text(vui_context_t *ctx, int index, const char *text)
+void vui_label_update_text(vui_context_t *ctx, int index, const char *text)
 {
     vui_label_t *lbl = &ctx->labels[index];
     vui_strcpy(lbl->text, text);
+}
+
+void vui_label_update_visible(vui_context_t *ctx, int index, int visible)
+{
+    vui_label_t *lbl = &ctx->labels[index];
+    lbl->visible = visible;
 }
 
 int vui_rect_create(vui_context_t *ctx, int x, int y, int w, int h, int border_radius, vui_color_t color, int layer)
@@ -415,4 +605,58 @@ int vui_image_create(vui_context_t *ctx, int x, int y, int w, int h, const char 
 void vui_image_destroy(vui_context_t *ctx, int image)
 {
     ctx->images[image].valid = 0;
+}
+
+void vui_process_keydown(vui_context_t *ctx, int button)
+{
+    switch (button) {
+    case VANILLA_BTN_LEFT:
+    case VANILLA_AXIS_L_LEFT:
+        vui_select_direction(ctx, VUI_DIR_LEFT);
+        break;
+    case VANILLA_BTN_RIGHT:
+    case VANILLA_AXIS_L_RIGHT:
+        vui_select_direction(ctx, VUI_DIR_RIGHT);
+        break;
+    case VANILLA_BTN_UP:
+    case VANILLA_AXIS_L_UP:
+        vui_select_direction(ctx, VUI_DIR_UP);
+        break;
+    case VANILLA_BTN_DOWN:
+    case VANILLA_AXIS_L_DOWN:
+        vui_select_direction(ctx, VUI_DIR_DOWN);
+        break;
+    case VANILLA_BTN_A:
+        if (ctx->selected_button != -1) {
+            press_button(ctx, ctx->selected_button);
+        } else if (ctx->button_count == 1) {
+            press_button(ctx, 0);
+        } else {
+            for (int i = 0; i < ctx->button_count; i++) {
+                vui_button_t *b = &ctx->buttons[i];
+                if (b->enabled && b->visible) {
+                    ctx->selected_button = i;
+                    break;
+                }
+            }
+        }
+        break;
+    case VANILLA_BTN_B:
+        if (ctx->cancel_button != -1) {
+            press_button(ctx, ctx->cancel_button);
+        } else if (ctx->button_count == 1) {
+            press_button(ctx, 0);
+        }
+        break;
+    }
+}
+
+void vui_process_keyup(vui_context_t *ctx, int button)
+{
+    switch (button) {
+    case VANILLA_BTN_A:
+    case VANILLA_BTN_B:
+        release_button(ctx, 1);
+        break;
+    }
 }
