@@ -1,7 +1,11 @@
 #include "audio.h"
 
+#ifdef _WIN32
+#include <winsock2.h>
+#else
 #include <arpa/inet.h>
-#include <byteswap.h>
+#endif
+
 #include <pthread.h>
 #include <stdint.h>
 
@@ -48,7 +52,7 @@ void handle_audio_packet(gamepad_context_t *ctx, unsigned char *data, size_t len
 
     // ap->format = reverse_bits(ap->format, 3);
     // ap->seq_id = reverse_bits(ap->seq_id, 10);
-    ap->payload_size = bswap_16(ap->payload_size);
+    ap->payload_size = ntohs(ap->payload_size);
     // ap->timestamp = reverse_bits(ap->timestamp, 32);
 
     if (ap->type == TYPE_VIDEO) {

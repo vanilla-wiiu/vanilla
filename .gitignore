@@ -7,3 +7,8 @@ squashfs-root/
 
 buildpi/
 rpi-ffmpeg/
+
+.gradle/
+.cxx/
+.idea/
+android/local.properties

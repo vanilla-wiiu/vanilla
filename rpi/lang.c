@@ -26,6 +26,18 @@ static const char *lang_str[__VPI_LANG_T_COUNT] = {
     "Audio",
     "Connection",
     "Webcam",
+    "Local",
+    "Via Server",
+    "Set up how Vanilla connects to the Wii U",
+    "Choose 'Local' to connect directly with the hardware on your system. Otherwise, you may need a compatible 'server' to relay the necessary packets.",
+    "Select the wireless interface to use for the connection.",
+    "Enter the IP address of the server you wish to connect through.",
+    "Screenshot saved to \"%s\"",
+    "Recording started to \"%s\"",
+    "Recording finished",
+    "Connection lost, attempting to re-connect...",
+    "Your platform is not capable of \"Local\" connection, and must connect via a server.",
+    "Failed to save screenshot (%i)"
 };
 
 const char *lang(vpi_lang_t id)

@@ -2,12 +2,15 @@
 
 #include <math.h>
 #include <SDL2/SDL.h>
-#include <SDL2/SDL_image.h>
-#include <SDL2/SDL_ttf.h>
+#include <SDL_image.h>
+#include <SDL_ttf.h>
 #include <pthread.h>
 #include <vanilla.h>
 
 #include "game/game_decode.h"
+#include "game/game_main.h"
+#include "menu/menu.h"
+#include "platform.h"
 #include "ui_priv.h"
 #include "ui_util.h"
 
@@ -29,12 +32,16 @@ typedef struct {
     SDL_Texture *label_data[MAX_BUTTON_COUNT];
     vui_sdl_cached_texture_t button_cache[MAX_BUTTON_COUNT];
     vui_sdl_cached_texture_t image_cache[MAX_BUTTON_COUNT];
+    vui_sdl_cached_texture_t textedit_cache[MAX_BUTTON_COUNT];
     TTF_Font *sysfont;
     TTF_Font *sysfont_small;
     TTF_Font *sysfont_tiny;
     SDL_AudioDeviceID audio;
     SDL_GameController *controller;
     SDL_Texture *game_tex;
+    int last_shown_toast;
+    SDL_Texture *toast_tex;
+    struct timeval toast_expiry;
     AVFrame *frame;
 } vui_sdl_context_t;
 
@@ -101,6 +108,10 @@ void init_gamepad()
     key_map[SDL_SCANCODE_G] = VANILLA_BTN_ZL;
     key_map[SDL_SCANCODE_U] = VANILLA_BTN_R;
     key_map[SDL_SCANCODE_J] = VANILLA_BTN_ZR;
+
+    key_map[SDL_SCANCODE_F5] = VPI_ACTION_TOGGLE_RECORDING;
+    key_map[SDL_SCANCODE_F12] = VPI_ACTION_SCREENSHOT;
+    key_map[SDL_SCANCODE_ESCAPE] = VPI_ACTION_DISCONNECT;
 }
 
 SDL_GameController *find_valid_controller()
@@ -120,7 +131,7 @@ void vui_sdl_audio_handler(const void *data, size_t size, void *userdata)
     vui_sdl_context_t *sdl_ctx = (vui_sdl_context_t *) userdata;
 
     if (SDL_QueueAudio(sdl_ctx->audio, data, size) < 0) {
-        printf("Failed to queue audio (data: %p, size: %zu)\n", data, size);
+        vpilog("Failed to queue audio (data: %p, size: %zu)\n", data, size);
     }
 }
 
@@ -133,11 +144,51 @@ void vui_sdl_vibrate_handler(uint8_t vibrate, void *userdata)
     }
 }
 
+TTF_Font *get_font(vui_sdl_context_t *sdl_ctx, vui_font_size_t size)
+{
+    switch (size) {
+    case VUI_FONT_SIZE_TINY:
+        return sdl_ctx->sysfont_tiny;
+    case VUI_FONT_SIZE_SMALL:
+        return sdl_ctx->sysfont_small;
+    case VUI_FONT_SIZE_NORMAL:
+    default:
+        return sdl_ctx->sysfont;
+    }
+}
+
+int vui_sdl_font_height_handler(vui_font_size_t size, void *userdata)
+{
+    vui_sdl_context_t *sdl_ctx = (vui_sdl_context_t *) userdata;
+    TTF_Font *font = get_font(sdl_ctx, size);
+    int h = 0;
+    if (font) {
+        TTF_SizeText(font, "Hj", 0, &h);
+    }
+    return h;
+}
+
+void vui_sdl_text_open_handler(vui_context_t *ctx, int textedit, int open, void *userdata)
+{
+    if (open) {
+        vui_textedit_t *edit = &ctx->textedits[textedit];
+        SDL_Rect r;
+        r.x = edit->x;
+        r.y = edit->y;
+        r.w = edit->w;
+        r.h = edit->h;
+        SDL_SetTextInputRect(&r);
+        SDL_StartTextInput();
+    } else {
+        SDL_StopTextInput();
+    }
+}
+
 int vui_init_sdl(vui_context_t *ctx, int fullscreen)
 {
     // Initialize SDL
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER) < 0) {
-        fprintf(stderr, "Failed to initialize SDL\n");
+        vpilog("Failed to initialize SDL\n");
         return -1;
     }
 
@@ -158,11 +209,13 @@ int vui_init_sdl(vui_context_t *ctx, int fullscreen)
 
     sdl_ctx->window = SDL_CreateWindow("Vanilla", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, ctx->screen_width, ctx->screen_height, window_flags);
     if (!sdl_ctx->window) {
+        vpilog("Failed to CreateWindow\n");
         return -1;
     }
 
     sdl_ctx->renderer = SDL_CreateRenderer(sdl_ctx->window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
     if (!sdl_ctx->renderer) {
+        vpilog("Failed to CreateRenderer\n");
         return -1;
     }
 
@@ -178,30 +231,40 @@ int vui_init_sdl(vui_context_t *ctx, int fullscreen)
         ctx->audio_handler = vui_sdl_audio_handler;
         ctx->audio_handler_data = sdl_ctx;
 	} else {
-		printf("Failed to open audio device\n");
+		vpilog("Failed to open audio device\n");
 	}
 
     ctx->vibrate_handler = vui_sdl_vibrate_handler;
     ctx->vibrate_handler_data = sdl_ctx;
 
+    ctx->font_height_handler = vui_sdl_font_height_handler;
+    ctx->font_height_handler_data = sdl_ctx;
+
+    ctx->text_open_handler = vui_sdl_text_open_handler;
+
     if (TTF_Init()) {
+        vpilog("Failed to TTF_Init\n");
         return -1;
     }
 
-    const char *font_filename = "/home/matt/src/vanilla/rpi/font/system.ttf";
+    char font_filename[128];
+    vpi_asset_filename(font_filename, sizeof(font_filename), "font", "system.ttf");
 
     sdl_ctx->sysfont = TTF_OpenFont(font_filename, 36);
     if (!sdl_ctx->sysfont) {
+        vpilog("Failed to TTF_OpenFont\n");
         return -1;
     }
 
     sdl_ctx->sysfont_small = TTF_OpenFont(font_filename, 24);
     if (!sdl_ctx->sysfont_small) {
+        vpilog("Failed to TTF_OpenFont\n");
         return -1;
     }
 
     sdl_ctx->sysfont_tiny = TTF_OpenFont(font_filename, 16);
     if (!sdl_ctx->sysfont_tiny) {
+        vpilog("Failed to TTF_OpenFont\n");
         return -1;
     }
 
@@ -215,10 +278,13 @@ int vui_init_sdl(vui_context_t *ctx, int fullscreen)
     SDL_RenderClear(sdl_ctx->renderer);
 
     sdl_ctx->background = 0;
+    sdl_ctx->last_shown_toast = 0;
+    sdl_ctx->toast_tex = 0;
     memset(sdl_ctx->layer_data, 0, sizeof(sdl_ctx->layer_data));
     memset(sdl_ctx->label_data, 0, sizeof(sdl_ctx->label_data));
     memset(sdl_ctx->button_cache, 0, sizeof(sdl_ctx->button_cache));
     memset(sdl_ctx->image_cache, 0, sizeof(sdl_ctx->image_cache));
+    memset(sdl_ctx->textedit_cache, 0, sizeof(sdl_ctx->textedit_cache));
     sdl_ctx->controller = find_valid_controller();
 
     sdl_ctx->frame = av_frame_alloc();
@@ -242,6 +308,7 @@ void vui_close_sdl(vui_context_t *ctx)
         SDL_GameControllerClose(sdl_ctx->controller);
     }
 
+    SDL_DestroyTexture(sdl_ctx->toast_tex);
     SDL_DestroyTexture(sdl_ctx->game_tex);
     SDL_DestroyTexture(sdl_ctx->background);
 
@@ -249,23 +316,17 @@ void vui_close_sdl(vui_context_t *ctx)
         if (sdl_ctx->layer_data[i]) {
             SDL_DestroyTexture(sdl_ctx->layer_data[i]);
         }
-    }
-
-    for (int i = 0; i < MAX_BUTTON_COUNT; i++) {
+        if (sdl_ctx->label_data[i]) {
+            SDL_DestroyTexture(sdl_ctx->label_data[i]);
+        }
         if (sdl_ctx->button_cache[i].texture) {
             SDL_DestroyTexture(sdl_ctx->button_cache[i].texture);
         }
-    }
-
-    for (int i = 0; i < MAX_BUTTON_COUNT; i++) {
         if (sdl_ctx->image_cache[i].texture) {
             SDL_DestroyTexture(sdl_ctx->image_cache[i].texture);
         }
-    }
-
-    for (int i = 0; i < MAX_BUTTON_COUNT; i++) {
-        if (sdl_ctx->image_cache[i].texture) {
-            SDL_DestroyTexture(sdl_ctx->image_cache[i].texture);
+        if (sdl_ctx->textedit_cache[i].texture) {
+            SDL_DestroyTexture(sdl_ctx->textedit_cache[i].texture);
         }
     }
 
@@ -305,7 +366,7 @@ void vui_sdl_set_render_color(SDL_Renderer *renderer, vui_color_t color)
 SDL_Texture *vui_sdl_load_texture(SDL_Renderer *renderer, const char *filename)
 {
     char buf[1024];
-    snprintf(buf, sizeof(buf), "/home/matt/src/vanilla/rpi/tex/%s", filename);
+    vpi_asset_filename(buf, sizeof(buf), "tex", filename);
     return IMG_LoadTexture(renderer, buf);
 }
 
@@ -324,6 +385,26 @@ float calculate_x_inset(float y, float h, float radius)
     return x_inset;
 }
 
+void determine_color_for_gradient(int y, int h, uint8_t *r, uint8_t *g, uint8_t *b, const float *position, const uint8_t *colors, size_t count)
+{
+    float yf = y / (float) h;
+    for (size_t j = 1; j < count; j++) {
+        float min = position[j - 1];
+        float max = position[j];
+        if (yf >= min && yf < max) {
+            yf -= min;
+            yf /= max - min;
+
+            const uint8_t *minrgb = colors + (j - 1) * 3;
+            const uint8_t *maxrgb = colors + j * 3;
+            *r = lerp(minrgb[0], maxrgb[0], yf);
+            *g = lerp(minrgb[1], maxrgb[1], yf);
+            *b = lerp(minrgb[2], maxrgb[2], yf);
+            break;
+        }
+    }
+}
+
 void vui_sdl_draw_button(vui_context_t *vui, vui_sdl_context_t *sdl_ctx, vui_button_t *btn)
 {
     SDL_SetRenderDrawColor(sdl_ctx->renderer, 0, 0, 0, 0);
@@ -337,18 +418,18 @@ void vui_sdl_draw_button(vui_context_t *vui, vui_sdl_context_t *sdl_ctx, vui_but
     rect.w = btn->w;
     rect.h = btn->h;
 
-    static const float button_x_gradient_positions[] = {
-        0.0f,
-        0.1f,
-        0.9f,
-        1.0f,
-    };
-    static const uint8_t button_x_gradient_colors[] = {
-        0xE8,
-        0xFF,
-        0xFF,
-        0xE8,
-    };
+    // static const float button_x_gradient_positions[] = {
+    //     0.0f,
+    //     0.1f,
+    //     0.9f,
+    //     1.0f,
+    // };
+    // static const uint8_t button_x_gradient_colors[] = {
+    //     0xE8,
+    //     0xFF,
+    //     0xFF,
+    //     0xE8,
+    // };
     static const float button_y_gradient_positions[] = {
         0.0f,
         0.1f,
@@ -357,18 +438,25 @@ void vui_sdl_draw_button(vui_context_t *vui, vui_sdl_context_t *sdl_ctx, vui_but
         1.0f
     };
     static const uint8_t button_y_gradient_colors[] = {
-        0xE8,
-        0xFF,
-        0xF8,
-        0xE0,
-        0xF0,
+        0xE8, 0xE8, 0xE8,
+        0xFF, 0xFF, 0xFF,
+        0xF8, 0xF8, 0xF8,
+        0xE0, 0xE0, 0xE0,
+        0xF0, 0xF0, 0xF0,
+    };
+    static const uint8_t button_checkable_y_gradient_colors[] = {
+        0xCA, 0xCA, 0xCA,
+        0xE5, 0xE5, 0xE5,
+        0xE4, 0xE4, 0xE4,
+        0xD6, 0xD6, 0xD6,
+        0xD2, 0xD2, 0xD2,
     };
     static const uint8_t button_checked_y_gradient_colors[] = {
-        0xFF, 0x00, 0x00,
-        0xFF, 0x80, 0x00,
-        0xFF, 0xFF, 0x00,
-        0x00, 0xFF, 0x00,
-        0x00, 0x00, 0xFF,
+        0x50, 0xC4, 0x25,
+        0x71, 0xE5, 0x28,
+        0x7D, 0xE3, 0x06,
+        0x4D, 0xCF, 0x00,
+        0x64, 0xCD, 0x3D,
     };
 
     int scrw, scrh;
@@ -377,7 +465,7 @@ void vui_sdl_draw_button(vui_context_t *vui, vui_sdl_context_t *sdl_ctx, vui_but
     // Load icon if exists
     int icon_x;
     int icon_y;
-    int icon_size = btn->style == VUI_BUTTON_STYLE_CORNER ? rect.h * 1 / 3 : rect.h * 3 / 4;
+    int icon_size = btn->style == VUI_BUTTON_STYLE_CORNER ? rect.h * 1 / 3 : rect.h * 2 / 4;
     SDL_Texture *icon = 0;
     if (btn->icon[0]) {
         icon = vui_sdl_load_texture(sdl_ctx->renderer, btn->icon);
@@ -399,35 +487,13 @@ void vui_sdl_draw_button(vui_context_t *vui, vui_sdl_context_t *sdl_ctx, vui_but
         int coord = rect.y + y;
 
         // Determine color
-        float lr = 0;
-        float lg = 0;
-        float lb = 0;
-        {
-            float yf = y / (float) rect.h;
-            for (size_t j = 1; j < sizeof(button_y_gradient_positions)/sizeof(float); j++) {
-                float min = button_y_gradient_positions[j - 1];
-                float max = button_y_gradient_positions[j];
-                if (yf >= min && yf < max) {
-                    yf -= min;
-                    yf /= max - min;
-
-                    if (btn->checked) {
-                        const uint8_t *minrgb = button_checked_y_gradient_colors + (j - 1) * 3;
-                        const uint8_t *maxrgb = button_checked_y_gradient_colors + j * 3;
-                        lr = lerp(minrgb[0], maxrgb[0], yf);
-                        lg = lerp(minrgb[1], maxrgb[1], yf);
-                        lb = lerp(minrgb[2], maxrgb[2], yf);
-                    } else {
-                        uint8_t minc = button_y_gradient_colors[j - 1];
-                        uint8_t maxc = button_y_gradient_colors[j];
-                        lr = lerp(minc, maxc, yf);
-                        lg = lerp(minc, maxc, yf);
-                        lb = lerp(minc, maxc, yf);
-                    }
-                    break;
-                }
-            }
-        }
+        uint8_t lr, lg, lb;
+        determine_color_for_gradient(
+            y, rect.h, &lr, &lg, &lb,
+            button_y_gradient_positions,
+            button_y_gradient_colors,
+            sizeof(button_y_gradient_positions)/sizeof(float)
+        );
 
         // Handle rounded corners
         float x_inset = 0;
@@ -448,6 +514,24 @@ void vui_sdl_draw_button(vui_context_t *vui, vui_sdl_context_t *sdl_ctx, vui_but
             }
         }
 
+        // Make a cutoff section for the highlighted area
+        if (btn->checkable) {
+            uint8_t clr, clg, clb;
+            int lim = btn_radius + btn_radius;
+
+            determine_color_for_gradient(
+                y, rect.h, &clr, &clg, &clb,
+                button_y_gradient_positions,
+                btn->checked ? button_checked_y_gradient_colors : button_checkable_y_gradient_colors,
+                sizeof(button_y_gradient_positions)/sizeof(float)
+            );
+
+            SDL_SetRenderDrawColor(sdl_ctx->renderer, clr, clg, clb, 0xFF);
+            SDL_RenderDrawLineF(sdl_ctx->renderer, rect.x + x_inset, coord, rect.x + lim - 1, coord);
+
+            x_inset = lim;
+        }
+
         SDL_SetRenderDrawColor(sdl_ctx->renderer, lr, lg, lb, 0xFF);
         SDL_RenderDrawLineF(sdl_ctx->renderer, rect.x + x_inset, coord, rect.x + rect.w - w_inset, coord);
     }
@@ -457,7 +541,7 @@ void vui_sdl_draw_button(vui_context_t *vui, vui_sdl_context_t *sdl_ctx, vui_but
     
     // Draw text
     if (btn->text[0]) {
-        SDL_Surface *surface = TTF_RenderUTF8_Blended_Wrapped(text_font, btn->text, text_color, rect.w);
+        SDL_Surface *surface = TTF_RenderUTF8_Blended(text_font, btn->text, text_color);
         SDL_Texture *texture = SDL_CreateTextureFromSurface(sdl_ctx->renderer, surface);
 
         SDL_Rect text_rect;
@@ -466,20 +550,20 @@ void vui_sdl_draw_button(vui_context_t *vui, vui_sdl_context_t *sdl_ctx, vui_but
         text_rect.h = surface->h;
 
         const int btn_padding = 8;
-        if (icon && btn->style != VUI_BUTTON_STYLE_CORNER) {
-            icon_x = rect.x + rect.w / 2 - (text_rect.w + icon_size) / 2;
-            icon_y = rect.y + rect.h/2 - icon_size/2;
-            text_rect.x = icon_x + icon_size + btn_padding;
-        } else {
-            text_rect.x = rect.x + rect.w / 2 - text_rect.w / 2;
-        }
+        text_rect.x = rect.x + rect.w / 2 - text_rect.w / 2;
+        text_rect.y = rect.y + rect.h / 2 - text_rect.h / 2;
 
-        if (icon && btn->style == VUI_BUTTON_STYLE_CORNER) {
-            text_rect.y = rect.y + rect.h/2 - (text_rect.h + icon_size + btn_padding)/2;
-            icon_x = rect.x + rect.w/2 - icon_size/2;
-            icon_y = text_rect.y + text_rect.h + btn_padding;
-        } else {
-            text_rect.y = rect.y + rect.h / 2 - text_rect.h / 2;
+        // Adjust text rect if icon exists
+        if (icon) {
+            if (btn->style == VUI_BUTTON_STYLE_CORNER) {
+                text_rect.y = rect.y + rect.h/2 - (text_rect.h + icon_size + btn_padding)/2;
+                icon_x = rect.x + rect.w/2 - icon_size/2;
+                icon_y = text_rect.y + text_rect.h + btn_padding;
+            } else {
+                icon_x = rect.x + rect.w/2 - (text_rect.w + icon_size)/2;
+                icon_y = rect.y + rect.h/2 - icon_size/2;
+                text_rect.x = icon_x + icon_size + btn_padding;
+            }
         }
 
         SDL_RenderCopy(sdl_ctx->renderer, texture, NULL, &text_rect);
@@ -592,7 +676,7 @@ void vui_draw_sdl(vui_context_t *ctx, SDL_Renderer *renderer)
             c.b = lbl->color.b * 0xFF;
             c.a = lbl->color.a * 0xFF;
 
-            SDL_Surface *surface = TTF_RenderUTF8_Blended_Wrapped(lbl->size == VUI_FONT_SIZE_SMALL ? sdl_ctx->sysfont_small : sdl_ctx->sysfont, lbl->text, c, lbl->w);
+            SDL_Surface *surface = TTF_RenderUTF8_Blended_Wrapped(get_font(sdl_ctx, lbl->size), lbl->text, c, lbl->w);
 
             SDL_Rect sr;
             sr.x = 0;
@@ -610,6 +694,89 @@ void vui_draw_sdl(vui_context_t *ctx, SDL_Renderer *renderer)
             SDL_RenderCopy(renderer, texture, &sr, &dr);
             SDL_DestroyTexture(texture);
             SDL_FreeSurface(surface);
+        }
+    }
+
+    // Draw textedits
+    for (int i = 0; i < ctx->textedit_count; i++) {
+        vui_textedit_t *edit = &ctx->textedits[i];
+        if (!edit->visible) {
+            continue;
+        }
+
+        SDL_SetRenderTarget(renderer, sdl_ctx->layer_data[edit->layer]);
+
+        SDL_Rect rect;
+        rect.x = edit->x;
+        rect.y = edit->y;
+        rect.w = edit->w;
+        rect.h = edit->h;
+
+        SDL_SetRenderDrawColor(renderer, 0x00, 0x00, 0x00, 0x80);
+
+        const int bgrect_pad = 8;
+        SDL_Rect bgrect = rect;
+        bgrect.x -= bgrect_pad;
+        bgrect.y -= bgrect_pad;
+        bgrect.w += bgrect_pad + bgrect_pad;
+        bgrect.h += bgrect_pad + bgrect_pad;
+
+        for (int y = 0; y < bgrect.h; y++) {
+            int x_inset = calculate_x_inset(y, bgrect.h, bgrect_pad);
+            int ry = bgrect.y+y;
+            SDL_RenderDrawLine(renderer, bgrect.x + x_inset, ry, bgrect.x + bgrect.w - x_inset, ry);
+        }
+
+        SDL_Color c;
+        c.r = c.g = c.b = c.a = 0xFF;
+
+        TTF_Font *font = get_font(sdl_ctx, edit->size);
+        
+        if (edit->text[0]) {
+            SDL_Surface *surface = TTF_RenderUTF8_Blended(font, edit->text, c);
+            SDL_Texture *texture = SDL_CreateTextureFromSurface(sdl_ctx->renderer, surface);
+    
+            SDL_Rect src;
+            src.x = src.y = 0;
+            src.w = surface->w;
+            src.h = surface->h;
+    
+            if (src.w > rect.w) {
+                src.w = rect.w;
+            } else {
+                rect.w = src.w;
+            }
+    
+            SDL_RenderCopy(renderer, texture, &src, &rect);
+    
+            SDL_FreeSurface(surface);
+            SDL_DestroyTexture(texture);
+        }
+
+        if (ctx->active_textedit == i) {
+            struct timeval now;
+            gettimeofday(&now, 0);
+            time_t diff = (now.tv_sec - ctx->active_textedit_time.tv_sec) * 1000000 + (now.tv_usec - ctx->active_textedit_time.tv_usec);
+            if ((diff % 1000000) < 500000) {
+                char tmp_ate[MAX_BUTTON_TEXT];
+                
+                char *copy_end = edit->text;
+                for (int i = 0; i < edit->cursor; i++) {
+                    copy_end = vui_utf8_advance(copy_end);
+                }
+
+                size_t len = copy_end - edit->text;
+                strncpy(tmp_ate, edit->text, len);
+
+                tmp_ate[len] = 0;
+    
+                int tw;
+                TTF_SizeUTF8(font, tmp_ate, &tw, 0);
+                int cursor_x = rect.x + tw;
+                
+                SDL_SetRenderDrawColor(renderer, c.r, c.g, c.b, c.a);
+                SDL_RenderDrawLine(renderer, cursor_x, rect.y, cursor_x, rect.y + rect.h);
+            }
         }
     }
 
@@ -663,7 +830,7 @@ void vui_draw_sdl(vui_context_t *ctx, SDL_Renderer *renderer)
         SDL_RenderCopy(renderer, btn_tex->texture, 0, &rect);
 
         if (i == ctx->selected_button) {
-            const int btn_select_short_sz = 8;
+            const int btn_select_short_sz = 4;
             const int btn_select_long_sz = 24;
 
             const int tlx = btn->sx;
@@ -756,6 +923,8 @@ int vui_update_sdl(vui_context_t *vui)
 
     SDL_Rect *dst_rect = &sdl_ctx->dst_rect;
 
+    SDL_Renderer *renderer = sdl_ctx->renderer;
+
     SDL_Event ev;
     while (SDL_PollEvent(&ev)) {
         switch (ev.type) {
@@ -789,6 +958,40 @@ int vui_update_sdl(vui_context_t *vui)
                         vui_process_mousedown(vui, tr_x, tr_y);
                     else if (ev.type == SDL_MOUSEBUTTONUP)
                         vui_process_mouseup(vui, tr_x, tr_y);
+                    
+                    if (vui->active_textedit != -1 && (ev.type == SDL_MOUSEBUTTONDOWN || ev.type == SDL_MOUSEMOTION) && ev.button.button == SDL_BUTTON_LEFT) {
+                        // Put cursor in correct position
+                        vui_textedit_t *edit = &vui->textedits[vui->active_textedit];
+                        TTF_Font *font = get_font(sdl_ctx, edit->size);
+
+                        // Determine best location for new cursor
+                        int rel_x = tr_x - edit->x;
+                        char tmp[MAX_BUTTON_TEXT];
+                        int new_cursor = 0;
+                        int diff = rel_x;
+                        size_t len = 0;
+                        char *src = edit->text;
+                        while (*src != 0) {
+                            src = vui_utf8_advance(src);
+                            
+                            size_t len = src - edit->text;
+                            strncpy(tmp, edit->text, len);
+                            tmp[len] = 0;
+
+                            int tw;
+                            TTF_SizeUTF8(font, tmp, &tw, 0);
+
+                            int this_diff = abs(tw - rel_x);
+                            if (this_diff < diff) {
+                                diff = this_diff;
+                                new_cursor++;
+                            } else {
+                                break;
+                            }
+                        }
+                    
+                        vui_textedit_set_cursor(vui, vui->active_textedit, new_cursor);
+                    }
                 }
             }
             break;
@@ -809,7 +1012,10 @@ int vui_update_sdl(vui_context_t *vui)
         case SDL_CONTROLLERBUTTONUP:
             if (sdl_ctx->controller && ev.cdevice.which == SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(sdl_ctx->controller))) {
                 int vanilla_btn = button_map[ev.cbutton.button];
-                if (vanilla_btn != -1) {
+                if (vanilla_btn > VPI_ACTION_START_INDEX) {
+                    if (ev.type == SDL_CONTROLLERBUTTONDOWN)
+                        vpi_menu_action(vui, (vpi_extra_action_t) vanilla_btn);
+                } else if (vanilla_btn != -1) {
                     if (vui->game_mode) {
                         vanilla_set_button(vanilla_btn, ev.type == SDL_CONTROLLERBUTTONDOWN ? INT16_MAX : 0);
                     } else if (ev.type == SDL_CONTROLLERBUTTONDOWN) {
@@ -863,18 +1069,50 @@ int vui_update_sdl(vui_context_t *vui)
         case SDL_KEYDOWN:
         case SDL_KEYUP:
         {
-            int vanilla_btn = key_map[ev.key.keysym.scancode];
-            if (vanilla_btn != -1) {
-                if (vui->game_mode) {
-                    vanilla_set_button(vanilla_btn, ev.type == SDL_KEYDOWN ? INT16_MAX : 0);
-                } else if (ev.type == SDL_KEYDOWN) {
-                    vui_process_keydown(vui, vanilla_btn);
-                } else {
-                    vui_process_keyup(vui, vanilla_btn);
+            if (vui->active_textedit == -1) {
+                int vanilla_btn = key_map[ev.key.keysym.scancode];
+                if (vanilla_btn > VPI_ACTION_START_INDEX) {
+                    if (ev.type == SDL_KEYDOWN)
+                        vpi_menu_action(vui, (vpi_extra_action_t) vanilla_btn);
+                } else if (vanilla_btn != -1) {
+                    if (vui->game_mode) {
+                        vanilla_set_button(vanilla_btn, ev.type == SDL_KEYDOWN ? INT16_MAX : 0);
+                    } else if (ev.type == SDL_KEYDOWN) {
+                        vui_process_keydown(vui, vanilla_btn);
+                    } else {
+                        vui_process_keyup(vui, vanilla_btn);
+                    }
+                }
+            } else if (ev.type == SDL_KEYDOWN) {
+                switch (ev.key.keysym.scancode) {
+                case SDL_SCANCODE_BACKSPACE:
+                    vui_textedit_backspace(vui, vui->active_textedit);
+                    break;
+                case SDL_SCANCODE_LEFT:
+                    vui_textedit_move_cursor(vui, vui->active_textedit, -1);
+                    break;
+                case SDL_SCANCODE_RIGHT:
+                    vui_textedit_move_cursor(vui, vui->active_textedit, 1);
+                    break;
+                case SDL_SCANCODE_HOME:
+                    vui_textedit_move_cursor(vui, vui->active_textedit, -MAX_BUTTON_TEXT);
+                    break;
+                case SDL_SCANCODE_END:
+                    vui_textedit_move_cursor(vui, vui->active_textedit, MAX_BUTTON_TEXT);
+                    break;
+                case SDL_SCANCODE_DELETE:
+                    vui_textedit_del(vui, vui->active_textedit);
+                    break;
                 }
             }
             break;
         }
+        case SDL_TEXTINPUT:
+            vui_textedit_input(vui, vui->active_textedit, ev.text.text);
+            break;
+        case SDL_TEXTEDITING:
+            vpilog("text editing!\n");
+            break;
         }
     }
 
@@ -884,17 +1122,17 @@ int vui_update_sdl(vui_context_t *vui)
 
     if (!vui->game_mode) {
         // Draw vui to a custom texture
-        vui_draw_sdl(vui, sdl_ctx->renderer);
+        vui_draw_sdl(vui, renderer);
 
         // Flatten layers
         for (int i = vui->layers - 1; i > 0; i--) {
             SDL_Texture *bg = sdl_ctx->layer_data[i-1];
             SDL_Texture *fg = sdl_ctx->layer_data[i];
 
-            SDL_SetRenderTarget(sdl_ctx->renderer, bg);
+            SDL_SetRenderTarget(renderer, bg);
             SDL_SetTextureColorMod(fg, vui->layer_opacity[i] * 0xFF, vui->layer_opacity[i] * 0xFF, vui->layer_opacity[i] * 0xFF);
             SDL_SetTextureAlphaMod(fg, vui->layer_opacity[i] * 0xFF);
-            SDL_RenderCopy(sdl_ctx->renderer, fg, NULL, NULL);
+            SDL_RenderCopy(renderer, fg, NULL, NULL);
         }
 
         main_tex = sdl_ctx->layer_data[0];
@@ -908,11 +1146,85 @@ int vui_update_sdl(vui_context_t *vui)
 		if (sdl_ctx->frame->data[0]) {
 			SDL_UpdateYUVTexture(sdl_ctx->game_tex, NULL,
 								 sdl_ctx->frame->data[0], sdl_ctx->frame->linesize[0],
-								 sdl_ctx->frame->data[1], sdl_ctx->frame->linesize[1],
-								 sdl_ctx->frame->data[2], sdl_ctx->frame->linesize[2]);
+								 sdl_ctx->frame->data[2], sdl_ctx->frame->linesize[2],
+								 sdl_ctx->frame->data[1], sdl_ctx->frame->linesize[1]);
 			av_frame_unref(sdl_ctx->frame);
 		}
-        main_tex = sdl_ctx->game_tex;
+        main_tex = sdl_ctx->layer_data[0];
+
+        SDL_SetRenderTarget(renderer, main_tex);
+        SDL_RenderCopy(renderer, sdl_ctx->game_tex, 0, 0);
+        // main_tex = sdl_ctx->game_tex;
+    }
+
+    // Draw toast on screen if necessary
+    const int TOAST_PADDING = 12;
+    int cur_toast;
+    vpi_get_toast(&cur_toast, 0, 0, 0);
+    if (cur_toast != sdl_ctx->last_shown_toast) {
+        // Get toast information
+        char toast_str[VPI_TOAST_MAX_LEN];
+        vpi_get_toast(&cur_toast, toast_str, sizeof(toast_str), &sdl_ctx->toast_expiry);
+
+        sdl_ctx->last_shown_toast = cur_toast;
+
+        const int toast_w = vui->screen_width/2;
+
+        SDL_Color c;
+        c.r = c.g = c.b = 0x40;
+        c.a = 0xFF;
+
+        SDL_Surface *surface = TTF_RenderUTF8_Blended_Wrapped(sdl_ctx->sysfont_small, toast_str, c, toast_w - TOAST_PADDING - TOAST_PADDING);
+        SDL_Texture *texture = SDL_CreateTextureFromSurface(renderer, surface);
+
+        const int toast_h = surface->h + TOAST_PADDING + TOAST_PADDING;
+        sdl_ctx->toast_tex = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_TARGET, toast_w, toast_h);
+        SDL_SetTextureBlendMode(sdl_ctx->toast_tex, SDL_BLENDMODE_BLEND);
+
+        SDL_SetRenderTarget(renderer, sdl_ctx->toast_tex);
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
+        SDL_RenderClear(renderer);
+
+        SDL_SetRenderDrawColor(renderer, 0xFF, 0xFF, 0xFF, 0xF0);
+        const int TOAST_BORDER_RADIUS = TOAST_PADDING;
+        for (int y = 0; y < toast_h; y++) {
+            const int x_inset = calculate_x_inset(y, toast_h, TOAST_BORDER_RADIUS);
+            SDL_RenderDrawLine(renderer, x_inset, y, toast_w - x_inset, y);
+        }
+
+        SDL_Rect dst_rect;
+        dst_rect.x = dst_rect.y = TOAST_PADDING;
+        dst_rect.w = surface->w;
+        dst_rect.h = surface->h;
+        SDL_RenderCopy(renderer, texture, 0, &dst_rect);
+
+        SDL_DestroyTexture(texture);
+        SDL_FreeSurface(surface);
+    }
+    if (sdl_ctx->toast_tex) {
+        // Draw toast to screen
+        SDL_SetRenderTarget(renderer, main_tex);
+
+        // Get texture size
+        int toast_w, toast_h;
+        SDL_QueryTexture(sdl_ctx->toast_tex, 0, 0, &toast_w, &toast_h);
+
+        // Calculate dst rect
+        SDL_Rect dst_rect;
+        dst_rect.w = toast_w;
+        dst_rect.h = toast_h;
+        dst_rect.y = vui->screen_height - dst_rect.h - TOAST_PADDING - TOAST_PADDING;
+        dst_rect.x = vui->screen_width/2 - toast_w/2;
+
+        SDL_RenderCopy(renderer, sdl_ctx->toast_tex, 0, &dst_rect);
+
+        // Handle expiry
+        struct timeval now;
+        gettimeofday(&now, 0);
+        if (now.tv_sec*1000000+now.tv_usec >= sdl_ctx->toast_expiry.tv_sec*1000000+sdl_ctx->toast_expiry.tv_usec) {
+            SDL_DestroyTexture(sdl_ctx->toast_tex);
+            sdl_ctx->toast_tex = 0;
+        }
     }
 
     // Calculate our destination rectangle
@@ -938,13 +1250,13 @@ int vui_update_sdl(vui_context_t *vui)
     }
 
     // Copy texture to window
-    SDL_SetRenderTarget(sdl_ctx->renderer, NULL);
-    SDL_SetRenderDrawColor(sdl_ctx->renderer, 0, 0, 0, 0);
-    SDL_RenderClear(sdl_ctx->renderer);
-    SDL_RenderCopy(sdl_ctx->renderer, main_tex, NULL, dst_rect);
+    SDL_SetRenderTarget(renderer, NULL);
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
+    SDL_RenderClear(renderer);
+    SDL_RenderCopy(renderer, main_tex, NULL, dst_rect);
 
     // Flip surfaces
-    SDL_RenderPresent(sdl_ctx->renderer);
+    SDL_RenderPresent(renderer);
 
     return 1;
 }

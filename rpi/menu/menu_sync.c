@@ -10,8 +10,8 @@
 #include "config.h"
 #include "lang.h"
 #include "menu_common.h"
+#include "menu_game.h"
 #include "menu_main.h"
-#include "menu_sudo.h"
 #include "ui/ui_anim.h"
 #include "ui/ui_util.h"
 
@@ -42,7 +42,7 @@ static const char *suit_icons_white[4] = {
 
 void vpi_sync_menu_back_action(vui_context_t *vui, int btn, void *v)
 {
-    vui_transition_fade_layer_out(vui, (int) (intptr_t) v, vpi_menu_main, 0);
+    vui_transition_fade_layer_out(vui, (int) (intptr_t) v, vpi_menu_main, (void *) (intptr_t) 1);
 }
 
 void sync_return_to_main(vui_context_t *vui, int button, void *data)
@@ -50,51 +50,9 @@ void sync_return_to_main(vui_context_t *vui, int button, void *data)
     vui_transition_fade_layer_out(vui, sync_fglayer, vpi_menu_sync, (void *) (intptr_t) 1);
 }
 
-void sync_show_success(vui_context_t *vui, void *data)
+void vpi_sync_show_error(vui_context_t *vui, void *data)
 {
-    vui_reset(vui);
-
-    int bglayer = vui_layer_create(vui);
-
-    vui_rect_t bkg_rect;
-    int margin;
-    vpi_menu_create_background(vui, bglayer, &bkg_rect, &margin);
-
-    sync_fglayer = vui_layer_create(vui);
-
-    vui_label_create(vui, bkg_rect.x, bkg_rect.y + bkg_rect.h/4, bkg_rect.w, bkg_rect.h, "TEMP: Sync successful!", vui_color_create(1,1,1,1), VUI_FONT_SIZE_NORMAL, sync_fglayer);
-
-    vui_button_create(vui, bkg_rect.x + bkg_rect.w/2 - BTN_SZ, bkg_rect.y + bkg_rect.h * 3 / 4, BTN_SZ*2, BTN_SZ, lang(VPI_LANG_OK_BTN), 0, VUI_BUTTON_STYLE_BUTTON, sync_fglayer, vpi_sync_menu_back_action, (void *) (intptr_t) bglayer);
-}
-
-void sync_show_error(vui_context_t *vui, void *data)
-{
-    vui_reset(vui);
-
-    int bglayer = vui_layer_create(vui);
-
-    vui_rect_t bkg_rect;
-    int margin;
-    vpi_menu_create_background(vui, bglayer, &bkg_rect, &margin);
-
-    sync_fglayer = vui_layer_create(vui);
-
-    vui_label_create(vui, bkg_rect.x, bkg_rect.y + bkg_rect.h/4, bkg_rect.w, bkg_rect.h, lang(VPI_LANG_SYNC_FAILED), vui_color_create(1,1,1,1), VUI_FONT_SIZE_NORMAL, sync_fglayer);
-
-    int status = (int) (intptr_t) data;
-    char buf[20];
-    sprintf(buf, "%i", status);
-    vui_label_create(vui, bkg_rect.x, bkg_rect.y + bkg_rect.h/2, bkg_rect.w, bkg_rect.h, buf, vui_color_create(1,0,0,1), VUI_FONT_SIZE_SMALL, sync_fglayer);
-
-    vui_button_create(vui, bkg_rect.x + bkg_rect.w/2 - BTN_SZ, bkg_rect.y + bkg_rect.h * 3 / 4, BTN_SZ*2, BTN_SZ, lang(VPI_LANG_OK_BTN), 0, VUI_BUTTON_STYLE_BUTTON, sync_fglayer, sync_return_to_main, 0);
-
-    vui_transition_fade_layer_in(vui, sync_fglayer, 0, 0);
-}
-
-void sync_success(void *data)
-{
-    vui_context_t *vui = data;
-    vui_transition_fade_layer_out(vui, sync_fglayer, sync_show_success, 0);
+    sync_fglayer = vpi_menu_show_error(vui, (intptr_t) data, 1, sync_return_to_main, 0);
 }
 
 int intpow(int x, unsigned int p)
@@ -132,31 +90,33 @@ void sync_animation_step(vui_context_t *ctx, int64_t time, void *userdata)
             int err = * (int *) event.data;
 
             // Transition to error screen showing error code
-            vui_transition_fade_layer_out(ctx, sync_fglayer, sync_show_error, (void *) (intptr_t) err);
-        }
-        if (event.type == VANILLA_EVENT_SYNC) {
+            vui_transition_fade_layer_out(ctx, sync_fglayer, vpi_sync_show_error, (void *) (intptr_t) err);
+
+            vanilla_free_event(&event);
+            vanilla_stop();
+        } else if (event.type == VANILLA_EVENT_SYNC) {
             vanilla_sync_event_t *sync = (vanilla_sync_event_t *) event.data;
 
             // Save this as a new console and transition to success screen
-            int found = 0;
+            int found = -1;
 
             for (uint8_t i = 0; i < vpi_config.connected_console_count; i++) {
                 if (!memcmp(vpi_config.connected_console_entries[i].bssid.bssid, sync->data.bssid.bssid, sizeof(vanilla_bssid_t))) {
                     // We don't bother checking PSK because BSSID is already unique and the PSK should not have changed
-                    found = 1;
+                    found = i;
                     break;
                 }
             }
 
-            if (!found) {
+            if (found == -1) {
                 vpi_console_entry_t console;
                 snprintf(console.name, sizeof(console.name), "Wii U %i", vpi_config.connected_console_count + 1);
                 console.bssid = sync->data.bssid;
                 console.psk = sync->data.psk;
-                vpi_config_add_console(&console);
+                found = vpi_config_add_console(&console);
             }
 
-            vui_transition_fade_layer_out(ctx, sync_fglayer, sync_show_success, sync);
+            vui_transition_fade_layer_out(ctx, sync_fglayer, vpi_menu_game, (void *) (intptr_t) found);
 
             vanilla_free_event(&event);
             vanilla_stop();
@@ -200,23 +160,13 @@ void start_syncing(vui_context_t *vui, void *v)
         vui_transition_fade_layer_in(vui, sync_fglayer, 0, 0);
         vui_start_passive_animation(vui, sync_animation_step, (void *) (intptr_t) progress_lbl);
     } else {
-        sync_show_error(vui, (void *) (intptr_t) ret);
-    }
-}
-
-void start_syncing_or_sudo(vui_context_t *vui, void *v)
-{
-    const int sudo_required = 0;
-    if (sudo_required) {
-        vpi_menu_sudo(vui, start_syncing, v, vpi_menu_sync, (void *) (intptr_t) 1);
-    } else {
-        start_syncing(vui, v);
+        vpi_sync_show_error(vui, (void *) (intptr_t) ret);
     }
 }
 
 void transition_to_sync_window(vui_context_t *vui, void *v)
 {
-    vui_transition_fade_layer_out(vui, sync_fglayer, start_syncing_or_sudo, 0);
+    vui_transition_fade_layer_out(vui, sync_fglayer, start_syncing, 0);
 }
 
 void sync_btn_clicked(vui_context_t *vui, int button, void *data)
@@ -275,7 +225,7 @@ void create_sync_btn(vui_context_t *vui, int x, int data, int layer, int origin_
     sync_btns[data] = btn;
 }
 
-void vpi_menu_sync(vui_context_t *vui, void *d)
+void vpi_menu_sync_start(vui_context_t *vui, void *d)
 {
     // Clears all extra layers
     vui_reset(vui);
@@ -330,4 +280,9 @@ void vpi_menu_sync(vui_context_t *vui, void *d)
     vui_transition_fade_layer_in(vui, d ? sync_fglayer : sync_bglayer, 0, 0);
 
     vui_button_set_cancel(vui, sync_cancel_btn);
+}
+
+void vpi_menu_sync(vui_context_t *vui, void *d)
+{
+    vpi_menu_start_pipe(vui, 0, vpi_menu_sync_start, d, 0, 0);
 }

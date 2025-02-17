@@ -20,12 +20,12 @@ void vpi_menu_gamepad(vui_context_t *vui, void *v)
     int scrw, scrh;
     vui_get_screen_size(vui, &scrw, &scrh);
 
-    int img_w = scrw * 8 / 10;
-    int img_h = scrh * 8 / 10;
+    int img_w = scrw / 2;
+    int img_h = scrh / 2;
     vui_image_create(vui, scrw/2-img_w/2, scrh/2-img_h/2, img_w, img_h, "gamepad.svg", layer);
 
     // Back button
-    vui_button_create(vui, 0, 0, BTN_SZ, BTN_SZ, lang(VPI_LANG_BACK), 0, VUI_BUTTON_STYLE_CORNER, layer, return_to_settings, (void *) (intptr_t) layer);
+    vpi_menu_create_back_button(vui, layer, return_to_settings, (void *) (intptr_t) layer);
 
     // More button
     vui_button_create(vui, scrw-BTN_SZ, 0, BTN_SZ, BTN_SZ, lang(VPI_LANG_MORE), 0, VUI_BUTTON_STYLE_CORNER, layer, return_to_settings, (void *) (intptr_t) layer);

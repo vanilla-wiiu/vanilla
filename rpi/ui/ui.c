@@ -7,6 +7,7 @@
 #include <sys/time.h>
 #include <vanilla.h>
 
+#include "platform.h"
 #include "ui_anim.h"
 #include "ui_priv.h"
 #include "ui_util.h"
@@ -22,6 +23,8 @@ vui_context_t *vui_alloc(int width, int height)
     vui->background_enabled = 0;
     vui->audio_handler = 0;
     vui->vibrate_handler = 0;
+    vui->font_height_handler = 0;
+    vui->text_open_handler = 0;
     return vui;
 }
 
@@ -31,11 +34,12 @@ void vui_free(vui_context_t *vui)
     free(vui);
 }
 
-int vui_reset(vui_context_t *ctx)
+void vui_reset(vui_context_t *ctx)
 {
     ctx->button_count = 0;
     ctx->label_count = 0;
     ctx->rect_count = 0;
+    ctx->textedit_count = 0;
     ctx->game_mode = 0;
     ctx->passive_animation_count = 0;
     memset(ctx->images, 0, sizeof(ctx->images));
@@ -45,6 +49,9 @@ int vui_reset(vui_context_t *ctx)
     ctx->layer_opacity[0] = 1;
     ctx->selected_button = -1;
     ctx->cancel_button = -1;
+    ctx->active_textedit = -1;
+    if (ctx->text_open_handler)
+        ctx->text_open_handler(ctx, -1, 0, ctx->text_open_handler_data);
 }
 
 void vui_get_screen_size(vui_context_t *ctx, int *width, int *height)
@@ -101,6 +108,7 @@ int vui_button_create(vui_context_t *ctx, int x, int y, int w, int h, const char
     vui_button_update_visible(ctx, index, 1);
     vui_button_update_enabled(ctx, index, 1);
     vui_button_update_checked(ctx, index, 0);
+    vui_button_update_checkable(ctx, index, 0);
 
     ctx->button_count++;
 
@@ -129,6 +137,12 @@ void vui_button_update_checked(vui_context_t *ctx, int index, int checked)
 {
     vui_button_t *btn = &ctx->buttons[index];
     btn->checked = checked;
+}
+
+void vui_button_update_checkable(vui_context_t *ctx, int index, int checkable)
+{
+    vui_button_t *btn = &ctx->buttons[index];
+    btn->checkable = checkable;
 }
 
 void vui_button_set_cancel(vui_context_t *ctx, int button)
@@ -276,6 +290,11 @@ int point_inside_button(vui_button_t *btn, int x, int y)
     return x >= btn->x && y >= btn->y && x < btn->x + btn->w && y < btn->y + btn->h;
 }
 
+int point_inside_textedit(vui_textedit_t *btn, int x, int y)
+{
+    return x >= btn->x && y >= btn->y && x < btn->x + btn->w && y < btn->y + btn->h;
+}
+
 void vui_button_callback(vui_context_t *ctx, void *data)
 {
     int index = (int) (intptr_t) data;
@@ -335,13 +354,44 @@ void vui_process_mousedown(vui_context_t *ctx, int x, int y)
 
     ctx->selected_button = -1;
 
+    int button_pressed = 0;
+
     for (int i = 0; i < ctx->button_count; i++) {
         vui_button_t *btn = &ctx->buttons[i];
 
         if (btn->visible && btn->enabled && point_inside_button(btn, x, y)) {
             press_button(ctx, i);
+            button_pressed = 1;
             break;
         }
+    }
+
+    int new_active_textedit = -1;
+    if (!button_pressed) {
+        for (int i = 0; i < ctx->textedit_count; i++) {
+            vui_textedit_t *edit = &ctx->textedits[i];
+    
+            if (edit->visible && edit->enabled && point_inside_textedit(edit, x, y)) {
+                new_active_textedit = i;
+                break;
+            }
+        }
+    }
+
+    if (new_active_textedit != ctx->active_textedit) {
+        if (ctx->active_textedit == -1) {
+            // Signal to start text input
+            if (ctx->text_open_handler)
+                ctx->text_open_handler(ctx, new_active_textedit, 1, ctx->text_open_handler_data);
+            gettimeofday(&ctx->active_textedit_time, 0);
+        } else if (new_active_textedit == -1) {
+            // Signal to stop text input
+            if (ctx->text_open_handler)
+                ctx->text_open_handler(ctx, -1, 0, ctx->text_open_handler_data);
+        }
+
+        // Update value
+        ctx->active_textedit = new_active_textedit;
     }
 }
 
@@ -439,6 +489,13 @@ void vui_update(vui_context_t *ctx)
 void vui_game_mode_set(vui_context_t *ctx, int enabled)
 {
     ctx->game_mode = enabled;
+}
+
+int vui_get_font_height(vui_context_t *ctx, vui_font_size_t size)
+{
+    if (ctx->font_height_handler)
+        return ctx->font_height_handler(size, ctx->font_height_handler_data);
+    return 0;
 }
 
 void vui_audio_push(vui_context_t *ctx, const void *data, size_t size)
@@ -545,6 +602,171 @@ void vui_label_update_visible(vui_context_t *ctx, int index, int visible)
 {
     vui_label_t *lbl = &ctx->labels[index];
     lbl->visible = visible;
+}
+
+int vui_textedit_create(vui_context_t *ctx, int x, int y, int w, int h, const char *initial_text, vui_font_size_t size, int layer)
+{
+    if (ctx->textedit_count == MAX_BUTTON_COUNT) {
+        return -1;
+    }
+
+    int index = ctx->textedit_count;
+
+    vui_textedit_t *edit = &ctx->textedits[index];
+
+    edit->x = x;
+    edit->y = y;
+    edit->w = w;
+    edit->h = h;
+
+    edit->layer = layer;
+    edit->size = size;
+
+    edit->cursor = 0;
+    
+    vui_textedit_update_text(ctx, index, initial_text);
+    vui_textedit_update_visible(ctx, index, 1);
+    vui_textedit_update_enabled(ctx, index, 1);
+
+    if (initial_text) {
+        edit->cursor = vui_utf8_cp_len(initial_text);
+    }
+
+    ctx->textedit_count++;
+
+    return index;
+}
+
+void vui_textedit_get_text(vui_context_t *ctx, int index, char *output, size_t output_size)
+{
+    vui_textedit_t *edit = &ctx->textedits[index];
+    strncpy(output, edit->text, output_size);
+}
+
+void vui_textedit_update_text(vui_context_t *ctx, int index, const char *text)
+{
+    vui_textedit_t *edit = &ctx->textedits[index];
+    vui_strcpy(edit->text, text);
+
+    if (text) {
+        size_t len = vui_utf8_cp_len(text);
+        if (edit->cursor > len) {
+            edit->cursor = len;
+        }
+    } else {
+        edit->cursor = 0;
+    }
+}
+
+void vui_textedit_update_visible(vui_context_t *ctx, int index, int visible)
+{
+    vui_textedit_t *edit = &ctx->textedits[index];
+    edit->visible = visible;
+}
+
+void vui_textedit_update_enabled(vui_context_t *ctx, int index, int enabled)
+{
+    vui_textedit_t *edit = &ctx->textedits[index];
+    edit->enabled = enabled;
+}
+
+void vui_textedit_input(vui_context_t *ctx, int index, const char *text)
+{
+    vui_textedit_t *edit = &ctx->textedits[index];
+
+    // Ensure we don't overflow our buffer
+    size_t len = strlen(text);
+    size_t our_len = strlen(edit->text);
+    if (our_len + len == MAX_BUTTON_TEXT - 1) {
+        return;
+    }
+
+    // Get string up to cursor
+    char *end = edit->text;
+    for (int i = 0; i < edit->cursor; i++) {
+        end = vui_utf8_advance(end);
+    }
+
+    // Copy first part
+    size_t old_len = (end - edit->text);
+    char tmp[MAX_BUTTON_TEXT];
+    strncpy(tmp, edit->text, old_len);
+    tmp[old_len] = 0;
+
+    // Concat new insertion
+    strcat(tmp, text);
+
+    // Concat rest of string
+    strcat(tmp, end);
+
+    // Copy back to textedit
+    strcpy(edit->text, tmp);
+
+    // Increment cursor (even if we added multiple chars, we only incremented one code point)
+    vui_textedit_set_cursor(ctx, index, edit->cursor + 1);
+}
+
+void vui_textedit_backspace(vui_context_t *ctx, int index)
+{
+    vui_textedit_t *edit = &ctx->textedits[index];
+    if (edit->text[0] == 0) {
+        return;
+    }
+
+    if (edit->cursor == 0) {
+        return;
+    }
+
+    vui_textedit_set_cursor(ctx, index, edit->cursor - 1);
+    vui_textedit_del(ctx, index);
+}
+
+void vui_textedit_del(vui_context_t *ctx, int index)
+{
+    vui_textedit_t *edit = &ctx->textedits[index];
+
+    char buf[MAX_BUTTON_TEXT];
+
+    // Find true byte location
+    char *to = edit->text;
+    int target = edit->cursor;
+    for (int i = 0; i < target; i++) {
+        to = vui_utf8_advance(to);
+    }
+
+    if (*to == 0) {
+        // String ends here, nothing to do
+        return;
+    }
+
+    char *from = vui_utf8_advance(to);
+
+    strcpy(buf, from);
+    strcpy(to, buf);
+
+    vui_textedit_set_cursor(ctx, index, edit->cursor);
+}
+
+void vui_textedit_move_cursor(vui_context_t *ctx, int index, int movement)
+{
+    vui_textedit_t *edit = &ctx->textedits[index];
+    int new_cursor = edit->cursor + movement;
+    if (new_cursor < 0)
+        new_cursor = 0;
+    size_t edit_len = vui_utf8_cp_len(edit->text);
+    if (new_cursor > edit_len)
+        new_cursor = edit_len;
+
+    vui_textedit_set_cursor(ctx, index, new_cursor);
+}
+
+void vui_textedit_set_cursor(vui_context_t *ctx, int index, int pos)
+{
+    vui_textedit_t *edit = &ctx->textedits[index];
+    edit->cursor = pos;
+
+    // Store last time of input
+    gettimeofday(&ctx->active_textedit_time, 0);
 }
 
 int vui_rect_create(vui_context_t *ctx, int x, int y, int w, int h, int border_radius, vui_color_t color, int layer)

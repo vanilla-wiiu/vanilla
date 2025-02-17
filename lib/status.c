@@ -14,11 +14,6 @@ static const char *VANILLA_STATUS_STRINGS[] = {
     "INVALID_ARGUMENT"
 };
 
-void print_status(int errno)
-{
-    vanilla_log("%s", VANILLA_STATUS_STRINGS[-errno]);
-}
-
 void print_info(const char *errstr, ...)
 {
     va_list args;

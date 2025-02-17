@@ -1,6 +1,11 @@
 #include "input.h"
 
+#ifdef _WIN32
+#include <winsock2.h>
+#else
 #include <arpa/inet.h>
+#endif
+
 #include <math.h>
 #include <pthread.h>
 #include <stdint.h>
@@ -96,8 +101,8 @@ uint16_t resolve_axis_value(float axis, float neg, float pos, int flip)
 {
     float val = axis < 0 ? axis / 32768.0f : axis / 32767.0f;
 
-    neg = abs(neg);
-    pos = abs(pos);
+    neg = fabs(neg);
+    pos = fabs(pos);
 
     neg /= 32767.0f;
     pos /= 32767.0f;

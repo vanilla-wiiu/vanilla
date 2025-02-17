@@ -26,6 +26,7 @@ typedef struct {
     int visible;
     int enabled;
     int checked;
+    int checkable;
 } vui_button_t;
 
 typedef struct {
@@ -39,6 +40,19 @@ typedef struct {
     vui_font_size_t size;
     int visible;
 } vui_label_t;
+
+typedef struct {
+    int x;
+    int y;
+    int w;
+    int h;
+    char text[MAX_BUTTON_TEXT];
+    int layer;
+    vui_font_size_t size;
+    int visible;
+    int enabled;
+    int cursor;
+} vui_textedit_t;
 
 typedef struct {
     int x;
@@ -82,6 +96,8 @@ typedef struct {
 
 typedef void (*vui_audio_handler_t)(const void *data, size_t size, void *userdata);
 typedef void (*vui_vibrate_handler_t)(uint8_t vibrate, void *userdata);
+typedef int (*vui_font_height_handler_t)(vui_font_size_t size, void *userdata);
+typedef void (*vui_text_open_handler_t)(vui_context_t *ctx, int textedit, int open, void *userdata);
 
 typedef struct vui_context_t {
     void *platform_data;
@@ -92,6 +108,8 @@ typedef struct vui_context_t {
     vui_rect_priv_t rects[MAX_BUTTON_COUNT];
     int rect_count;
     vui_image_t images[MAX_BUTTON_COUNT];
+    int textedit_count;
+    vui_textedit_t textedits[MAX_BUTTON_COUNT];
     vui_animation_t animation;
     int animation_enabled;
     vui_animation_t passive_animations[MAX_BUTTON_COUNT];
@@ -111,6 +129,12 @@ typedef struct vui_context_t {
     int game_mode;
     int selected_button;
     int cancel_button;
+    vui_font_height_handler_t font_height_handler;
+    void *font_height_handler_data;
+    vui_text_open_handler_t text_open_handler;
+    void *text_open_handler_data;
+    int active_textedit;
+    struct timeval active_textedit_time;
 } vui_context_t;
 
 #endif // VANILLA_PI_UI_PRIV_H

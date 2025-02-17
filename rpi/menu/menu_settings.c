@@ -2,6 +2,7 @@
 
 #include "lang.h"
 #include "menu_common.h"
+#include "menu_connection.h"
 #include "menu_gamepad.h"
 #include "menu_main.h"
 #include "ui/ui_anim.h"
@@ -16,6 +17,12 @@ static void transition_to_gamepad(vui_context_t *vui, int button, void *v)
 {
     int layer = (intptr_t) v;
     vui_transition_fade_layer_out(vui, layer, vpi_menu_gamepad, 0);
+}
+
+static void transition_to_connection(vui_context_t *vui, int button, void *v)
+{
+    int layer = (intptr_t) v;
+    vui_transition_fade_layer_out(vui, layer, vpi_menu_connection, 0);
 }
 
 void vpi_menu_settings(vui_context_t *vui, void *v)
@@ -47,7 +54,7 @@ void vpi_menu_settings(vui_context_t *vui, void *v)
     // Highlight currently implemented functionality
     static const vui_button_callback_t SETTINGS_ACTION[] = {
         transition_to_gamepad,
-        0,
+        transition_to_connection,
         0,
         0,
     };
@@ -67,7 +74,7 @@ void vpi_menu_settings(vui_context_t *vui, void *v)
     }
 
     // Back button
-    vui_button_create(vui, 0, 0, BTN_SZ, BTN_SZ, lang(VPI_LANG_BACK), 0, VUI_BUTTON_STYLE_CORNER, fglayer, return_to_main, (void *) (intptr_t) fglayer);
+    vpi_menu_create_back_button(vui, fglayer, return_to_main, (void *) (intptr_t) fglayer);
 
     vui_transition_fade_layer_in(vui, fglayer, 0, 0);
 }

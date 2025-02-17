@@ -15,7 +15,6 @@
 
 static int main_menu_btns[MAIN_MENU_ENTRIES] = {0};
 
-static int main_menu_first_run = 1;
 static int main_menu_current = 0;
 
 static int console_menu_layer = 0;
@@ -27,6 +26,8 @@ static int main_menu_no_console_lbl;
 
 static int main_menu_connect_btn;
 static int main_menu_edit_btn;
+
+static const char *checkmark = "checkmark.svg";
 
 void vpi_menu_main_sync_action(vui_context_t *vui, int btn, void *v)
 {
@@ -179,12 +180,12 @@ void vpi_menu_main(vui_context_t *vui, void *v)
     int list_item_height = (SCREEN_HEIGHT - BTN_SZ - BTN_SZ) / MAIN_MENU_ENTRIES;
     for (int i = 0; i < MAIN_MENU_ENTRIES; i++) {
         main_menu_btns[i] = vui_button_create(vui, BTN_SZ, BTN_SZ + list_item_height * i, list_item_width, list_item_height, NULL, NULL, VUI_BUTTON_STYLE_LIST, console_menu_layer, vpi_menu_main_connect_console, (void *) (intptr_t) i);
+        vui_button_update_checkable(vui, main_menu_btns[i], 1);
     }
     vpi_menu_main_populate(vui);
 
-    if (main_menu_first_run) {
+    if (!v) {
         vui_transition_fade_black_out(vui, NULL, NULL);
-        main_menu_first_run = 0;
     } else {
         vui_transition_fade_layer_in(vui, layer, NULL, NULL);
     }

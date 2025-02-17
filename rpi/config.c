@@ -7,12 +7,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-vpi_config_t vpi_config;
+#include "platform.h"
 
-int vpi_config_filename(char *out, size_t out_size)
-{
-    return snprintf(out, out_size, "%s/.config/vanilla.conf", getenv("HOME"));
-}
+vpi_config_t vpi_config;
 
 void hex_to_string(char *output, uint8_t *data, size_t count)
 {
@@ -37,7 +34,7 @@ void vpi_config_save()
     vpi_config_filename(config_fn, sizeof(config_fn));
     xmlTextWriterPtr writer = xmlNewTextWriterFilename(config_fn, 0);
     if (!writer) {
-        fprintf(stderr, "Error: xmlNewTextWriterFilename\n");
+        vpilog("Error: xmlNewTextWriterFilename\n");
         return;
     }
 
@@ -49,19 +46,29 @@ void vpi_config_save()
     xmlTextWriterSetIndentString(writer, BAD_CAST "\t");
     
     xmlTextWriterStartElement(writer, BAD_CAST "vanilla");
+
     xmlTextWriterStartElement(writer, BAD_CAST "consoles");
     
     for (uint8_t i = 0; i < vpi_config.connected_console_count; i++) {
         vpi_console_entry_t *entry = &vpi_config.connected_console_entries[i];
         xmlTextWriterStartElement(writer, BAD_CAST "console");
-        xmlTextWriterWriteElement(writer, BAD_CAST "name", entry->name);
+        xmlTextWriterWriteElement(writer, BAD_CAST "name", BAD_CAST entry->name);
         hex_to_string(buf, entry->bssid.bssid, sizeof(vanilla_bssid_t));
-        xmlTextWriterWriteElement(writer, BAD_CAST "bssid", buf);
+        xmlTextWriterWriteElement(writer, BAD_CAST "bssid", BAD_CAST buf);
         hex_to_string(buf, entry->psk.psk, sizeof(vanilla_psk_t));
-        xmlTextWriterWriteElement(writer, BAD_CAST "psk", buf);
+        xmlTextWriterWriteElement(writer, BAD_CAST "psk", BAD_CAST buf);
         xmlTextWriterEndElement(writer); // console
     }
     xmlTextWriterEndElement(writer); // consoles
+
+    sprintf(buf, "%X", vpi_config.server_address);
+    xmlTextWriterWriteElement(writer, BAD_CAST "server", BAD_CAST buf);
+    
+    xmlTextWriterWriteElement(writer, BAD_CAST "wireless", BAD_CAST vpi_config.wireless_interface);
+
+    sprintf(buf, "%i", vpi_config.connection_setup);
+    xmlTextWriterWriteElement(writer, BAD_CAST "connectionsetup", BAD_CAST buf);
+
     xmlTextWriterEndElement(writer); // vanilla
     
     xmlTextWriterEndDocument(writer);
@@ -75,6 +82,7 @@ void vpi_config_init()
 
     // Set defaults
     memset(&vpi_config, 0, sizeof(vpi_config));
+    
     vpi_config.server_address = VANILLA_ADDRESS_LOCAL;
 
     // Load from file
@@ -88,11 +96,11 @@ void vpi_config_init()
             xmlNodePtr child = root->children;
             while (child) {
                 if (child->type == XML_ELEMENT_NODE) {
-                    if (!strcmp(child->name, "consoles")) {
+                    if (!strcmp((const char *) child->name, "consoles")) {
                         // Firstly, count the number of consoles
                         xmlNodePtr console = child->children;
                         while (console) {
-                            if (console->type == XML_ELEMENT_NODE && !strcmp(console->name, "console")) {
+                            if (console->type == XML_ELEMENT_NODE && !strcmp((const char *) console->name, "console")) {
                                 vpi_config.connected_console_count++;
                             }
                             console = console->next;
@@ -104,15 +112,15 @@ void vpi_config_init()
                         vpi_console_entry_t *entry = vpi_config.connected_console_entries;
                         console = child->children;
                         while (console) {
-                            if (console->type == XML_ELEMENT_NODE && !strcmp(console->name, "console")) {
+                            if (console->type == XML_ELEMENT_NODE && !strcmp((const char *) console->name, "console")) {
                                 xmlNodePtr console_info = console->children;
                                 while (console_info) {
-                                    if (!strcmp(console_info->name, "name")) {
-                                        strncpy(entry->name, console_info->children->content, sizeof(entry->name));
-                                    } else if (!strcmp(console_info->name, "bssid")) {
-                                        string_to_hex(entry->bssid.bssid, sizeof(entry->bssid), console_info->children->content);
-                                    } else if (!strcmp(console_info->name, "psk")) {
-                                        string_to_hex(entry->psk.psk, sizeof(entry->psk), console_info->children->content);
+                                    if (!strcmp((const char *) console_info->name, "name")) {
+                                        strncpy(entry->name, (const char *) console_info->children->content, sizeof(entry->name));
+                                    } else if (!strcmp((const char *) console_info->name, "bssid")) {
+                                        string_to_hex(entry->bssid.bssid, sizeof(entry->bssid), (const char *) console_info->children->content);
+                                    } else if (!strcmp((const char *) console_info->name, "psk")) {
+                                        string_to_hex(entry->psk.psk, sizeof(entry->psk), (const char *) console_info->children->content);
                                     }
                                     console_info = console_info->next;
                                 }
@@ -120,6 +128,15 @@ void vpi_config_init()
                             }
                             console = console->next;
                         }
+                    } else if (!strcmp((const char *) child->name, "server")) {
+                        vpi_config.server_address = strtol((const char *) child->children->content, 0, 16);
+                    } else if (!strcmp((const char *) child->name, "wireless")) {
+                        if (child->children) {
+                            strncpy(vpi_config.wireless_interface, (const char *) child->children->content, sizeof(vpi_config.wireless_interface)-1);
+                            vpi_config.wireless_interface[sizeof(vpi_config.wireless_interface)-1] = 0;
+                        }
+                    } else if (!strcmp((const char *) child->name, "connectionsetup")) {
+                        vpi_config.connection_setup = atoi((const char *) child->children->content);
                     }
                 }
                 child = child->next;
@@ -135,21 +152,34 @@ void vpi_config_free()
     free(vpi_config.connected_console_entries);
 }
 
-void vpi_config_add_console(vpi_console_entry_t *entry)
+int vpi_config_add_console(vpi_console_entry_t *entry)
 {
     if (vpi_config.connected_console_count == UINT8_MAX) {
         // Nothing to do
-        return;
+        return -1;
     }
 
     vpi_console_entry_t *old_entries = vpi_config.connected_console_entries;
     vpi_config.connected_console_entries = malloc((vpi_config.connected_console_count + 1) * sizeof(vpi_console_entry_t));
     if (vpi_config.connected_console_count > 0)
         memcpy(vpi_config.connected_console_entries, old_entries, vpi_config.connected_console_count * sizeof(vpi_console_entry_t));
+
+    int index = vpi_config.connected_console_count;
+
     memcpy(vpi_config.connected_console_entries + vpi_config.connected_console_count, entry, sizeof(vpi_console_entry_t));
     vpi_config.connected_console_count++;
     if (old_entries)
         free(old_entries);
+    
+    vpi_config_save();
+
+    return index;
+}
+
+void vpi_config_rename_console(uint8_t index, const char *name)
+{
+    strncpy(vpi_config.connected_console_entries[index].name, name, VPI_CONSOLE_MAX_NAME);
+    vpi_config.connected_console_entries[index].name[VPI_CONSOLE_MAX_NAME-1] = 0;
     
     vpi_config_save();
 }

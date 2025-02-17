@@ -13,7 +13,8 @@ typedef enum {
 
 typedef enum {
     VUI_FONT_SIZE_NORMAL,
-    VUI_FONT_SIZE_SMALL
+    VUI_FONT_SIZE_SMALL,
+    VUI_FONT_SIZE_TINY,
 } vui_font_size_t;
 
 typedef struct {
@@ -37,7 +38,6 @@ typedef void (*vui_button_callback_t)(vui_context_t *ctx, int button, void *user
 typedef void (*vui_anim_step_callback_t)(vui_context_t *ctx, int64_t time, void *userdata);
 
 typedef enum {
-    VUI_DIR_NONE,
     VUI_DIR_LEFT,
     VUI_DIR_RIGHT,
     VUI_DIR_UP,
@@ -48,10 +48,11 @@ typedef enum {
  * Context-related functions
  */
 vui_context_t *vui_alloc(int width, int height);
-int vui_reset(vui_context_t *ctx);
+void vui_reset(vui_context_t *ctx);
 void vui_free(vui_context_t *ctx);
 void vui_update(vui_context_t *ctx);
 void vui_game_mode_set(vui_context_t *ctx, int enabled);
+int vui_get_font_height(vui_context_t *ctx, vui_font_size_t size);
 
 /**
  * Audio-related functions
@@ -87,6 +88,7 @@ void vui_button_update_style(vui_context_t *ctx, int button, vui_button_style_t 
 void vui_button_update_visible(vui_context_t *ctx, int button, int visible);
 void vui_button_update_enabled(vui_context_t *ctx, int button, int enabled);
 void vui_button_update_checked(vui_context_t *ctx, int button, int checked);
+void vui_button_update_checkable(vui_context_t *ctx, int button, int checkable);
 void vui_button_set_cancel(vui_context_t *ctx, int button);
 
 /**
@@ -95,6 +97,20 @@ void vui_button_set_cancel(vui_context_t *ctx, int button);
 int vui_label_create(vui_context_t *ctx, int x, int y, int w, int h, const char *text, vui_color_t color, vui_font_size_t size, int layer);
 void vui_label_update_text(vui_context_t *ctx, int label, const char *text);
 void vui_label_update_visible(vui_context_t *ctx, int label, int visible);
+
+/**
+ * TextEdit-related functions
+ */
+int vui_textedit_create(vui_context_t *ctx, int x, int y, int w, int h, const char *initial_text, vui_font_size_t size, int layer);
+void vui_textedit_get_text(vui_context_t *ctx, int textedit, char *output, size_t output_size);
+void vui_textedit_update_text(vui_context_t *ctx, int textedit, const char *text);
+void vui_textedit_update_visible(vui_context_t *ctx, int textedit, int visible);
+void vui_textedit_update_enabled(vui_context_t *ctx, int textedit, int enabled);
+void vui_textedit_input(vui_context_t *ctx, int textedit, const char *text);
+void vui_textedit_backspace(vui_context_t *ctx, int textedit);
+void vui_textedit_del(vui_context_t *ctx, int textedit);
+void vui_textedit_move_cursor(vui_context_t *ctx, int textedit, int movement);
+void vui_textedit_set_cursor(vui_context_t *ctx, int textedit, int pos);
 
 /**
  * Rect-related functions

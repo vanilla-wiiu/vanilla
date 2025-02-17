@@ -1,6 +1,11 @@
 #include "command.h"
 
+#ifdef _WIN32
+#include <winsock2.h>
+#else
 #include <arpa/inet.h>
+#endif
+
 #include <pthread.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -209,6 +214,7 @@ enum MethodIDSoftware
 enum MethodIDSystem
 {
     METHOD_ID_SYSTEM_GET_INFO = 0x4,
+    METHOD_ID_SYSTEM_POWER = 0x1A,
 };
 
 enum MethodIDPeripheral
@@ -245,7 +251,7 @@ void send_generic_response(int skt, CmdHeader *response)
     send_to_console(skt, response, response->payload_size + sizeof(CmdHeader), PORT_CMD);
 }
 
-void handle_generic_packet(int skt, GenericPacket *request)
+void handle_generic_packet(gamepad_context_t *info, int skt, GenericPacket *request)
 {
     GenericCmdHeader *gen_cmd = &request->generic_cmd_header;
     print_info("magic: %x, flags: %x, service ID: %u, method ID: %u", gen_cmd->magic_0x7E, gen_cmd->flags, gen_cmd->service_id, gen_cmd->method_id);
@@ -309,6 +315,15 @@ void handle_generic_packet(int skt, GenericPacket *request)
             info->spl_id = htonl(0x00001c58);
             response.generic_cmd_header.payload_size = htons(sizeof(SystemInfo));
             response.generic_cmd_header.error_code = 0;
+            break;
+        }
+        case METHOD_ID_SYSTEM_POWER:
+        {
+            if (gen_cmd->flags == 0x42) {
+                // Console told us to poweroff
+                int err = VANILLA_ERR_SHUTDOWN;
+                push_event(info->event_loop, VANILLA_EVENT_ERROR, &err, sizeof(int));
+            }
             break;
         }
         }
@@ -376,7 +391,7 @@ void handle_time_packet(int skt, TimePacket *request)
     send_quick_response(skt, &request->cmd_header);
 }
 
-void handle_command_packet(int skt, CmdHeader *request)
+void handle_command_packet(gamepad_context_t *info, int skt, CmdHeader *request)
 {
     switch (request->packet_type)
     {
@@ -386,7 +401,7 @@ void handle_command_packet(int skt, CmdHeader *request)
         {
         case CMD_GENERIC:
         {
-            handle_generic_packet(skt, (GenericPacket *)request);
+            handle_generic_packet(info, skt, (GenericPacket *)request);
             break;
         }
         case CMD_UVC_UAC:
@@ -409,6 +424,7 @@ void handle_command_packet(int skt, CmdHeader *request)
         {
         default:
             // print_info("[Command] Unhandled request command: %u", request->query_type);
+            break;
         }
         break;
     case PACKET_TYPE_REQUEST_ACK:
@@ -432,7 +448,7 @@ void *listen_command(void *x)
         size = recv(info->socket_cmd, data, sizeof(data), 0);
         if (size > 0) {
             CmdHeader *header = (CmdHeader *)data;
-            handle_command_packet(info->socket_cmd, header);
+            handle_command_packet(info, info->socket_cmd, header);
         }
     } while (!is_interrupted());
 

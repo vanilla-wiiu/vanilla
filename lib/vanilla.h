@@ -9,15 +9,18 @@ extern "C" {
 #include <stddef.h>
 #include <stdint.h>
 
-static const int VANILLA_SUCCESS                    =  0;
-static const int VANILLA_ERR_GENERIC                = -1;
-static const int VANILLA_ERR_UNKNOWN_COMMAND        = -2;
-static const int VANILLA_ERR_INVALID_ARGUMENT       = -3;
-static const int VANILLA_ERR_PIPE_UNRESPONSIVE      = -4;
-static const int VANILLA_ERR_OUT_OF_MEMORY          = -5;
-static const int VANILLA_ERR_BUSY                   = -6;
-static const int VANILLA_ERR_BAD_SOCKET             = -7;
-static const int VANILLA_ERR_NO_CONNECTION          = -8;
+#define VANILLA_SUCCESS                  0
+#define VANILLA_ERR_GENERIC             -1
+#define VANILLA_ERR_UNKNOWN_COMMAND     -2
+#define VANILLA_ERR_INVALID_ARGUMENT    -3
+#define VANILLA_ERR_PIPE_UNRESPONSIVE   -4
+#define VANILLA_ERR_OUT_OF_MEMORY       -5
+#define VANILLA_ERR_BUSY                -6
+#define VANILLA_ERR_BAD_SOCKET          -7
+#define VANILLA_ERR_NO_CONNECTION       -8
+#define VANILLA_ERR_SHUTDOWN            -9
+#define VANILLA_ERR_CONNECTED           -10
+#define VANILLA_ERR_DISCONNECTED        -11
 
 static const uint32_t VANILLA_ADDRESS_LOCAL = 0xFFFFFFFF;
 static const uint32_t VANILLA_ADDRESS_DIRECT = 0x0;
@@ -71,7 +74,7 @@ enum VanillaEvent
     VANILLA_EVENT_AUDIO,
     VANILLA_EVENT_VIBRATE,
     VANILLA_EVENT_SYNC,
-    VANILLA_EVENT_ERROR,
+    VANILLA_EVENT_ERROR
 };
 
 enum VanillaRegion
@@ -93,14 +96,6 @@ enum VanillaBatteryStatus {
     VANILLA_BATTERY_STATUS_MEDIUM   = 4,
     VANILLA_BATTERY_STATUS_HIGH     = 5,
     VANILLA_BATTERY_STATUS_FULL     = 6
-};
-
-static const uint8_t VANILLA_SPS_PARAMS[] = {
-    0x00, 0x00, 0x00, 0x01, 0x67, 0x64, 0x00, 0x20, 0xac, 0x2b, 0x40, 0x6c, 0x1e, 0xf3, 0x68,
-};
-
-static const uint8_t VANILLA_PPS_PARAMS[] = {
-    0x00, 0x00, 0x00, 0x01, 0x68, 0xee, 0x06, 0x0c, 0xe8
 };
 
 typedef struct
@@ -192,6 +187,12 @@ void vanilla_set_region(int region);
  * Sets the gamepad battery status that Vanilla should send to the console
  */
 void vanilla_set_battery_status(int battery_status);
+
+/**
+ * Retrieve SPS/PPS parameters for H.264 packeting
+ */
+size_t vanilla_generate_sps_params(void *data, size_t data_size);
+size_t vanilla_generate_pps_params(void *data, size_t data_size);
 
 #if defined(__cplusplus)
 }

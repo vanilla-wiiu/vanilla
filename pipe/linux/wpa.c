@@ -30,8 +30,10 @@ const char *wpa_ctrl_interface = "/var/run/wpa_supplicant_drc";
 pthread_mutex_t running_mutex;
 pthread_mutex_t main_loop_mutex;
 pthread_mutex_t action_mutex;
+pthread_mutex_t relay_mutex;
 int running = 0;
 int main_loop = 0;
+int relay_running = 0;
 
 typedef union {
     struct sockaddr_in in;
@@ -98,6 +100,14 @@ int is_interrupted()
     pthread_mutex_lock(&running_mutex);
     int r = !running;
     pthread_mutex_unlock(&running_mutex);
+    return r;
+}
+
+int are_relays_running()
+{
+    pthread_mutex_lock(&relay_mutex);
+    int r = relay_running;
+    pthread_mutex_unlock(&relay_mutex);
     return r;
 }
 
@@ -323,6 +333,13 @@ void interrupt()
     pthread_mutex_unlock(&running_mutex);
 }
 
+void interrupt_relays()
+{
+    pthread_mutex_lock(&relay_mutex);
+    relay_running = 0;
+    pthread_mutex_unlock(&relay_mutex);
+}
+
 void sigint_handler(int signum)
 {
     if (signum == SIGINT) {
@@ -540,7 +557,7 @@ void *do_relay(void *data)
     relay_ports *ports = (relay_ports *) data;
     char buf[4096];
     ssize_t read_size;
-    while (!is_interrupted()) {
+    while (are_relays_running()) {
         read_size = recv(ports->from_socket, buf, sizeof(buf), 0);
         if (read_size <= 0) {
             continue;
@@ -581,6 +598,7 @@ int open_socket(int local, in_port_t port)
         skt = socket(AF_UNIX, SOCK_DGRAM, 0);
         sa.un.sun_family = AF_UNIX;
         snprintf(sa.un.sun_path, sizeof(sa.un.sun_path) - 1, VANILLA_PIPE_LOCAL_SOCKET, port);
+        unlink(sa.un.sun_path);
         sa_size = sizeof(struct sockaddr_un);
     } else {
         skt = socket(AF_INET, SOCK_DGRAM, 0);
@@ -601,6 +619,8 @@ int open_socket(int local, in_port_t port)
         print_info("FAILED TO BIND PORT %u: %i", port, errno);
         close(skt);
         return -1;
+    } else {
+        // print_info("BOUND PORT %u", port);
     }
 
     return skt;
@@ -647,7 +667,7 @@ void *open_relay(void *data)
     }
 
     // print_info("ENTERING MAIN LOOP");
-    while (!is_interrupted()) {
+    while (are_relays_running()) {
         print_info("STARTED RELAYS");
         relay_ports console_to_frontend = create_ports(from_console, from_frontend, &frontend_addr, frontend_addr_size);
         relay_ports frontend_to_console = create_ports(from_frontend, from_console, (sockaddr_u *) &console_addr, sizeof(struct sockaddr_in));
@@ -676,22 +696,25 @@ close:
     return THREADRESULT(ret);
 }
 
-void create_all_relays(int skt, int local, const char *wireless_interface, sockaddr_u client, size_t client_size)
+void create_all_relays(struct sync_args *args)
 {
     pthread_t vid_thread, aud_thread, msg_thread, cmd_thread, hid_thread;
     struct relay_info vid_info, aud_info, msg_info, cmd_info, hid_info;
 
     // Set common info for all
-    vid_info.wireless_interface = aud_info.wireless_interface = msg_info.wireless_interface = cmd_info.wireless_interface = hid_info.wireless_interface = wireless_interface;
-    vid_info.local = aud_info.local = msg_info.local = cmd_info.local = hid_info.local = local;
-    vid_info.client = aud_info.client = msg_info.client = cmd_info.client = hid_info.client = client;
-    vid_info.client_size = aud_info.client_size = msg_info.client_size = cmd_info.client_size = hid_info.client_size = client_size;
+    vid_info.wireless_interface = aud_info.wireless_interface = msg_info.wireless_interface = cmd_info.wireless_interface = hid_info.wireless_interface = args->wireless_interface;
+    vid_info.local = aud_info.local = msg_info.local = cmd_info.local = hid_info.local = args->local;
+    vid_info.client = aud_info.client = msg_info.client = cmd_info.client = hid_info.client = args->client;
+    vid_info.client_size = aud_info.client_size = msg_info.client_size = cmd_info.client_size = hid_info.client_size = args->client_size;
     
     vid_info.port = PORT_VID;
     aud_info.port = PORT_AUD;
     msg_info.port = PORT_MSG;
     cmd_info.port = PORT_CMD;
     hid_info.port = PORT_HID;
+
+    // Enable relays
+    relay_running = 1;
 
     pthread_create(&vid_thread, NULL, open_relay, &vid_info);
     pthread_create(&aud_thread, NULL, open_relay, &aud_info);
@@ -702,7 +725,26 @@ void create_all_relays(int skt, int local, const char *wireless_interface, socka
     // Notify client that we are connected
     vanilla_pipe_command_t cmd;
     cmd.control_code = VANILLA_PIPE_CC_CONNECTED;
-    sendto(skt, &cmd, sizeof(cmd.control_code), 0, (const struct sockaddr *) &client, client_size);
+    sendto(args->skt, &cmd, sizeof(cmd.control_code), 0, (const struct sockaddr *) &args->client, args->client_size);
+
+    while (!is_interrupted()) {
+        char buf[1024];
+        size_t buf_len = sizeof(buf);
+        if (wpa_ctrl_recv(args->ctrl, buf, &buf_len) == 0) {
+            if (!memcmp(buf, "<3>CTRL-EVENT-DISCONNECTED", 26)) {
+                print_info("Wii U disconnected, attempting to re-connect...");
+
+                // Let client know we lost connection
+                cmd.control_code = VANILLA_PIPE_CC_DISCONNECTED;
+                sendto(args->skt, &cmd, sizeof(cmd.control_code), 0, (const struct sockaddr *) &args->client, args->client_size);
+
+                break;
+            }
+        }
+    }
+
+    // Stop all relays
+    interrupt_relays();
 
     pthread_join(vid_thread, NULL);
     pthread_join(aud_thread, NULL);
@@ -994,45 +1036,47 @@ void *do_connect(void *data)
 {
     struct sync_args *args = (struct sync_args *) data;
 
-    while (1) {
-        while (!wpa_ctrl_pending(args->ctrl)) {
-            sleep(2);
-            print_info("WAITING FOR CONNECTION");
-
+    while (!is_interrupted()) {
+        while (1) {
+            while (!wpa_ctrl_pending(args->ctrl)) {
+                sleep(2);
+                print_info("WAITING FOR CONNECTION");
+    
+                if (is_interrupted()) return THREADRESULT(VANILLA_ERR_GENERIC);
+            }
+    
+            char buf[1024];
+            size_t actual_buf_len = sizeof(buf);
+            wpa_ctrl_recv(args->ctrl, buf, &actual_buf_len);
+            if (!strstr(buf, "CTRL-EVENT-BSS-ADDED")
+                && !strstr(buf, "CTRL-EVENT-BSS-REMOVED")) {
+                print_info("CONN RECV: %.*s", actual_buf_len, buf);
+            }
+    
+            if (memcmp(buf, "<3>CTRL-EVENT-CONNECTED", 23) == 0) {
+                break;
+            }
+    
             if (is_interrupted()) return THREADRESULT(VANILLA_ERR_GENERIC);
         }
-
-        char buf[1024];
-        size_t actual_buf_len = sizeof(buf);
-        wpa_ctrl_recv(args->ctrl, buf, &actual_buf_len);
-        if (!strstr(buf, "CTRL-EVENT-BSS-ADDED")
-            && !strstr(buf, "CTRL-EVENT-BSS-REMOVED")) {
-            print_info("CONN RECV: %.*s", actual_buf_len, buf);
+    
+        print_info("CONNECTED TO CONSOLE");
+    
+        // Use DHCP on interface
+        pid_t dhclient_pid;
+        int r = call_dhcp(args->wireless_interface, &dhclient_pid);
+        if (r != VANILLA_SUCCESS) {
+            print_info("FAILED TO RUN DHCP ON %s", args->wireless_interface);
+            return THREADRESULT(r);
+        } else {
+            print_info("DHCP ESTABLISHED");
         }
-
-        if (memcmp(buf, "<3>CTRL-EVENT-CONNECTED", 23) == 0) {
-            break;
-        }
-
-        if (is_interrupted()) return THREADRESULT(VANILLA_ERR_GENERIC);
+    
+        create_all_relays(args);
+    
+        int kill_ret = kill(dhclient_pid, SIGTERM);
+        print_info("KILLING DHCLIENT %i", dhclient_pid);
     }
-
-    print_info("CONNECTED TO CONSOLE");
-
-    // Use DHCP on interface
-    pid_t dhclient_pid;
-    int r = call_dhcp(args->wireless_interface, &dhclient_pid);
-    if (r != VANILLA_SUCCESS) {
-        print_info("FAILED TO RUN DHCP ON %s", args->wireless_interface);
-        return THREADRESULT(r);
-    } else {
-        print_info("DHCP ESTABLISHED");
-    }
-
-    create_all_relays(args->skt, args->local, args->wireless_interface, args->client, args->client_size);
-
-    int kill_ret = kill(dhclient_pid, SIGTERM);
-    print_info("KILLING DHCLIENT %i", dhclient_pid);
 
     return THREADRESULT(VANILLA_SUCCESS);
 }
@@ -1153,6 +1197,8 @@ void vanilla_listen(int local, const char *wireless_interface)
         } else if (cmd.control_code == VANILLA_PIPE_CC_UNBIND) {
             print_info("RECEIVED UNBIND SIGNAL");
             interrupt();
+        } else if (cmd.control_code == VANILLA_PIPE_CC_QUIT) {
+            quit_loop();
         }
 
 repeat_loop:

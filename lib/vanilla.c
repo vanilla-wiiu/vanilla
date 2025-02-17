@@ -2,6 +2,10 @@
 
 #include "vanilla.h"
 
+#ifdef _WIN32
+#include <winsock2.h>
+#endif // _WIN32
+
 #include <pthread.h>
 #include <signal.h>
 #include <stdlib.h>
@@ -24,6 +28,19 @@ void *start_event_loop(void *arg)
 {
     thread_data_t *data = (thread_data_t *) arg;
 
+#ifdef _WIN32
+    {
+        WSADATA wsaData;
+        int r = WSAStartup(MAKEWORD(2, 2), &wsaData);
+        if (r != 0) {
+            char buf[100];
+            print_info("Failed to WSAStartup: %i\n", r);
+            pthread_mutex_unlock(&main_mutex);
+            goto exit;
+        }
+    }
+#endif // _WIN32
+
     pthread_mutex_lock(&event_loop.mutex);
     init_event_buffer_arena();
     event_loop.active = 1;
@@ -38,6 +55,7 @@ void *start_event_loop(void *arg)
     data->event_loop = &event_loop;
 
     data->thread_start(data);
+
     free(data);
 
     pthread_mutex_lock(&event_loop.mutex);
@@ -55,6 +73,11 @@ void *start_event_loop(void *arg)
     pthread_cond_broadcast(&event_loop.waitcond);
     pthread_mutex_unlock(&event_loop.mutex);
 
+#ifdef _WIN32
+    WSACleanup();
+#endif // _WIN32
+
+exit:
     pthread_mutex_unlock(&main_mutex);
     return 0;
 }
@@ -193,4 +216,15 @@ int vanilla_free_event(vanilla_event_t *event)
         release_event_buffer(event->data);
         event->data = NULL;
     }
+    return VANILLA_SUCCESS;
+}
+
+size_t vanilla_generate_sps_params(void *data, size_t data_size)
+{
+    return generate_sps_params(data, data_size);
+}
+
+size_t vanilla_generate_pps_params(void *data, size_t data_size)
+{
+    return generate_pps_params(data, data_size);
 }

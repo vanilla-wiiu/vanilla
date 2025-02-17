@@ -2,17 +2,22 @@
 
 #include "gamepad.h"
 
+#ifdef _WIN32
+#include <winsock2.h>
+typedef uint32_t in_addr_t;
+typedef uint16_t in_port_t;
+#else
 #include <arpa/inet.h>
-#include <assert.h>
 #include <errno.h>
-#include <netinet/in.h>
+#include <sys/un.h>
+#endif
+
+#include <assert.h>
 #include <pthread.h>
 #include <signal.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/time.h>
-#include <sys/wait.h>
-#include <sys/un.h>
 #include <unistd.h>
 
 #include "audio.h"
@@ -34,8 +39,19 @@ pthread_mutex_t event_buffer_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 typedef union {
     struct sockaddr_in in;
+#ifndef _WIN32
     struct sockaddr_un un;
+#endif
 } sockaddr_u;
+
+static inline int skterr()
+{
+#ifdef _WIN32
+    return WSAGetLastError();
+#else
+    return errno;
+#endif
+}
 
 in_addr_t get_real_server_address()
 {
@@ -44,29 +60,35 @@ in_addr_t get_real_server_address()
         return inet_addr("192.168.1.10");
     } else if (SERVER_ADDRESS != VANILLA_ADDRESS_LOCAL) {
         // If there's a remote pipe, we send to that
-        return htonl(SERVER_ADDRESS);
+        return SERVER_ADDRESS;
     }
 
     // Must be local, in which case we don't care
     return INADDR_ANY;
 }
 
-void create_sockaddr(sockaddr_u *addr, size_t *size, in_addr_t inaddr, uint16_t port)
+void create_sockaddr(sockaddr_u *addr, size_t *size, in_addr_t inaddr, uint16_t port, int delete)
 {
+#ifndef _WIN32
     if (SERVER_ADDRESS == VANILLA_ADDRESS_LOCAL) {
         memset(&addr->un, 0, sizeof(addr->un));
         addr->un.sun_family = AF_UNIX;
         snprintf(addr->un.sun_path, sizeof(addr->un.sun_path) - 1, VANILLA_PIPE_LOCAL_SOCKET, port);
+        if (delete)
+            unlink(addr->un.sun_path);
 
         if (size) *size = sizeof(struct sockaddr_un);
     } else {
+#endif
         memset(&addr->in, 0, sizeof(addr->in));
         addr->in.sin_family = AF_INET;
         addr->in.sin_port = htons(port);
         addr->in.sin_addr.s_addr = inaddr;
         
         if (size) *size = sizeof(struct sockaddr_in);
+#ifndef _WIN32
     }
+#endif
 }
 
 void send_to_console(int fd, const void *data, size_t data_size, uint16_t port)
@@ -76,12 +98,25 @@ void send_to_console(int fd, const void *data, size_t data_size, uint16_t port)
 
     in_port_t console_port = port - 100;
 
-    create_sockaddr(&addr, &addr_size, get_real_server_address(), console_port);
+    create_sockaddr(&addr, &addr_size, get_real_server_address(), console_port, 0);
 
     ssize_t sent = sendto(fd, data, data_size, 0, (const struct sockaddr *) &addr, addr_size);
     if (sent == -1) {
-        print_info("Failed to send to Wii U socket: fd: %d, port: %d, errno: %i", fd, console_port, errno);
+        print_info("Failed to send to Wii U socket: fd: %d, port: %d, errno: %i", fd, console_port, skterr());
     }
+}
+
+void set_socket_rcvtimeo(int skt, uint64_t microseconds)
+{
+#ifdef _WIN32
+    DWORD millis = microseconds / 1000;
+    setsockopt(skt, SOL_SOCKET, SO_RCVTIMEO, (const char *) &millis, sizeof(millis));
+#else
+    struct timeval tv = {0};
+    tv.tv_sec = microseconds / 1000000;
+    tv.tv_usec = microseconds % 1000000;
+    setsockopt(skt, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+#endif // _WIN32
 }
 
 int create_socket(int *socket_out, in_port_t port)
@@ -89,29 +124,27 @@ int create_socket(int *socket_out, in_port_t port)
     sockaddr_u addr;
     size_t addr_size;
     
-    create_sockaddr(&addr, &addr_size, INADDR_ANY, port);
+    create_sockaddr(&addr, &addr_size, INADDR_ANY, port, 1);
 
     int domain = (SERVER_ADDRESS == VANILLA_ADDRESS_LOCAL) ? AF_UNIX : AF_INET;
         
     int skt = socket(domain, SOCK_DGRAM, 0);
     if (skt == -1) {
-        print_info("FAILED TO CREATE SOCKET: %i", errno);
+        print_info("FAILED TO CREATE SOCKET: %i", skterr());
         return VANILLA_ERR_BAD_SOCKET;
     }
 
     if (bind(skt, (const struct sockaddr *) &addr, addr_size) == -1) {
-        print_info("FAILED TO BIND PORT %u: %i", port, errno);
+        print_info("FAILED TO BIND PORT %u: %i", port, skterr());
         close(skt);
         return VANILLA_ERR_BAD_SOCKET;
     }
 
-    print_info("SUCCESSFULLY BOUND SOCKET %i ON PORT %i", skt, port);
+    // print_info("SUCCESSFULLY BOUND SOCKET %i ON PORT %i", skt, port);
     
     (*socket_out) = skt;
 
-    struct timeval tv = {0};
-    tv.tv_usec = 250000;
-    setsockopt(skt, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+    set_socket_rcvtimeo(skt, 250000);
     
     return VANILLA_SUCCESS;
 }
@@ -121,13 +154,13 @@ int send_pipe_cc(int skt, vanilla_pipe_command_t *cmd, size_t cmd_size, int wait
     sockaddr_u addr;
     size_t addr_size;
 
-    create_sockaddr(&addr, &addr_size, get_real_server_address(), VANILLA_PIPE_CMD_SERVER_PORT);
+    create_sockaddr(&addr, &addr_size, get_real_server_address(), VANILLA_PIPE_CMD_SERVER_PORT, 0);
 
     ssize_t read_size;
     uint8_t recv_cc;
 
     for (int retries = 0; retries < MAX_PIPE_RETRY; retries++) {
-        if (sendto(skt, cmd, cmd_size, 0, (const struct sockaddr *) &addr, addr_size) == -1) {
+        if (sendto(skt, (const char *) cmd, cmd_size, 0, (const struct sockaddr *) &addr, addr_size) == -1) {
             print_info("Failed to write control code to socket");
             return 0;
         }
@@ -165,9 +198,7 @@ int connect_to_backend(int *socket, vanilla_pipe_command_t *cmd, size_t cmd_size
         return ret;
     }
 
-    struct timeval tv = {0};
-    tv.tv_sec = 2;
-    setsockopt(pipe_cc_skt, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+    set_socket_rcvtimeo(pipe_cc_skt, 2000000);
 
     if (!send_pipe_cc(pipe_cc_skt, cmd, cmd_size, 1)) {
         print_info("FAILED TO BIND TO PIPE");
@@ -210,7 +241,7 @@ void sync_internal(thread_data_t *data)
         vanilla_pipe_command_t recv_cmd;
         syncdata.status = VANILLA_ERR_PIPE_UNRESPONSIVE;
         for (int retries = 0; retries < MAX_PIPE_RETRY; retries++) {
-            ssize_t read_size = recv(skt, &recv_cmd, sizeof(recv_cmd), 0);
+            ssize_t read_size = recv(skt, (char *) &recv_cmd, sizeof(recv_cmd), 0);
 
             if (recv_cmd.control_code == VANILLA_PIPE_CC_STATUS) {
                 syncdata.status = (int32_t) ntohl(recv_cmd.status.status);
@@ -257,6 +288,13 @@ void connect_as_gamepad_internal(thread_data_t *data)
 
     int ret = VANILLA_SUCCESS;
 
+    // Open all required sockets
+    if (create_socket(&info.socket_vid, PORT_VID) != VANILLA_SUCCESS) goto exit_pipe;
+    if (create_socket(&info.socket_msg, PORT_MSG) != VANILLA_SUCCESS) goto exit_vid;
+    if (create_socket(&info.socket_hid, PORT_HID) != VANILLA_SUCCESS) goto exit_msg;
+    if (create_socket(&info.socket_aud, PORT_AUD) != VANILLA_SUCCESS) goto exit_hid;
+    if (create_socket(&info.socket_cmd, PORT_CMD) != VANILLA_SUCCESS) goto exit_aud;
+
     int pipe_cc_skt = -1;
     if (SERVER_ADDRESS != VANILLA_ADDRESS_DIRECT) {
         vanilla_pipe_command_t cmd;
@@ -267,39 +305,39 @@ void connect_as_gamepad_internal(thread_data_t *data)
         
         // Connect to backend pipe
         ret = connect_to_backend(&pipe_cc_skt, &cmd, sizeof(cmd.control_code) + sizeof(cmd.connection));
-        // if (ret == VANILLA_SUCCESS) {
-        //     // Wait for backend to be available
-        //     vanilla_pipe_command_t connected_state;
-        //     ret = VANILLA_ERR_NO_CONNECTION;
-        //     while (!is_interrupted()) {
-        //         ssize_t read_size = recv(pipe_cc_skt, &connected_state, sizeof(connected_state), 0);
-        //         if (read_size < 0) {
-        //             if (errno != EAGAIN) {
-        //                 ret = VANILLA_ERR_PIPE_UNRESPONSIVE;
-        //                 break;
-        //             }
-        //         } else if (connected_state.control_code == VANILLA_PIPE_CC_CONNECTED) {
-        //             ret = VANILLA_SUCCESS;
-        //             sleep(1);
-        //             break;
-        //         }
+        if (ret == VANILLA_SUCCESS) {
+            // Wait for backend to be available
+            vanilla_pipe_command_t connected_state;
+            ret = VANILLA_ERR_NO_CONNECTION;
+            while (!is_interrupted()) {
+                ssize_t read_size = recv(pipe_cc_skt, (char *) &connected_state, sizeof(connected_state), 0);
+                if (read_size < 0) {
+                    int r = skterr();
+#ifdef _WIN32
+                    if (r != WSAETIMEDOUT) {
+#else
+                    if (r != EAGAIN) {
+#endif
+                        print_info("FAILED TO GET CONNECTED STATE: %i", r);
+                        ret = VANILLA_ERR_PIPE_UNRESPONSIVE;
+                        break;
+                    }
+                } else if (connected_state.control_code == VANILLA_PIPE_CC_CONNECTED) {
+                    ret = VANILLA_SUCCESS;
+                    sleep(1);
+                    break;
+                }
 
-        //         print_info("STILL WAITING FOR CONNECTED STATE");
-
-        //         sleep(1);
-        //     }
-        // }
+                print_info("STILL WAITING FOR CONNECTED STATE");
+            }
+        }
     }
 
     if (ret == VANILLA_SUCCESS) {
-        // Open all required sockets
-        if (create_socket(&info.socket_vid, PORT_VID) != VANILLA_SUCCESS) goto exit_pipe;
-        if (create_socket(&info.socket_msg, PORT_MSG) != VANILLA_SUCCESS) goto exit_vid;
-        if (create_socket(&info.socket_hid, PORT_HID) != VANILLA_SUCCESS) goto exit_msg;
-        if (create_socket(&info.socket_aud, PORT_AUD) != VANILLA_SUCCESS) goto exit_hid;
-        if (create_socket(&info.socket_cmd, PORT_CMD) != VANILLA_SUCCESS) goto exit_aud;
-
         pthread_t video_thread, audio_thread, input_thread, msg_thread, cmd_thread;
+
+        int cnn = VANILLA_ERR_CONNECTED;
+        push_event(data->event_loop, VANILLA_EVENT_ERROR, &cnn, sizeof(cnn));
 
         pthread_create(&video_thread, NULL, listen_video, &info);
         pthread_setname_np(video_thread, "vanilla-video");
@@ -314,8 +352,20 @@ void connect_as_gamepad_internal(thread_data_t *data)
         pthread_setname_np(cmd_thread, "vanilla-cmd");
 
         while (!is_interrupted()) {
-            // TODO: Should use a wake condition instead
-            usleep(250 * 1000);
+            vanilla_pipe_command_t pipe_state;
+            ssize_t read_size = recv(pipe_cc_skt, (char *) &pipe_state, sizeof(pipe_state), 0);
+            if (read_size > 0) {
+                switch (pipe_state.control_code) {
+                case VANILLA_PIPE_CC_DISCONNECTED:
+                    cnn = VANILLA_ERR_DISCONNECTED;
+                    push_event(data->event_loop, VANILLA_EVENT_ERROR, &cnn, sizeof(cnn));
+                    break;
+                case VANILLA_PIPE_CC_CONNECTED:
+                    cnn = VANILLA_ERR_CONNECTED;
+                    push_event(data->event_loop, VANILLA_EVENT_ERROR, &cnn, sizeof(cnn));
+                    break;
+                }
+            }
         }
 
         pthread_join(video_thread, NULL);
@@ -357,6 +407,8 @@ exit:
 
 int push_event(event_loop_t *loop, int type, const void *data, size_t size)
 {
+    int ret = VANILLA_SUCCESS;
+
     pthread_mutex_lock(&loop->mutex);
 
     if (size <= EVENT_BUFFER_SIZE) {
@@ -374,7 +426,8 @@ int push_event(event_loop_t *loop, int type, const void *data, size_t size)
         ev->data = get_event_buffer();
         if (!ev->data) {
             print_info("OUT OF MEMORY FOR NEW EVENTS");
-            return VANILLA_ERR_OUT_OF_MEMORY;
+            ret = VANILLA_ERR_OUT_OF_MEMORY;
+            goto exit;
         }
         
         ev->type = type;
@@ -386,9 +439,13 @@ int push_event(event_loop_t *loop, int type, const void *data, size_t size)
         pthread_cond_broadcast(&loop->waitcond);
     } else {
         print_info("FAILED TO PUSH EVENT: wanted %lu, only had %lu. This is a bug, please report to developers.\n", size, EVENT_BUFFER_SIZE);
+        ret = VANILLA_ERR_INVALID_ARGUMENT;
     }
 
+exit:
     pthread_mutex_unlock(&loop->mutex);
+
+    return ret;
 }
 
 int get_event(event_loop_t *loop, vanilla_event_t *event, int wait)

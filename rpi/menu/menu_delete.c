@@ -45,7 +45,6 @@ void vpi_menu_delete_status(vui_context_t *vui, void *v)
     snprintf(buf, sizeof(buf), lang(VPI_LANG_DELETE_SUCCESS), cname);
     vui_label_create(vui, bkg_rect.x, bkg_rect.y + bkg_rect.h*1/5, bkg_rect.w, bkg_rect.h, buf, vui_color_create(1,1,1,1), VUI_FONT_SIZE_NORMAL, fglayer);
 
-    printf("%s\n", buf);
 
     static const int ok_btn_w = BTN_SZ * 3;
     vui_button_create(vui, bkg_rect.x + bkg_rect.w/2 - (ok_btn_w)/2, bkg_rect.y + bkg_rect.h * 3 / 4, ok_btn_w, BTN_SZ, lang(VPI_LANG_OK_BTN), 0, VUI_BUTTON_STYLE_BUTTON, fglayer, vpi_menu_delete_return_to_main, v);
@@ -79,7 +78,7 @@ void vpi_menu_delete(vui_context_t *vui, void *v)
     static const int cancel_btn_w = BTN_SZ * 3;
 
     vui_button_create(vui, bkg_rect.x + bkg_rect.w/2 - (ok_btn_w + cancel_btn_w)/2, bkg_rect.y + bkg_rect.h * 3 / 4, ok_btn_w, BTN_SZ, lang(VPI_LANG_OK_BTN), 0, VUI_BUTTON_STYLE_BUTTON, fglayer, vpi_menu_delete_ok, v);
-    vui_button_create(vui, bkg_rect.x + bkg_rect.w/2 - (ok_btn_w + cancel_btn_w)/2 + ok_btn_w, bkg_rect.y + bkg_rect.h * 3 / 4, cancel_btn_w, BTN_SZ, lang(VPI_LANG_CANCEL_BTN), 0, VUI_BUTTON_STYLE_BUTTON, fglayer, vpi_menu_delete_return_to_edit, (void *) (intptr_t) bglayer);
+    vui_button_create(vui, bkg_rect.x + bkg_rect.w/2 - (ok_btn_w + cancel_btn_w)/2 + ok_btn_w, bkg_rect.y + bkg_rect.h * 3 / 4, cancel_btn_w, BTN_SZ, lang(VPI_LANG_CANCEL_BTN), 0, VUI_BUTTON_STYLE_BUTTON, fglayer, vpi_menu_delete_return_to_edit, v);
 
     vui_transition_fade_layer_in(vui, fglayer, 0, 0);
 }

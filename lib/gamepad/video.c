@@ -1,12 +1,17 @@
 #include "video.h"
 
+#ifdef _WIN32
+#include <winsock2.h>
+#else
+#include <sys/socket.h>
+#endif // _WIN32
+
 #include <assert.h>
 #include <math.h>
 #include <pthread.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/socket.h>
 #include <sys/types.h>
 #include <sys/time.h>
 #include <unistd.h>
@@ -41,6 +46,10 @@ static size_t video_packet_cache_index = 0;
 static uint8_t video_packet[100000];
 
 static size_t generated_sps_params_size = 0;
+
+static const uint8_t VANILLA_PPS_PARAMS[] = {
+    0x00, 0x00, 0x00, 0x01, 0x68, 0xee, 0x06, 0x0c, 0xe8
+};
 
 void request_idr()
 {
@@ -80,7 +89,15 @@ void handle_video_packet(gamepad_context_t *ctx, VideoPacket *vp, size_t size, i
     int is_idr = 0;
     for (int i = 0; i < sizeof(vp->extended_header); i++) {
         if (vp->extended_header[i] == 0x80) {
+            // print_info("GOT IDR");
+
             is_idr = 1;
+
+            // pthread_mutex_lock(&video_mutex);
+            // if (idr_is_queued) {
+            //     idr_is_queued = 0;
+            // }
+            // pthread_mutex_unlock(&video_mutex);
             break;
         }
     }
@@ -483,4 +500,10 @@ size_t generate_sps_params(void *data, size_t size)
     }
 
     return bit_index / align;
+}
+
+size_t generate_pps_params(void *data, size_t size)
+{
+    memcpy(data, VANILLA_PPS_PARAMS, MIN(sizeof(VANILLA_PPS_PARAMS), size));
+    return sizeof(VANILLA_PPS_PARAMS);
 }
