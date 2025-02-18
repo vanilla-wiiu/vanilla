@@ -13,6 +13,8 @@ target_include_directories(vanilla PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
+set_target_properties(vanilla PROPERTIES PUBLIC_HEADER "vanilla.h")
+
 if (NOT ANDROID)
     target_link_libraries(vanilla PRIVATE
         pthread

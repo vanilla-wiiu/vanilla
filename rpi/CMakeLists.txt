@@ -1,3 +1,8 @@
+cmake_minimum_required(VERSION 3.22)
+
+set(_sdl_lib SDL2::SDL2)
+set(_vanilla_pi_libs "")
+
 if (VANILLA_BUILD_VENDORED)
     include(FetchContent)
     include(ExternalProject)
@@ -23,17 +28,21 @@ if (VANILLA_BUILD_VENDORED)
 
     set(LIBXML2_WITH_PYTHON OFF)
     set(LIBXML2_WITH_ICONV OFF)
+    set(LIBXML2_WITH_PROGRAMS OFF)
+    set(BUILD_SHARED_LIBS OFF)
     FetchContent_Declare(
         libxml2
         GIT_REPOSITORY https://gitlab.gnome.org/GNOME/libxml2.git
         GIT_TAG v2.13.5
+        EXCLUDE_FROM_ALL
     )
 
     FetchContent_MakeAvailable(SDL2 SDL2_ttf SDL2_image libxml2)
     set(FFMPEG_INSTALL_DIR "${CMAKE_CURRENT_BINARY_DIR}/ffmpeg/install")
     set(FFMPEG_CONFIGURE_ARGS
         --enable-gpl
-        --enable-shared
+        --disable-shared
+        --enable-static
         --disable-programs
         --prefix=${FFMPEG_INSTALL_DIR}
         --disable-doc
@@ -56,6 +65,7 @@ if (VANILLA_BUILD_VENDORED)
             set(FFMPEG_TARGET_OS "mingw32")
             list(APPEND FFMPEG_CONFIGURE_ARGS
                 --cross-prefix=${CMAKE_SYSTEM_PROCESSOR}-w64-mingw32-
+                --host-cc=${CMAKE_C_COMPILER} # HACK: FFmpeg complains about "lack of C11 support" without this because it can't find "gcc"
             )
         elseif(MSVC)
             set(FFMPEG_TARGET_OS "win32")
@@ -63,15 +73,23 @@ if (VANILLA_BUILD_VENDORED)
             set(FFMPEG_TARGET_OS "darwin")
         elseif(ANDROID)
             set(FFMPEG_TARGET_OS "android")
+            string(REPLACE "-" "" _android_ver ${ANDROID_PLATFORM})
+            # message(FATAL_ERROR ${_android_ver})
             list(APPEND FFMPEG_CONFIGURE_ARGS
-                --cross-prefix=${CMAKE_SYSTEM_PROCESSOR}-linux-android35-
-                --cc=/opt/android-ndk/toolchains/llvm/prebuilt/linux-x86_64/bin/${CMAKE_SYSTEM_PROCESSOR}-linux-android35-clang
+                --cross-prefix=${CMAKE_SYSTEM_PROCESSOR}-linux-${_android_ver}-
+                # --cc=${CMAKE_C_COMPILER}
+                # --host-cc=${CMAKE_C_COMPILER}
+                # --ld=${CMAKE_C_COMPILER}
+                # --host-ld=${CMAKE_C_COMPILER}
+                --host-cc=${CMAKE_SYSTEM_PROCESSOR}-linux-${_android_ver}-clang
                 --extra-cflags=${CMAKE_C_FLAGS}
-                --ar=/opt/android-ndk/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar
-                --ranlib=/opt/android-ndk/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ranlib
+                --extra-ldflags=${CMAKE_STATIC_LINKER_FLAGS}
+                --sysroot=${CMAKE_ANDROID_NDK}/toolchains/llvm/prebuilt/linux-${CMAKE_HOST_SYSTEM_PROCESSOR}/sysroot
+                --ar=${CMAKE_ANDROID_NDK}/toolchains/llvm/prebuilt/linux-${CMAKE_HOST_SYSTEM_PROCESSOR}/bin/llvm-ar
+                --ranlib=${CMAKE_ANDROID_NDK}/toolchains/llvm/prebuilt/linux-${CMAKE_HOST_SYSTEM_PROCESSOR}/bin/llvm-ranlib
                 --disable-asm
-                --nm=/opt/android-ndk/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-nm
-                --strip=/opt/android-ndk/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip
+                --nm=${CMAKE_ANDROID_NDK}/toolchains/llvm/prebuilt/linux-${CMAKE_HOST_SYSTEM_PROCESSOR}/bin/llvm-nm
+                --strip=${CMAKE_ANDROID_NDK}/toolchains/llvm/prebuilt/linux-${CMAKE_HOST_SYSTEM_PROCESSOR}/bin/llvm-strip
             )
         endif()
         list(APPEND FFMPEG_CONFIGURE_ARGS
@@ -84,14 +102,16 @@ if (VANILLA_BUILD_VENDORED)
     set(FFMPEG_FILES "")
     set(FFMPEG_INCLUDE_DIR "${FFMPEG_INSTALL_DIR}/include")
     foreach(_component avformat avcodec avutil swscale)
-        add_library("FFmpeg::${_component}" UNKNOWN IMPORTED)
-        if (WIN32)
+        add_library("FFmpeg::${_component}" SHARED IMPORTED)
+        if (MSVC)
             set(_component_lib "${FFMPEG_INSTALL_DIR}/bin/${_component}.lib")
         else()
-            set(_component_lib "${FFMPEG_INSTALL_DIR}/lib/lib${_component}.so")
+            set(_component_lib "${FFMPEG_INSTALL_DIR}/lib/lib${_component}.a")
         endif()
         set_target_properties("FFmpeg::${_component}" PROPERTIES
-            IMPORTED_LOCATION ${_component_lib})
+            IMPORTED_IMPLIB ${_component_lib}
+            IMPORTED_LOCATION ${_component_lib}
+        )
         list(APPEND FFMPEG_FILES ${_component_lib})
         add_dependencies("FFmpeg::${_component}" FFmpeg)
     endforeach()
@@ -109,6 +129,11 @@ if (VANILLA_BUILD_VENDORED)
         BUILD_BYPRODUCTS
             ${FFMPEG_FILES}
     )
+
+    set(_sdl_lib SDL2::SDL2-static)
+
+    # Link zlib for PNG
+    list(APPEND _vanilla_pi_libs "z")
 endif()
 
 list(APPEND VANILLA_PI_SRC
@@ -163,15 +188,19 @@ if (NOT VANILLA_BUILD_VENDORED)
 endif()
 
 target_link_libraries(vanilla-pi PRIVATE
-    SDL2::SDL2
+    ${_sdl_lib}
     SDL2::SDL2main
-    SDL2_ttf::SDL2_ttf
-    SDL2_image::SDL2_image
+    SDL2_ttf
+    SDL2_image
     vanilla
-
-    # drm
     m
 )
+
+if (UNIX AND NOT APPLE AND NOT ANDROID)
+    target_link_libraries(vanilla-pi PRIVATE
+        drm
+    )
+endif()
 
 if (ANDROID)
     target_link_libraries(vanilla-pi PRIVATE
@@ -181,24 +210,19 @@ if (ANDROID)
 endif()
 
 # Find FFmpeg
-#
-# On Android, we use MediaCodec directly
 if (NOT VANILLA_BUILD_VENDORED)
     find_package(FFmpeg REQUIRED COMPONENTS avformat avcodec avutil swscale)
 endif()
 
-# if (NOT ANDROID)
-    target_link_libraries(vanilla-pi PRIVATE
-        FFmpeg::avformat
-        FFmpeg::avcodec
-        FFmpeg::avutil
-        FFmpeg::swscale
-    )
-# endif()
+target_link_libraries(vanilla-pi PRIVATE
+    FFmpeg::avformat
+    FFmpeg::avcodec
+    FFmpeg::avutil
+    FFmpeg::swscale
+    ${_vanilla_pi_libs}
+)
 
 # Find libxml2 (used for storing/parsing user config)
-#
-# On Android, we compile as part of the build, so we don't need to find it
 if (NOT VANILLA_BUILD_VENDORED)
     find_package(libxml2 REQUIRED)
 endif()
@@ -220,3 +244,19 @@ target_include_directories(vanilla-pi PRIVATE
     # xf86drm.h needs this
     /usr/include/libdrm
 )
+
+# Install assets
+if(NOT ANDROID)
+    # Put assets in correct place relative to build
+    add_custom_command(
+        TARGET vanilla-pi POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory_if_different "${CMAKE_CURRENT_SOURCE_DIR}/assets" "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/../share/vanilla/assets"
+    )
+
+    if(WIN32)
+        set(_vanilla_pi_asset_destination "bin")
+    else()
+        set(_vanilla_pi_asset_destination "share/vanilla")
+    endif()
+    install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/assets" DESTINATION "${_vanilla_pi_asset_destination}")
+endif()
