@@ -188,7 +188,7 @@ int vui_init_sdl(vui_context_t *ctx, int fullscreen)
 {
     // Initialize SDL
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER) < 0) {
-        vpilog("Failed to initialize SDL\n");
+        vpilog("Failed to initialize SDL: %s\n", SDL_GetError());
         return -1;
     }
 
