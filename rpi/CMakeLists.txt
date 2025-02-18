@@ -106,13 +106,15 @@ if (VANILLA_BUILD_VENDORED)
             list(APPEND FFMPEG_ENV "PATH=$ENV{PATH}:${CMAKE_ANDROID_NDK}/toolchains/llvm/prebuilt/linux-${CMAKE_HOST_SYSTEM_PROCESSOR}/bin")
         elseif(LINUX)
             set(FFMPEG_TARGET_OS "linux")
+            list(APPEND FFMPEG_CONFIGURE_ARGS
+                --cross-prefix=${CMAKE_CROSS_PREFIX}
+                --host-cc=${CMAKE_C_COMPILER}
+            )
         endif()
         list(APPEND FFMPEG_CONFIGURE_ARGS
             --enable-cross-compile
             --arch=${CMAKE_SYSTEM_PROCESSOR}
             --target-os=${FFMPEG_TARGET_OS}
-            --cross-prefix=${CMAKE_CROSS_PREFIX}
-            --host-cc=${CMAKE_C_COMPILER}
         )
     endif()
 
