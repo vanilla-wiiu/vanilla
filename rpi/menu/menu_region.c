@@ -44,7 +44,7 @@ void vpi_menu_region(vui_context_t *vui, void *v)
     int margin;
     vpi_menu_create_background(vui, bglayer, &bkg_rect, &margin);
 
-    const int lbl_margin = margin * 4;
+    const int lbl_margin = margin * 2;
     const int lbl_y = bkg_rect.y + lbl_margin;
     vui_label_create(vui, bkg_rect.x + lbl_margin, lbl_y, bkg_rect.w - lbl_margin - lbl_margin, bkg_rect.h - lbl_margin - lbl_margin, lang(VPI_LANG_REGION_HELP_1), vui_color_create(1,1,1,1), VUI_FONT_SIZE_NORMAL, fglayer);
 
@@ -52,7 +52,7 @@ void vpi_menu_region(vui_context_t *vui, void *v)
     vui_label_create(vui, bkg_rect.x + bkg_rect.w/2 - lbl2_width/2, lbl_y + bkg_rect.h/8, lbl2_width, bkg_rect.h - lbl_margin - lbl_margin, lang(VPI_LANG_REGION_HELP_2), vui_color_create(0.66f,0.66f,0.66f,1), VUI_FONT_SIZE_SMALL, fglayer);
 
     const int btn_w = bkg_rect.w/2;
-    const int btn_y = bkg_rect.y + bkg_rect.h * 7 / 16;
+    const int btn_y = bkg_rect.y + bkg_rect.h * 13 / 32;
     const int btn_x = bkg_rect.x + bkg_rect.w/2 - btn_w/2;
 
     for (int i = 0; i < MAX_REGIONS; i++) {
