@@ -13,7 +13,7 @@ set(HOSTAP_DIR ${CMAKE_CURRENT_BINARY_DIR}/hostap)
 ExternalProject_Add(hostap
     SOURCE_DIR ${HOSTAP_DIR}
     BINARY_DIR ${HOSTAP_DIR}
-    GIT_REPOSITORY https://github.com/rolandoislas/drc-hostap
+    GIT_REPOSITORY https://github.com/rolandoislas/drc-hostap.git
     CONFIGURE_COMMAND ${CMAKE_COMMAND} -E copy_if_different conf/wpa_supplicant.config wpa_supplicant/.config
     BUILD_COMMAND make -C wpa_supplicant wpa_supplicant libwpa_client.a && cp wpa_supplicant/wpa_supplicant wpa_supplicant/wpa_supplicant_drc
     INSTALL_COMMAND ""
