@@ -72,7 +72,7 @@ int vpi_start_pipe()
         dirname(exe);
         strcat(exe, "/vanilla-pipe");
 
-        r = execlp(pkexec, pkexec, exe, "-local", vpi_config.wireless_interface, 0);
+        r = execlp(pkexec, pkexec, exe, "-local", vpi_config.wireless_interface, (const char *) 0);
 
         // Handle failure to execute, use _exit so we don't interfere with the host
         _exit(1);
