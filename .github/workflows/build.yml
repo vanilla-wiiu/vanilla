@@ -7,10 +7,18 @@ on:
     paths-ignore:
     - 'README.md'
 jobs:
-  linux:
+  build:
     strategy:
       matrix:
-        arch: [ x86_64, aarch64 ]
+        platform:
+          - os: linux
+            arch: x86_64
+          - os: linux
+            arch: aarch64
+          - os: windows
+            arch: x86_64
+          - os: android
+            arch: x86_64
     runs-on: ubuntu-24.04
     steps:
     - uses: actions/checkout@v4
@@ -18,7 +26,7 @@ jobs:
         submodules: recursive
 
     - name: Install dependencies for cross-compiling
-      if: ${{ matrix.arch != 'x86_64' }}
+      if: ${{ matrix.platform.arch != 'x86_64' }}
       run: sudo apt -y update && sudo apt -y install qemu-user-static binfmt-support
 
     - name: Restore Docker cache
@@ -26,26 +34,26 @@ jobs:
       id: cache
       with:
         path: path/to/dependencies
-        key: linux-${{ matrix.arch }}
+        key: ${{ matrix.platform.os }}-${{ matrix.platform.arch }}
     
     - name: Build Docker image
       run: |
-        cd docker/linux
-        docker build --platform linux/${{ matrix.arch }} -t vanilla-linux-${{ matrix.arch }} .
+        cd docker/${{ matrix.platform.os }}
+        docker build --platform linux/${{ matrix.platform.arch }} -t vanilla-${{ matrix.platform.os }}-${{ matrix.platform.arch }} .
       
     - name: Run Docker container
       run: |
-        docker run --platform linux/${{ matrix.arch }} -v "${{ github.workspace }}:/vanilla" -v "${{ github.workspace }}/build:/install" vanilla-linux-${{ matrix.arch }}
+        docker run --platform linux/${{ matrix.platform.arch }} -v "${{ github.workspace }}:/vanilla" -v "${{ github.workspace }}/build:/install" vanilla-${{ matrix.platform.os }}-${{ matrix.platform.arch }}
     
     - name: Archive
       run: |
-        tar czf Vanilla-Linux-${{ matrix.arch }}.tar.gz -C "${{ github.workspace }}/build" .
+        tar czf Vanilla-${{ matrix.platform.os }}-${{ matrix.platform.arch }}.tar.gz -C "${{ github.workspace }}/build" .
 
     - name: Upload a Build Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: Vanilla (Linux ${{ matrix.arch }})
-        path: Vanilla-Linux-${{ matrix.arch }}.tar.gz
+        name: Vanilla (${{ matrix.platform.os }} ${{ matrix.platform.arch }})
+        path: Vanilla-${{ matrix.platform.os }}-${{ matrix.platform.arch }}.tar.gz
 
     - name: Upload Continuous Release
       if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' && github.repository == 'vanilla-wiiu/vanilla' }}
@@ -54,5 +62,5 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         curl -fLOSs --retry 2 --retry-delay 60 https://github.com/probonopd/uploadtool/raw/master/upload.sh
-        bash upload.sh Vanilla-Linux-${{ matrix.arch }}.tar.gz
+        bash upload.sh Vanilla-${{ matrix.platform.os }}-${{ matrix.platform.arch }}.tar.gz
       
