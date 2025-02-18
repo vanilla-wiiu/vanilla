@@ -153,6 +153,7 @@ list(APPEND VANILLA_PI_SRC
     menu/menu_game.c
     menu/menu_gamepad.c
     menu/menu_main.c
+    menu/menu_region.c
     menu/menu_rename.c
     menu/menu_settings.c
     menu/menu_sync.c

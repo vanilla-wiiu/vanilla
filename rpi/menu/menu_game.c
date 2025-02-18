@@ -86,6 +86,9 @@ void vpi_menu_game_start(vui_context_t *vui, void *v)
 
     vui_enable_background(vui, 0);
 
+    // Set initial values
+    vanilla_set_region(vpi_config.region);
+
     vpi_console_entry_t *entry = vpi_config.connected_console_entries + console;
     int r = vanilla_start(vpi_config.server_address, entry->bssid, entry->psk);
     if (r != VANILLA_SUCCESS) {

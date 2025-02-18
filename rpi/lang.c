@@ -26,6 +26,7 @@ static const char *lang_str[__VPI_LANG_T_COUNT] = {
     "Audio",
     "Connection",
     "Webcam",
+    "Region",
     "Local",
     "Via Server",
     "Set up how Vanilla connects to the Wii U",
@@ -37,7 +38,12 @@ static const char *lang_str[__VPI_LANG_T_COUNT] = {
     "Recording finished",
     "Connection lost, attempting to re-connect...",
     "Your platform is not capable of \"Local\" connection, and must connect via a server.",
-    "Failed to save screenshot (%i)"
+    "Failed to save screenshot (%i)",
+    "Select gamepad region",
+    "Gamepad region must match the console region or else the console will throw an error. This has no other effect on usage.",
+    "Japan",
+    "America",
+    "Europe",
 };
 
 const char *lang(vpi_lang_t id)

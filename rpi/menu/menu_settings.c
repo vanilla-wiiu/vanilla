@@ -5,6 +5,7 @@
 #include "menu_connection.h"
 #include "menu_gamepad.h"
 #include "menu_main.h"
+#include "menu_region.h"
 #include "ui/ui_anim.h"
 
 static void return_to_main(vui_context_t *vui, int btn, void *v)
@@ -25,6 +26,12 @@ static void transition_to_connection(vui_context_t *vui, int button, void *v)
     vui_transition_fade_layer_out(vui, layer, vpi_menu_connection, 0);
 }
 
+static void transition_to_region(vui_context_t *vui, int button, void *v)
+{
+    int layer = (intptr_t) v;
+    vui_transition_fade_layer_out(vui, layer, vpi_menu_region, 0);
+}
+
 void vpi_menu_settings(vui_context_t *vui, void *v)
 {
     vui_reset(vui);
@@ -37,25 +44,25 @@ void vpi_menu_settings(vui_context_t *vui, void *v)
     vui_get_screen_size(vui, &scrw, &scrh);
 
     static const int SETTINGS_NAMES[] = {
-        VPI_LANG_GAMEPAD,
         VPI_LANG_CONNECTION,
+        VPI_LANG_GAMEPAD,
+        VPI_LANG_REGION,
         VPI_LANG_AUDIO,
-        VPI_LANG_WEBCAM,
     };
 
     // Highlight currently implemented functionality
     static const int SETTINGS_ENABLED[] = {
         1,
         1,
-        0,
+        1,
         0,
     };
 
     // Highlight currently implemented functionality
     static const vui_button_callback_t SETTINGS_ACTION[] = {
-        transition_to_gamepad,
         transition_to_connection,
-        0,
+        transition_to_gamepad,
+        transition_to_region,
         0,
     };
 

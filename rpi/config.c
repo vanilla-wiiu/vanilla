@@ -68,6 +68,9 @@ void vpi_config_save()
 
     sprintf(buf, "%i", vpi_config.connection_setup);
     xmlTextWriterWriteElement(writer, BAD_CAST "connectionsetup", BAD_CAST buf);
+    
+    sprintf(buf, "%i", vpi_config.region);
+    xmlTextWriterWriteElement(writer, BAD_CAST "region", BAD_CAST buf);
 
     xmlTextWriterEndElement(writer); // vanilla
     
@@ -84,6 +87,7 @@ void vpi_config_init()
     memset(&vpi_config, 0, sizeof(vpi_config));
     
     vpi_config.server_address = VANILLA_ADDRESS_LOCAL;
+    vpi_config.region = VANILLA_REGION_AMERICA;
 
     // Load from file
     char config_fn[1024];
@@ -137,6 +141,8 @@ void vpi_config_init()
                         }
                     } else if (!strcmp((const char *) child->name, "connectionsetup")) {
                         vpi_config.connection_setup = atoi((const char *) child->children->content);
+                    } else if (!strcmp((const char *) child->name, "region")) {
+                        vpi_config.region = atoi((const char *) child->children->content);
                     }
                 }
                 child = child->next;
