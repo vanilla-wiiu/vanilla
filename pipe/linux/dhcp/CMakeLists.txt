@@ -11,3 +11,4 @@ add_library(udhcpc STATIC
     script.c
 )
 
+target_compile_definitions(udhcpc PRIVATE _GNU_SOURCE)
