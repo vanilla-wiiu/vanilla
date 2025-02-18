@@ -12,7 +12,9 @@ if (VANILLA_BUILD_VENDORED)
     endif()
 
     # Link zlib for PNG
-    list(APPEND _vanilla_pi_libs "z")
+    if (UNIX)
+        list(APPEND _vanilla_pi_libs "z")
+    endif()
 
     include(FetchContent)
     include(ExternalProject)
@@ -179,11 +181,6 @@ else()
     add_executable(vanilla-pi ${VANILLA_PI_SRC})
 endif()
 
-if (UNIX AND NOT APPLE)
-    # Assume this platform is capable of running vanilla-pipe
-    target_compile_definitions(vanilla-pi PRIVATE VANILLA_PIPE_AVAILABLE)
-endif()
-
 # Ensure executable is installed
 install(TARGETS vanilla-pi)
 
@@ -203,9 +200,17 @@ target_link_libraries(vanilla-pi PRIVATE
     m
 )
 
-if (UNIX AND NOT APPLE AND NOT ANDROID)
+if (LINUX)
+    # Assume this platform is capable of running vanilla-pipe
+    target_compile_definitions(vanilla-pi PRIVATE VANILLA_PIPE_AVAILABLE)
+
     target_link_libraries(vanilla-pi PRIVATE
         drm
+    )
+
+    target_include_directories(vanilla-pi PRIVATE
+        # xf86drm.h needs this
+        /usr/include/libdrm
     )
 endif()
 
@@ -247,9 +252,6 @@ target_include_directories(vanilla-pi PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/../lib"
     "${CMAKE_CURRENT_SOURCE_DIR}"
     "${CMAKE_CURRENT_SOURCE_DIR}/.."
-
-    # xf86drm.h needs this
-    /usr/include/libdrm
 )
 
 # Install assets
@@ -273,6 +275,8 @@ else()
     endif()
     install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/assets" DESTINATION "${_vanilla_pi_asset_destination}")
 
-    install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/res/com.mattkc.vanilla.desktop" DESTINATION share/applications)
-    install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/res/com.mattkc.vanilla.svg" DESTINATION share/pixmaps)
+    if (LINUX)
+        install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/res/com.mattkc.vanilla.desktop" DESTINATION share/applications)
+        install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/res/com.mattkc.vanilla.svg" DESTINATION share/pixmaps)
+    endif()
 endif()

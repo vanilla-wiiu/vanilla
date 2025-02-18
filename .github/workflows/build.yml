@@ -47,13 +47,13 @@ jobs:
     
     - name: Archive
       run: |
-        tar czf Vanilla-${{ matrix.platform.os }}-${{ matrix.platform.arch }}.tar.gz -C "${{ github.workspace }}/build" .
+        tar czf vanilla-${{ matrix.platform.os }}-${{ matrix.platform.arch }}.tar.gz -C "${{ github.workspace }}/build" .
 
     - name: Upload a Build Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: Vanilla (${{ matrix.platform.os }} ${{ matrix.platform.arch }})
-        path: Vanilla-${{ matrix.platform.os }}-${{ matrix.platform.arch }}.tar.gz
+        name: ${{ matrix.platform.os }} ${{ matrix.platform.arch }}
+        path: vanilla-${{ matrix.platform.os }}-${{ matrix.platform.arch }}.tar.gz
 
     - name: Upload Continuous Release
       if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' && github.repository == 'vanilla-wiiu/vanilla' }}
@@ -62,5 +62,5 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         curl -fLOSs --retry 2 --retry-delay 60 https://github.com/probonopd/uploadtool/raw/master/upload.sh
-        bash upload.sh Vanilla-${{ matrix.platform.os }}-${{ matrix.platform.arch }}.tar.gz
+        bash upload.sh vanilla-${{ matrix.platform.os }}-${{ matrix.platform.arch }}.tar.gz
       
