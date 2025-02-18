@@ -17,7 +17,6 @@ At a minimum, you will need an adapter that supports 802.11n 5GHz. Newer standar
 In practice, not all hardware/drivers appear to work at this time. Check the [Wireless Compatibility](https://github.com/vanilla-wiiu/vanilla/wiki/Wireless-Compatibility) page on the wiki to check if a card is confirmed working or not.
 
 ## Compiling (Linux)
-#### Note: Currently Qt 6.4 or later is required
 Vanilla currently requires the following dependencies:
 
 - Debian/Ubuntu 
@@ -26,21 +25,21 @@ Vanilla currently requires the following dependencies:
   ```
 - Fedora
   ```
-  # dnf install qt6-qtbase-devel qt6-qtmultimedia-devel qt6-qtsvg-devel libavcodec-free-devel libavutil-free-devel libavfilter-free-devel libnl3-devel SDL2-devel openssl-devel make automake gcc gcc-c++ kernel-devel cmake
+  # dnf install libavcodec-free-devel libavutil-free-devel libavfilter-free-devel libnl3-devel SDL2-devel openssl-devel make automake gcc gcc-c++ kernel-devel cmake
   ```
 - Arch
   ```
-  # pacman -S qt6 ffmpeg libnl sdl2 base-devel make cmake
+  # pacman -S base-devel make cmake ffmpeg libnl sdl2
   ```
 - Alpine/postmarketOS
   ```
-  # apk add qt6-qtbase-dev qt6-qtmultimedia-dev qt6-qtsvg-dev ffmpeg-dev libnl3-dev sdl2-dev build-base cmake
+  # apk add build-base cmake sdl2-dev ffmpeg-dev libnl3-dev
   ```
 
 The build process is otherwise normal for a CMake program:
 
 ```
-git clone --recursive https://github.com/vanilla-wiiu/vanilla.git
+git clone https://github.com/vanilla-wiiu/vanilla.git
 cd vanilla
 mkdir build && cd build
 cmake ..
