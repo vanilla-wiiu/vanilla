@@ -57,8 +57,3 @@ void vpi_asset_filename(char *buf, size_t size, const char *type, const char *fi
     snprintf(buf, size, "%s/../share/vanilla/assets/%s/%s", SDL_GetBasePath(), type, filename);
 #endif
 }
-
-void *vpi_start_process(const char **args)
-{
-    
-}

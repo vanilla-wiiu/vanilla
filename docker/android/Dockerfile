@@ -14,9 +14,10 @@ RUN mkdir -p /opt/android/cmdline-tools && \
 
 ENV ANDROID_NDK="25.1.8937393"
 ENV SYSTEM_ARCH="x86_64"
+ENV BUILD_TOOLS="35.0.1"
 
 # Install Android SDK and NDK
-RUN yes Y | /opt/android/cmdline-tools/tools/bin/sdkmanager --install "ndk;${ANDROID_NDK}"
+RUN yes Y | /opt/android/cmdline-tools/tools/bin/sdkmanager --install "ndk;${ANDROID_NDK}" "build-tools;${BUILD_TOOLS}"
 # RUN yes Y | /opt/android/cmdline-tools/tools/bin/sdkmanager --install "cmake;3.31.5" "build-tools;35.0.1" "platforms;android-35" "platform-tools" "ndk;28.0.13004108"
 
 # Accept all licenses
@@ -25,6 +26,6 @@ RUN yes Y | /opt/android/cmdline-tools/tools/bin/sdkmanager --licenses
 # Add ndk-build to the search path
 ENV ANDROID_HOME=/opt/android
 ENV ANDROID_NDK_HOME=/opt/android/ndk/${ANDROID_NDK}
-ENV PATH="$PATH:/opt/gradlew:$ANDROID_HOME/cmdline-tools/tools/bin:/opt/android/platform-tools:$ANDROID_NDK_HOME:$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-${SYSTEM_ARCH}/bin"
+ENV PATH="$PATH:/opt/gradlew:$ANDROID_HOME/cmdline-tools/tools/bin:/opt/android/platform-tools:$ANDROID_NDK_HOME:$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-${SYSTEM_ARCH}/bin:/opt/android/build-tools/$BUILD_TOOLS"
 
 ENTRYPOINT [ "/vanilla/docker/android/build.sh" ]

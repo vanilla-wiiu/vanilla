@@ -15,7 +15,6 @@
 vui_context_t *vui_alloc(int width, int height)
 {
     vui_context_t *vui = malloc(sizeof(vui_context_t));
-    vui_reset(vui);
     vui->platform_data = 0;
     vui->screen_width = width;
     vui->screen_height = height;
@@ -25,6 +24,7 @@ vui_context_t *vui_alloc(int width, int height)
     vui->vibrate_handler = 0;
     vui->font_height_handler = 0;
     vui->text_open_handler = 0;
+    vui_reset(vui);
     return vui;
 }
 

@@ -43,7 +43,7 @@ jobs:
       
     - name: Run Docker container
       run: |
-        docker run -v "${{ github.workspace }}:/vanilla" -v "${{ github.workspace }}/build:/install" vanilla-${{ matrix.platform.os }}-${{ matrix.platform.arch }}
+        docker run -v "${{ github.workspace }}:/vanilla" -v "${{ github.workspace }}/build:/install" -e ANDROID_SIGNING_KEY=${{ secrets.ANDROID_SIGNING_KEY }} vanilla-${{ matrix.platform.os }}-${{ matrix.platform.arch }}
     
     - name: Archive
       run: |
