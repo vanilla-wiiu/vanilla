@@ -272,4 +272,7 @@ else()
         set(_vanilla_pi_asset_destination "share/vanilla")
     endif()
     install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/assets" DESTINATION "${_vanilla_pi_asset_destination}")
+
+    install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/res/com.mattkc.vanilla.desktop" DESTINATION share/applications)
+    install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/res/com.mattkc.vanilla.svg" DESTINATION share/pixmaps)
 endif()
