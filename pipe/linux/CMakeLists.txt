@@ -1,72 +1,72 @@
+# Add vanilla-pipe executalbe
 add_executable(vanilla-pipe
     main.c
     wpa.c
 )
 
+# Install vanilla-pipe
 install(TARGETS vanilla-pipe)
 
-target_include_directories(vanilla-pipe PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/hostap/src/common
-    ${CMAKE_CURRENT_SOURCE_DIR}/hostap/src/utils
-    ${CMAKE_SOURCE_DIR}/lib
-)
-
 # Build WPA supplicant
-add_custom_target(
-    wpa_supplicant_configure
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_CURRENT_SOURCE_DIR}/hostap/conf/wpa_supplicant.config" "${CMAKE_CURRENT_SOURCE_DIR}/hostap/wpa_supplicant/.config"
-)
-add_custom_target(
-    wpa_supplicant_build
-    COMMAND make -j$$(nproc)
-    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/hostap/wpa_supplicant"
-    BYPRODUCTS "${CMAKE_CURRENT_SOURCE_DIR}/hostap/wpa_supplicant/wpa_supplicant"
-    USES_TERMINAL
-    DEPENDS wpa_supplicant_configure
-)
-add_executable(wpa_supplicant IMPORTED)
-add_dependencies(wpa_supplicant wpa_supplicant_build)
-set_target_properties(wpa_supplicant PROPERTIES
-    IMPORTED_LOCATION "${CMAKE_CURRENT_SOURCE_DIR}/hostap/wpa_supplicant/wpa_supplicant"
-)
-add_custom_command(
-    TARGET wpa_supplicant_build POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_CURRENT_SOURCE_DIR}/hostap/wpa_supplicant/wpa_supplicant" "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/wpa_supplicant_drc"
-    DEPENDS wpa_supplicant_build
+include(ExternalProject)
+set(HOSTAP_DIR ${CMAKE_CURRENT_BINARY_DIR}/hostap)
+ExternalProject_Add(hostap
+    SOURCE_DIR ${HOSTAP_DIR}
+    BINARY_DIR ${HOSTAP_DIR}
+    GIT_REPOSITORY https://github.com/rolandoislas/drc-hostap
+    CONFIGURE_COMMAND ${CMAKE_COMMAND} -E copy_if_different conf/wpa_supplicant.config wpa_supplicant/.config
+    BUILD_COMMAND make -C wpa_supplicant wpa_supplicant libwpa_client.a && cp wpa_supplicant/wpa_supplicant wpa_supplicant/wpa_supplicant_drc
+    INSTALL_COMMAND ""
+    UPDATE_COMMAND ""
+    BUILD_BYPRODUCTS
+        ${HOSTAP_DIR}/wpa_supplicant/wpa_supplicant_drc
+        ${HOSTAP_DIR}/wpa_supplicant/libwpa_client.a
 )
 
-# Install dhcp script
-add_custom_target(
-    dhcp_script ALL
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_CURRENT_SOURCE_DIR}/dhcp.sh" "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/../sbin/dhcp.sh"
-)
-
-# Build client library
-add_custom_target(
-    wpa_client_build
-    COMMAND make libwpa_client.so
-    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/hostap/wpa_supplicant"
-    DEPENDS wpa_supplicant
-    BYPRODUCTS "${CMAKE_CURRENT_SOURCE_DIR}/hostap/wpa_supplicant/libwpa_client.so"
-)
+# Define wpa_client library from hostap
 add_library(wpa_client SHARED IMPORTED)
 set_target_properties(wpa_client PROPERTIES
-    IMPORTED_LOCATION "${CMAKE_CURRENT_SOURCE_DIR}/hostap/wpa_supplicant/libwpa_client.so"
+    IMPORTED_IMPLIB ${HOSTAP_DIR}/wpa_supplicant/libwpa_client.a
     IMPORTED_NO_SONAME true
 )
-add_dependencies(wpa_client wpa_client_build)
+add_dependencies(wpa_client hostap)
+
+# Define wpa_supplicant binary from hostap
+add_executable(wpa_supplicant IMPORTED)
+set_target_properties(wpa_supplicant PROPERTIES
+    IMPORTED_LOCATION ${HOSTAP_DIR}/wpa_supplicant/wpa_supplicant_drc
+)
+add_dependencies(wpa_supplicant hostap)
+add_custom_command(
+    TARGET hostap POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different "${HOSTAP_DIR}/wpa_supplicant/wpa_supplicant_drc" "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/wpa_supplicant_drc"
+)
+
+# Compile custom dhclient library
+add_subdirectory(dhcp)
+
+# Find LibNL
+find_package(LibNL REQUIRED)
+
+# Define vanilla-pipe include directories
+target_include_directories(vanilla-pipe PRIVATE
+    ${HOSTAP_DIR}/src/common
+    ${HOSTAP_DIR}/src/utils
+    ${CMAKE_SOURCE_DIR}/lib
+    ${LibNL_INCLUDE_DIR}
+)
 
 # Link our library with the client library
 target_link_libraries(vanilla-pipe PRIVATE
     wpa_client
     pthread
+    udhcpc
+    ${LibNL_LIBRARY}
+    ${LibNL_ROUTE_LIBRARY}
 )
 
-# Copy files into build directory
-#add_custom_command(
-#    TARGET wpa_supplicant POST_BUILD
-#    COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_SOURCE_DIR}/hostap/wpa_supplicant/wpa_supplicant" "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/wpa_supplicant_drc"
-#)
+# Ensure wpa_supplicant is installed
+install(IMPORTED_RUNTIME_ARTIFACTS wpa_supplicant)
 
 # Handle polkit files
 set(PIPE_BIN ${CMAKE_INSTALL_PREFIX})

@@ -22,7 +22,7 @@ Vanilla currently requires the following dependencies:
 
 - Debian/Ubuntu 
   ```
-  # apt install qt6-base-dev qt6-multimedia-dev qt6-svg-dev libavcodec-dev libavutil-dev libavfilter-dev libsdl2-dev libnl-genl-3-dev isc-dhcp-client libssl-dev build-essential cmake
+  # apt install build-essential cmake libsdl2-dev libavformat-dev libavcodec-dev libavutil-dev libswscale-dev libnl-genl-3-dev libssl-dev
   ```
 - Fedora
   ```
@@ -30,11 +30,11 @@ Vanilla currently requires the following dependencies:
   ```
 - Arch
   ```
-  # pacman -S qt6 ffmpeg libnl sdl2 dhclient base-devel make cmake
+  # pacman -S qt6 ffmpeg libnl sdl2 base-devel make cmake
   ```
 - Alpine/postmarketOS
   ```
-  # apk add qt6-qtbase-dev qt6-qtmultimedia-dev qt6-qtsvg-dev ffmpeg-dev libnl3-dev sdl2-dev dhclient build-base cmake
+  # apk add qt6-qtbase-dev qt6-qtmultimedia-dev qt6-qtsvg-dev ffmpeg-dev libnl3-dev sdl2-dev build-base cmake
   ```
 
 The build process is otherwise normal for a CMake program:

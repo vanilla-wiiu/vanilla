@@ -3,6 +3,8 @@
 #include <arpa/inet.h>
 #include <errno.h>
 #include <libgen.h>
+#include <net/if.h>
+#include <netlink/route/addr.h>
 #include <pthread.h>
 #include <signal.h>
 #include <stdio.h>
@@ -20,6 +22,7 @@
 
 #include "../def.h"
 #include "../ports.h"
+#include "dhcp/dhcpc.h"
 #include "status.h"
 #include "util.h"
 #include "vanilla.h"
@@ -351,7 +354,7 @@ void sigint_handler(int signum)
     signal(signum, SIG_DFL);
 }
 
-void *read_stdin(void *)
+void *read_stdin(void *arg)
 {
     char *line = NULL;
     size_t size = 0;
@@ -442,7 +445,100 @@ die:
     return ret;
 }
 
-int call_dhcp(const char *network_interface, pid_t *dhclient_pid)
+const char *get_dhcp_value(char **env, const char *key)
+{
+    char buf[100];
+    int len = snprintf(buf, sizeof(buf), "%s=", key);
+
+    while (*env) {
+        char *e = *env;
+        if (!memcmp(e, buf, len)) {
+            return e + len;
+        }
+        env++;
+    }
+    return 0;
+}
+
+void dhcp_callback(const char *type, char **env, void *data)
+{
+    struct nl_sock *nl = (struct nl_sock *) data;
+
+    if (!strcmp(type, "bound")) {
+        // Add address to interface
+        const char *ip = get_dhcp_value(env, "ip");
+        // const char *subnet = get_dhcp_value(env, "subnet");
+        // const char *router = get_dhcp_value(env, "router");
+        // const char *serverid = get_dhcp_value(env, "serverid");
+        // const char *mask = get_dhcp_value(env, "mask");
+        
+        struct nl_addr *ip_addr;
+
+        nl_addr_parse(ip, AF_INET, &ip_addr);
+
+        struct rtnl_addr *ra = rtnl_addr_alloc();
+        rtnl_addr_set_ifindex(ra, if_nametoindex(get_dhcp_value(env, "interface")));
+        // rtnl_addr_set_family(ra, AF_INET);
+        rtnl_addr_set_local(ra, ip_addr);
+        // rtnl_addr_set_broadcast();
+        // rtnl_addr_set_
+        rtnl_addr_add(nl, ra, 0);
+        rtnl_addr_put(ra);
+
+        nl_addr_put(ip_addr);
+    } else if (!strcmp(type, "deconfig")) {
+        // Remove address from interface
+        struct rtnl_addr *ra = rtnl_addr_alloc();
+        rtnl_addr_set_ifindex(ra, if_nametoindex(get_dhcp_value(env, "interface")));
+        rtnl_addr_set_family(ra, AF_INET);
+        rtnl_addr_delete(nl, ra, 0);
+        rtnl_addr_put(ra);
+    }
+    // print_info("GOT DHCP EVENT: %s", type);
+    // while (*env) {
+    //     char *e = *env;
+    //     print_info("  %s", e);
+    //     env++;
+    // }
+}
+
+int call_dhcp(const char *network_interface)
+{
+    int ret = VANILLA_ERR_GENERIC;
+
+    struct nl_sock *nl = nl_socket_alloc();
+    if (!nl) {
+        print_info("FAILED TO ALLOC NL_SOCK");
+        goto exit;
+    }
+    
+    int nlr = nl_connect(nl, NETLINK_ROUTE);
+    if (nlr < 0) {
+        print_info("FAILED TO CONNECT NL: %i", nlr);
+        goto free_socket_and_exit;
+    }
+
+    client_config.foreground = 1;
+    client_config.quit_after_lease = 1;
+    client_config.interface = (char *) network_interface;
+    client_config.callback = dhcp_callback;
+    client_config.callback_data = nl;
+
+    if (udhcpc_main() == 0) {
+        ret = VANILLA_SUCCESS;
+    }
+
+close_socket_and_exit:
+    nl_close(nl);
+
+free_socket_and_exit:
+    nl_socket_free(nl);
+
+exit:
+    return ret;
+}
+
+int call_dhcp_old(const char *network_interface, pid_t *dhclient_pid)
 {
     // See if dhclient exists in our local directories    
     size_t buf_size = get_max_path_length();
@@ -1063,8 +1159,7 @@ void *do_connect(void *data)
         print_info("CONNECTED TO CONSOLE");
     
         // Use DHCP on interface
-        pid_t dhclient_pid;
-        int r = call_dhcp(args->wireless_interface, &dhclient_pid);
+        int r = call_dhcp(args->wireless_interface);
         if (r != VANILLA_SUCCESS) {
             print_info("FAILED TO RUN DHCP ON %s", args->wireless_interface);
             return THREADRESULT(r);
@@ -1073,9 +1168,6 @@ void *do_connect(void *data)
         }
     
         create_all_relays(args);
-    
-        int kill_ret = kill(dhclient_pid, SIGTERM);
-        print_info("KILLING DHCLIENT %i", dhclient_pid);
     }
 
     return THREADRESULT(VANILLA_SUCCESS);
