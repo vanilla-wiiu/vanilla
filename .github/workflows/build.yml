@@ -35,7 +35,7 @@ jobs:
       
     - name: Run Docker container
       run: |
-        docker run --platform linux/${{ matrix.arch }} -v "${{ github.workspace }}:/vanilla" "${{ github.workspace }}/build:/vanilla" vanilla-linux-${{ matrix.arch }}
+        docker run --platform linux/${{ matrix.arch }} -v "${{ github.workspace }}:/vanilla" -v "${{ github.workspace }}/build:/install" vanilla-linux-${{ matrix.arch }}
     
     - name: Archive
       run: |
