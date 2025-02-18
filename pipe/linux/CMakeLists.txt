@@ -68,4 +68,7 @@ target_link_libraries(vanilla-pipe PRIVATE
 #    COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_SOURCE_DIR}/hostap/wpa_supplicant/wpa_supplicant" "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/wpa_supplicant_drc"
 #)
 
-install(IMPORTED_RUNTIME_ARTIFACTS wpa_client wpa_supplicant)
+# Handle polkit files
+set(PIPE_BIN ${CMAKE_INSTALL_PREFIX})
+configure_file("polkit/com.mattkc.vanilla.policy.in" "com.mattkc.vanilla.policy" @ONLY)
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/com.mattkc.vanilla.policy" DESTINATION "share/polkit-1/actions")
