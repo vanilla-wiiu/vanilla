@@ -39,11 +39,11 @@ jobs:
     - name: Build Docker image
       run: |
         cd docker/${{ matrix.platform.os }}
-        docker build --platform linux/${{ matrix.platform.arch }} -t vanilla-${{ matrix.platform.os }}-${{ matrix.platform.arch }} .
+        docker build --build-arg ARCH=${{ matrix.platform.arch }} -t vanilla-${{ matrix.platform.os }}-${{ matrix.platform.arch }} .
       
     - name: Run Docker container
       run: |
-        docker run --platform linux/${{ matrix.platform.arch }} -v "${{ github.workspace }}:/vanilla" -v "${{ github.workspace }}/build:/install" vanilla-${{ matrix.platform.os }}-${{ matrix.platform.arch }}
+        docker run -v "${{ github.workspace }}:/vanilla" -v "${{ github.workspace }}/build:/install" vanilla-${{ matrix.platform.os }}-${{ matrix.platform.arch }}
     
     - name: Archive
       run: |

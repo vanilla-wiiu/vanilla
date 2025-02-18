@@ -26,6 +26,5 @@ RUN yes Y | /opt/android/cmdline-tools/tools/bin/sdkmanager --licenses
 ENV ANDROID_HOME=/opt/android
 ENV ANDROID_NDK_HOME=/opt/android/ndk/${ANDROID_NDK}
 ENV PATH="$PATH:/opt/gradlew:$ANDROID_HOME/cmdline-tools/tools/bin:/opt/android/platform-tools:$ANDROID_NDK_HOME:$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-${SYSTEM_ARCH}/bin"
-COPY "build.sh" "/"
 
-CMD [ "/build.sh" ]
+ENTRYPOINT [ "/vanilla/docker/android/build.sh" ]

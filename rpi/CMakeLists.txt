@@ -104,11 +104,15 @@ if (VANILLA_BUILD_VENDORED)
                 --strip=${CMAKE_ANDROID_NDK}/toolchains/llvm/prebuilt/linux-${CMAKE_HOST_SYSTEM_PROCESSOR}/bin/llvm-strip
             )
             list(APPEND FFMPEG_ENV "PATH=$ENV{PATH}:${CMAKE_ANDROID_NDK}/toolchains/llvm/prebuilt/linux-${CMAKE_HOST_SYSTEM_PROCESSOR}/bin")
+        elseif(LINUX)
+            set(FFMPEG_TARGET_OS "linux")
         endif()
         list(APPEND FFMPEG_CONFIGURE_ARGS
             --enable-cross-compile
             --arch=${CMAKE_SYSTEM_PROCESSOR}
             --target-os=${FFMPEG_TARGET_OS}
+            --cross-prefix=${CMAKE_CROSS_PREFIX}
+            --host-cc=${CMAKE_C_COMPILER}
         )
     endif()
 
@@ -200,20 +204,6 @@ target_link_libraries(vanilla-pi PRIVATE
     m
 )
 
-if (LINUX)
-    # Assume this platform is capable of running vanilla-pipe
-    target_compile_definitions(vanilla-pi PRIVATE VANILLA_PIPE_AVAILABLE)
-
-    target_link_libraries(vanilla-pi PRIVATE
-        drm
-    )
-
-    target_include_directories(vanilla-pi PRIVATE
-        # xf86drm.h needs this
-        /usr/include/libdrm
-    )
-endif()
-
 if (ANDROID)
     target_link_libraries(vanilla-pi PRIVATE
         SDL2main
@@ -233,6 +223,18 @@ target_link_libraries(vanilla-pi PRIVATE
     FFmpeg::swscale
     ${_vanilla_pi_libs}
 )
+
+if (LINUX)
+    # Assume this platform is capable of running vanilla-pipe
+    target_compile_definitions(vanilla-pi PRIVATE VANILLA_PIPE_AVAILABLE)
+
+    # Link with DRM if available
+    find_package(DRM)
+    if (DRM_FOUND)
+        target_link_libraries(vanilla-pi PRIVATE ${DRM_LIBRARIES})
+        target_include_directories(vanilla-pi PRIVATE ${DRM_INCLUDE_DIRS})
+    endif()
+endif()
 
 # Find libxml2 (used for storing/parsing user config)
 if (NOT VANILLA_BUILD_VENDORED)
