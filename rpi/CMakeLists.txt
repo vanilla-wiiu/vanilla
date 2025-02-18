@@ -4,6 +4,16 @@ set(_sdl_lib SDL2::SDL2)
 set(_vanilla_pi_libs "")
 
 if (VANILLA_BUILD_VENDORED)
+    # Static build
+    if (NOT ANDROID)
+        set(BUILD_SHARED_LIBS OFF)
+
+        set(_sdl_lib SDL2::SDL2-static)
+    endif()
+
+    # Link zlib for PNG
+    list(APPEND _vanilla_pi_libs "z")
+
     include(FetchContent)
     include(ExternalProject)
 
@@ -29,7 +39,6 @@ if (VANILLA_BUILD_VENDORED)
     set(LIBXML2_WITH_PYTHON OFF)
     set(LIBXML2_WITH_ICONV OFF)
     set(LIBXML2_WITH_PROGRAMS OFF)
-    set(BUILD_SHARED_LIBS OFF)
     FetchContent_Declare(
         libxml2
         GIT_REPOSITORY https://gitlab.gnome.org/GNOME/libxml2.git
@@ -61,6 +70,7 @@ if (VANILLA_BUILD_VENDORED)
     )
     if (CMAKE_CROSSCOMPILING)
         set(FFMPEG_TARGET_OS ${CMAKE_SYSTEM_NAME})
+        set(FFMPEG_ENV "")
         if (MINGW)
             set(FFMPEG_TARGET_OS "mingw32")
             list(APPEND FFMPEG_CONFIGURE_ARGS
@@ -91,6 +101,7 @@ if (VANILLA_BUILD_VENDORED)
                 --nm=${CMAKE_ANDROID_NDK}/toolchains/llvm/prebuilt/linux-${CMAKE_HOST_SYSTEM_PROCESSOR}/bin/llvm-nm
                 --strip=${CMAKE_ANDROID_NDK}/toolchains/llvm/prebuilt/linux-${CMAKE_HOST_SYSTEM_PROCESSOR}/bin/llvm-strip
             )
+            list(APPEND FFMPEG_ENV "PATH=$ENV{PATH}:${CMAKE_ANDROID_NDK}/toolchains/llvm/prebuilt/linux-${CMAKE_HOST_SYSTEM_PROCESSOR}/bin")
         endif()
         list(APPEND FFMPEG_CONFIGURE_ARGS
             --enable-cross-compile
@@ -123,17 +134,12 @@ if (VANILLA_BUILD_VENDORED)
         DOWNLOAD_DIR ${CMAKE_CURRENT_BINARY_DIR}
         GIT_REPOSITORY https://git.ffmpeg.org/ffmpeg.git
         GIT_TAG n7.1
-        CONFIGURE_COMMAND ../FFmpeg/configure ${FFMPEG_CONFIGURE_ARGS}
-        # BUILD_COMMAND "make -j${CMAKE_BUILD_PARALLEL_LEVEL}"
+        CONFIGURE_COMMAND ${CMAKE_COMMAND} -E env ${FFMPEG_ENV} ../FFmpeg/configure ${FFMPEG_CONFIGURE_ARGS}
+        BUILD_COMMAND ${CMAKE_COMMAND} -E env ${FFMPEG_ENV} make -j${CMAKE_BUILD_PARALLEL_LEVEL}
         UPDATE_COMMAND ""
         BUILD_BYPRODUCTS
             ${FFMPEG_FILES}
     )
-
-    set(_sdl_lib SDL2::SDL2-static)
-
-    # Link zlib for PNG
-    list(APPEND _vanilla_pi_libs "z")
 endif()
 
 list(APPEND VANILLA_PI_SRC
@@ -247,7 +253,13 @@ target_include_directories(vanilla-pi PRIVATE
 )
 
 # Install assets
-if(NOT ANDROID)
+if(ANDROID)
+    # Put assets in correct place relative to build
+    add_custom_command(
+        TARGET vanilla-pi POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/assets" "${CMAKE_CURRENT_SOURCE_DIR}/../android/app/src/main/assets"
+    )
+else()
     # Put assets in correct place relative to build
     add_custom_command(
         TARGET vanilla-pi POST_BUILD
