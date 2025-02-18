@@ -17,18 +17,35 @@ jobs:
       with:
         submodules: recursive
 
-    - name: Install dependencies
+    - name: Install dependencies for cross-compiling
       if: ${{ matrix.arch != 'x86_64' }}
       run: sudo apt -y update && sudo apt -y install qemu-user-static binfmt-support
+
+    - name: Restore Docker cache
+      uses: actions/cache/restore@v4
+      id: cache
+      with:
+        path: path/to/dependencies
+        key: linux-${{ matrix.arch }}
     
+    - name: Build Docker image
+      run: |
+        cd docker/linux
+        docker build --platform linux/${{ matrix.arch }} -t vanilla-linux-${{ matrix.arch }} .
+      
     - name: Run Docker container
-      run: docker run -v "${{ github.workspace }}:/vanilla" itsmattkc/vanilla-u-build:${{ matrix.arch }}-latest
+      run: |
+        docker run --platform linux/${{ matrix.arch }} -v "${{ github.workspace }}:/vanilla" "${{ github.workspace }}/build:/vanilla" vanilla-linux-${{ matrix.arch }}
     
+    - name: Archive
+      run: |
+        tar czf Vanilla-Linux-${{ matrix.arch }}.tar.gz -C "${{ github.workspace }}/build" .
+
     - name: Upload a Build Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: Vanilla U (${{ matrix.arch }})
-        path: ${{ github.workspace }}/Vanilla_U-${{ matrix.arch }}.tar.gz
+        name: Vanilla (Linux ${{ matrix.arch }})
+        path: Vanilla-Linux-${{ matrix.arch }}.tar.gz
 
     - name: Upload Continuous Release
       if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' && github.repository == 'vanilla-wiiu/vanilla' }}
@@ -37,5 +54,5 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         curl -fLOSs --retry 2 --retry-delay 60 https://github.com/probonopd/uploadtool/raw/master/upload.sh
-        bash upload.sh Vanilla_U-${{ matrix.arch }}.tar.gz
+        bash upload.sh Vanilla-Linux-${{ matrix.arch }}.tar.gz
       
