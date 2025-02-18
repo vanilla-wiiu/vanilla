@@ -52,9 +52,9 @@ void vpi_asset_filename(char *buf, size_t size, const char *type, const char *fi
 #if defined(ANDROID)
     snprintf(buf, size, "%s/%s", type, filename);
 #elif defined(_WIN32)
-    snprintf(buf, size, "%s/%s/%s", SDL_GetBasePath(), type, filename);
+    snprintf(buf, size, "%s/assets/%s/%s", SDL_GetBasePath(), type, filename);
 #else
-    snprintf(buf, size, "/home/matt/src/vanilla/rpi/assets/%s/%s", type, filename);
+    snprintf(buf, size, "%s/../share/vanilla/assets/%s/%s", SDL_GetBasePath(), type, filename);
 #endif
 }
 
