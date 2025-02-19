@@ -30,20 +30,20 @@ In practice, not all hardware/drivers appear to work at this time. Check the [Wi
 Vanilla currently requires the following dependencies:
 
 - Debian/Ubuntu 
-  ```
-  # apt install build-essential cmake libsdl2-dev libavformat-dev libavcodec-dev libavutil-dev libswscale-dev libnl-genl-3-dev libnl-route-3-dev libssl-dev libxml2-dev
+  ```sh
+  apt install build-essential cmake libsdl2-dev libsdl2-image-dev libsdl2-ttf-dev libavformat-dev libavcodec-dev libavutil-dev libswscale-dev libnl-genl-3-dev libnl-route-3-dev libssl-dev libxml2-dev
   ```
 - Fedora
-  ```
-  # dnf install libavcodec-free-devel libavutil-free-devel libavfilter-free-devel libnl3-devel SDL2-devel openssl-devel make automake gcc gcc-c++ kernel-devel cmake libxml2-devel
+  ```sh
+  dnf install libavcodec-free-devel libavutil-free-devel libavfilter-free-devel libnl3-devel SDL2-devel openssl-devel make automake gcc gcc-c++ kernel-devel cmake libxml2-devel
   ```
 - Arch
-  ```
-  # pacman -S base-devel make cmake ffmpeg libnl sdl2 libxml2
+  ```sh
+  pacman -S base-devel make cmake ffmpeg libnl sdl2 libxml2
   ```
 - Alpine/postmarketOS
-  ```
-  # apk add build-base cmake sdl2-dev ffmpeg-dev libnl3-dev libxml2-dev
+  ```sh
+  apk add build-base cmake sdl2-dev ffmpeg-dev libnl3-dev libxml2-dev
   ```
 
 The build process is otherwise normal for a CMake program:
@@ -53,7 +53,7 @@ git clone https://github.com/vanilla-wiiu/vanilla.git
 cd vanilla
 mkdir build && cd build
 cmake ..
-cmake --build .
+cmake --build . --parallel
 ```
 
 Optionally, to install the program:
