@@ -31,7 +31,7 @@ Vanilla currently requires the following dependencies:
 
 - Debian/Ubuntu 
   ```
-  # apt install build-essential cmake libsdl2-dev libavformat-dev libavcodec-dev libavutil-dev libswscale-dev libnl-genl-3-dev libssl-dev libxml2-dev
+  # apt install build-essential cmake libsdl2-dev libavformat-dev libavcodec-dev libavutil-dev libswscale-dev libnl-genl-3-dev libnl-route-3-dev libssl-dev libxml2-dev
   ```
 - Fedora
   ```
