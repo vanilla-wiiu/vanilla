@@ -470,11 +470,12 @@ void dhcp_callback(const char *type, char **env, void *data)
         // const char *subnet = get_dhcp_value(env, "subnet");
         // const char *router = get_dhcp_value(env, "router");
         // const char *serverid = get_dhcp_value(env, "serverid");
-        // const char *mask = get_dhcp_value(env, "mask");
+        const char *mask = get_dhcp_value(env, "mask");
         
         struct nl_addr *ip_addr;
 
         nl_addr_parse(ip, AF_INET, &ip_addr);
+        nl_addr_set_prefixlen(ip_addr, atoi(mask));
 
         struct rtnl_addr *ra = rtnl_addr_alloc();
         rtnl_addr_set_ifindex(ra, if_nametoindex(get_dhcp_value(env, "interface")));
