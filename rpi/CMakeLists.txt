@@ -241,9 +241,14 @@ endif()
 # Find libxml2 (used for storing/parsing user config)
 if (NOT VANILLA_BUILD_VENDORED)
     find_package(LibXML2 REQUIRED)
+    set(_libxml2_libs ${LibXML2_LIBRARIES})
+    set(_libxml2_includes ${LibXML2_INCLUDE_DIR})
+else()
+    set(_libxml2_libs LibXml2::LibXml2)
+    set(_libxml2_includes "")
 endif()
 
-target_link_libraries(vanilla-pi PRIVATE ${LibXML2_LIBRARIES})
+target_link_libraries(vanilla-pi PRIVATE ${_libxml2_libs})
 
 # Link with winsock2 on Windows
 if (WIN32)
@@ -256,7 +261,7 @@ target_include_directories(vanilla-pi PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/../lib"
     "${CMAKE_CURRENT_SOURCE_DIR}"
     "${CMAKE_CURRENT_SOURCE_DIR}/.."
-    ${LibXML2_INCLUDE_DIR}
+    ${_libxml2_includes}
 )
 
 # Install assets
