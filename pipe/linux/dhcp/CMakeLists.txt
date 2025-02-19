@@ -11,8 +11,4 @@ add_library(udhcpc STATIC
     script.c
 )
 
-target_compile_definitions(udhcpc PRIVATE _GNU_SOURCE)
-
-if ("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
-    target_compile_definitions(udhcpc PRIVATE UDHCP_DEBUG)
-endif()
+target_compile_definitions(udhcpc PRIVATE _GNU_SOURCE $<$<CONFIG:Debug>:UDHCP_DEBUG>)
