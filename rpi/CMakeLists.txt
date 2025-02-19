@@ -240,7 +240,7 @@ endif()
 
 # Find libxml2 (used for storing/parsing user config)
 if (NOT VANILLA_BUILD_VENDORED)
-    find_package(libxml2 REQUIRED)
+    find_package(LibXml2 REQUIRED)
 endif()
 
 target_link_libraries(vanilla-pi PRIVATE LibXml2::LibXml2)
