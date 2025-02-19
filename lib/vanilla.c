@@ -228,3 +228,8 @@ size_t vanilla_generate_pps_params(void *data, size_t data_size)
 {
     return generate_pps_params(data, data_size);
 }
+
+size_t vanilla_generate_h264_header(void *data, size_t size)
+{
+    return generate_h264_header(data, size);
+}

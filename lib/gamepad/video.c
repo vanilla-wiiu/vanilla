@@ -153,10 +153,9 @@ void handle_video_packet(gamepad_context_t *ctx, VideoPacket *vp, size_t size, i
         if (is_streaming) {
             // Encapsulate packet data into NAL unit
             static int frame_decode_num = 0;
-            uint8_t *nals_current = video_packet + generated_sps_params_size + sizeof(VANILLA_PPS_PARAMS);
+            uint8_t *nals_current = video_packet + generated_sps_params_size;
 
             int slice_header = is_idr ? 0x25b804ff : (0x21e003ff | ((frame_decode_num & 0xff) << 13));
-            frame_decode_num++;
 
             // begin slice nalu
             uint8_t slice[] = {0x00, 0x00, 0x00, 0x01,
@@ -199,12 +198,29 @@ void handle_video_packet(gamepad_context_t *ctx, VideoPacket *vp, size_t size, i
             }
 
             // Skip IDR parameters if not an IDR frame
-            uint8_t *nals = (is_idr) ? video_packet : (video_packet + generated_sps_params_size + sizeof(VANILLA_PPS_PARAMS));
+            uint8_t *nals = (is_idr) ? video_packet : (video_packet + generated_sps_params_size);
             push_event(ctx->event_loop, VANILLA_EVENT_VIDEO, nals, (nals_current - nals));
         } else {
             // We didn't receive the complete frame so we'll skip it here
         }
     }
+}
+
+size_t generate_h264_header(void *data, size_t size)
+{
+    uint8_t *output = (uint8_t *) data;
+
+    static const char *frame_start_word = "\x00\x00\x00\x01";
+    memcpy(output, frame_start_word, 4);
+    output += 4;
+
+    size_t sps = generate_sps_params(output, size - 4);
+    output += sps;
+
+    size_t pps = generate_pps_params(output, size - 4 - sps);
+    output += pps;
+
+    return (uintptr_t) output - (uintptr_t) data;
 }
 
 void *listen_video(void *x)
@@ -227,6 +243,7 @@ void *listen_video(void *x)
 
     memcpy(nals_current, VANILLA_PPS_PARAMS, sizeof(VANILLA_PPS_PARAMS));
     nals_current += sizeof(VANILLA_PPS_PARAMS);
+    generated_sps_params_size += sizeof(VANILLA_PPS_PARAMS);
 
     pthread_mutex_init(&video_mutex, NULL);
 

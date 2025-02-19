@@ -277,22 +277,8 @@ int vpi_decode_record(const char *filename)
     recording_vstr->time_base = (AVRational) {1, 60};
     recording_vstr->codecpar->codec_id = AV_CODEC_ID_H264;
 
-	// char sps[100];
-	char pps[100];
-	// size_t sps_sz = vanilla_generate_sps_params(sps, sizeof(sps));
-	size_t pps_sz = vanilla_generate_pps_params(pps, sizeof(pps));
-
-	// For some reason vanilla_generate_sps_params() doesn't produce valid files?
-	static const uint8_t sps[] = {
-		0x00, 0x00, 0x00, 0x01, 0x67, 0x64, 0x00, 0x20, 0xac, 0x2b, 0x40, 0x6c, 0x1e, 0xf3, 0x68,
-	};
-	size_t sps_sz = sizeof(sps);
-
-    size_t sps_pps_size = sps_sz + pps_sz;
-    recording_vstr->codecpar->extradata_size = sps_pps_size;
-    recording_vstr->codecpar->extradata = (uint8_t *) av_malloc(sps_pps_size);
-    memcpy(recording_vstr->codecpar->extradata, sps, sps_sz);
-    memcpy(recording_vstr->codecpar->extradata + sps_sz, pps, pps_sz);
+	recording_vstr->codecpar->extradata = av_malloc(200);
+	recording_vstr->codecpar->extradata_size = vanilla_generate_h264_header(recording_vstr->codecpar->extradata, 200);
 
     recording_astr = avformat_new_stream(recording_fmt_ctx, 0);
     if (!recording_astr) {
