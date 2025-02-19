@@ -1257,5 +1257,5 @@ int vui_update_sdl(vui_context_t *vui)
     // Flip surfaces
     SDL_RenderPresent(renderer);
 
-    return 1;
+    return !vui->quit;
 }

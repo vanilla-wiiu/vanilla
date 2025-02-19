@@ -44,6 +44,7 @@ static const char *lang_str[__VPI_LANG_T_COUNT] = {
     "Japan",
     "America",
     "Europe",
+    "Quit",
 };
 
 const char *lang(vpi_lang_t id)

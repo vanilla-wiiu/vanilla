@@ -135,6 +135,7 @@ typedef struct vui_context_t {
     void *text_open_handler_data;
     int active_textedit;
     struct timeval active_textedit_time;
+    int quit;
 } vui_context_t;
 
 #endif // VANILLA_PI_UI_PRIV_H

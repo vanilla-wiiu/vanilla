@@ -24,6 +24,7 @@ vui_context_t *vui_alloc(int width, int height)
     vui->vibrate_handler = 0;
     vui->font_height_handler = 0;
     vui->text_open_handler = 0;
+    vui->quit = 0;
     vui_reset(vui);
     return vui;
 }
@@ -496,6 +497,11 @@ int vui_get_font_height(vui_context_t *ctx, vui_font_size_t size)
     if (ctx->font_height_handler)
         return ctx->font_height_handler(size, ctx->font_height_handler_data);
     return 0;
+}
+
+void vui_quit(vui_context_t *ctx)
+{
+    ctx->quit = 1;
 }
 
 void vui_audio_push(vui_context_t *ctx, const void *data, size_t size)

@@ -32,6 +32,17 @@ static void transition_to_region(vui_context_t *vui, int button, void *v)
     vui_transition_fade_layer_out(vui, layer, vpi_menu_region, 0);
 }
 
+static void do_quit(vui_context_t *vui, void *v)
+{
+    vui_quit(vui);
+}
+
+static void quit_vanilla(vui_context_t *vui, int button, void *v)
+{
+    int layer = (intptr_t) v;
+    vui_transition_fade_black_in(vui, do_quit, 0);
+}
+
 void vpi_menu_settings(vui_context_t *vui, void *v)
 {
     vui_reset(vui);
@@ -47,7 +58,7 @@ void vpi_menu_settings(vui_context_t *vui, void *v)
         VPI_LANG_CONNECTION,
         VPI_LANG_GAMEPAD,
         VPI_LANG_REGION,
-        VPI_LANG_AUDIO,
+        VPI_LANG_QUIT,
     };
 
     // Highlight currently implemented functionality
@@ -55,7 +66,7 @@ void vpi_menu_settings(vui_context_t *vui, void *v)
         1,
         1,
         1,
-        0,
+        1,
     };
 
     // Highlight currently implemented functionality
@@ -63,7 +74,7 @@ void vpi_menu_settings(vui_context_t *vui, void *v)
         transition_to_connection,
         transition_to_gamepad,
         transition_to_region,
-        0,
+        quit_vanilla,
     };
 
     const int settings_cols = 2;
