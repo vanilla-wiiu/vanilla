@@ -304,6 +304,8 @@ int udhcpc_main()
 	run_script(NULL, "deconfig");
 	change_mode(LISTEN_RAW);
 
+	timeout = 0;
+
 	for (;;) {
 
 		tv.tv_sec = timeout - uptime();
