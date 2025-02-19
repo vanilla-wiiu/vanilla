@@ -12,12 +12,12 @@ This is a **work-in-progress** software clone of the Wii U gamepad for Linux (in
 
 ## What devices are supported?
 
-- (Steam Deck)[https://github.com/vanilla-wiiu/vanilla/wiki/Linux-Setup-Guide]
-- (Nintendo Switch)[https://github.com/vanilla-wiiu/vanilla/wiki/Linux-Setup-Guide]
-- (Android)[https://github.com/vanilla-wiiu/vanilla/wiki/Android-Setup-Guide]
-- (Linux)[https://github.com/vanilla-wiiu/vanilla/wiki/Linux-Setup-Guide]
-- (Windows)[https://github.com/vanilla-wiiu/vanilla/wiki/Windows-Setup-Guide]
-- (Raspberry Pi)[https://github.com/vanilla-wiiu/vanilla/wiki/Linux-Setup-Guide]
+- [Steam Deck](https://github.com/vanilla-wiiu/vanilla/wiki/Linux-Setup-Guide)
+- [Nintendo Switch](https://github.com/vanilla-wiiu/vanilla/wiki/Linux-Setup-Guide)
+- [Android](https://github.com/vanilla-wiiu/vanilla/wiki/Android-Setup-Guide)
+- [Linux](https://github.com/vanilla-wiiu/vanilla/wiki/Linux-Setup-Guide)
+- [Windows](https://github.com/vanilla-wiiu/vanilla/wiki/Windows-Setup-Guide)
+- [Raspberry Pi](https://github.com/vanilla-wiiu/vanilla/wiki/Linux-Setup-Guide)
 - *iOS* - Coming soon
 
 ## What Wi-Fi adapter should I use?
