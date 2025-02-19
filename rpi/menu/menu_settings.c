@@ -34,6 +34,8 @@ static void transition_to_region(vui_context_t *vui, int button, void *v)
 
 static void do_quit(vui_context_t *vui, void *v)
 {
+    vui_reset(vui);
+    vui_enable_background(vui, 0);
     vui_quit(vui);
 }
 
