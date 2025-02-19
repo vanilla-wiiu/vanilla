@@ -512,7 +512,6 @@ void *vpi_decode_loop(void *)
             vpilog("Failed to send packet to decoder: %s (%i)\n", av_err2str(err), err);
             // return 0;
 
-			avcodec_flush_buffers(video_codec_ctx);
 			vanilla_request_idr();
         } else {
             decode();
@@ -537,6 +536,7 @@ free_packet:
 
 free_present_frame:
 	av_frame_free(&vpi_present_frame);
+	vpi_present_frame = 0;
 
 free_decode_frame:
 	av_frame_free(&decoding_frame);
