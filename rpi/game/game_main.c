@@ -5,8 +5,9 @@
 #include <vanilla.h>
 
 #include "game_decode.h"
-#include "ui/ui.h"
 #include "platform.h"
+#include "ui/ui.h"
+#include "ui/ui_util.h"
 
 static pthread_t vpi_event_handler_thread;
 static int vpi_game_error_value;
@@ -97,8 +98,7 @@ void vpi_show_toast(const char *message)
 {
     pthread_mutex_lock(&vpi_toast_mutex);
 
-    strncpy(vpi_toast_string, message, sizeof(vpi_toast_string) - 1);
-    vpi_toast_string[sizeof(vpi_toast_string) - 1] = 0;
+    vui_strncpy(vpi_toast_string, message, sizeof(vpi_toast_string));
 
     gettimeofday(&vpi_toast_expiry, 0);
     
@@ -118,8 +118,7 @@ void vpi_get_toast(int *number, char *output, size_t output_size, struct timeval
         *number = vpi_toast_number;
     
     if (output && output_size) {
-        strncpy(output, vpi_toast_string, output_size - 1);
-        output[output_size-1] = 0;
+        vui_strncpy(output, vpi_toast_string, output_size);
     }
 
     if (expiry_time) {

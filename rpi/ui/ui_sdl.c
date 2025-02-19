@@ -767,7 +767,6 @@ void vui_draw_sdl(vui_context_t *ctx, SDL_Renderer *renderer)
 
                 size_t len = copy_end - edit->text;
                 strncpy(tmp_ate, edit->text, len);
-
                 tmp_ate[len] = 0;
     
                 int tw;

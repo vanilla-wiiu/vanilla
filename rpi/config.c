@@ -7,6 +7,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "ui/ui_util.h"
+
 #include "platform.h"
 
 vpi_config_t vpi_config;
@@ -120,7 +122,7 @@ void vpi_config_init()
                                 xmlNodePtr console_info = console->children;
                                 while (console_info) {
                                     if (!strcmp((const char *) console_info->name, "name")) {
-                                        strncpy(entry->name, (const char *) console_info->children->content, sizeof(entry->name));
+                                        vui_strncpy(entry->name, (const char *) console_info->children->content, sizeof(entry->name));
                                     } else if (!strcmp((const char *) console_info->name, "bssid")) {
                                         string_to_hex(entry->bssid.bssid, sizeof(entry->bssid), (const char *) console_info->children->content);
                                     } else if (!strcmp((const char *) console_info->name, "psk")) {
@@ -136,8 +138,7 @@ void vpi_config_init()
                         vpi_config.server_address = strtol((const char *) child->children->content, 0, 16);
                     } else if (!strcmp((const char *) child->name, "wireless")) {
                         if (child->children) {
-                            strncpy(vpi_config.wireless_interface, (const char *) child->children->content, sizeof(vpi_config.wireless_interface)-1);
-                            vpi_config.wireless_interface[sizeof(vpi_config.wireless_interface)-1] = 0;
+                            vui_strncpy(vpi_config.wireless_interface, (const char *) child->children->content, sizeof(vpi_config.wireless_interface));
                         }
                     } else if (!strcmp((const char *) child->name, "connectionsetup")) {
                         vpi_config.connection_setup = atoi((const char *) child->children->content);
@@ -184,9 +185,7 @@ int vpi_config_add_console(vpi_console_entry_t *entry)
 
 void vpi_config_rename_console(uint8_t index, const char *name)
 {
-    strncpy(vpi_config.connected_console_entries[index].name, name, VPI_CONSOLE_MAX_NAME);
-    vpi_config.connected_console_entries[index].name[VPI_CONSOLE_MAX_NAME-1] = 0;
-    
+    vui_strncpy(vpi_config.connected_console_entries[index].name, name, VPI_CONSOLE_MAX_NAME);
     vpi_config_save();
 }
 

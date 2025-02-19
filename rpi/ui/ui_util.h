@@ -4,7 +4,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-void vui_strcpy(char *dst, const char *src);
+void vui_strncpy(char *dst, const char *src, size_t max_dst_size);
 size_t vui_utf8_cp_len(const char *s);
 char *vui_utf8_advance(char *s);
 

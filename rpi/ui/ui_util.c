@@ -4,13 +4,14 @@
 
 #include "ui_priv.h"
 
-void vui_strcpy(char *dst, const char *src)
+void vui_strncpy(char *dst, const char *src, size_t max_dst_size)
 {
-    if (src)
-        strncpy(dst, src, MAX_BUTTON_TEXT);
-    else
+    if (src) {
+        strncpy(dst, src, max_dst_size);
+    } else {
         dst[0] = 0;
-    dst[MAX_BUTTON_TEXT-1] = 0;
+    }
+    dst[max_dst_size - 1] = 0;
 }
 
 size_t vui_utf8_cp_len(const char *s)

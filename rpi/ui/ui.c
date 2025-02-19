@@ -67,7 +67,7 @@ void vui_enable_background(vui_context_t *ctx, int enabled)
 
 void vui_set_background(vui_context_t *ctx, const char *background_image)
 {
-    vui_strcpy(ctx->background_image, background_image);
+    vui_strncpy(ctx->background_image, background_image, sizeof(ctx->background_image));
 }
 
 int vui_button_create(vui_context_t *ctx, int x, int y, int w, int h, const char *text, const char *icon, vui_button_style_t style, int layer, vui_button_callback_t callback, void *callback_data)
@@ -184,13 +184,13 @@ void vui_button_update_geometry(vui_context_t *ctx, int index, int x, int y, int
 void vui_button_update_icon(vui_context_t *ctx, int index, const char *icon)
 {
     vui_button_t *btn = &ctx->buttons[index];
-    vui_strcpy(btn->icon, icon);
+    vui_strncpy(btn->icon, icon, sizeof(btn->icon));
 }
 
 void vui_button_update_text(vui_context_t *ctx, int index, const char *text)
 {
     vui_button_t *btn = &ctx->buttons[index];
-    vui_strcpy(btn->text, text);
+    vui_strncpy(btn->text, text, sizeof(btn->text));
 }
 
 void vui_button_update_style(vui_context_t *ctx, int index, vui_button_style_t style)
@@ -595,7 +595,7 @@ int vui_label_create(vui_context_t *ctx, int x, int y, int w, int h, const char 
 void vui_label_update_text(vui_context_t *ctx, int index, const char *text)
 {
     vui_label_t *lbl = &ctx->labels[index];
-    vui_strcpy(lbl->text, text);
+    vui_strncpy(lbl->text, text, sizeof(lbl->text));
 }
 
 void vui_label_update_visible(vui_context_t *ctx, int index, int visible)
@@ -640,13 +640,13 @@ int vui_textedit_create(vui_context_t *ctx, int x, int y, int w, int h, const ch
 void vui_textedit_get_text(vui_context_t *ctx, int index, char *output, size_t output_size)
 {
     vui_textedit_t *edit = &ctx->textedits[index];
-    strncpy(output, edit->text, output_size);
+    vui_strncpy(output, edit->text, output_size);
 }
 
 void vui_textedit_update_text(vui_context_t *ctx, int index, const char *text)
 {
     vui_textedit_t *edit = &ctx->textedits[index];
-    vui_strcpy(edit->text, text);
+    vui_strncpy(edit->text, text, sizeof(edit->text));
 
     if (text) {
         size_t len = vui_utf8_cp_len(text);
@@ -675,9 +675,9 @@ void vui_textedit_input(vui_context_t *ctx, int index, const char *text)
     vui_textedit_t *edit = &ctx->textedits[index];
 
     // Ensure we don't overflow our buffer
-    size_t len = strlen(text);
     size_t our_len = strlen(edit->text);
-    if (our_len + len == MAX_BUTTON_TEXT - 1) {
+    size_t new_len = strlen(text);
+    if ((our_len + new_len) > (sizeof(edit->text) - 1)) {
         return;
     }
 
@@ -689,7 +689,7 @@ void vui_textedit_input(vui_context_t *ctx, int index, const char *text)
 
     // Copy first part
     size_t old_len = (end - edit->text);
-    char tmp[MAX_BUTTON_TEXT];
+    char tmp[sizeof(edit->text)];
     strncpy(tmp, edit->text, old_len);
     tmp[old_len] = 0;
 
@@ -817,7 +817,7 @@ int vui_image_create(vui_context_t *ctx, int x, int y, int w, int h, const char 
     img->w = w;
     img->h = h;
 
-    vui_strcpy(img->image, image);
+    vui_strncpy(img->image, image, sizeof(img->image));
 
     img->layer = layer;
 

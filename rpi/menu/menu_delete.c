@@ -9,6 +9,7 @@
 #include "menu_edit.h"
 #include "menu_main.h"
 #include "ui/ui_anim.h"
+#include "ui/ui_util.h"
 
 static int fglayer;
 
@@ -37,7 +38,7 @@ void vpi_menu_delete_status(vui_context_t *vui, void *v)
     vpi_menu_create_background(vui, bglayer, &bkg_rect, &margin);
 
     char cname[VPI_CONSOLE_MAX_NAME];
-    strncpy(cname, vpi_config.connected_console_entries[console].name, sizeof(cname));
+    vui_strncpy(cname, vpi_config.connected_console_entries[console].name, sizeof(cname));
 
     vpi_config_remove_console(console);
 

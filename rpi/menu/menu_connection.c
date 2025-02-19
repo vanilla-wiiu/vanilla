@@ -18,6 +18,7 @@ typedef uint32_t in_addr_t;
 #include "menu_settings.h"
 #include "pipemgmt.h"
 #include "ui/ui_anim.h"
+#include "ui/ui_util.h"
 
 static int fglayer;
 static int error_lbl;
@@ -69,7 +70,7 @@ static void populate_wireless_intf()
                 snprintf(buf, sizeof(buf), "/sys/class/net/%s/wireless", intf);
                 DIR *wifi_check = opendir(buf);
                 if (wifi_check) {
-                    strncpy(detected_wireless_interfaces[cur], intf, sizeof(detected_wireless_interfaces[cur]));
+                    vui_strncpy(detected_wireless_interfaces[cur], intf, sizeof(detected_wireless_interfaces[cur]));
                     cur++;
                     closedir(wifi_check);
                 }
@@ -84,7 +85,7 @@ static void intf_pressed(vui_context_t *vui, int button, void *v)
     for (int i = 0; i < MAX_WIRELESS_ENTRIES; i++) {
         if (button == intf_buttons[i]) {
             vpi_config.server_address = VANILLA_ADDRESS_LOCAL;
-            strncpy(vpi_config.wireless_interface, detected_wireless_interfaces[intf_start + i], sizeof(vpi_config.wireless_interface));
+            vui_strncpy(vpi_config.wireless_interface, detected_wireless_interfaces[intf_start + i], sizeof(vpi_config.wireless_interface));
             vpi_config.connection_setup = 1;
             vpi_stop_pipe();
             vpi_config_save();

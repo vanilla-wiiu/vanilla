@@ -9,6 +9,8 @@
 #include <SDL_filesystem.h>
 #include <stdio.h>
 
+#include "ui/ui_util.h"
+
 static char pref_path[4096] = {0};
 
 void vpi_config_filename(char *out, size_t out_size)
@@ -20,7 +22,7 @@ void vpi_get_data_filename(char *out, size_t out_size, const char *filename)
 {
     if (!pref_path[0]) {
         char *s = SDL_GetPrefPath("", "Vanilla");
-        strcpy(pref_path, s);
+        vui_strncpy(pref_path, s, sizeof(pref_path));
         SDL_free(s);
     }
     snprintf(out, out_size, "%s%s", pref_path, filename);

@@ -12,6 +12,7 @@
 #include "game_main.h"
 #include "lang.h"
 #include "platform.h"
+#include "ui/ui_util.h"
 
 pthread_mutex_t vpi_decoding_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t decoding_wait_cond = PTHREAD_COND_INITIALIZER;
@@ -402,8 +403,7 @@ void vpi_decode_screenshot(const char *filename)
 {
 	// Grab copy of filename
 	pthread_mutex_lock(&screenshot_mutex);
-	strncpy(screenshot_buf, filename, sizeof(screenshot_buf) - 1);
-	screenshot_buf[sizeof(screenshot_buf) - 1] = 0;
+	vui_strncpy(screenshot_buf, filename, sizeof(screenshot_buf));
 	pthread_mutex_unlock(&screenshot_mutex);
 }
 
