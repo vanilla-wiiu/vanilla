@@ -69,14 +69,6 @@ target_link_libraries(vanilla-pipe PRIVATE
 install(IMPORTED_RUNTIME_ARTIFACTS wpa_supplicant)
 
 # Handle polkit files
-if (NOT VANILLA_INSTALL_POLKIT_TEMPLATE)
-    set(PIPE_BIN ${CMAKE_INSTALL_PREFIX})
-    configure_file("polkit/com.mattkc.vanilla.policy.in" "com.mattkc.vanilla.policy" @ONLY)
-    install(FILES "${CMAKE_CURRENT_BINARY_DIR}/com.mattkc.vanilla.policy" DESTINATION "share/polkit-1/actions")
-else()
-    install(FILES "polkit/com.mattkc.vanilla.policy.in" DESTINATION "share/polkit-1/actions")
-endif()
-
-if (VANILLA_INSTALL_POLKIT_RULE)
-    install(FILES "polkit/com.mattkc.vanilla.rules" DESTINATION "share/polkit-1/rules.d")
+if (LINUX)
+    install(FILES "polkit/vanilla-polkit-install.sh" DESTINATION bin)
 endif()

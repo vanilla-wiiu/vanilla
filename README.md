@@ -10,6 +10,16 @@ This is a **work-in-progress** software clone of the Wii U gamepad for Linux (in
     </a>
 </p>
 
+## What devices are supported?
+
+- (Steam Deck)[https://github.com/vanilla-wiiu/vanilla/wiki/Linux-Setup-Guide]
+- (Nintendo Switch)[https://github.com/vanilla-wiiu/vanilla/wiki/Linux-Setup-Guide]
+- (Android)[https://github.com/vanilla-wiiu/vanilla/wiki/Android-Setup-Guide]
+- (Linux)[https://github.com/vanilla-wiiu/vanilla/wiki/Linux-Setup-Guide]
+- (Windows)[https://github.com/vanilla-wiiu/vanilla/wiki/Windows-Setup-Guide]
+- (Raspberry Pi)[https://github.com/vanilla-wiiu/vanilla/wiki/Linux-Setup-Guide]
+- *iOS* - Coming soon
+
 ## What Wi-Fi adapter should I use?
 
 At a minimum, you will need an adapter that supports 802.11n 5GHz. Newer standards (e.g. 802.11ac) are backwards compatible and should work as long as they can run at 5GHz.

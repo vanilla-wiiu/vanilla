@@ -25,11 +25,6 @@ OPTION(VANILLA_BUILD_TESTS "Build unit tests for Vanilla" OFF)
 OPTION(VANILLA_BUILD_PIPE "Build vanilla-pipe for connecting to Wii U (Linux only)" ${LINUX})
 OPTION(VANILLA_BUILD_VENDORED "Build Vanilla with \"vendored\" third-party libraries" ${vendored_default})
 
-if (LINUX)
-    OPTION(VANILLA_INSTALL_POLKIT_TEMPLATE "Install Polkit action as a template for further installation later" OFF)
-    OPTION(VANILLA_INSTALL_POLKIT_RULE "Install Polkit rule to allow vanilla-pipe as root without password" OFF)
-endif()
-
 add_subdirectory(lib)
 if (VANILLA_BUILD_PIPE)
 	add_subdirectory(pipe)
