@@ -4,6 +4,7 @@
 
 #include <errno.h>
 #include <libgen.h>
+#include <pthread.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -20,6 +21,33 @@
 static pid_t pipe_pid = -1;
 static int pipe_input;
 static int pipe_err;
+static pthread_t pipe_log_thread = 0;
+
+void *vpi_pipe_log_thread(void *data)
+{
+    char buf[512];
+    int pipe_err = (intptr_t) data;
+    size_t buf_read = 0;
+    while (1) {
+        ssize_t this_read = read(pipe_err, buf + buf_read, 1);
+        if (this_read == 1) {
+            if (buf[buf_read] == '\n') {
+                // Print line and reset
+                buf[buf_read + 1] = '\0';
+                vpilog(buf);
+
+                buf_read = 0;
+            } else {
+                buf_read += this_read;
+            }
+        } else {
+            // Encountered error, pipe likely exited so break here
+            break;
+        }
+    }
+
+    return 0;
+}
 
 int vpi_start_pipe()
 {
@@ -100,18 +128,22 @@ int vpi_start_pipe()
         if (!memcmp(ready_buf, "READY", 5)) {
             ret = VANILLA_SUCCESS;
             pipe_pid = pid;
+
+            pipe_input = in_pipes[1];
+            pipe_err = err_pipes[0];
+
+            pthread_create(&pipe_log_thread, 0, vpi_pipe_log_thread, (void *) (intptr_t) pipe_err);
         } else {
             vpilog("GOT INVALID SIGNAL: %.*s\n", sizeof(ready_buf), ready_buf);
             
             // Kill seems to break a lot of things so I guess we'll just leave it orphaned
             // kill(pipe_pid, SIGKILL);
+            close(in_pipes[1]);
+            close(err_pipes[0]);
         }
 
         close(err_pipes[1]);
         close(in_pipes[0]);
-
-        pipe_input = in_pipes[1];
-        pipe_err = err_pipes[0];
 
         return ret;
     }
@@ -120,10 +152,14 @@ int vpi_start_pipe()
 void vpi_stop_pipe()
 {
     if (pipe_pid != -1) {
-        close(pipe_err);
-
+        // Signal to pipe to quit
         ssize_t s = write(pipe_input, "QUIT\n", 5);
         close(pipe_input);
+
+        // Wait for our log thread to quit
+        pthread_join(pipe_log_thread, 0);
+
+        close(pipe_err);
 
         waitpid(pipe_pid, 0, 0);
         pipe_pid = -1;
