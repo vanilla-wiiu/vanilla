@@ -37,6 +37,10 @@ Vanilla currently requires the following dependencies:
   ```sh
   dnf install libavcodec-free-devel libavutil-free-devel libavfilter-free-devel libnl3-devel SDL2-devel SDL2_image-devel SDL2_ttf-devel openssl-devel make automake gcc gcc-c++ kernel-devel cmake libxml2-devel
   ```
+- Fedora (with RPM Fusion multimedia packages)
+  ```
+  # dnf install qt6-qtbase-devel qt6-qtmultimedia-devel qt6-qtsvg-devel ffmpeg-devel libnl3-devel SDL2-devel openssl-devel make automake gcc gcc-c++ kernel-devel cmake
+  ```
 - Arch
   ```sh
   pacman -S base-devel make cmake ffmpeg libnl sdl2 sdl2_image sdl2_ttf libxml2
