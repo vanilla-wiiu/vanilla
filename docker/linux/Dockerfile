@@ -21,7 +21,9 @@ RUN if [ "${ARCH}" = "aarch64" ]; then export DEBARCH="arm64"; export DEBGCC="gc
     && apt -y install libwayland-dev:$DEBARCH \
     && apt -y install libxext-dev:$DEBARCH \
     && apt -y install libnl-route-3-dev:$DEBARCH \
-    && apt -y install libxcb-xinput-dev:$DEBARCH
+    && apt -y install libxcb-xinput-dev:$DEBARCH \
+    && apt -y install libgl1-mesa-dev:$DEBARCH \
+    && apt -y install libopengl-dev:$DEBARCH
 # RUN apt -y install libpipewire-dev:$DEBARCH
 
 # RUN dnf -y update
