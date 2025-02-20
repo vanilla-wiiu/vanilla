@@ -98,6 +98,7 @@ typedef void (*vui_audio_handler_t)(const void *data, size_t size, void *userdat
 typedef void (*vui_vibrate_handler_t)(uint8_t vibrate, void *userdata);
 typedef int (*vui_font_height_handler_t)(vui_font_size_t size, void *userdata);
 typedef void (*vui_text_open_handler_t)(vui_context_t *ctx, int textedit, int open, void *userdata);
+typedef void *(*vui_get_platform_surface_t)(vui_context_t *ctx, void *userdata);
 
 typedef struct vui_context_t {
     void *platform_data;
@@ -136,6 +137,8 @@ typedef struct vui_context_t {
     int active_textedit;
     struct timeval active_textedit_time;
     int quit;
+    vui_get_platform_surface_t get_platform_surface;
+    void *get_platform_surface_data;
 } vui_context_t;
 
 #endif // VANILLA_PI_UI_PRIV_H

@@ -70,6 +70,18 @@ if (VANILLA_BUILD_VENDORED)
         --enable-decoder=h264
         --enable-encoder=png
     )
+    if (ANDROID)
+        list(APPEND FFMPEG_CONFIGURE_ARGS
+            --enable-mediacodec
+            --enable-jni
+            --enable-hwaccel=h264_mediacodec
+            --enable-decoder=h264_mediacodec
+        )
+        list(APPEND _vanilla_pi_libs
+            android
+            mediandk
+        )
+    endif()
     if (CMAKE_CROSSCOMPILING)
         set(FFMPEG_TARGET_OS ${CMAKE_SYSTEM_NAME})
         set(FFMPEG_ENV "")

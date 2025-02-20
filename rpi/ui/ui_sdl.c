@@ -2,6 +2,7 @@
 
 #include <math.h>
 #include <SDL2/SDL.h>
+#include <SDL2/SDL_syswm.h>
 #include <SDL_image.h>
 #include <SDL_ttf.h>
 #include <pthread.h>
@@ -184,6 +185,20 @@ void vui_sdl_text_open_handler(vui_context_t *ctx, int textedit, int open, void 
     }
 }
 
+void *vui_sdl_get_platform_surface(vui_context_t *ctx, void *userdata)
+{
+    vui_sdl_context_t *sdl_ctx = (vui_sdl_context_t *) ctx->platform_data;
+
+    SDL_SysWMinfo info;
+    if (SDL_GetWindowWMInfo(sdl_ctx->window, &info)) {
+#ifdef ANDROID
+        return info.info.android.surface;
+#endif
+    }
+
+    return 0;
+}
+
 int vui_init_sdl(vui_context_t *ctx, int fullscreen)
 {
     // Initialize SDL
@@ -241,6 +256,8 @@ int vui_init_sdl(vui_context_t *ctx, int fullscreen)
     ctx->font_height_handler_data = sdl_ctx;
 
     ctx->text_open_handler = vui_sdl_text_open_handler;
+
+    ctx->get_platform_surface = vui_sdl_get_platform_surface;
 
     if (TTF_Init()) {
         vpilog("Failed to TTF_Init\n");
@@ -608,7 +625,7 @@ void vui_draw_sdl(vui_context_t *ctx, SDL_Renderer *renderer)
     for (int layer = 0; layer < ctx->layers; layer++) {
         if (!sdl_ctx->layer_data[layer]) {
             // Create a new layer here
-            sdl_ctx->layer_data[layer] = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_TARGET, ctx->screen_width, ctx->screen_height);
+            sdl_ctx->layer_data[layer] = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_BGRA32, SDL_TEXTUREACCESS_TARGET, ctx->screen_width, ctx->screen_height);
 
             SDL_BlendMode bm = SDL_ComposeCustomBlendMode(
                 SDL_BLENDFACTOR_ONE,
@@ -627,7 +644,7 @@ void vui_draw_sdl(vui_context_t *ctx, SDL_Renderer *renderer)
         if (layer == 0 && ctx->background_enabled) {
             // Draw background
             if (!sdl_ctx->background) {
-                sdl_ctx->background = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_TARGET, ctx->screen_width, ctx->screen_height);
+                sdl_ctx->background = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_BGRA32, SDL_TEXTUREACCESS_TARGET, ctx->screen_width, ctx->screen_height);
                 SDL_Texture *old_target = SDL_GetRenderTarget(renderer);
                 SDL_SetRenderTarget(renderer, sdl_ctx->background);
                 vui_sdl_draw_background(ctx, renderer);
@@ -799,7 +816,7 @@ void vui_draw_sdl(vui_context_t *ctx, SDL_Renderer *renderer)
             }
 
             if (!btn_tex->texture) {
-                btn_tex->texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_TARGET, btn->w, btn->h);
+                btn_tex->texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_BGRA32, SDL_TEXTUREACCESS_TARGET, btn->w, btn->h);
             }
 
             SDL_Texture *old_target = SDL_GetRenderTarget(renderer);
@@ -916,6 +933,37 @@ int32_t pack_float(float f)
     return x;
 }
 
+int vui_sdl_test_yuv(SDL_Renderer *renderer)
+{
+    static SDL_Texture *tex = 0;
+
+    const int w = 64;
+    const int ystrd = 64;
+    const int yplsz = ystrd*ystrd;
+    const int uvstrd = ystrd/2;
+    const int uvplsz = uvstrd*uvstrd;
+
+    if (tex == 0) {
+        tex = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_IYUV, SDL_TEXTUREACCESS_STREAMING, w, w);
+
+        uint8_t yplane[yplsz];
+        uint8_t uplane[uvplsz];
+        uint8_t vplane[uvplsz];
+        memset(yplane, 0, sizeof(yplane));
+        memset(uplane, 0, sizeof(uplane));
+        memset(vplane, 0xFF, sizeof(vplane));
+
+        SDL_UpdateYUVTexture(tex, 0, yplane, ystrd, uplane, uvstrd, vplane, uvstrd);
+    }
+
+    SDL_Rect r;
+    r.w = r.h = w;
+    r.x = 854/2-r.w/2;
+    r.y = 480/2-r.h/2;
+
+    SDL_RenderCopy(renderer, tex, 0, &r);
+}
+
 int vui_update_sdl(vui_context_t *vui)
 {
     vui_sdl_context_t *sdl_ctx = (vui_sdl_context_t *) vui->platform_data;
@@ -1006,6 +1054,10 @@ int vui_update_sdl(vui_context_t *vui)
                 SDL_GameControllerClose(sdl_ctx->controller);
                 sdl_ctx->controller = find_valid_controller();
             }
+            break;
+        case SDL_APP_WILLENTERBACKGROUND:
+            // On mobile, if the user switches to another app, we'll disconnect
+            vpi_menu_action(vui, VPI_ACTION_DISCONNECT);
             break;
         case SDL_CONTROLLERBUTTONDOWN:
         case SDL_CONTROLLERBUTTONUP:
@@ -1134,6 +1186,9 @@ int vui_update_sdl(vui_context_t *vui)
             SDL_RenderCopy(renderer, fg, NULL, NULL);
         }
 
+        // Test YUV (having a weird issue on SDL's opengles2 backend)
+        // vui_sdl_test_yuv(renderer);
+
         main_tex = sdl_ctx->layer_data[0];
     } else {
         pthread_mutex_lock(&vpi_decoding_mutex);
@@ -1177,7 +1232,7 @@ int vui_update_sdl(vui_context_t *vui)
         SDL_Texture *texture = SDL_CreateTextureFromSurface(renderer, surface);
 
         const int toast_h = surface->h + TOAST_PADDING + TOAST_PADDING;
-        sdl_ctx->toast_tex = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_TARGET, toast_w, toast_h);
+        sdl_ctx->toast_tex = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_BGRA32, SDL_TEXTUREACCESS_TARGET, toast_w, toast_h);
         SDL_SetTextureBlendMode(sdl_ctx->toast_tex, SDL_BLENDMODE_BLEND);
 
         SDL_SetRenderTarget(renderer, sdl_ctx->toast_tex);

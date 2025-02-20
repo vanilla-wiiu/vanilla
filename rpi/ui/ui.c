@@ -25,6 +25,7 @@ vui_context_t *vui_alloc(int width, int height)
     vui->font_height_handler = 0;
     vui->text_open_handler = 0;
     vui->quit = 0;
+    vui->get_platform_surface = 0;
     vui_reset(vui);
     return vui;
 }
@@ -69,6 +70,13 @@ void vui_enable_background(vui_context_t *ctx, int enabled)
 void vui_set_background(vui_context_t *ctx, const char *background_image)
 {
     vui_strncpy(ctx->background_image, background_image, sizeof(ctx->background_image));
+}
+
+void *vui_platform_get_surface(vui_context_t *ctx)
+{
+    if (ctx->get_platform_surface)
+        return ctx->get_platform_surface(ctx, ctx->get_platform_surface_data);
+    return 0;
 }
 
 int vui_button_create(vui_context_t *ctx, int x, int y, int w, int h, const char *text, const char *icon, vui_button_style_t style, int layer, vui_button_callback_t callback, void *callback_data)

@@ -36,14 +36,14 @@ void vpi_game_set_error(int r)
 
 void *vpi_event_handler(void *data)
 {
+    vui_context_t *vui = (vui_context_t *) data;
+
 	vanilla_event_t event;
 
 	vpi_decode_loop_running = 1;
 
     pthread_t decode_thread;
-    pthread_create(&decode_thread, 0, vpi_decode_loop, 0);
-
-    vui_context_t *vui = (vui_context_t *) data;
+    pthread_create(&decode_thread, 0, vpi_decode_loop, vui);
 
 	while (vanilla_wait_event(&event)) {
         int stop = 0;

@@ -56,6 +56,11 @@ int vui_get_font_height(vui_context_t *ctx, vui_font_size_t size);
 void vui_quit(vui_context_t *ctx);
 
 /**
+ * Platform-specific functions
+ */
+void *vui_platform_get_surface(vui_context_t *ctx);
+
+/**
  * Audio-related functions
  */
 void vui_audio_push(vui_context_t *ctx, const void *data, size_t size);
