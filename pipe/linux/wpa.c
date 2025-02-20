@@ -1309,6 +1309,10 @@ repeat_loop:
 
     pthread_mutex_unlock(&main_loop_mutex);
 
+    // Wait for any potential running actions to complete
+    pthread_mutex_lock(&action_mutex);
+    pthread_mutex_unlock(&action_mutex);
+
     // Interrupt our stdin thread
     signal(SIGINT, SIG_DFL);
     signal(SIGTERM, SIG_DFL);
