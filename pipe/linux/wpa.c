@@ -471,21 +471,30 @@ void dhcp_callback(const char *type, char **env, void *data)
         // const char *router = get_dhcp_value(env, "router");
         // const char *serverid = get_dhcp_value(env, "serverid");
         const char *mask = get_dhcp_value(env, "mask");
-        
-        struct nl_addr *ip_addr;
 
+        // Create IP address object from DHCP data
+        struct nl_addr *ip_addr;
         nl_addr_parse(ip, AF_INET, &ip_addr);
         nl_addr_set_prefixlen(ip_addr, atoi(mask));
 
+        // Create route object
         struct rtnl_addr *ra = rtnl_addr_alloc();
         rtnl_addr_set_ifindex(ra, if_nametoindex(get_dhcp_value(env, "interface")));
-        // rtnl_addr_set_family(ra, AF_INET);
         rtnl_addr_set_local(ra, ip_addr);
-        // rtnl_addr_set_broadcast();
-        // rtnl_addr_set_
-        rtnl_addr_add(nl, ra, 0);
-        rtnl_addr_put(ra);
 
+        // Create build request
+        struct nl_msg *msg;
+        rtnl_addr_build_add_request(ra, 0, &msg);
+
+        // Make this route the lowest possible priority so the system doesn't favor it over other connections
+        nla_put_u32(msg, IFA_RT_PRIORITY, UINT32_MAX);
+
+        // Send request
+        nl_send_auto_complete(nl, msg);
+        
+        // Cleanup
+        nlmsg_free(msg);
+        rtnl_addr_put(ra);
         nl_addr_put(ip_addr);
     } else if (!strcmp(type, "deconfig")) {
         // Remove address from interface
