@@ -35,15 +35,15 @@ Vanilla currently requires the following dependencies:
   ```
 - Fedora
   ```sh
-  dnf install libavcodec-free-devel libavutil-free-devel libavfilter-free-devel libnl3-devel SDL2-devel openssl-devel make automake gcc gcc-c++ kernel-devel cmake libxml2-devel
+  dnf install libavcodec-free-devel libavutil-free-devel libavfilter-free-devel libnl3-devel SDL2-devel SDL2_image-devel SDL2_ttf-devel openssl-devel make automake gcc gcc-c++ kernel-devel cmake libxml2-devel
   ```
 - Arch
   ```sh
-  pacman -S base-devel make cmake ffmpeg libnl sdl2 libxml2
+  pacman -S base-devel make cmake ffmpeg libnl sdl2 sdl2_image sdl2_ttf libxml2
   ```
 - Alpine/postmarketOS
   ```sh
-  apk add build-base cmake sdl2-dev ffmpeg-dev libnl3-dev libxml2-dev
+  apk add build-base cmake sdl2-dev sdl2_image-dev sdl2_ttf-dev ffmpeg-dev libnl3-dev libxml2-dev
   ```
 
 The build process is otherwise normal for a CMake program:
