@@ -13,11 +13,11 @@ This is a **work-in-progress** software clone of the Wii U gamepad for Linux (in
 ## What devices are supported?
 
 - [Steam Deck](https://github.com/vanilla-wiiu/vanilla/wiki/Linux-Setup-Guide)
-- [Nintendo Switch](https://github.com/vanilla-wiiu/vanilla/wiki/Linux-Setup-Guide)
-- [Android](https://github.com/vanilla-wiiu/vanilla/wiki/Android-Setup-Guide)
-- [Linux](https://github.com/vanilla-wiiu/vanilla/wiki/Linux-Setup-Guide)
-- [Windows](https://github.com/vanilla-wiiu/vanilla/wiki/Windows-Setup-Guide)
-- [Raspberry Pi](https://github.com/vanilla-wiiu/vanilla/wiki/Linux-Setup-Guide)
+- [Linux](https://github.com/vanilla-wiiu/vanilla/wiki/Linux-Setup-Guide) (check [Wi-Fi hardware compatibility](https://github.com/vanilla-wiiu/vanilla/wiki/Wireless-Compatibility))
+- [Nintendo Switch](https://github.com/vanilla-wiiu/vanilla/wiki/Linux-Setup-Guide) (currently requires [external Wi-Fi adapter](https://github.com/vanilla-wiiu/vanilla/wiki/Linux-Setup-Guide#nintendo-switch))
+- [Android](https://github.com/vanilla-wiiu/vanilla/wiki/Android-Setup-Guide) (currently frontend only)
+- [Windows](https://github.com/vanilla-wiiu/vanilla/wiki/Windows-Setup-Guide) (currently frontend only)
+- [Raspberry Pi](https://github.com/vanilla-wiiu/vanilla/wiki/Linux-Setup-Guide) (currently requires [external Wi-Fi adapter](https://github.com/vanilla-wiiu/vanilla/wiki/Linux-Setup-Guide#raspberry-pi))
 - *iOS* - Coming soon
 
 ## What Wi-Fi adapter should I use?
