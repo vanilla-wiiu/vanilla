@@ -28,6 +28,9 @@
 #include "vanilla.h"
 #include "wpa.h"
 
+// NOTE: This header must be below others because it defines things that break other headers
+#include <libnm/NetworkManager.h>
+
 const char *wpa_ctrl_interface = "/var/run/wpa_supplicant_drc";
 
 pthread_mutex_t running_mutex;
@@ -382,19 +385,25 @@ void *wpa_setup_environment(void *data)
     struct sync_args *args = (struct sync_args *) data;
 
     // Check status of interface with NetworkManager
-    int is_managed = 0;
-    if (is_networkmanager_managing_device(args->wireless_interface, &is_managed) != VANILLA_SUCCESS) {
-        print_info("FAILED TO DETERMINE MANAGED STATE OF WIRELESS INTERFACE");
-        //goto die;
-    }
+    GError *nm_err;
+    NMClient *nmcli = nm_client_new(NULL, &nm_err);
+    NMDevice *nmdev = NULL;
+    gboolean is_managed = 0;
+    if (nmcli) {
+        nmdev = nm_client_get_device_by_iface(nmcli, args->wireless_interface);
+        if (!nmdev) {
+            pprint("FAILED TO GET STATUS OF DEVICE %s\n", args->wireless_interface);
+            goto die_and_close_nmcli;
+        }
 
-    // If NetworkManager is managing this device, temporarily stop it from doing so
-    if (is_managed) {
-        if (disable_networkmanager_on_device(args->wireless_interface) != VANILLA_SUCCESS) {
-            print_info("FAILED TO SET %s TO UNMANAGED, RESULTS MAY BE UNPREDICTABLE");
-        } else {
+        if ((is_managed = nm_device_get_managed(nmdev))) {
+            nm_device_set_managed(nmdev, FALSE);
             print_info("TEMPORARILY SET %s TO UNMANAGED", args->wireless_interface);
         }
+    } else {
+        // Failed to get NetworkManager, host may just not have it?
+        g_message("Failed to create NetworkManager client: %s", nm_err->message);
+        g_error_free(nm_err);
     }
 
     // Start modified WPA supplicant
@@ -438,7 +447,12 @@ die_and_kill:
 die_and_reenable_managed:
     if (is_managed) {
         print_info("SETTING %s BACK TO MANAGED", args->wireless_interface);
-        enable_networkmanager_on_device(args->wireless_interface);
+        nm_device_set_managed(nmdev, TRUE);
+    }
+
+die_and_close_nmcli:
+    if (nmcli) {
+        g_object_unref(nmcli);
     }
 
 die:
@@ -587,75 +601,6 @@ int call_dhcp_old(const char *network_interface, pid_t *dhclient_pid)
 
         return VANILLA_ERR_GENERIC;
     }
-}
-
-static const char *nmcli = "nmcli";
-int is_networkmanager_managing_device(const char *wireless_interface, int *is_managed)
-{
-    pid_t nmcli_pid;
-    int pipe;
-
-    const char *argv[] = {nmcli, "device", "show", wireless_interface, NULL};
-
-    int r = start_process(argv, &nmcli_pid, &pipe, NULL);
-    if (r != VANILLA_SUCCESS) {
-        // Assume nmcli is not installed so the host is not using NetworkManager
-        print_info("FAILED TO LAUNCH NMCLI, RESULTS MAY BE UNPREDICTABLE");
-        *is_managed = 0;
-        return VANILLA_SUCCESS;
-    }
-
-    int status;
-    waitpid(nmcli_pid, &status, 0);
-
-    if (!WIFEXITED(status)) {
-        // Something went wrong
-        print_info("NMCLI DID NOT EXIT NORMALLY");
-        return VANILLA_ERR_GENERIC;
-    }
-
-    char buf[100];
-    int ret = VANILLA_ERR_GENERIC;
-    while (read_line_from_fd(pipe, buf, sizeof(buf))) {
-        if (memcmp(buf, "GENERAL.STATE", 13) == 0) {
-            *is_managed = !strstr(buf, "unmanaged");
-            ret = VANILLA_SUCCESS;
-            goto exit;
-        }
-    }
-
-exit:
-    close(pipe);
-    return ret;
-}
-
-int set_networkmanager_on_device(const char *wireless_interface, int on)
-{
-    const char *argv[] = {nmcli, "device", "set", wireless_interface, "managed", on ? "on" : "off", NULL};
-
-    pid_t nmcli_pid;
-    int r = start_process(argv, &nmcli_pid, NULL, NULL);
-    if (r != VANILLA_SUCCESS) {
-        return r;
-    }
-
-    int status;
-    waitpid(nmcli_pid, &status, 0);
-    if (WIFEXITED(status)) {
-        return VANILLA_SUCCESS;
-    } else {
-        return VANILLA_ERR_GENERIC;
-    }
-}
-
-int disable_networkmanager_on_device(const char *wireless_interface)
-{
-    return set_networkmanager_on_device(wireless_interface, 0);
-}
-
-int enable_networkmanager_on_device(const char *wireless_interface)
-{
-    return set_networkmanager_on_device(wireless_interface, 1);
 }
 
 void *do_relay(void *data)

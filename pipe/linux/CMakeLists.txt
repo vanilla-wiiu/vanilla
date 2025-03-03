@@ -7,6 +7,11 @@ add_executable(vanilla-pipe
 # Install vanilla-pipe
 install(TARGETS vanilla-pipe)
 
+find_package(PkgConfig REQUIRED)
+# pkg_check_modules(OPENSSL REQUIRED libssl libcrypto)
+pkg_check_modules(LIBNM REQUIRED libnm)
+# pkg_check_modules(LIBNL3 REQUIRED libnl-3.0 libnl-route-3.0 libnl-genl-3.0)
+
 # Build WPA supplicant
 include(ExternalProject)
 set(HOSTAP_DIR ${CMAKE_CURRENT_BINARY_DIR}/hostap)
@@ -24,9 +29,9 @@ ExternalProject_Add(hostap
 )
 
 # Define wpa_client library from hostap
-add_library(wpa_client SHARED IMPORTED)
+add_library(wpa_client STATIC IMPORTED)
 set_target_properties(wpa_client PROPERTIES
-    IMPORTED_IMPLIB ${HOSTAP_DIR}/wpa_supplicant/libwpa_client.a
+    IMPORTED_LOCATION ${HOSTAP_DIR}/wpa_supplicant/libwpa_client.a
     IMPORTED_NO_SONAME true
 )
 add_dependencies(wpa_client hostap)
@@ -54,6 +59,7 @@ target_include_directories(vanilla-pipe PRIVATE
     ${HOSTAP_DIR}/src/utils
     ${CMAKE_SOURCE_DIR}/lib
     ${LibNL_INCLUDE_DIR}
+    ${LIBNM_INCLUDE_DIRS}
 )
 
 # Link our library with the client library
@@ -63,6 +69,7 @@ target_link_libraries(vanilla-pipe PRIVATE
     udhcpc
     ${LibNL_LIBRARY}
     ${LibNL_ROUTE_LIBRARY}
+    ${LIBNM_LIBRARIES}
 )
 
 # Ensure wpa_supplicant is installed
