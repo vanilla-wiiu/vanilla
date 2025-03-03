@@ -31,6 +31,9 @@
 // NOTE: This header must be below others because it defines things that break other headers
 #include <libnm/NetworkManager.h>
 
+#include <utils/common.h>
+#include <wpa_supplicant_i.h>
+
 const char *wpa_ctrl_interface = "/var/run/wpa_supplicant_drc";
 
 pthread_mutex_t running_mutex;
@@ -117,209 +120,14 @@ int are_relays_running()
     return r;
 }
 
-void wpa_msg(char *msg, size_t len)
+void vanilla_pipe_wpa_msg(char *msg, size_t len)
 {
     print_info("%.*s", len, msg);
 }
 
 void wpa_ctrl_command(struct wpa_ctrl *ctrl, const char *cmd, char *buf, size_t *buf_len)
 {
-    wpa_ctrl_request(ctrl, cmd, strlen(cmd), buf, buf_len, NULL /*wpa_msg*/);
-}
-
-int get_binary_in_working_directory(const char *bin_name, char *buf, size_t buf_size)
-{
-    size_t path_size = get_max_path_length();
-    char *path_buf = malloc(path_size);
-    if (!path_buf) {
-        // Failed to allocate buffer, terminate
-        return -1;
-    }
-
-    // Get current working directory
-    // TODO: This is Linux only and will require changes on other platforms
-    ssize_t link_len = readlink("/proc/self/exe", path_buf, path_size);
-    if (link_len < 0) {
-        print_info("READLINK ERROR: %i", errno);
-        free(path_buf);
-        return -1;
-    }
-
-    // Merge current working directory with wpa_supplicant name
-    path_buf[link_len] = 0;
-    dirname(path_buf);
-    int r = snprintf(buf, path_size, "%s/%s", path_buf, bin_name);
-    free(path_buf);
-
-    return r;
-}
-
-ssize_t read_line_from_pipe(int pipe, char *buf, size_t buf_len)
-{
-    int attempts = 0;
-    const static int max_attempts = 5;
-    ssize_t read_count = 0;
-    while (read_count < buf_len) {
-        ssize_t this_read = read(pipe, buf + read_count, 1);
-        if (this_read == 0) {
-            attempts++;
-            if (is_interrupted() || attempts == max_attempts) {
-                return -1;
-            }
-            sleep(1); // Wait for more output
-            continue;
-        }
-
-        attempts = 0;
-
-        if (buf[read_count] == '\n') {
-            buf[read_count] = 0;
-            break;
-        }
-
-        read_count++;
-    }
-    return read_count;
-}
-
-int wait_for_output(int pipe, const char *expected_output)
-{
-    static const int max_attempts = 5;
-    int nbytes, attempts = 0, success = 0;
-    const int expected_len = strlen(expected_output);
-    char buf[256];
-    int read_count = 0;
-    int ret = 0;
-    do {
-        // Read line from child process
-        ssize_t read_sz = read_line_from_pipe(pipe, buf, sizeof(buf));
-
-        print_info("SUBPROCESS %.*s", read_sz, buf);
-
-        // We got success message!
-        if (!memcmp(buf, expected_output, expected_len)) {
-            ret = 1;
-            break;
-        }
-
-        // Haven't gotten success message (yet), wait and try again
-    } while (attempts < max_attempts && !is_interrupted());
-    
-    return ret;
-}
-
-int start_process(const char **argv, pid_t *pid_out, int *stdout_pipe, int *stderr_pipe)
-{
-    // Set up pipes so child stdout can be read by the parent process
-    int out_pipes[2], err_pipes[2];
-    pipe(out_pipes);
-    pipe(err_pipes);
-
-    // Get parent pid (allows us to check if parent was terminated immediately after fork)
-    pid_t ppid_before_fork = getpid();
-
-    // Fork into parent/child processes
-    pid_t pid = fork();
-
-    if (pid == 0) {
-        // We are in the child. Set child to terminate when parent does.
-        int r = prctl(PR_SET_PDEATHSIG, SIGHUP);
-        if (r == -1) {
-            perror(0);
-            exit(1);
-        }
-
-        // See if parent pid is still the same. If not, it must have been terminated, so we will exit too.
-        if (getppid() != ppid_before_fork) {
-            exit(1);
-        }
-
-        // Set up pipes so our stdout can be read by the parent process
-        dup2(out_pipes[1], STDOUT_FILENO);
-        dup2(err_pipes[1], STDERR_FILENO);
-        close(out_pipes[0]);
-        close(out_pipes[1]);
-        close(err_pipes[0]);
-        close(err_pipes[1]);
-
-        setsid();
-
-        // Execute process (this will replace the running code)
-        r = execvp(argv[0], (char * const *) argv);
-
-        // Handle failure to execute, use _exit so we don't interfere with the host
-        _exit(1);
-    } else if (pid < 0) {
-        // Fork error
-        return VANILLA_ERR_GENERIC;
-    } else {
-        // Continuation of parent
-        close(out_pipes[1]);
-        close(err_pipes[1]);
-        if (!stdout_pipe) {
-            // Caller is not interested in the stdout
-            close(out_pipes[0]);
-        } else {
-            // Caller is interested so we'll hand them the pipe
-            *stdout_pipe = out_pipes[0];
-        }
-        if (!stderr_pipe) {
-            close(err_pipes[0]);
-        } else {
-            *stderr_pipe = err_pipes[0];
-        }
-
-        // If caller wants the pid, send it to them
-        if (pid_out) {
-            *pid_out = pid;
-        }
-
-        return VANILLA_SUCCESS;
-    }
-}
-
-int start_wpa_supplicant(const char *wireless_interface, const char *config_file, pid_t *pid)
-{
-    // TODO: drc-sim has `rfkill unblock wlan`, should we do that too?
-
-    // Kill any potentially orphaned wpa_supplicant_drcs
-    const char *wpa_supplicant_drc = "wpa_supplicant_drc";
-    const char *kill_argv[] = {"killall", "-9", wpa_supplicant_drc, NULL};
-    pid_t kill_pid;
-    int kill_pipe;
-    int r = start_process(kill_argv, &kill_pid, &kill_pipe, NULL);
-    int status;
-    waitpid(kill_pid, &status, 0);
-
-    size_t path_size = get_max_path_length();
-    char *wpa_buf = malloc(path_size);
-
-    get_binary_in_working_directory(wpa_supplicant_drc, wpa_buf, path_size);
-
-    const char *argv[] = {wpa_buf, "-Dnl80211", "-i", wireless_interface, "-c", config_file, NULL};
-    print_info("USING WPA CONFIG: %s", config_file);
-    int pipe;
-
-    r = start_process(argv, pid, &pipe, NULL);
-    free(wpa_buf);
-
-    if (r != VANILLA_SUCCESS) {
-        return r;
-    }
-
-    // Wait for WPA supplicant to start
-    if (wait_for_output(pipe, "Successfully initialized wpa_supplicant")) {
-        // I'm not sure why, but closing this pipe breaks wpa_supplicant in subtle ways, so just leave it.
-        //close(pipe);
-
-        // WPA initialized correctly! Continue with action...
-        return VANILLA_SUCCESS;
-    } else {
-        // Give up
-give_up:
-        kill((*pid), SIGTERM);
-        return VANILLA_ERR_GENERIC;
-    }
+    wpa_ctrl_request(ctrl, cmd, strlen(cmd), buf, buf_len, NULL /*vanilla_pipe_wpa_msg*/);
 }
 
 void quit_loop()
@@ -378,6 +186,11 @@ void *read_stdin(void *arg)
     return NULL;
 }
 
+void *start_wpa(void *arg)
+{
+    return THREADRESULT(wpa_supplicant_run((struct wpa_global *) arg));
+}
+
 void *wpa_setup_environment(void *data)
 {
     void *ret = THREADRESULT(VANILLA_ERR_GENERIC);
@@ -407,17 +220,32 @@ void *wpa_setup_environment(void *data)
     }
 
     // Start modified WPA supplicant
-    pid_t pid;
-    int err = start_wpa_supplicant(args->wireless_interface, args->wireless_config, &pid);
-    if (err != VANILLA_SUCCESS || is_interrupted()) {
-        print_info("FAILED TO START WPA SUPPLICANT");
+    struct wpa_params params = {0};
+    params.wpa_debug_level = MSG_INFO;
+
+    struct wpa_interface interface = {0};
+    interface.driver = "nl80211";
+    interface.ifname = args->wireless_interface;
+    interface.confname = args->wireless_config;
+    
+    struct wpa_global *wpa = wpa_supplicant_init(&params);
+    if (!wpa) {
+        print_info("FAILED TO INIT WPA SUPPLICANT");
         goto die_and_reenable_managed;
     }
 
+    struct wpa_supplicant *wpa_s = wpa_supplicant_add_iface(wpa, &interface, NULL);
+    if (!wpa_s) {
+        print_info("FAILED TO ADD WPA IFACE");
+        goto die_and_kill;
+    }
+
+    pthread_t wpa_thread;
+    pthread_create(&wpa_thread, NULL, start_wpa, wpa);
+
     // Get control interface
-    const size_t buf_len = 1048576;
-    char *buf = malloc(buf_len);
-    snprintf(buf, buf_len, "%s/%s", wpa_ctrl_interface, args->wireless_interface);
+    char buf[128];
+    snprintf(buf, sizeof(buf), "%s/%s", wpa_ctrl_interface, args->wireless_interface);
     struct wpa_ctrl *ctrl;
     while (!(ctrl = wpa_ctrl_open(buf))) {
         if (is_interrupted()) goto die_and_kill;
@@ -440,9 +268,9 @@ die_and_close:
     wpa_ctrl_close(ctrl);
 
 die_and_kill:
-    kill(pid, SIGTERM);
-
-    free(buf);
+    pthread_kill(wpa_thread, SIGINT);
+    pthread_join(wpa_thread, NULL);
+    wpa_supplicant_deinit(wpa);
 
 die_and_reenable_managed:
     if (is_managed) {
@@ -560,47 +388,6 @@ free_socket_and_exit:
 
 exit:
     return ret;
-}
-
-int call_dhcp_old(const char *network_interface, pid_t *dhclient_pid)
-{
-    // See if dhclient exists in our local directories    
-    size_t buf_size = get_max_path_length();
-    char *dhclient_buf = malloc(buf_size);
-    char *dhclient_script = malloc(buf_size);
-    get_binary_in_working_directory("dhclient", dhclient_buf, buf_size);
-    get_binary_in_working_directory("../sbin/dhcp.sh", dhclient_script, buf_size);
-
-    if (access(dhclient_buf, F_OK) == 0) {
-        // Prefer our local dhclient if it's available
-        // TODO: dhclient is EOL and should be replaced with something else
-        print_info("Using custom dhclient at: %s", dhclient_buf);
-    } else {
-        print_info("Using system dhclient");
-        strncpy(dhclient_buf, "dhclient", buf_size);
-    }
-
-    const char *argv[] = {dhclient_buf, "-d", "--no-pid", "-sf", dhclient_script, network_interface, NULL};
-
-    int dhclient_pipe;
-    int r = start_process(argv, dhclient_pid, NULL, &dhclient_pipe);
-
-    free(dhclient_buf);
-    free(dhclient_script);
-
-    if (r != VANILLA_SUCCESS) {
-        print_info("FAILED TO CALL DHCLIENT");
-        return r;
-    }
-
-    if (wait_for_output(dhclient_pipe, "bound to")) {
-        return VANILLA_SUCCESS;
-    } else {
-        print_info("FAILED TO ESTABLISH DHCP");
-        kill(*dhclient_pid, SIGTERM);
-
-        return VANILLA_ERR_GENERIC;
-    }
 }
 
 void *do_relay(void *data)
@@ -830,11 +617,6 @@ char wireless_connect_config_filename[1024] = {0};
 size_t get_home_directory_file(const char *filename, char *buf, size_t buf_size)
 {
     return snprintf(buf, buf_size, "/tmp/%s", filename);
-}
-
-size_t get_max_path_length()
-{
-    return pathconf(".", _PC_PATH_MAX);
 }
 
 const char *get_wireless_connect_config_filename()
