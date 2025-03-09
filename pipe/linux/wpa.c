@@ -692,7 +692,6 @@ int create_connect_config(const char *filename, unsigned char *bssid, unsigned c
 
     static const char *template =
         "ctrl_interface=/var/run/wpa_supplicant_drc\n"
-        "update_config=1\n"
         "ap_scan=1\n"
         "\n"
         "network={\n"
