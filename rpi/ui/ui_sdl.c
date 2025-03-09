@@ -572,8 +572,8 @@ void vui_sdl_draw_button(vui_context_t *vui, vui_sdl_context_t *sdl_ctx, vui_but
         else{
             if (btn->style == VUI_BUTTON_STYLE_CORNER) { 
                 float centr = (4.0f * rect.w) / (3.0f * M_PI); 
-                text_rect.x = rect.x + centr - text_rect.w / 2;
-                text_rect.y = rect.y + centr - text_rect.h / 2;
+                text_rect.x = rect.x + centr - text_rect.w / 2.0f;
+                text_rect.y = rect.y + centr - text_rect.h / 2.0f;
             }
         }
         SDL_RenderCopy(sdl_ctx->renderer, texture, NULL, &text_rect);
