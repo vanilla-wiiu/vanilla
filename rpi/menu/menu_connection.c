@@ -136,7 +136,9 @@ static void local_connection_menu(vui_context_t *vui, void *v)
     const int button_x = bkg_rect.x+bkg_rect.w/2-button_w/2;
     const int button_y = bkg_rect.y+bkg_rect.h*2/5;
     for (int i = 0; i < MAX_WIRELESS_ENTRIES; i++) {
-        intf_buttons[i] = vui_button_create(vui, button_x, button_y+button_h*i, button_w, button_h, "intf", 0, VUI_BUTTON_STYLE_BUTTON, fglayer, intf_pressed, (void *) (intptr_t) fglayer);
+        int b = vui_button_create(vui, button_x, button_y+button_h*i, button_w, button_h, 0, 0, VUI_BUTTON_STYLE_BUTTON, fglayer, intf_pressed, (void *) (intptr_t) fglayer);
+        vui_button_update_font_size(vui, b, VUI_FONT_SIZE_SMALL);
+        intf_buttons[i] = b;
     }
 
     update_wireless_buttons(vui);

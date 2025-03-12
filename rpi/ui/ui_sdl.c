@@ -479,7 +479,7 @@ void vui_sdl_draw_button(vui_context_t *vui, vui_sdl_context_t *sdl_ctx, vui_but
             text_font = sdl_ctx->sysfont_tiny;
         }
     } else {
-        text_font = sdl_ctx->sysfont;
+        text_font = get_font(sdl_ctx, btn->font_size);
     }
 
     const int btn_radius = rect.h * 2 / 10;

@@ -90,6 +90,7 @@ void vui_button_update_visible(vui_context_t *ctx, int button, int visible);
 void vui_button_update_enabled(vui_context_t *ctx, int button, int enabled);
 void vui_button_update_checked(vui_context_t *ctx, int button, int checked);
 void vui_button_update_checkable(vui_context_t *ctx, int button, int checkable);
+void vui_button_update_font_size(vui_context_t *ctx, int button, vui_font_size_t size);
 void vui_button_set_cancel(vui_context_t *ctx, int button);
 
 /**

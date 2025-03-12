@@ -5,7 +5,7 @@
 
 #include "ui.h"
 
-#define MAX_BUTTON_COUNT 16
+#define MAX_BUTTON_COUNT 32
 #define MAX_BUTTON_TEXT 256
 
 typedef struct {
@@ -20,6 +20,7 @@ typedef struct {
     char text[MAX_BUTTON_TEXT];
     char icon[MAX_BUTTON_TEXT];
     vui_button_style_t style;
+    vui_font_size_t font_size;
     vui_button_callback_t onclick;
     void *onclick_data;
     int layer;

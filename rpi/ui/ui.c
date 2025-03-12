@@ -110,6 +110,7 @@ int vui_button_create(vui_context_t *ctx, int x, int y, int w, int h, const char
     vui_button_update_enabled(ctx, index, 1);
     vui_button_update_checked(ctx, index, 0);
     vui_button_update_checkable(ctx, index, 0);
+    vui_button_update_font_size(ctx, index, VUI_FONT_SIZE_NORMAL);
 
     ctx->button_count++;
 
@@ -144,6 +145,12 @@ void vui_button_update_checkable(vui_context_t *ctx, int index, int checkable)
 {
     vui_button_t *btn = &ctx->buttons[index];
     btn->checkable = checkable;
+}
+
+void vui_button_update_font_size(vui_context_t *ctx, int index, vui_font_size_t size)
+{
+    vui_button_t *btn = &ctx->buttons[index];
+    btn->font_size = size;
 }
 
 void vui_button_set_cancel(vui_context_t *ctx, int button)
