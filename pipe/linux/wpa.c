@@ -725,6 +725,13 @@ int create_connect_config(const char *filename, unsigned char *bssid, unsigned c
     return VANILLA_SUCCESS;
 }
 
+ssize_t send_ping_to_client(struct sync_args *args)
+{
+    vanilla_pipe_command_t cmd;
+    cmd.control_code = VANILLA_PIPE_CC_PING;
+    return sendto(args->skt, &cmd, sizeof(cmd.control_code), 0, (const struct sockaddr *) &args->client, args->client_size);
+}
+
 void *sync_with_console_internal(void *data)
 {
     struct sync_args *args = (struct sync_args *) data;
@@ -743,10 +750,7 @@ void *sync_with_console_internal(void *data)
         while (1) {
             if (is_interrupted()) goto exit_loop;
 
-            vanilla_pipe_command_t cmd;
-            cmd.control_code = VANILLA_PIPE_CC_PING;
-
-            if (sendto(args->skt, &cmd, sizeof(cmd.control_code), 0, (const struct sockaddr *) &args->client, args->client_size) == -1) {
+            if (send_ping_to_client(args) == -1) {
                 // Client has probably disconnected
                 interrupt();
                 goto exit_loop;
@@ -794,15 +798,25 @@ void *sync_with_console_internal(void *data)
                 int cred_received = 0;
 
                 while (!is_interrupted()) {
-                    while (wait_count < max_wait && !wpa_ctrl_pending(args->ctrl)) {
-                        if (is_interrupted()) goto exit_loop;
-                        sleep(1);
-                        wait_count++;
+                    // Send a ping to the client to say we're still here
+                    if (send_ping_to_client(args) == -1) {
+                        // Client has probably disconnected
+                        interrupt();
+                        goto exit_loop;
                     }
 
-                    if (wait_count == max_wait) {
-                        print_info("GIVING UP, RETURNING TO SCANNING");
-                        break;
+                    if (!wpa_ctrl_pending(args->ctrl)) {
+                        // If we haven't gotten any information yet, wait one second and try again
+                        wait_count++;
+                        if (wait_count == max_wait) {
+                            print_info("GIVING UP, RETURNING TO SCANNING");
+                            break;
+                        } else {
+                            sleep(1);
+                            continue;
+                        }
+                    } else {
+                        wait_count = 0;
                     }
 
                     actual_buf_len = buf_len;
