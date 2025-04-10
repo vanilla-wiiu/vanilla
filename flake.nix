@@ -1,7 +1,7 @@
 {
   description = "A software clone of the Wii U gamepad for Linux";
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.11";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
   };
   outputs = { self, nixpkgs }:
     let

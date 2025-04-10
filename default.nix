@@ -64,7 +64,6 @@ stdenv.mkDerivation {
   '';
 
   buildPhase = ''
-    cp -r ${hostap} ./hostap
     cmake --build .
   '';
 
