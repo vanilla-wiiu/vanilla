@@ -68,22 +68,16 @@ stdenv.mkDerivation {
     cmake --build .
   '';
 
-  # upstream removed pkg-config support and uses dlopen now
-  postPatch =
-    let
-      libnlPath = lib.getLib libnl;
-    in
-    lib.optionalString stdenv.hostPlatform.isLinux ''
-      substituteInPlace cmake/FindLibNL.cmake \
-      --replace-fail /usr/include/libnl3 ${lib.getDev libnl}/include/libnl3
-          #substituteInPlace rpi/CMakeLists.txt \
-          #--replace-fail "SDL2::SDL2main" ""
-    '';
+  postPatch = ''
+    substituteInPlace cmake/FindLibNL.cmake \
+    --replace-fail /usr/include/libnl3 ${lib.getDev libnl}/include/libnl3
+    substituteInPlace rpi/CMakeLists.txt \
+    --replace-fail "SDL2::SDL2main" ""
+  '';
 
   installPhase = ''
     mkdir -p $out
-    cp -r ./lib $out
-    cp -r ./bin $out
+    cp -r ./ $out
   '';
 
   meta = with lib; {
