@@ -76,7 +76,11 @@ stdenv.mkDerivation {
 
   installPhase = ''
     mkdir -p $out
-    cp -r ./ $out
+    cp -r ./bin $out
+    cp -r ./lib $out
+    cp -r ./share $out
+    mkdir -p $out/include
+    cp $src/lib/vanilla.h $out/include/vanilla.h
   '';
 
   meta = with lib; {
@@ -84,6 +88,6 @@ stdenv.mkDerivation {
     homepage = "https://github.com/vanilla-wiiu/vanilla";
     license = licenses.gpl2;
     platforms = [ "x86_64-linux" "aarch64-linux" ];
-    mainProgram = "vanilla-gui";
+    mainProgram = "vanilla-pi";
   };
 }
