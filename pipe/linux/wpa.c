@@ -23,7 +23,6 @@
 #include "../def.h"
 #include "../ports.h"
 #include "dhcp/dhcpc.h"
-#include "status.h"
 #include "util.h"
 #include "vanilla.h"
 #include "wpa.h"
@@ -80,26 +79,13 @@ struct relay_info {
 
 #define THREADRESULT(x) ((void *) (uintptr_t) (x))
 
-void lpprint(const char *fmt, va_list args)
-{
-    vfprintf(stderr, fmt, args);
-}
-
-void pprint(const char *fmt, ...)
+void nlprint(const char *fmt, ...)
 {
     va_list args;
     va_start(args, fmt);
-    lpprint(fmt, args);
-    va_end(args);
-}
 
-void print_info(const char *errstr, ...)
-{
-    va_list args;
-    va_start(args, errstr);
-
-    lpprint(errstr, args);
-    pprint("\n");
+    vfprintf(stderr, fmt, args);
+    fprintf(stderr, "\n");
 
     va_end(args);
 }
@@ -122,7 +108,7 @@ int are_relays_running()
 
 void vanilla_pipe_wpa_msg(char *msg, size_t len)
 {
-    print_info("%.*s", len, msg);
+    nlprint("%.*s", len, msg);
 }
 
 void wpa_ctrl_command(struct wpa_ctrl *ctrl, const char *cmd, char *buf, size_t *buf_len)
@@ -157,9 +143,9 @@ void interrupt_relays()
 void sigint_handler(int signum)
 {
     if (signum == SIGINT) {
-        pprint("RECEIVED INTERRUPT SIGNAL\n");
+        nlprint("RECEIVED INTERRUPT SIGNAL");
     } else if (signum == SIGTERM) {
-        pprint("RECEIVED TERMINATE SIGNAL\n");
+        nlprint("RECEIVED TERMINATE SIGNAL");
     }
     quit_loop();
     signal(signum, SIG_DFL);
@@ -205,13 +191,13 @@ void *wpa_setup_environment(void *data)
     if (nmcli) {
         nmdev = nm_client_get_device_by_iface(nmcli, args->wireless_interface);
         if (!nmdev) {
-            pprint("FAILED TO GET STATUS OF DEVICE %s\n", args->wireless_interface);
+            nlprint("FAILED TO GET STATUS OF DEVICE %s", args->wireless_interface);
             goto die_and_close_nmcli;
         }
 
         if ((is_managed = nm_device_get_managed(nmdev))) {
             nm_device_set_managed(nmdev, FALSE);
-            print_info("TEMPORARILY SET %s TO UNMANAGED", args->wireless_interface);
+            nlprint("TEMPORARILY SET %s TO UNMANAGED", args->wireless_interface);
         }
     } else {
         // Failed to get NetworkManager, host may just not have it?
@@ -230,13 +216,13 @@ void *wpa_setup_environment(void *data)
     
     struct wpa_global *wpa = wpa_supplicant_init(&params);
     if (!wpa) {
-        print_info("FAILED TO INIT WPA SUPPLICANT");
+        nlprint("FAILED TO INIT WPA SUPPLICANT");
         goto die_and_reenable_managed;
     }
 
     struct wpa_supplicant *wpa_s = wpa_supplicant_add_iface(wpa, &interface, NULL);
     if (!wpa_s) {
-        print_info("FAILED TO ADD WPA IFACE");
+        nlprint("FAILED TO ADD WPA IFACE");
         goto die_and_kill;
     }
 
@@ -249,12 +235,12 @@ void *wpa_setup_environment(void *data)
     struct wpa_ctrl *ctrl;
     while (!(ctrl = wpa_ctrl_open(buf))) {
         if (is_interrupted()) goto die_and_kill;
-        print_info("WAITING FOR CTRL INTERFACE");
+        nlprint("WAITING FOR CTRL INTERFACE");
         sleep(1);
     }
 
     if (is_interrupted() || wpa_ctrl_attach(ctrl) < 0) {
-        print_info("FAILED TO ATTACH TO WPA");
+        nlprint("FAILED TO ATTACH TO WPA");
         goto die_and_close;
     }
 
@@ -274,7 +260,7 @@ die_and_kill:
 
 die_and_reenable_managed:
     if (is_managed) {
-        print_info("SETTING %s BACK TO MANAGED", args->wireless_interface);
+        nlprint("SETTING %s BACK TO MANAGED", args->wireless_interface);
         nm_device_set_managed(nmdev, TRUE);
     }
 
@@ -346,10 +332,10 @@ void dhcp_callback(const char *type, char **env, void *data)
         rtnl_addr_delete(nl, ra, 0);
         rtnl_addr_put(ra);
     }
-    // print_info("GOT DHCP EVENT: %s", type);
+    // nlprint("GOT DHCP EVENT: %s", type);
     // while (*env) {
     //     char *e = *env;
-    //     print_info("  %s", e);
+    //     nlprint("  %s", e);
     //     env++;
     // }
 }
@@ -360,13 +346,13 @@ int call_dhcp(const char *network_interface)
 
     struct nl_sock *nl = nl_socket_alloc();
     if (!nl) {
-        print_info("FAILED TO ALLOC NL_SOCK");
+        nlprint("FAILED TO ALLOC NL_SOCK");
         goto exit;
     }
     
     int nlr = nl_connect(nl, NETLINK_ROUTE);
     if (nlr < 0) {
-        print_info("FAILED TO CONNECT NL: %i", nlr);
+        nlprint("FAILED TO CONNECT NL: %i", nlr);
         goto free_socket_and_exit;
     }
 
@@ -403,13 +389,13 @@ void *do_relay(void *data)
 
         if (sendto(ports->to_socket, buf, read_size, 0, (const struct sockaddr *) &ports->to_address, ports->to_address_size) == -1) {
             if (ports->to_address_size == sizeof(struct sockaddr_un)) {
-                print_info("FAILED TO SENDTO \"%s\" (%i)", ports->to_address.un.sun_path, errno);
+                nlprint("FAILED TO SENDTO \"%s\" (%i)", ports->to_address.un.sun_path, errno);
             } else if (ports->to_address_size == sizeof(struct sockaddr_in)) {
                 char ip[20];
                 inet_ntop(AF_INET, &ports->to_address.in.sin_addr, ip, sizeof(ip));
-                print_info("FAILED TO SENDTO %s:%u (%i)", ip, ports->to_address.in.sin_port, errno);
+                nlprint("FAILED TO SENDTO %s:%u (%i)", ip, ports->to_address.in.sin_port, errno);
             } else {
-                print_info("FAILED TO SENDTO - INVALID SIZE: %zu", ports->to_address_size);
+                nlprint("FAILED TO SENDTO - INVALID SIZE: %zu", ports->to_address_size);
             }
         }
     }
@@ -454,11 +440,11 @@ int open_socket(int local, in_port_t port)
     setsockopt(skt, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
     
     if (bind(skt, (const struct sockaddr *) &sa, sa_size) == -1) {
-        print_info("FAILED TO BIND PORT %u: %i", port, errno);
+        nlprint("FAILED TO BIND PORT %u: %i", port, errno);
         close(skt);
         return -1;
     } else {
-        // print_info("BOUND PORT %u", port);
+        // nlprint("BOUND PORT %u", port);
     }
 
     return skt;
@@ -504,9 +490,9 @@ void *open_relay(void *data)
         frontend_addr_size = sizeof(frontend_addr.in);
     }
 
-    // print_info("ENTERING MAIN LOOP");
+    // nlprint("ENTERING MAIN LOOP");
     while (are_relays_running()) {
-        print_info("STARTED RELAYS");
+        nlprint("STARTED RELAYS");
         relay_ports console_to_frontend = create_ports(from_console, from_frontend, &frontend_addr, frontend_addr_size);
         relay_ports frontend_to_console = create_ports(from_frontend, from_console, (sockaddr_u *) &console_addr, sizeof(struct sockaddr_in));
 
@@ -517,9 +503,9 @@ void *open_relay(void *data)
         pthread_join(a_thread, NULL);
         pthread_join(b_thread, NULL);
 
-        print_info("STOPPED RELAYS");
+        nlprint("STOPPED RELAYS");
 
-        // print_info("RELAY EXITED");
+        // nlprint("RELAY EXITED");
     }
 
     ret = 0;
@@ -570,7 +556,7 @@ void create_all_relays(struct sync_args *args)
         size_t buf_len = sizeof(buf);
         if (wpa_ctrl_recv(args->ctrl, buf, &buf_len) == 0) {
             if (!memcmp(buf, "<3>CTRL-EVENT-DISCONNECTED", 26)) {
-                print_info("Wii U disconnected, attempting to re-connect...");
+                nlprint("Wii U disconnected, attempting to re-connect...");
 
                 // Let client know we lost connection
                 cmd.control_code = VANILLA_PIPE_CC_DISCONNECTED;
@@ -686,7 +672,7 @@ int create_connect_config(const char *filename, unsigned char *bssid, unsigned c
 {   
     FILE *out_file = fopen(filename, "w");
     if (!out_file) {
-        print_info("FAILED TO OPEN OUTPUT CONFIG FILE");
+        nlprint("FAILED TO OPEN OUTPUT CONFIG FILE");
         return VANILLA_ERR_GENERIC;
     }
 
@@ -755,32 +741,32 @@ void *sync_with_console_internal(void *data)
                 goto exit_loop;
             }
 
-            // print_info("SCANNING");
+            // nlprint("SCANNING");
             actual_buf_len = buf_len;
             wpa_ctrl_command(args->ctrl, "SCAN", buf, &actual_buf_len);
 
             if (!memcmp(buf, "FAIL-BUSY", 9)) {
-                //print_info("DEVICE BUSY, RETRYING");
+                //nlprint("DEVICE BUSY, RETRYING");
                 sleep(5);
             } else if (!memcmp(buf, "OK", 2)) {
                 break;
             } else {
-                print_info("UNKNOWN SCAN RESPONSE: %.*s (RETRYING)", actual_buf_len, buf);
+                nlprint("UNKNOWN SCAN RESPONSE: %.*s (RETRYING)", actual_buf_len, buf);
                 sleep(5);
             }
         }
 
-        //print_info("WAITING FOR SCAN RESULTS");
+        //nlprint("WAITING FOR SCAN RESULTS");
         actual_buf_len = buf_len;
         wpa_ctrl_command(args->ctrl, "SCAN_RESULTS", buf, &actual_buf_len);
-        print_info("RECEIVED SCAN RESULTS");
+        nlprint("RECEIVED SCAN RESULTS");
 
         const char *line = strtok(buf, "\n");
         while (line) {
             if (is_interrupted()) goto exit_loop;
 
             if (strstr(line, "WiiU") && strstr(line, "_STA1")) {
-                print_info("FOUND WII U, TESTING WPS PIN");
+                nlprint("FOUND WII U, TESTING WPS PIN");
 
                 // Make copy of bssid for later
                 strncpy(bssid, line, sizeof(bssid));
@@ -808,7 +794,7 @@ void *sync_with_console_internal(void *data)
                         // If we haven't gotten any information yet, wait one second and try again
                         wait_count++;
                         if (wait_count == max_wait) {
-                            print_info("GIVING UP, RETURNING TO SCANNING");
+                            nlprint("GIVING UP, RETURNING TO SCANNING");
                             break;
                         } else {
                             sleep(1);
@@ -822,11 +808,11 @@ void *sync_with_console_internal(void *data)
                     wpa_ctrl_recv(args->ctrl, buf, &actual_buf_len);
                     if (!strstr(buf, "CTRL-EVENT-BSS-ADDED")
                         && !strstr(buf, "CTRL-EVENT-BSS-REMOVED")) {
-                        print_info("CRED RECV: %.*s", buf_len, buf);
+                        nlprint("CRED RECV: %.*s", buf_len, buf);
                     }
 
                     if (!memcmp("<3>WPS-CRED-RECEIVED", buf, 20)) {
-                        print_info("RECEIVED AUTHENTICATION FROM CONSOLE");
+                        nlprint("RECEIVED AUTHENTICATION FROM CONSOLE");
                         cred_received = 1;
                         break;
                     }
@@ -838,7 +824,7 @@ void *sync_with_console_internal(void *data)
 
                     // Tell wpa_supplicant to save config (this seems to be the only way to retrieve the PSK)
                     actual_buf_len = buf_len;
-                    print_info("SAVING CONFIG", actual_buf_len, buf);
+                    nlprint("SAVING CONFIG", actual_buf_len, buf);
                     wpa_ctrl_command(args->ctrl, "SAVE_CONFIG", buf, &actual_buf_len);
 
                     // Retrieve BSSID and PSK from saved config
@@ -864,7 +850,7 @@ void *sync_with_console_internal(void *data)
                         ret = VANILLA_SUCCESS;
                     } else {
                         // TODO: Return error to the frontend
-                        print_info("FAILED TO OPEN INPUT CONFIG FILE TO RETRIEVE PSK");
+                        nlprint("FAILED TO OPEN INPUT CONFIG FILE TO RETRIEVE PSK");
                     }
 
                     goto exit_loop;
@@ -886,7 +872,7 @@ void *do_connect(void *data)
         while (1) {
             while (!wpa_ctrl_pending(args->ctrl)) {
                 sleep(2);
-                print_info("WAITING FOR CONNECTION");
+                nlprint("WAITING FOR CONNECTION");
     
                 if (is_interrupted()) return THREADRESULT(VANILLA_ERR_GENERIC);
             }
@@ -896,7 +882,7 @@ void *do_connect(void *data)
             wpa_ctrl_recv(args->ctrl, buf, &actual_buf_len);
             if (!strstr(buf, "CTRL-EVENT-BSS-ADDED")
                 && !strstr(buf, "CTRL-EVENT-BSS-REMOVED")) {
-                print_info("CONN RECV: %.*s", actual_buf_len, buf);
+                nlprint("CONN RECV: %.*s", actual_buf_len, buf);
             }
     
             if (memcmp(buf, "<3>CTRL-EVENT-CONNECTED", 23) == 0) {
@@ -906,15 +892,15 @@ void *do_connect(void *data)
             if (is_interrupted()) return THREADRESULT(VANILLA_ERR_GENERIC);
         }
     
-        print_info("CONNECTED TO CONSOLE");
+        nlprint("CONNECTED TO CONSOLE");
     
         // Use DHCP on interface
         int r = call_dhcp(args->wireless_interface);
         if (r != VANILLA_SUCCESS) {
-            print_info("FAILED TO RUN DHCP ON %s", args->wireless_interface);
+            nlprint("FAILED TO RUN DHCP ON %s", args->wireless_interface);
             return THREADRESULT(r);
         } else {
-            print_info("DHCP ESTABLISHED");
+            nlprint("DHCP ESTABLISHED");
         }
     
         create_all_relays(args);
@@ -933,7 +919,7 @@ void *vanilla_sync_with_console(void *data)
     wireless_conf_file = get_wireless_authenticate_config_filename();
     config = fopen(wireless_conf_file, "w");
     if (!config) {
-        print_info("FAILED TO WRITE TEMP CONFIG: %s", wireless_conf_file);
+        nlprint("FAILED TO WRITE TEMP CONFIG: %s", wireless_conf_file);
         return THREADRESULT(VANILLA_ERR_GENERIC);
     }
 
@@ -958,14 +944,14 @@ void *vanilla_connect_to_console(void *data)
     return wpa_setup_environment(args);
 }
 
-void vanilla_listen(int local, const char *wireless_interface)
+void pipe_listen(int local, const char *wireless_interface)
 {
     // Ensure local domain sockets can be written to by everyone
     umask(0000);
 
     int skt = open_socket(local, VANILLA_PIPE_CMD_SERVER_PORT);
     if (skt == -1) {
-        pprint("Failed to open server socket\n");
+        nlprint("Failed to open server socket");
         return;
     }
 
@@ -987,7 +973,7 @@ void vanilla_listen(int local, const char *wireless_interface)
 
     pthread_mutex_lock(&main_loop_mutex);
 
-    pprint("READY\n");
+    nlprint("READY");
 
     while (main_loop) {
         pthread_mutex_unlock(&main_loop_mutex);
@@ -1020,24 +1006,24 @@ void vanilla_listen(int local, const char *wireless_interface)
                 // Acknowledge
                 cmd.control_code = VANILLA_PIPE_CC_BIND_ACK;
                 if (sendto(skt, &cmd, sizeof(cmd.control_code), 0, (const struct sockaddr *) &addr, addr_size) == -1) {
-                    print_info("FAILED TO SEND ACK: %i", errno);
+                    nlprint("FAILED TO SEND ACK: %i", errno);
                 }
 
                 pthread_t thread;
                 int thread_ret;
                 if (pthread_create(&thread, NULL, thread_handler, args) != 0) {
-                    print_info("FAILED TO CREATE THREAD");
+                    nlprint("FAILED TO CREATE THREAD");
                     free(args);
                 }
             } else {
                 // Busy
                 cmd.control_code = VANILLA_PIPE_CC_BUSY;
                 if (sendto(skt, &cmd, sizeof(cmd.control_code), 0, (const struct sockaddr *) &addr, addr_size) == -1) {
-                    print_info("FAILED TO SEND BUSY: %i", errno);
+                    nlprint("FAILED TO SEND BUSY: %i", errno);
                 }
             }
         } else if (cmd.control_code == VANILLA_PIPE_CC_UNBIND) {
-            print_info("RECEIVED UNBIND SIGNAL");
+            nlprint("RECEIVED UNBIND SIGNAL");
             interrupt();
         } else if (cmd.control_code == VANILLA_PIPE_CC_QUIT) {
             quit_loop();

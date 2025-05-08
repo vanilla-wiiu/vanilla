@@ -7,7 +7,6 @@
 #include <time.h>
 #include <unistd.h>
 
-#include "status.h"
 #include "vanilla.h"
 
 // TODO: Static variables are undesirable
@@ -15,7 +14,7 @@ int interrupted = 0;
 
 void interrupt_handler(int signum)
 {
-    print_info("INTERRUPT SIGNAL RECEIVED, CANCELLING...");
+    vanilla_log("INTERRUPT SIGNAL RECEIVED, CANCELLING...");
     interrupted = 1;
 }
 

@@ -16,7 +16,6 @@
 #include "gamepad/gamepad.h"
 #include "gamepad/input.h"
 #include "gamepad/video.h"
-#include "status.h"
 #include "util.h"
 #include "vanilla.h"
 
@@ -34,7 +33,7 @@ void *start_event_loop(void *arg)
         int r = WSAStartup(MAKEWORD(2, 2), &wsaData);
         if (r != 0) {
             char buf[100];
-            print_info("Failed to WSAStartup: %i\n", r);
+            vanilla_log("Failed to WSAStartup: %i", r);
             pthread_mutex_unlock(&main_mutex);
             goto exit;
         }

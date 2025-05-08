@@ -4,7 +4,6 @@ add_library(vanilla STATIC
     gamepad/gamepad.c
     gamepad/input.c
     gamepad/video.c
-    status.c
     util.c
     vanilla.c
 )

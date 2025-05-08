@@ -18,7 +18,6 @@
 
 #include "gamepad.h"
 #include "vanilla.h"
-#include "status.h"
 #include "util.h"
 
 typedef struct
@@ -62,7 +61,7 @@ void send_idr_request_to_console(int socket_msg)
 {
     // Make an IDR request to the Wii U?
     unsigned char idr_request[] = {1, 0, 0, 0}; // Undocumented
-    print_info("SENDING IDR");
+    vanilla_log("SENDING IDR");
     send_to_console(socket_msg, idr_request, sizeof(idr_request), PORT_MSG);
 }
 
@@ -89,7 +88,7 @@ void handle_video_packet(gamepad_context_t *ctx, VideoPacket *vp, size_t size, i
     int is_idr = 0;
     for (int i = 0; i < sizeof(vp->extended_header); i++) {
         if (vp->extended_header[i] == 0x80) {
-            // print_info("GOT IDR");
+            // vanilla_log("GOT IDR");
 
             is_idr = 1;
 

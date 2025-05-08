@@ -13,7 +13,6 @@
 #include <assert.h>
 
 #include "gamepad.h"
-#include "status.h"
 #include "vanilla.h"
 #include "util.h"
 
@@ -254,7 +253,7 @@ void send_generic_response(int skt, CmdHeader *response)
 void handle_generic_packet(gamepad_context_t *info, int skt, GenericPacket *request)
 {
     GenericCmdHeader *gen_cmd = &request->generic_cmd_header;
-    print_info("magic: %x, flags: %x, service ID: %u, method ID: %u", gen_cmd->magic_0x7E, gen_cmd->flags, gen_cmd->service_id, gen_cmd->method_id);
+    vanilla_log("magic: %x, flags: %x, service ID: %u, method ID: %u", gen_cmd->magic_0x7E, gen_cmd->flags, gen_cmd->service_id, gen_cmd->method_id);
 
     // Prepare response
     GenericPacket response;
@@ -356,13 +355,13 @@ void handle_generic_packet(gamepad_context_t *info, int skt, GenericPacket *requ
         }
         case METHOD_ID_PERIPHERAL_UPDATE_EEPROM:
         {
-            print_info("5,12 - index: %u, length: %u", response.payload[0], response.payload[1]);
+            vanilla_log("5,12 - index: %u, length: %u", response.payload[0], response.payload[1]);
             response.generic_cmd_header.error_code = 0;
             break;
         }
         case METHOD_ID_PERIPHERAL_SET_REMOCON:
         {
-            print_info("5,24 - str1: %s, str2: %s", response.payload, response.payload + 5);
+            vanilla_log("5,24 - str1: %s, str2: %s", response.payload, response.payload + 5);
             response.generic_cmd_header.error_code = 0;
             break;
         }
@@ -379,14 +378,14 @@ void handle_generic_packet(gamepad_context_t *info, int skt, GenericPacket *requ
 
 void handle_uac_uvc_packet(int skt, UvcUacPacket *request)
 {
-    print_info("uac/uvc - mic_enable: %u, mic_freq: %u, mic_mute: %u, mic_volume: %i, mic_volume2: %i", request->uac_uvc.mic_enable, request->uac_uvc.mic_freq, request->uac_uvc.mic_mute, request->uac_uvc.mic_volume, request->uac_uvc.mic_volume_2);
+    vanilla_log("uac/uvc - mic_enable: %u, mic_freq: %u, mic_mute: %u, mic_volume: %i, mic_volume2: %i", request->uac_uvc.mic_enable, request->uac_uvc.mic_freq, request->uac_uvc.mic_mute, request->uac_uvc.mic_volume, request->uac_uvc.mic_volume_2);
 
     // send_quick_response(skt, &request->cmd_header);
 }
 
 void handle_time_packet(int skt, TimePacket *request)
 {
-    print_info("time - days: %u, padding: %u, seconds: %u", request->time.days_counter, request->time.padding, request->time.seconds_counter);
+    vanilla_log("time - days: %u, padding: %u, seconds: %u", request->time.days_counter, request->time.padding, request->time.seconds_counter);
     
     send_quick_response(skt, &request->cmd_header);
 }
@@ -415,7 +414,7 @@ void handle_command_packet(gamepad_context_t *info, int skt, CmdHeader *request)
             break;
         }
         default:
-            print_info("[Command] Unhandled request command: %u", request->query_type);
+            vanilla_log("[Command] Unhandled request command: %u", request->query_type);
         }
         break;
     case PACKET_TYPE_RESPONSE:
@@ -423,7 +422,7 @@ void handle_command_packet(gamepad_context_t *info, int skt, CmdHeader *request)
         switch (request->query_type)
         {
         default:
-            // print_info("[Command] Unhandled request command: %u", request->query_type);
+            // vanilla_log("[Command] Unhandled request command: %u", request->query_type);
             break;
         }
         break;
@@ -432,7 +431,7 @@ void handle_command_packet(gamepad_context_t *info, int skt, CmdHeader *request)
         // NOTE: Should we do something if we don't get this? e.g. attempt re-sending request/response after some time has passed
         break;
     default:
-        print_info("Unhandled command packet type: %u", request->packet_type);
+        vanilla_log("Unhandled command packet type: %u", request->packet_type);
     }
 }
 

@@ -26,7 +26,6 @@ typedef uint16_t in_port_t;
 #include "video.h"
 
 #include "../pipe/def.h"
-#include "status.h"
 #include "util.h"
 
 static uint32_t SERVER_ADDRESS = 0;
@@ -102,7 +101,7 @@ void send_to_console(int fd, const void *data, size_t data_size, uint16_t port)
 
     ssize_t sent = sendto(fd, data, data_size, 0, (const struct sockaddr *) &addr, addr_size);
     if (sent == -1) {
-        print_info("Failed to send to Wii U socket: fd: %d, port: %d, errno: %i", fd, console_port, skterr());
+        vanilla_log("Failed to send to Wii U socket: fd: %d, port: %d, errno: %i", fd, console_port, skterr());
     }
 }
 
@@ -130,17 +129,17 @@ int create_socket(int *socket_out, in_port_t port)
         
     int skt = socket(domain, SOCK_DGRAM, 0);
     if (skt == -1) {
-        print_info("FAILED TO CREATE SOCKET: %i", skterr());
+        vanilla_log("FAILED TO CREATE SOCKET: %i", skterr());
         return VANILLA_ERR_BAD_SOCKET;
     }
 
     if (bind(skt, (const struct sockaddr *) &addr, addr_size) == -1) {
-        print_info("FAILED TO BIND PORT %u: %i", port, skterr());
+        vanilla_log("FAILED TO BIND PORT %u: %i", port, skterr());
         close(skt);
         return VANILLA_ERR_BAD_SOCKET;
     }
 
-    // print_info("SUCCESSFULLY BOUND SOCKET %i ON PORT %i", skt, port);
+    // vanilla_log("SUCCESSFULLY BOUND SOCKET %i ON PORT %i", skt, port);
     
     (*socket_out) = skt;
 
@@ -161,7 +160,7 @@ int send_pipe_cc(int skt, vanilla_pipe_command_t *cmd, size_t cmd_size, int wait
 
     for (int retries = 0; retries < MAX_PIPE_RETRY; retries++) {
         if (sendto(skt, (const char *) cmd, cmd_size, 0, (const struct sockaddr *) &addr, addr_size) == -1) {
-            print_info("Failed to write control code to socket");
+            vanilla_log("Failed to write control code to socket");
             return 0;
         }
 
@@ -174,7 +173,7 @@ int send_pipe_cc(int skt, vanilla_pipe_command_t *cmd, size_t cmd_size, int wait
             return 1;
         }
 
-        print_info("STILL WAITING FOR REPLY");
+        vanilla_log("STILL WAITING FOR REPLY");
 
         sleep(1);
     }
@@ -201,7 +200,7 @@ int connect_to_backend(int *socket, vanilla_pipe_command_t *cmd, size_t cmd_size
     set_socket_rcvtimeo(pipe_cc_skt, 2000000);
 
     if (!send_pipe_cc(pipe_cc_skt, cmd, cmd_size, 1)) {
-        print_info("FAILED TO BIND TO PIPE");
+        vanilla_log("FAILED TO BIND TO PIPE");
         close(pipe_cc_skt);
         return VANILLA_ERR_PIPE_UNRESPONSIVE;
     }
@@ -318,7 +317,7 @@ void connect_as_gamepad_internal(thread_data_t *data)
 #else
                     if (r != EAGAIN) {
 #endif
-                        print_info("FAILED TO GET CONNECTED STATE: %i", r);
+                        vanilla_log("FAILED TO GET CONNECTED STATE: %i", r);
                         ret = VANILLA_ERR_PIPE_UNRESPONSIVE;
                         break;
                     }
@@ -328,7 +327,7 @@ void connect_as_gamepad_internal(thread_data_t *data)
                     break;
                 }
 
-                print_info("STILL WAITING FOR CONNECTED STATE");
+                vanilla_log("STILL WAITING FOR CONNECTED STATE");
             }
         }
     }
@@ -415,7 +414,7 @@ int push_event(event_loop_t *loop, int type, const void *data, size_t size)
         // Prevent rollover by skipping oldest event if necessary
         if (loop->new_index == loop->used_index + VANILLA_MAX_EVENT_COUNT) {
             vanilla_free_event(&loop->events[loop->used_index % VANILLA_MAX_EVENT_COUNT]);
-            print_info("SKIPPED EVENT TO PREVENT ROLLOVER (%lu > %lu + %lu)", loop->new_index, loop->used_index, VANILLA_MAX_EVENT_COUNT);
+            vanilla_log("SKIPPED EVENT TO PREVENT ROLLOVER (%lu > %lu + %lu)", loop->new_index, loop->used_index, VANILLA_MAX_EVENT_COUNT);
             loop->used_index++;
         }
 
@@ -425,7 +424,7 @@ int push_event(event_loop_t *loop, int type, const void *data, size_t size)
 
         ev->data = get_event_buffer();
         if (!ev->data) {
-            print_info("OUT OF MEMORY FOR NEW EVENTS");
+            vanilla_log("OUT OF MEMORY FOR NEW EVENTS");
             ret = VANILLA_ERR_OUT_OF_MEMORY;
             goto exit;
         }
@@ -438,7 +437,7 @@ int push_event(event_loop_t *loop, int type, const void *data, size_t size)
 
         pthread_cond_broadcast(&loop->waitcond);
     } else {
-        print_info("FAILED TO PUSH EVENT: wanted %lu, only had %lu. This is a bug, please report to developers.\n", size, EVENT_BUFFER_SIZE);
+        vanilla_log("FAILED TO PUSH EVENT: wanted %lu, only had %lu. This is a bug, please report to developers.", size, EVENT_BUFFER_SIZE);
         ret = VANILLA_ERR_INVALID_ARGUMENT;
     }
 
@@ -516,7 +515,7 @@ void init_event_buffer_arena()
         if (!EVENT_BUFFER_ARENA[i]) {
             EVENT_BUFFER_ARENA[i] = malloc(EVENT_BUFFER_SIZE);
         } else {
-            print_info("CRITICAL: Buffer wasn't returned to the arena");
+            vanilla_log("CRITICAL: Buffer wasn't returned to the arena");
         }
     }
 }
@@ -528,7 +527,7 @@ void free_event_buffer_arena()
             free(EVENT_BUFFER_ARENA[i]);
             EVENT_BUFFER_ARENA[i] = NULL;
         } else {
-            print_info("CRITICAL: Buffer wasn't returned to the arena");
+            vanilla_log("CRITICAL: Buffer wasn't returned to the arena");
         }
     }
 }
