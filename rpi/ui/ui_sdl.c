@@ -120,6 +120,10 @@ SDL_GameController *find_valid_controller()
 	for (int i = 0; i < SDL_NumJoysticks(); i++) {
 		SDL_GameController *c = SDL_GameControllerOpen(i);
 		if (c) {
+            // Enable gyro/accelerometer
+            SDL_GameControllerSetSensorEnabled(c, SDL_SENSOR_ACCEL, 1);
+            SDL_GameControllerSetSensorEnabled(c, SDL_SENSOR_GYRO, 1);
+
 			return c;
 		}
 	}
