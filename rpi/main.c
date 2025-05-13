@@ -20,16 +20,13 @@
 
 int SDL_main(int argc, const char **argv)
 {
-    int fs = 0;
-#ifdef ANDROID
-    fs = 1;
-#else
-for (int i = 1; i < argc; i++) {
-    if (!strcmp(argv[i], "-f")) {
-        fs = 1;
+    // Default to full screen unless "-w" is specified
+    int fs = 1;
+    for (int i = 1; i < argc; i++) {
+        if (!strcmp(argv[i], "-w")) {
+            fs = 0;
+        }
     }
-}
-#endif // ANDROID
 
     vanilla_install_logger(vpilog_va);
 

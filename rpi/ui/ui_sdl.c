@@ -43,6 +43,7 @@ typedef struct {
     SDL_Texture *toast_tex;
     struct timeval toast_expiry;
     AVFrame *frame;
+    Uint32 last_mouse_move;
 } vui_sdl_context_t;
 
 static int button_map[SDL_CONTROLLER_BUTTON_MAX];
@@ -202,7 +203,6 @@ int vui_init_sdl(vui_context_t *ctx, int fullscreen)
     SDL_WindowFlags window_flags;
     if (fullscreen) {
         window_flags = SDL_WINDOW_FULLSCREEN;
-        SDL_ShowCursor(0);
     } else {
         window_flags = SDL_WINDOW_RESIZABLE;
     }
@@ -241,6 +241,8 @@ int vui_init_sdl(vui_context_t *ctx, int fullscreen)
     ctx->font_height_handler_data = sdl_ctx;
 
     ctx->text_open_handler = vui_sdl_text_open_handler;
+
+    sdl_ctx->last_mouse_move = 0;
 
     if (TTF_Init()) {
         vpilog("Failed to TTF_Init\n");
@@ -907,6 +909,10 @@ void vui_draw_sdl(vui_context_t *ctx, SDL_Renderer *renderer)
 
         SDL_RenderCopy(renderer, img_tex->texture, 0, &dst);
     }
+
+    if (SDL_GetTicks() > sdl_ctx->last_mouse_move + 2000) {
+        SDL_ShowCursor(0);
+    }
 }
 
 int32_t pack_float(float f)
@@ -991,6 +997,11 @@ int vui_update_sdl(vui_context_t *vui)
                     
                         vui_textedit_set_cursor(vui, vui->active_textedit, new_cursor);
                     }
+                }
+
+                if (ev.type == SDL_MOUSEMOTION && ev.button.button == 0) {
+                    sdl_ctx->last_mouse_move = SDL_GetTicks();
+                    SDL_ShowCursor(1);
                 }
             }
             break;
