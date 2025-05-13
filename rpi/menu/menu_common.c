@@ -121,3 +121,15 @@ int vpi_menu_show_error(vui_context_t *vui, int status, int fade_fglayer, vui_bu
 
     return bglayer;
 }
+
+static void do_quit(vui_context_t *vui, void *v)
+{
+    vui_reset(vui);
+    vui_enable_background(vui, 0);
+    vui_quit(vui);
+}
+
+void vpi_menu_quit_vanilla(vui_context_t *vui)
+{
+    vui_transition_fade_black_in(vui, do_quit, 0);
+}

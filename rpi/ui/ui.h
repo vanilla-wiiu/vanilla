@@ -51,6 +51,7 @@ vui_context_t *vui_alloc(int width, int height);
 void vui_reset(vui_context_t *ctx);
 void vui_free(vui_context_t *ctx);
 void vui_update(vui_context_t *ctx);
+int vui_game_mode_get(vui_context_t *ctx);
 void vui_game_mode_set(vui_context_t *ctx, int enabled);
 int vui_get_font_height(vui_context_t *ctx, vui_font_size_t size);
 void vui_quit(vui_context_t *ctx);

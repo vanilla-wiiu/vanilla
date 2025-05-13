@@ -9,6 +9,7 @@
 
 #include "game/game_decode.h"
 #include "game/game_main.h"
+#include "menu_common.h"
 #include "menu_main.h"
 #include "platform.h"
 
@@ -53,8 +54,13 @@ void vpi_menu_action(vui_context_t *vui, vpi_extra_action_t action)
     }
     case VPI_ACTION_DISCONNECT:
     {
-        // Simulate shutdown
-        vpi_game_set_error(VANILLA_ERR_SHUTDOWN);
+        if (vui_game_mode_get(vui)) {
+            // Simulate shutdown
+            vpi_game_set_error(VANILLA_ERR_SHUTDOWN);
+        } else {
+            // Quit Vanilla entirely
+            vpi_menu_quit_vanilla(vui);
+        }
         break;
     }
     }

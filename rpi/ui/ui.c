@@ -487,6 +487,11 @@ void vui_update(vui_context_t *ctx)
     }
 }
 
+int vui_game_mode_get(vui_context_t *ctx)
+{
+    return ctx->game_mode;
+}
+
 void vui_game_mode_set(vui_context_t *ctx, int enabled)
 {
     ctx->game_mode = enabled;
