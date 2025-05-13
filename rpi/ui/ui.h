@@ -17,6 +17,15 @@ typedef enum {
     VUI_FONT_SIZE_TINY,
 } vui_font_size_t;
 
+typedef enum {
+    VUI_POWERSTATE_ERROR = -1,
+    VUI_POWERSTATE_UNKNOWN,
+    VUI_POWERSTATE_ON_BATTERY,
+    VUI_POWERSTATE_NO_BATTERY,
+    VUI_POWERSTATE_CHARGING,
+    VUI_POWERSTATE_CHARGED
+} vui_power_state_t;
+
 typedef struct {
     float r;
     float g;
@@ -145,5 +154,10 @@ void vui_process_mouseup(vui_context_t *ctx, int x, int y);
 void vui_process_keydown(vui_context_t *ctx, int button);
 void vui_process_keyup(vui_context_t *ctx, int button);
 void vui_vibrate_set(vui_context_t *ctx, uint8_t val);
+
+/**
+ * Power-related functions
+ */
+vui_power_state_t vui_power_state_get(vui_context_t *ctx, int *percent);
 
 #endif // VANILLA_PI_UI_H

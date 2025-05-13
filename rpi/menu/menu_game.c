@@ -12,6 +12,9 @@
 #include "ui/ui_anim.h"
 
 static int status_lbl;
+static struct {
+    int64_t last_power_time;
+} menu_game_ctx;
 
 void back_to_main_menu(vui_context_t *vui, int button, void *v)
 {
@@ -49,6 +52,44 @@ void cancel_connect(vui_context_t *vui, int button, void *v)
     vui_transition_fade_layer_out(vui, layer, vpi_menu_main, 0);
 }
 
+static void update_battery_information(vui_context_t *vui, int64_t time)
+{
+    // Get power information
+    int64_t current_minute = time / (2 * 1000000); // Update every 2 seconds
+    if (menu_game_ctx.last_power_time != current_minute) {
+        int percent;
+        vui_power_state_t power_state = vui_power_state_get(vui, &percent);
+
+        enum VanillaBatteryStatus status = VANILLA_BATTERY_STATUS_UNKNOWN;
+
+        switch (power_state) {
+        case VUI_POWERSTATE_ERROR:
+        case VUI_POWERSTATE_UNKNOWN:
+            // Unknown status
+            status = VANILLA_BATTERY_STATUS_UNKNOWN;
+            break;
+        case VUI_POWERSTATE_NO_BATTERY:
+        case VUI_POWERSTATE_CHARGING:
+        case VUI_POWERSTATE_CHARGED:
+            // Plugged in
+            status = VANILLA_BATTERY_STATUS_CHARGING;
+            break;
+        case VUI_POWERSTATE_ON_BATTERY:
+            // On battery
+            status = (percent < 10) ? VANILLA_BATTERY_STATUS_VERY_LOW :
+                        (percent < 25) ? VANILLA_BATTERY_STATUS_LOW :
+                        (percent < 75) ? VANILLA_BATTERY_STATUS_MEDIUM :
+                        (percent < 95) ? VANILLA_BATTERY_STATUS_HIGH :
+                        VANILLA_BATTERY_STATUS_FULL;
+            break;
+        }
+
+        vanilla_set_battery_status(status);
+        
+        current_minute = menu_game_ctx.last_power_time;
+    }
+}
+
 void vpi_display_update(vui_context_t *vui, int64_t time, void *v)
 {
     int backend_err = vpi_game_error();
@@ -75,6 +116,8 @@ void vpi_display_update(vui_context_t *vui, int64_t time, void *v)
             vanilla_stop();
             show_error(vui, (void*)(intptr_t) backend_err);
         };
+    } else {
+        update_battery_information(vui, time);
     }
 }
 
@@ -85,6 +128,8 @@ void vpi_menu_game_start(vui_context_t *vui, void *v)
     vui_reset(vui);
 
     vui_enable_background(vui, 0);
+
+    menu_game_ctx.last_power_time = 0;
 
     // Set initial values
     vanilla_set_region(vpi_config.region);

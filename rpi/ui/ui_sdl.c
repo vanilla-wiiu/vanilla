@@ -3,6 +3,7 @@
 #include <math.h>
 #include <SDL2/SDL.h>
 #include <SDL_image.h>
+#include <SDL_power.h>
 #include <SDL_ttf.h>
 #include <pthread.h>
 #include <vanilla.h>
@@ -185,6 +186,11 @@ void vui_sdl_text_open_handler(vui_context_t *ctx, int textedit, int open, void 
     }
 }
 
+vui_power_state_t vui_sdl_power_state_handler(int *percent)
+{
+    return (vui_power_state_t) SDL_GetPowerInfo(NULL, percent);
+}
+
 int vui_init_sdl(vui_context_t *ctx, int fullscreen)
 {
     // Initialize SDL
@@ -241,6 +247,8 @@ int vui_init_sdl(vui_context_t *ctx, int fullscreen)
     ctx->font_height_handler_data = sdl_ctx;
 
     ctx->text_open_handler = vui_sdl_text_open_handler;
+
+    ctx->power_state_handler = vui_sdl_power_state_handler;
 
     sdl_ctx->last_mouse_move = 0;
 

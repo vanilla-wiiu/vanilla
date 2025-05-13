@@ -24,6 +24,7 @@ vui_context_t *vui_alloc(int width, int height)
     vui->vibrate_handler = 0;
     vui->font_height_handler = 0;
     vui->text_open_handler = 0;
+    vui->power_state_handler = 0;
     vui->quit = 0;
     vui_reset(vui);
     return vui;
@@ -892,5 +893,17 @@ void vui_process_keyup(vui_context_t *ctx, int button)
     case VANILLA_BTN_B:
         release_button(ctx, 1);
         break;
+    }
+}
+
+vui_power_state_t vui_power_state_get(vui_context_t *ctx, int *percent)
+{
+    if (ctx->power_state_handler) {
+        return ctx->power_state_handler(percent);
+    } else {
+        if (percent) {
+            *percent = -1;
+        }
+        return VUI_POWERSTATE_UNKNOWN;
     }
 }
