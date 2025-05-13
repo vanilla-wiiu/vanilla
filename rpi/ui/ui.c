@@ -860,6 +860,7 @@ void vui_process_keydown(vui_context_t *ctx, int button)
         vui_select_direction(ctx, VUI_DIR_DOWN);
         break;
     case VANILLA_BTN_A:
+    case VANILLA_BTN_PLUS:
         if (ctx->selected_button != -1) {
             press_button(ctx, ctx->selected_button);
         } else if (ctx->button_count == 1) {
