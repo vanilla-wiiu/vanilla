@@ -13,7 +13,7 @@ int main(int argc, const char **argv)
         return 1;
     }
 
-    if (argc != 3) {
+    if (argc < 3) {
         nlprint("vanilla-pipe - brokers a connection between Vanilla and the Wii U");
         nlprint("--------------------------------------------------------------------------------");
         nlprint("");
@@ -37,6 +37,8 @@ int main(int argc, const char **argv)
         nlprint("sockets by a compatible frontend. By choosing '-local' or '-udp', you can");
         nlprint("choose what type of socket to use to best suit the environment.");
         nlprint("");
+        nlprint("External logging can be enabled with '-log <log-file>'.");
+        nlprint("");
 
         return 1;
     }
@@ -44,12 +46,22 @@ int main(int argc, const char **argv)
     int udp_mode = 0;
     int local_mode = 0;
     const char *wireless_interface = 0;
+    const char *log_file = 0;
 
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "-udp")) {
             udp_mode = 1;
         } else if (!strcmp(argv[i], "-local")) {
             local_mode = 1;
+        } else if (!strcmp(argv[i], "-log")) {
+            // Increment index
+            i++;
+            if (i < argc) {
+                log_file = argv[i];
+            } else {
+                nlprint("-log requires an argument");
+                return 1;
+            }
         } else {
             wireless_interface = argv[i];
         }
@@ -65,7 +77,7 @@ int main(int argc, const char **argv)
         return 1;
     }
 
-    pipe_listen(local_mode, wireless_interface);
+    pipe_listen(local_mode, wireless_interface, log_file);
 
     return 0;
 }

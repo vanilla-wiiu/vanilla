@@ -79,6 +79,7 @@ struct relay_info {
 
 #define THREADRESULT(x) ((void *) (uintptr_t) (x))
 
+static const char *ext_logfile = 0;
 void nlprint(const char *fmt, ...)
 {
     va_list args;
@@ -86,6 +87,15 @@ void nlprint(const char *fmt, ...)
 
     vfprintf(stderr, fmt, args);
     fprintf(stderr, "\n");
+
+    if (ext_logfile) {
+        FILE *f = fopen(ext_logfile, "a");
+        if (f) {
+            vfprintf(f, fmt, args);
+            fprintf(f, "\n");
+            fclose(f);
+        }
+    }
 
     va_end(args);
 }
@@ -944,8 +954,11 @@ void *vanilla_connect_to_console(void *data)
     return wpa_setup_environment(args);
 }
 
-void pipe_listen(int local, const char *wireless_interface)
+void pipe_listen(int local, const char *wireless_interface, const char *log_file)
 {
+    // Store reference to log file
+    ext_logfile = log_file;
+
     // Ensure local domain sockets can be written to by everyone
     umask(0000);
 
