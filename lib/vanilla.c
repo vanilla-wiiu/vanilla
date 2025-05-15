@@ -12,6 +12,7 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "gamepad/audio.h"
 #include "gamepad/command.h"
 #include "gamepad/gamepad.h"
 #include "gamepad/input.h"
@@ -231,4 +232,9 @@ size_t vanilla_generate_pps_params(void *data, size_t data_size)
 size_t vanilla_generate_h264_header(void *data, size_t size)
 {
     return generate_h264_header(data, size);
+}
+
+void vanilla_send_audio(const void *data, size_t size)
+{
+    send_audio_packet(data, size);
 }

@@ -38,6 +38,7 @@ typedef struct {
     TTF_Font *sysfont_small;
     TTF_Font *sysfont_tiny;
     SDL_AudioDeviceID audio;
+    SDL_AudioDeviceID mic;
     SDL_GameController *controller;
     SDL_Texture *game_tex;
     int last_shown_toast;
@@ -198,6 +199,11 @@ vui_power_state_t vui_sdl_power_state_handler(int *percent)
     return (vui_power_state_t) SDL_GetPowerInfo(NULL, percent);
 }
 
+void mic_callback(void *userdata, Uint8 *stream, int len)
+{
+    vanilla_send_audio(stream, len);
+}
+
 int vui_init_sdl(vui_context_t *ctx, int fullscreen)
 {
     // Initialize SDL
@@ -233,19 +239,33 @@ int vui_init_sdl(vui_context_t *ctx, int fullscreen)
         return -1;
     }
 
+    // Open audio output device
     SDL_AudioSpec desired = {0};
-	desired.freq = 48000;
-	desired.format = AUDIO_S16LSB;
-	desired.channels = 2;
+    desired.freq = 48000;
+    desired.format = AUDIO_S16LSB;
+    desired.channels = 2;
 
-	sdl_ctx->audio = SDL_OpenAudioDevice(NULL, 0, &desired, NULL, 0);
-	if (sdl_ctx->audio) {
-		SDL_PauseAudioDevice(sdl_ctx->audio, 0);
-        
+    sdl_ctx->audio = SDL_OpenAudioDevice(NULL, 0, &desired, NULL, 0);
+    if (sdl_ctx->audio) {
+        SDL_PauseAudioDevice(sdl_ctx->audio, 0);
+
         ctx->audio_handler = vui_sdl_audio_handler;
         ctx->audio_handler_data = sdl_ctx;
-	} else {
-		vpilog("Failed to open audio device\n");
+    } else {
+        vpilog("Failed to open audio device\n");
+    }
+
+    // Open audio input device
+    SDL_AudioSpec mic_desired = {0};
+    mic_desired.freq = 16000;
+    mic_desired.format = AUDIO_S16LSB;
+    mic_desired.callback = mic_callback;
+    mic_desired.channels = 1;
+    sdl_ctx->mic = SDL_OpenAudioDevice(NULL, 1, &mic_desired, NULL, 0);
+    if (sdl_ctx->mic) {
+        SDL_PauseAudioDevice(sdl_ctx->mic, 0);
+    } else {
+		vpilog("Failed to open microphone device\n");
 	}
 
     ctx->vibrate_handler = vui_sdl_vibrate_handler;
@@ -554,14 +574,14 @@ void vui_sdl_draw_button(vui_context_t *vui, vui_sdl_context_t *sdl_ctx, vui_but
 
     text_color.r = text_color.g = text_color.b = 0x40;
     text_color.a = 0xFF;
-    
+
     // Draw text
     if (btn->text[0]) {
         SDL_Surface *surface = TTF_RenderUTF8_Blended(text_font, btn->text, text_color);
         SDL_Texture *texture = SDL_CreateTextureFromSurface(sdl_ctx->renderer, surface);
 
         SDL_Rect text_rect;
-        
+
         text_rect.w = surface->w;
         text_rect.h = surface->h;
 
@@ -655,7 +675,7 @@ void vui_draw_sdl(vui_context_t *ctx, SDL_Renderer *renderer)
             SDL_RenderClear(renderer);
         }
     }
-    
+
     // Draw rects
     for (int i = 0; i < ctx->rect_count; i++) {
         vui_rect_priv_t *rect = &ctx->rects[i];
@@ -705,7 +725,7 @@ void vui_draw_sdl(vui_context_t *ctx, SDL_Renderer *renderer)
             dr.y = lbl->y;
             dr.w = sr.w;
             dr.h = sr.h;
-            
+
             SDL_Texture *texture = SDL_CreateTextureFromSurface(renderer, surface);
             SDL_RenderCopy(renderer, texture, &sr, &dr);
             SDL_DestroyTexture(texture);
@@ -747,24 +767,24 @@ void vui_draw_sdl(vui_context_t *ctx, SDL_Renderer *renderer)
         c.r = c.g = c.b = c.a = 0xFF;
 
         TTF_Font *font = get_font(sdl_ctx, edit->size);
-        
+
         if (edit->text[0]) {
             SDL_Surface *surface = TTF_RenderUTF8_Blended(font, edit->text, c);
             SDL_Texture *texture = SDL_CreateTextureFromSurface(sdl_ctx->renderer, surface);
-    
+
             SDL_Rect src;
             src.x = src.y = 0;
             src.w = surface->w;
             src.h = surface->h;
-    
+
             if (src.w > rect.w) {
                 src.w = rect.w;
             } else {
                 rect.w = src.w;
             }
-    
+
             SDL_RenderCopy(renderer, texture, &src, &rect);
-    
+
             SDL_FreeSurface(surface);
             SDL_DestroyTexture(texture);
         }
@@ -775,7 +795,7 @@ void vui_draw_sdl(vui_context_t *ctx, SDL_Renderer *renderer)
             time_t diff = (now.tv_sec - ctx->active_textedit_time.tv_sec) * 1000000 + (now.tv_usec - ctx->active_textedit_time.tv_usec);
             if ((diff % 1000000) < 500000) {
                 char tmp_ate[MAX_BUTTON_TEXT];
-                
+
                 char *copy_end = edit->text;
                 for (int i = 0; i < edit->cursor; i++) {
                     copy_end = vui_utf8_advance(copy_end);
@@ -784,11 +804,11 @@ void vui_draw_sdl(vui_context_t *ctx, SDL_Renderer *renderer)
                 size_t len = copy_end - edit->text;
                 strncpy(tmp_ate, edit->text, len);
                 tmp_ate[len] = 0;
-    
+
                 int tw;
                 TTF_SizeUTF8(font, tmp_ate, &tw, 0);
                 int cursor_x = rect.x + tw;
-                
+
                 SDL_SetRenderDrawColor(renderer, c.r, c.g, c.b, c.a);
                 SDL_RenderDrawLine(renderer, cursor_x, rect.y, cursor_x, rect.y + rect.h);
             }
@@ -837,7 +857,7 @@ void vui_draw_sdl(vui_context_t *ctx, SDL_Renderer *renderer)
         rect.y = btn->sy;
         rect.w = btn->sw;
         rect.h = btn->sh;
-        
+
         uint8_t f = (btn->enabled ? 1 : 0.5f) * 0xFF;
         SDL_SetTextureAlphaMod(btn_tex->texture, f);
         SDL_SetTextureColorMod(btn_tex->texture, f, f, f);
@@ -879,7 +899,7 @@ void vui_draw_sdl(vui_context_t *ctx, SDL_Renderer *renderer)
 
             r.w = btn_select_short_sz;
             r.h = btn_select_long_sz;
-            
+
             r.y = tly;
             SDL_RenderFillRect(renderer, &r);
 
@@ -973,7 +993,7 @@ int vui_update_sdl(vui_context_t *vui)
                         vui_process_mousedown(vui, tr_x, tr_y);
                     else if (ev.type == SDL_MOUSEBUTTONUP)
                         vui_process_mouseup(vui, tr_x, tr_y);
-                    
+
                     if (vui->active_textedit != -1 && (ev.type == SDL_MOUSEBUTTONDOWN || ev.type == SDL_MOUSEMOTION) && ev.button.button == SDL_BUTTON_LEFT) {
                         // Put cursor in correct position
                         vui_textedit_t *edit = &vui->textedits[vui->active_textedit];
@@ -988,7 +1008,7 @@ int vui_update_sdl(vui_context_t *vui)
                         char *src = edit->text;
                         while (*src != 0) {
                             src = vui_utf8_advance(src);
-                            
+
                             size_t len = src - edit->text;
                             strncpy(tmp, edit->text, len);
                             tmp[len] = 0;
@@ -1004,7 +1024,7 @@ int vui_update_sdl(vui_context_t *vui)
                                 break;
                             }
                         }
-                    
+
                         vui_textedit_set_cursor(vui, vui->active_textedit, new_cursor);
                     }
                 }
@@ -1157,7 +1177,7 @@ int vui_update_sdl(vui_context_t *vui)
 			av_frame_move_ref(sdl_ctx->frame, vpi_present_frame);
 		}
 		pthread_mutex_unlock(&vpi_decoding_mutex);
-		
+
 		if (sdl_ctx->frame->data[0]) {
 			SDL_UpdateYUVTexture(sdl_ctx->game_tex, NULL,
 								 sdl_ctx->frame->data[0], sdl_ctx->frame->linesize[0],

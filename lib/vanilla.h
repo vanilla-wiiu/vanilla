@@ -193,6 +193,11 @@ void vanilla_set_battery_status(int battery_status);
  */
 size_t vanilla_generate_h264_header(void *data, size_t size);
 
+/**
+ * Send microphone audio
+ */
+void vanilla_send_audio(const void *data, size_t size);
+
 #if defined(__cplusplus)
 }
 #endif

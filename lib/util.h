@@ -24,4 +24,6 @@ unsigned int reverse_bits(unsigned int b, int bit_count);
 
 uint16_t crc16(const void* data, size_t len);
 
+void print_hex(const void *data, size_t len);
+
 #endif // VANILLA_UTIL_H

@@ -325,6 +325,14 @@ void handle_generic_packet(gamepad_context_t *info, int skt, GenericPacket *requ
             }
             break;
         }
+        case 10:
+            response.generic_cmd_header.error_code = 0;
+            break;
+        case 11:
+            response.payload[0] = 0;
+            response.generic_cmd_header.payload_size = htons(1);
+            response.generic_cmd_header.error_code = 0;
+            break;
         }
         break;
     case SERVICE_ID_PERIPHERAL:
