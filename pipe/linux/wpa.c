@@ -67,6 +67,8 @@ struct sync_args {
     int skt;
     sockaddr_u client;
     size_t client_size;
+    sockaddr_u cmd_client;
+    size_t cmd_client_size;
 };
 
 struct relay_info {
@@ -223,7 +225,7 @@ void *wpa_setup_environment(void *data)
     interface.driver = "nl80211";
     interface.ifname = args->wireless_interface;
     interface.confname = args->wireless_config;
-    
+
     struct wpa_global *wpa = wpa_supplicant_init(&params);
     if (!wpa) {
         nlprint("FAILED TO INIT WPA SUPPLICANT");
@@ -329,7 +331,7 @@ void dhcp_callback(const char *type, char **env, void *data)
 
         // Send request
         nl_send_auto_complete(nl, msg);
-        
+
         // Cleanup
         nlmsg_free(msg);
         rtnl_addr_put(ra);
@@ -359,7 +361,7 @@ int call_dhcp(const char *network_interface)
         nlprint("FAILED TO ALLOC NL_SOCK");
         goto exit;
     }
-    
+
     int nlr = nl_connect(nl, NETLINK_ROUTE);
     if (nlr < 0) {
         nlprint("FAILED TO CONNECT NL: %i", nlr);
@@ -448,7 +450,7 @@ int open_socket(int local, in_port_t port)
     struct timeval tv = {0};
     tv.tv_usec = 250000;
     setsockopt(skt, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
-    
+
     if (bind(skt, (const struct sockaddr *) &sa, sa_size) == -1) {
         nlprint("FAILED TO BIND PORT %u: %i", port, errno);
         close(skt);
@@ -540,7 +542,7 @@ void create_all_relays(struct sync_args *args)
     vid_info.local = aud_info.local = msg_info.local = cmd_info.local = hid_info.local = args->local;
     vid_info.client = aud_info.client = msg_info.client = cmd_info.client = hid_info.client = args->client;
     vid_info.client_size = aud_info.client_size = msg_info.client_size = cmd_info.client_size = hid_info.client_size = args->client_size;
-    
+
     vid_info.port = PORT_VID;
     aud_info.port = PORT_AUD;
     msg_info.port = PORT_MSG;
@@ -559,7 +561,7 @@ void create_all_relays(struct sync_args *args)
     // Notify client that we are connected
     vanilla_pipe_command_t cmd;
     cmd.control_code = VANILLA_PIPE_CC_CONNECTED;
-    sendto(args->skt, &cmd, sizeof(cmd.control_code), 0, (const struct sockaddr *) &args->client, args->client_size);
+    sendto(args->skt, &cmd, sizeof(cmd.control_code), 0, (const struct sockaddr *) &args->cmd_client, args->cmd_client_size);
 
     while (!is_interrupted()) {
         char buf[1024];
@@ -570,7 +572,7 @@ void create_all_relays(struct sync_args *args)
 
                 // Let client know we lost connection
                 cmd.control_code = VANILLA_PIPE_CC_DISCONNECTED;
-                sendto(args->skt, &cmd, sizeof(cmd.control_code), 0, (const struct sockaddr *) &args->client, args->client_size);
+                sendto(args->skt, &cmd, sizeof(cmd.control_code), 0, (const struct sockaddr *) &args->cmd_client, args->cmd_client_size);
 
                 break;
             }
@@ -596,14 +598,14 @@ void *thread_handler(void *data)
     pthread_mutex_unlock(&running_mutex);
 
     void *ret = args->start_routine(data);
-    
+
     free(args);
 
     interrupt();
 
     // Locked by calling thread
     pthread_mutex_unlock(&action_mutex);
-    
+
     return ret;
 }
 
@@ -679,7 +681,7 @@ void bytes_to_str(unsigned char *data, size_t data_size, const char *separator, 
 }
 
 int create_connect_config(const char *filename, unsigned char *bssid, unsigned char *psk)
-{   
+{
     FILE *out_file = fopen(filename, "w");
     if (!out_file) {
         nlprint("FAILED TO OPEN OUTPUT CONFIG FILE");
@@ -703,7 +705,7 @@ int create_connect_config(const char *filename, unsigned char *bssid, unsigned c
         "	pbss=2\n"
         "}\n"
         "\n";
-    
+
     char bssid_str[18];
     char ssid_str[17];
     char psk_str[65];
@@ -724,7 +726,7 @@ ssize_t send_ping_to_client(struct sync_args *args)
 {
     vanilla_pipe_command_t cmd;
     cmd.control_code = VANILLA_PIPE_CC_PING;
-    return sendto(args->skt, &cmd, sizeof(cmd.control_code), 0, (const struct sockaddr *) &args->client, args->client_size);
+    return sendto(args->skt, &cmd, sizeof(cmd.control_code), 0, (const struct sockaddr *) &args->cmd_client, args->cmd_client_size);
 }
 
 void *sync_with_console_internal(void *data)
@@ -855,7 +857,7 @@ void *sync_with_console_internal(void *data)
                         // Convert BSSID from string to bytes
                         str_to_bytes(bssid, 1, cmd.connection.bssid.bssid, sizeof(cmd.connection.bssid.bssid));
 
-                        sendto(args->skt, &cmd, sizeof(cmd.control_code) + sizeof(cmd.connection), 0, (const struct sockaddr *) &args->client, args->client_size);
+                        sendto(args->skt, &cmd, sizeof(cmd.control_code) + sizeof(cmd.connection), 0, (const struct sockaddr *) &args->cmd_client, args->cmd_client_size);
 
                         ret = VANILLA_SUCCESS;
                     } else {
@@ -883,10 +885,10 @@ void *do_connect(void *data)
             while (!wpa_ctrl_pending(args->ctrl)) {
                 sleep(2);
                 nlprint("WAITING FOR CONNECTION");
-    
+
                 if (is_interrupted()) return THREADRESULT(VANILLA_ERR_GENERIC);
             }
-    
+
             char buf[1024];
             size_t actual_buf_len = sizeof(buf);
             wpa_ctrl_recv(args->ctrl, buf, &actual_buf_len);
@@ -894,16 +896,20 @@ void *do_connect(void *data)
                 && !strstr(buf, "CTRL-EVENT-BSS-REMOVED")) {
                 nlprint("CONN RECV: %.*s", actual_buf_len, buf);
             }
-    
+
             if (memcmp(buf, "<3>CTRL-EVENT-CONNECTED", 23) == 0) {
                 break;
             }
-    
+
+			// if (memcmp(buf, "<3>CTRL-EVENT-WPA-ASSOC-REJECT") == 0) {
+				// TODO: Return result that informs user that their hardware is incompatible
+			// }
+
             if (is_interrupted()) return THREADRESULT(VANILLA_ERR_GENERIC);
         }
-    
+
         nlprint("CONNECTED TO CONSOLE");
-    
+
         // Use DHCP on interface
         int r = call_dhcp(args->wireless_interface);
         if (r != VANILLA_SUCCESS) {
@@ -912,7 +918,7 @@ void *do_connect(void *data)
         } else {
             nlprint("DHCP ESTABLISHED");
         }
-    
+
         create_all_relays(args);
     }
 
@@ -998,7 +1004,7 @@ void pipe_listen(int local, const char *wireless_interface, const char *log_file
             goto repeat_loop;
         }
 
-        if (cmd.control_code == VANILLA_PIPE_CC_SYNC || cmd.control_code == VANILLA_PIPE_CC_CONNECT) {
+        if (cmd.control_code == VANILLA_PIPE_CC_SYNC || cmd.control_code == VANILLA_PIPE_CC_CONNECT || cmd.control_code == VANILLA_PIPE_CC_PASSTHRU) {
             if (pthread_mutex_trylock(&action_mutex) == 0) {
                 struct sync_args *args = malloc(sizeof(struct sync_args));
                 args->wireless_interface = wireless_interface;
@@ -1006,6 +1012,8 @@ void pipe_listen(int local, const char *wireless_interface, const char *log_file
                 args->skt = skt;
                 args->client = addr;
                 args->client_size = addr_size;
+				args->cmd_client = addr;
+				args->cmd_client_size = addr_size;
 
                 if (cmd.control_code == VANILLA_PIPE_CC_SYNC) {
                     args->code = ntohs(cmd.sync.code);
@@ -1014,8 +1022,15 @@ void pipe_listen(int local, const char *wireless_interface, const char *log_file
                     memcpy(args->bssid, cmd.connection.bssid.bssid, sizeof(cmd.connection.bssid.bssid));
                     memcpy(args->psk, cmd.connection.psk.psk, sizeof(cmd.connection.psk.psk));
                     args->start_routine = vanilla_connect_to_console;
+
+					if (cmd.control_code == VANILLA_PIPE_CC_PASSTHRU) {
+						// Pass to real gamepad on the network whose IP is 192.168.1.11
+						args->client.in.sin_family = AF_INET;
+						args->client.in.sin_addr.s_addr = inet_addr("192.168.1.11");
+						args->client_size = sizeof(struct sockaddr_in);
+					}
                 }
-            
+
                 // Acknowledge
                 cmd.control_code = VANILLA_PIPE_CC_BIND_ACK;
                 if (sendto(skt, &cmd, sizeof(cmd.control_code), 0, (const struct sockaddr *) &addr, addr_size) == -1) {
