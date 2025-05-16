@@ -995,7 +995,7 @@ void pipe_listen(int local, const char *wireless_interface, const char *log_file
         ssize_t r = recvfrom(skt, &cmd, sizeof(cmd), 0, (struct sockaddr *) &addr, &addr_size);
         // ssize_t r = read(skt, &cmd, sizeof(cmd));
         if (r <= 0) {
-            continue;
+            goto repeat_loop;
         }
 
         if (cmd.control_code == VANILLA_PIPE_CC_SYNC || cmd.control_code == VANILLA_PIPE_CC_CONNECT) {

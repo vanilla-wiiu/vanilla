@@ -54,4 +54,8 @@ void free_event_buffer_arena();
 void *get_event_buffer();
 void release_event_buffer(void *buffer);
 
+void record_start();
+void record_packet(uint16_t port, const void *data, size_t size);
+void record_stop();
+
 #endif // VANILLA_GAMEPAD_H

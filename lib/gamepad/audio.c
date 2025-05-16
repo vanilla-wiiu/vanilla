@@ -55,7 +55,7 @@ int send_audio_packet(const void *data, size_t len)
     }
 
     pthread_mutex_unlock(&queued_audio_mutex);
-    
+
     return VANILLA_SUCCESS;
 }
 
@@ -66,7 +66,7 @@ static void handle_queued_audio(gamepad_context_t *ctx, int seq_id)
     // Initialize payload size to zero
     const size_t MIC_PAYLOAD_SIZE = 512;
     ap.payload_size = 0;
-    
+
     // Lock mutex
     pthread_mutex_lock(&queued_audio_mutex);
 
@@ -179,12 +179,13 @@ void *listen_audio(void *x)
     do {
         size = recv(info->socket_aud, data, sizeof(data), 0);
         if (size > 0) {
+			record_packet(PORT_AUD, data, sizeof(data));
             handle_audio_packet(info, data, size);
         }
     } while (!is_interrupted());
 
     pthread_mutex_destroy(&queued_audio_mutex);
-    
+
     pthread_exit(NULL);
 
     return NULL;

@@ -176,9 +176,9 @@ void vanilla_request_idr();
 
 /**
  * Sets the region Vanilla should present itself to the console
- * 
+ *
  * The gamepad is region locked and the console will complain if the gamepad doesn't match.
- * 
+ *
  * Set to a member of the VanillaRegion enum.
  */
 void vanilla_set_region(int region);
@@ -197,6 +197,16 @@ size_t vanilla_generate_h264_header(void *data, size_t size);
  * Send microphone audio
  */
 void vanilla_send_audio(const void *data, size_t size);
+
+/**
+ * Start dumping packets
+ */
+void vanilla_dump_start();
+
+/**
+ * Stop dumping packets
+ */
+void vanilla_dump_stop();
 
 #if defined(__cplusplus)
 }
