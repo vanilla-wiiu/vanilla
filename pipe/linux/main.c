@@ -84,7 +84,7 @@ int main(int argc, const char **argv)
         return 1;
     }
 
-    if (!wireless_interface) {
+    if (!wireless_interface && !playback_file) {
         nlprint("Must identify a wireless interface to use");
         return 1;
     }

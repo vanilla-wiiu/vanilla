@@ -983,6 +983,8 @@ void *do_playback(void *data)
 	int64_t timestamp;
 	char buffer[4096];
 
+	nlprint("PLAYBACK STARTED");
+
 	while (!is_interrupted()) {
 		if (!waiting) {
 			// Read next timestamp
