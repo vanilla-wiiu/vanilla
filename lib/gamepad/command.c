@@ -333,7 +333,7 @@ void handle_generic_packet(gamepad_context_t *info, int skt, GenericPacket *requ
         {
             memcpy(&response.payload[0], uic_firmware_version, 4);
             memcpy(&response.payload[4], eeprom_bytes, 768);
-            
+
             EEPROM *e = (EEPROM *)&response.payload[4];
 
             e->region = current_region;
@@ -386,7 +386,7 @@ void handle_uac_uvc_packet(int skt, UvcUacPacket *request)
 void handle_time_packet(int skt, TimePacket *request)
 {
     vanilla_log("time - days: %u, padding: %u, seconds: %u", request->time.days_counter, request->time.padding, request->time.seconds_counter);
-    
+
     send_quick_response(skt, &request->cmd_header);
 }
 
@@ -447,6 +447,7 @@ void *listen_command(void *x)
         size = recv(info->socket_cmd, data, sizeof(data), 0);
         if (size > 0) {
             CmdHeader *header = (CmdHeader *)data;
+			record_packet(PORT_CMD, data, sizeof(data));
             handle_command_packet(info, info->socket_cmd, header);
         }
     } while (!is_interrupted());
