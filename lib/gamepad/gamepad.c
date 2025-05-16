@@ -536,15 +536,13 @@ void free_event_buffer_arena()
     }
 }
 
-static void record_filename_for_port(char *buffer, size_t size, uint16_t port)
-{
-	snprintf(buffer, size, "/tmp/vanilla_record_%u.bin", port);
-	buffer[size-1] = 0; // Ensure null terminator
-}
+static const char *dump_filename = "/tmp/vanilla_dump.bin";
 
 void record_start()
 {
 	pthread_mutex_lock(&record_mutex);
+
+	unlink(dump_filename);
 
 	record_active = 1;
 	gettimeofday(&record_start_time, 0);
@@ -559,15 +557,14 @@ void record_packet(uint16_t port, const void *data, size_t size)
 	pthread_mutex_lock(&record_mutex);
 
 	if (record_active) {
-		char buf[512];
-		record_filename_for_port(buf, sizeof(buf), port);
-
-		FILE *f = fopen(buf, "ab");
+		FILE *f = fopen(dump_filename, "ab");
 		struct timeval now;
 		gettimeofday(&now, 0);
 
 		int64_t us = (now.tv_sec - record_start_time.tv_sec) * 1000000 + (now.tv_usec - record_start_time.tv_usec);
 		fwrite(&us, sizeof(us), 1, f);
+
+		fwrite(&port, sizeof(port), 1, f);
 
 		uint64_t aligned_size = size;
 		fwrite(&aligned_size, sizeof(aligned_size), 1, f);

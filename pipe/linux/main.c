@@ -39,6 +39,8 @@ int main(int argc, const char **argv)
         nlprint("");
         nlprint("External logging can be enabled with '-log <log-file>'.");
         nlprint("");
+        nlprint("Playback of dumped data can be enabled with '-playback <dump-file>'.");
+        nlprint("");
 
         return 1;
     }
@@ -47,12 +49,22 @@ int main(int argc, const char **argv)
     int local_mode = 0;
     const char *wireless_interface = 0;
     const char *log_file = 0;
+	const char *playback_file = 0;
 
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "-udp")) {
             udp_mode = 1;
         } else if (!strcmp(argv[i], "-local")) {
             local_mode = 1;
+        } else if (!strcmp(argv[i], "-playback")) {
+            // Increment index
+            i++;
+            if (i < argc) {
+                playback_file = argv[i];
+            } else {
+                nlprint("-playback requires an argument");
+                return 1;
+            }
         } else if (!strcmp(argv[i], "-log")) {
             // Increment index
             i++;
@@ -77,7 +89,7 @@ int main(int argc, const char **argv)
         return 1;
     }
 
-    pipe_listen(local_mode, wireless_interface, log_file);
+    pipe_listen(local_mode, wireless_interface, log_file, playback_file);
 
     return 0;
 }
