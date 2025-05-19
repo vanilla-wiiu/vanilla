@@ -179,7 +179,6 @@ void *listen_audio(void *x)
     do {
         size = recv(info->socket_aud, data, sizeof(data), 0);
         if (size > 0) {
-			record_packet(PORT_AUD, data, sizeof(data));
             handle_audio_packet(info, data, size);
         }
     } while (!is_interrupted());

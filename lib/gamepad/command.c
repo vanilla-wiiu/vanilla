@@ -455,7 +455,6 @@ void *listen_command(void *x)
         size = recv(info->socket_cmd, data, sizeof(data), 0);
         if (size > 0) {
             CmdHeader *header = (CmdHeader *)data;
-			record_packet(PORT_CMD, data, sizeof(data));
             handle_command_packet(info, info->socket_cmd, header);
         }
     } while (!is_interrupted());

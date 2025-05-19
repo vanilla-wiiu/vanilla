@@ -39,6 +39,8 @@ pthread_mutex_t running_mutex;
 pthread_mutex_t main_loop_mutex;
 pthread_mutex_t action_mutex;
 pthread_mutex_t relay_mutex;
+pthread_mutex_t dump_mutex = PTHREAD_MUTEX_INITIALIZER;
+struct timeval dump_start_time;
 int running = 0;
 int main_loop = 0;
 int relay_running = 0;
@@ -53,6 +55,8 @@ typedef struct {
     int to_socket;
     sockaddr_u to_address;
     size_t to_address_size;
+	FILE *dump_file;
+	uint16_t port;
 } relay_ports;
 
 struct sync_args {
@@ -68,6 +72,7 @@ struct sync_args {
     sockaddr_u client;
     size_t client_size;
 	const char *playback_file;
+	const char *dump_file;
 };
 
 struct relay_info {
@@ -76,6 +81,7 @@ struct relay_info {
     sockaddr_u client;
     size_t client_size;
     in_port_t port;
+	FILE *dump_file;
 };
 
 #define THREADRESULT(x) ((void *) (uintptr_t) (x))
@@ -387,6 +393,26 @@ exit:
     return ret;
 }
 
+void dump_data(FILE *f, uint16_t port, const void *data, size_t size)
+{
+	pthread_mutex_lock(&dump_mutex);
+
+	struct timeval now;
+	gettimeofday(&now, 0);
+
+	int64_t us = (now.tv_sec - dump_start_time.tv_sec) * 1000000 + (now.tv_usec - dump_start_time.tv_usec);
+	fwrite(&us, sizeof(us), 1, f);
+
+	fwrite(&port, sizeof(port), 1, f);
+
+	uint64_t aligned_size = size;
+	fwrite(&aligned_size, sizeof(aligned_size), 1, f);
+
+	fwrite(data, size, 1, f);
+
+	pthread_mutex_unlock(&dump_mutex);
+}
+
 void *do_relay(void *data)
 {
     relay_ports *ports = (relay_ports *) data;
@@ -397,6 +423,10 @@ void *do_relay(void *data)
         if (read_size <= 0) {
             continue;
         }
+
+		if (ports->dump_file) {
+			dump_data(ports->dump_file, ports->port, buf, read_size);
+		}
 
         if (sendto(ports->to_socket, buf, read_size, 0, (const struct sockaddr *) &ports->to_address, ports->to_address_size) == -1) {
             if (ports->to_address_size == sizeof(struct sockaddr_un)) {
@@ -513,6 +543,10 @@ void *open_relay(void *data)
         relay_ports console_to_frontend = create_ports(from_console, from_frontend, &frontend_addr, frontend_addr_size);
         relay_ports frontend_to_console = create_ports(from_frontend, from_console, (sockaddr_u *) &console_addr, sizeof(struct sockaddr_in));
 
+		frontend_to_console.dump_file = 0;
+		console_to_frontend.dump_file = info->dump_file;
+		console_to_frontend.port = port;
+
         pthread_t a_thread, b_thread;
         pthread_create(&a_thread, NULL, do_relay, &console_to_frontend);
         pthread_create(&b_thread, NULL, do_relay, &frontend_to_console);
@@ -542,11 +576,21 @@ void create_all_relays(struct sync_args *args)
     pthread_t vid_thread, aud_thread, msg_thread, cmd_thread, hid_thread;
     struct relay_info vid_info, aud_info, msg_info, cmd_info, hid_info;
 
+	FILE *dump = 0;
+	if (args->dump_file) {
+		dump = fopen(args->dump_file, "wb");
+		gettimeofday(&dump_start_time, 0);
+		if (!dump) {
+			nlprint("FAILED TO OPEN DUMP FILE \"%s\"", args->dump_file);
+		}
+	}
+
     // Set common info for all
     vid_info.wireless_interface = aud_info.wireless_interface = msg_info.wireless_interface = cmd_info.wireless_interface = hid_info.wireless_interface = args->wireless_interface;
     vid_info.local = aud_info.local = msg_info.local = cmd_info.local = hid_info.local = args->local;
     vid_info.client = aud_info.client = msg_info.client = cmd_info.client = hid_info.client = args->client;
     vid_info.client_size = aud_info.client_size = msg_info.client_size = cmd_info.client_size = hid_info.client_size = args->client_size;
+    vid_info.dump_file = aud_info.dump_file = msg_info.dump_file = cmd_info.dump_file = hid_info.dump_file = dump;
 
     vid_info.port = PORT_VID;
     aud_info.port = PORT_AUD;
@@ -592,6 +636,10 @@ void create_all_relays(struct sync_args *args)
     pthread_join(msg_thread, NULL);
     pthread_join(cmd_thread, NULL);
     pthread_join(hid_thread, NULL);
+
+	if (dump) {
+		fclose(dump);
+	}
 }
 
 void *thread_handler(void *data)
@@ -989,6 +1037,9 @@ void *do_playback(void *data)
 		if (!waiting) {
 			// Read next timestamp
 			fread(&timestamp, sizeof(timestamp), 1, f);
+			if (fread == 0) {
+				break;
+			}
 		}
 
 		struct timeval now;
@@ -1010,11 +1061,26 @@ void *do_playback(void *data)
 			// Read data into buffer
 			fread(buffer, size, 1, f);
 
-			// Send data to gamepad
-			size_t frontend_addr_size;
-			sockaddr_u frontend_addr = get_frontend_sockaddr(args->local, args->client, port, &frontend_addr_size);
-			if (sendto(args->skt, buffer, size, 0, (const struct sockaddr *) &frontend_addr, frontend_addr_size) == -1) {
+			// Send data to frontend
+			// size_t frontend_addr_size;
+			// sockaddr_u frontend_addr = get_frontend_sockaddr(args->local, args->client, port, &frontend_addr_size);
+			// ssize_t sendret = sendto(args->skt, buffer, size, 0, (const struct sockaddr *) &frontend_addr, frontend_addr_size);
+			// if (sendret == -1) {
+			// 	nlprint("Failed to send playback packet to port %u", port);
+			// } else {
+			// 	nlprint("SENT %zi BYTES TO PORT %u", sendret, port);
+			// }
+
+			// Send data to frontend
+			struct sockaddr_in in = {0};
+			in.sin_family = AF_INET;
+			in.sin_port = htons(port);
+			in.sin_addr.s_addr = inet_addr("192.168.1.11");
+			ssize_t sendret = sendto(args->skt, buffer, size, 0, (const struct sockaddr *) &in, sizeof(in));
+			if (sendret == -1) {
 				nlprint("Failed to send playback packet to port %u", port);
+			} else {
+				nlprint("SENT %zi BYTES TO PORT %u", sendret, port);
 			}
 		} else {
 			waiting = 1;
@@ -1024,7 +1090,7 @@ void *do_playback(void *data)
 	return THREADRESULT(VANILLA_SUCCESS);
 }
 
-void pipe_listen(int local, const char *wireless_interface, const char *log_file, const char *playback_file)
+void pipe_listen(int local, const char *wireless_interface, const char *log_file, const char *playback_file, const char *dump_file)
 {
     // Store reference to log file
     ext_logfile = log_file;
@@ -1068,7 +1134,13 @@ void pipe_listen(int local, const char *wireless_interface, const char *log_file
             goto repeat_loop;
         }
 
-        if (cmd.control_code == VANILLA_PIPE_CC_SYNC || cmd.control_code == VANILLA_PIPE_CC_CONNECT) {
+        if (cmd.control_code == VANILLA_PIPE_CC_SYNC && playback_file) {
+			// Sync is not available when using a playback file
+			cmd.control_code = VANILLA_PIPE_CC_BUSY;
+			if (sendto(skt, &cmd, sizeof(cmd.control_code), 0, (const struct sockaddr *) &addr, addr_size) == -1) {
+				nlprint("FAILED TO SEND BUSY: %i", errno);
+			}
+		} else if (cmd.control_code == VANILLA_PIPE_CC_SYNC || cmd.control_code == VANILLA_PIPE_CC_CONNECT) {
             if (pthread_mutex_trylock(&action_mutex) == 0) {
                 struct sync_args *args = malloc(sizeof(struct sync_args));
                 args->wireless_interface = wireless_interface;
@@ -1077,6 +1149,7 @@ void pipe_listen(int local, const char *wireless_interface, const char *log_file
                 args->client = addr;
                 args->client_size = addr_size;
 				args->playback_file = playback_file;
+				args->dump_file = dump_file;
 
                 if (cmd.control_code == VANILLA_PIPE_CC_SYNC) {
                     args->code = ntohs(cmd.sync.code);

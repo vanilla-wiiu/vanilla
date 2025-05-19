@@ -253,7 +253,6 @@ void *listen_video(void *x)
 
         size = recv(info->socket_vid, data, sizeof(VideoPacket), 0);
         if (size > 0) {
-			record_packet(PORT_VID, data, sizeof(VideoPacket));
             handle_video_packet(info, vp, size, info->socket_msg);
         }
     } while (!is_interrupted());

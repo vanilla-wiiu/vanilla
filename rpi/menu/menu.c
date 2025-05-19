@@ -63,17 +63,5 @@ void vpi_menu_action(vui_context_t *vui, vpi_extra_action_t action)
         }
         break;
     }
-	case VPI_ACTION_TOGGLE_DUMP:
-	{
-		static int dumping = 0;
-		if (dumping) {
-			dumping = 0;
-			vanilla_dump_stop();
-		} else {
-			dumping = 1;
-			vanilla_dump_start();
-		}
-		break;
-	}
     }
 }

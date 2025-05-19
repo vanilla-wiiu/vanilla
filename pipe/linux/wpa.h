@@ -17,6 +17,6 @@ int enable_networkmanager_on_device(const char *wireless_interface);
 
 void nlprint(const char *fmt, ...);
 
-void pipe_listen(int local, const char *wireless_interface, const char *log_file, const char *playback_file);
+void pipe_listen(int local, const char *wireless_interface, const char *log_file, const char *playback_file, const char *dump_file);
 
 #endif // VANILLA_WPA_H

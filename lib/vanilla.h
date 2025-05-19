@@ -198,16 +198,6 @@ size_t vanilla_generate_h264_header(void *data, size_t size);
  */
 void vanilla_send_audio(const void *data, size_t size);
 
-/**
- * Start dumping packets
- */
-void vanilla_dump_start();
-
-/**
- * Stop dumping packets
- */
-void vanilla_dump_stop();
-
 #if defined(__cplusplus)
 }
 #endif
