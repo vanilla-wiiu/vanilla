@@ -122,7 +122,7 @@ void set_socket_rcvtimeo(int skt, uint64_t microseconds)
 #endif // _WIN32
 }
 
-int create_socket(int *socket_out, in_port_t port)
+static int create_socket(int *socket_out, in_port_t port)
 {
     sockaddr_u addr;
     size_t addr_size;

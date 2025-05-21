@@ -103,6 +103,6 @@ void print_hex(const void *data, size_t len)
 {
     const unsigned char *c = (const unsigned char *) data;
     for (size_t i = 0; i < len; i++) {
-        printf("%02X", c[i]);
+        vanilla_log_no_newline("%02X", c[i]);
     }
 }
