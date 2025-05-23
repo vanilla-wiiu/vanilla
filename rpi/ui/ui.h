@@ -70,6 +70,7 @@ void vui_quit(vui_context_t *ctx);
  * Audio-related functions
  */
 void vui_audio_push(vui_context_t *ctx, const void *data, size_t size);
+void vui_audio_set_enabled(vui_context_t *ctx, int enabled);
 
 /**
  * Screen-related functions

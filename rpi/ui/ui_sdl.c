@@ -226,13 +226,18 @@ vui_power_state_t vui_sdl_power_state_handler(int *percent)
     return (vui_power_state_t) SDL_GetPowerInfo(NULL, percent);
 }
 
+void vui_sdl_audio_set_enabled(vui_context_t *ctx, int enabled, void *userdata)
+{
+    vui_sdl_context_t *sdl_ctx = (vui_sdl_context_t *) userdata;
+
+    SDL_PauseAudioDevice(sdl_ctx->audio, !enabled);
+}
+
 void vui_sdl_mic_set_enabled(vui_context_t *ctx, int enabled, void *userdata)
 {
     vui_sdl_context_t *sdl_ctx = (vui_sdl_context_t *) userdata;
 
-	if (sdl_ctx->mic) {
-        SDL_PauseAudioDevice(sdl_ctx->mic, !enabled);
-	}
+	SDL_PauseAudioDevice(sdl_ctx->mic, !enabled);
 }
 
 void audio_callback(void *userdata, Uint8 *stream, int len)
@@ -249,6 +254,9 @@ void audio_callback(void *userdata, Uint8 *stream, int len)
 			i += max_write;
 			sdl_ctx->audio_buffer_start += max_write;
 		}
+	} else {
+		// Return silence
+		memset(stream, 0, len);
 	}
 
 	pthread_mutex_unlock(&sdl_ctx->audio_buffer_mutex);
@@ -319,8 +327,9 @@ int vui_init_sdl(vui_context_t *ctx, int fullscreen)
         ctx->audio_handler = vui_sdl_audio_handler;
         ctx->audio_handler_data = sdl_ctx;
 
-		// Finally, start audio device
-        SDL_PauseAudioDevice(sdl_ctx->audio, 0);
+		// Set up handler for enabling audio
+		ctx->audio_enabled_handler = vui_sdl_audio_set_enabled;
+		ctx->audio_enabled_handler_data = sdl_ctx;
     } else {
         vpilog("Failed to open audio device\n");
     }
@@ -333,7 +342,10 @@ int vui_init_sdl(vui_context_t *ctx, int fullscreen)
 	mic_desired.userdata = ctx;
     mic_desired.channels = 1;
     sdl_ctx->mic = SDL_OpenAudioDevice(NULL, 1, &mic_desired, NULL, 0);
-    if (!sdl_ctx->mic) {
+    if (sdl_ctx->mic) {
+		ctx->mic_enabled_handler = vui_sdl_mic_set_enabled;
+		ctx->mic_enabled_handler_data = sdl_ctx;
+	} else {
 		vpilog("Failed to open microphone device\n");
 	}
 
@@ -346,9 +358,6 @@ int vui_init_sdl(vui_context_t *ctx, int fullscreen)
     ctx->text_open_handler = vui_sdl_text_open_handler;
 
     ctx->power_state_handler = vui_sdl_power_state_handler;
-
-	ctx->mic_enabled_handler = vui_sdl_mic_set_enabled;
-	ctx->mic_enabled_handler_data = sdl_ctx;
 
     if (TTF_Init()) {
         vpilog("Failed to TTF_Init\n");

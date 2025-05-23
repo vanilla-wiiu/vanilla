@@ -27,6 +27,7 @@ vui_context_t *vui_alloc(int width, int height)
     vui->power_state_handler = 0;
 	vui->mic_callback = 0;
 	vui->mic_enabled_handler = 0;
+	vui->audio_enabled_handler = 0;
     vui->quit = 0;
     vui_reset(vui);
     return vui;
@@ -54,6 +55,7 @@ void vui_reset(vui_context_t *ctx)
     ctx->selected_button = -1;
     ctx->cancel_button = -1;
     ctx->active_textedit = -1;
+	vui_audio_set_enabled(ctx, 0);
     if (ctx->text_open_handler)
         ctx->text_open_handler(ctx, -1, 0, ctx->text_open_handler_data);
 }
@@ -517,6 +519,12 @@ void vui_audio_push(vui_context_t *ctx, const void *data, size_t size)
     if (ctx->audio_handler) {
         ctx->audio_handler(data, size, ctx->audio_handler_data);
     }
+}
+
+void vui_audio_set_enabled(vui_context_t *ctx, int enabled)
+{
+	if (ctx->audio_enabled_handler)
+		ctx->audio_enabled_handler(ctx, enabled, ctx->audio_enabled_handler_data);
 }
 
 void vui_vibrate_set(vui_context_t *ctx, uint8_t val)

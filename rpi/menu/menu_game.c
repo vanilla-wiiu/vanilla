@@ -34,7 +34,7 @@ void show_error(vui_context_t *vui, void *v)
     int layer = vui_layer_create(vui);
 
     vui_label_create(vui, 0, scrh * 1 / 6, scrw, scrh, lang(VPI_LANG_ERROR), vui_color_create(0.25f,0.25f,0.25f,1), VUI_FONT_SIZE_NORMAL, layer);
-    
+
     char buf[10];
     snprintf(buf, sizeof(buf), "%i", (int) (intptr_t) v);
     vui_label_create(vui, 0, scrh * 3 / 6, scrw, scrh, buf, vui_color_create(1,0,0,1), VUI_FONT_SIZE_NORMAL, layer);
@@ -85,7 +85,7 @@ static void update_battery_information(vui_context_t *vui, int64_t time)
         }
 
         vanilla_set_battery_status(status);
-        
+
         current_minute = menu_game_ctx.last_power_time;
     }
 }
@@ -100,12 +100,14 @@ void vpi_display_update(vui_context_t *vui, int64_t time, void *v)
             pthread_mutex_lock(&vpi_decode_loop_mutex);
             if (vpi_present_frame && vpi_present_frame->data[0]) {
                 vui_game_mode_set(vui, 1);
+				vui_audio_set_enabled(vui, 1);
                 vpi_game_set_error(VANILLA_SUCCESS);
             }
             pthread_mutex_unlock(&vpi_decode_loop_mutex);
             break;
         case VANILLA_ERR_DISCONNECTED:
             vui_label_update_text(vui, status_lbl, lang(VPI_LANG_DISCONNECTED));
+			vui_audio_set_enabled(vui, 0);
             vui_game_mode_set(vui, 0);
             break;
         case VANILLA_ERR_SHUTDOWN:
