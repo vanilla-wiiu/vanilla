@@ -74,7 +74,8 @@ enum VanillaEvent
     VANILLA_EVENT_AUDIO,
     VANILLA_EVENT_VIBRATE,
     VANILLA_EVENT_SYNC,
-    VANILLA_EVENT_ERROR
+    VANILLA_EVENT_ERROR,
+	VANILLA_EVENT_MIC
 };
 
 enum VanillaRegion
@@ -176,9 +177,9 @@ void vanilla_request_idr();
 
 /**
  * Sets the region Vanilla should present itself to the console
- * 
+ *
  * The gamepad is region locked and the console will complain if the gamepad doesn't match.
- * 
+ *
  * Set to a member of the VanillaRegion enum.
  */
 void vanilla_set_region(int region);
@@ -192,6 +193,11 @@ void vanilla_set_battery_status(int battery_status);
  * Retrieve SPS/PPS parameters for H.264 packeting
  */
 size_t vanilla_generate_h264_header(void *data, size_t size);
+
+/**
+ * Send microphone audio
+ */
+void vanilla_send_audio(const void *data, size_t size);
 
 #if defined(__cplusplus)
 }

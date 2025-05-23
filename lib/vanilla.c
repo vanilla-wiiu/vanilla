@@ -12,6 +12,7 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "gamepad/audio.h"
 #include "gamepad/command.h"
 #include "gamepad/gamepad.h"
 #include "gamepad/input.h"
@@ -50,7 +51,7 @@ void *start_event_loop(void *arg)
     }
     pthread_cond_broadcast(&event_loop.waitcond);
     pthread_mutex_unlock(&event_loop.mutex);
-    
+
     data->event_loop = &event_loop;
 
     data->thread_start(data);
@@ -59,7 +60,7 @@ void *start_event_loop(void *arg)
 
     pthread_mutex_lock(&event_loop.mutex);
     event_loop.active = 0;
-    
+
     // Free any unconsumed events
     while (event_loop.used_index < event_loop.new_index) {
         // Output data to pointer
@@ -85,7 +86,7 @@ int vanilla_start_internal(uint32_t server_address, vanilla_bssid_t bssid, vanil
 {
     if (pthread_mutex_trylock(&main_mutex) == 0) {
         pthread_t other;
-        
+
         thread_data_t *data = malloc(sizeof(thread_data_t));
         data->server_address = server_address;
         data->thread_start = thread_start;
@@ -231,4 +232,9 @@ size_t vanilla_generate_pps_params(void *data, size_t data_size)
 size_t vanilla_generate_h264_header(void *data, size_t size)
 {
     return generate_h264_header(data, size);
+}
+
+void vanilla_send_audio(const void *data, size_t size)
+{
+    send_audio_packet(data, size);
 }

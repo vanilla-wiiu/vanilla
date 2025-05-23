@@ -25,6 +25,9 @@ vui_context_t *vui_alloc(int width, int height)
     vui->font_height_handler = 0;
     vui->text_open_handler = 0;
     vui->power_state_handler = 0;
+	vui->mic_callback = 0;
+	vui->mic_enabled_handler = 0;
+	vui->audio_enabled_handler = 0;
     vui->quit = 0;
     vui_reset(vui);
     return vui;
@@ -52,6 +55,7 @@ void vui_reset(vui_context_t *ctx)
     ctx->selected_button = -1;
     ctx->cancel_button = -1;
     ctx->active_textedit = -1;
+	vui_audio_set_enabled(ctx, 0);
     if (ctx->text_open_handler)
         ctx->text_open_handler(ctx, -1, 0, ctx->text_open_handler_data);
 }
@@ -372,7 +376,7 @@ void vui_process_mousedown(vui_context_t *ctx, int x, int y)
     if (!button_pressed) {
         for (int i = 0; i < ctx->textedit_count; i++) {
             vui_textedit_t *edit = &ctx->textedits[i];
-    
+
             if (edit->visible && edit->enabled && point_inside_textedit(edit, x, y)) {
                 new_active_textedit = i;
                 break;
@@ -403,7 +407,7 @@ void vui_process_mouseup(vui_context_t *ctx, int x, int y)
         // No button was mousedown'd, do nothing here
         return;
     }
-    
+
     release_button(ctx, point_inside_button(&ctx->buttons[ctx->button_active], x, y));
 }
 
@@ -428,13 +432,13 @@ int vui_start_passive_animation(vui_context_t *ctx, vui_anim_step_callback_t ste
     }
 
     ctx->passive_animation_count++;
-    
+
     // Set layer defaults
     vui_animation_t *a = &ctx->passive_animations[cur_anim];
     a->step = step;
     a->step_data = step_data;
     gettimeofday(&a->start_time, NULL);
-    
+
     return cur_anim;
 }
 
@@ -461,11 +465,11 @@ void vui_update(vui_context_t *ctx)
 
     if (ctx->animation_enabled) {
         int64_t diff = (now.tv_sec - ctx->animation.start_time.tv_sec) * 1000000 + (now.tv_usec - ctx->animation.start_time.tv_usec);
-        
+
         if (diff > ctx->animation.length) {
             diff = ctx->animation.length;
         }
-        
+
         if (ctx->animation.step)
             ctx->animation.step(ctx, diff, ctx->animation.step_data);
 
@@ -517,6 +521,12 @@ void vui_audio_push(vui_context_t *ctx, const void *data, size_t size)
     }
 }
 
+void vui_audio_set_enabled(vui_context_t *ctx, int enabled)
+{
+	if (ctx->audio_enabled_handler)
+		ctx->audio_enabled_handler(ctx, enabled, ctx->audio_enabled_handler_data);
+}
+
 void vui_vibrate_set(vui_context_t *ctx, uint8_t val)
 {
     if (ctx->vibrate_handler) {
@@ -532,7 +542,7 @@ int vui_layer_create(vui_context_t *ctx)
     }
 
     ctx->layers++;
-    
+
     // Set layer defaults
     ctx->layer_opacity[cur_layer] = 1.0f;
 
@@ -541,7 +551,7 @@ int vui_layer_create(vui_context_t *ctx)
     layerbg->g = 0;
     layerbg->b = 0;
     layerbg->a = 0;
-    
+
     return cur_layer;
 }
 
@@ -635,7 +645,7 @@ int vui_textedit_create(vui_context_t *ctx, int x, int y, int w, int h, const ch
     edit->size = size;
 
     edit->cursor = 0;
-    
+
     vui_textedit_update_text(ctx, index, initial_text);
     vui_textedit_update_visible(ctx, index, 1);
     vui_textedit_update_enabled(ctx, index, 1);
@@ -906,4 +916,17 @@ vui_power_state_t vui_power_state_get(vui_context_t *ctx, int *percent)
         }
         return VUI_POWERSTATE_UNKNOWN;
     }
+}
+
+void vui_mic_enabled_set(vui_context_t *ctx, int enabled)
+{
+	if (ctx->mic_enabled_handler) {
+		ctx->mic_enabled_handler(ctx, enabled, ctx->mic_enabled_handler_data);
+	}
+}
+
+void vui_mic_callback_set(vui_context_t *ctx, vui_mic_callback_t callback, void *userdata)
+{
+	ctx->mic_callback = callback;
+	ctx->mic_callback_data = userdata;
 }

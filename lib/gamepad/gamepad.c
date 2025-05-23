@@ -83,7 +83,7 @@ void create_sockaddr(sockaddr_u *addr, size_t *size, in_addr_t inaddr, uint16_t 
         addr->in.sin_family = AF_INET;
         addr->in.sin_port = htons(port);
         addr->in.sin_addr.s_addr = inaddr;
-        
+
         if (size) *size = sizeof(struct sockaddr_in);
 #ifndef _WIN32
     }
@@ -101,7 +101,10 @@ void send_to_console(int fd, const void *data, size_t data_size, uint16_t port)
 
     ssize_t sent = sendto(fd, data, data_size, 0, (const struct sockaddr *) &addr, addr_size);
     if (sent == -1) {
-        vanilla_log("Failed to send to Wii U socket: fd: %d, port: %d, errno: %i", fd, console_port, skterr());
+		int err = skterr();
+		if (err != 111) { // 111 is connection refused, occurs if we lose connection, but we'll already know that for other reasons so we don't need to spam the console with this error
+			vanilla_log("Failed to send to Wii U socket: fd: %d, port: %d, errno: %i", fd, console_port, skterr());
+		}
     }
 }
 
@@ -122,11 +125,11 @@ int create_socket(int *socket_out, in_port_t port)
 {
     sockaddr_u addr;
     size_t addr_size;
-    
+
     create_sockaddr(&addr, &addr_size, INADDR_ANY, port, 1);
 
     int domain = (SERVER_ADDRESS == VANILLA_ADDRESS_LOCAL) ? AF_UNIX : AF_INET;
-        
+
     int skt = socket(domain, SOCK_DGRAM, 0);
     if (skt == -1) {
         vanilla_log("FAILED TO CREATE SOCKET: %i", skterr());
@@ -140,11 +143,11 @@ int create_socket(int *socket_out, in_port_t port)
     }
 
     // vanilla_log("SUCCESSFULLY BOUND SOCKET %i ON PORT %i", skt, port);
-    
+
     (*socket_out) = skt;
 
     set_socket_rcvtimeo(skt, 250000);
-    
+
     return VANILLA_SUCCESS;
 }
 
@@ -167,7 +170,7 @@ int send_pipe_cc(int skt, vanilla_pipe_command_t *cmd, size_t cmd_size, int wait
         if (!wait_for_reply || is_interrupted()) {
             return 1;
         }
-        
+
         read_size = recv(skt, &recv_cc, sizeof(recv_cc), 0);
         if (recv_cc == VANILLA_PIPE_CC_BIND_ACK) {
             return 1;
@@ -177,7 +180,7 @@ int send_pipe_cc(int skt, vanilla_pipe_command_t *cmd, size_t cmd_size, int wait
 
         sleep(1);
     }
-    
+
     return 0;
 }
 
@@ -298,10 +301,10 @@ void connect_as_gamepad_internal(thread_data_t *data)
     if (SERVER_ADDRESS != VANILLA_ADDRESS_DIRECT) {
         vanilla_pipe_command_t cmd;
         cmd.control_code = VANILLA_PIPE_CC_CONNECT;
-        
+
         cmd.connection.bssid = data->bssid;
         cmd.connection.psk = data->psk;
-        
+
         // Connect to backend pipe
         ret = connect_to_backend(&pipe_cc_skt, &cmd, sizeof(cmd.control_code) + sizeof(cmd.connection));
         if (ret == VANILLA_SUCCESS) {
@@ -346,7 +349,7 @@ void connect_as_gamepad_internal(thread_data_t *data)
 
         pthread_create(&input_thread, NULL, listen_input, &info);
         pthread_setname_np(input_thread, "vanilla-input");
-        
+
         pthread_create(&cmd_thread, NULL, listen_command, &info);
         pthread_setname_np(cmd_thread, "vanilla-cmd");
 
@@ -428,7 +431,7 @@ int push_event(event_loop_t *loop, int type, const void *data, size_t size)
             ret = VANILLA_ERR_OUT_OF_MEMORY;
             goto exit;
         }
-        
+
         ev->type = type;
         memcpy(ev->data, data, size);
         ev->size = size;
@@ -476,7 +479,7 @@ int get_event(event_loop_t *loop, vanilla_event_t *event, int wait)
     }
 
     pthread_mutex_unlock(&loop->mutex);
-    
+
     return ret;
 }
 

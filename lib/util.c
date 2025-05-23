@@ -98,3 +98,11 @@ uint32_t reverse_bits(uint32_t b, int bit_count)
     b >>= 32 - bit_count;
     return b;
 }
+
+void print_hex(const void *data, size_t len)
+{
+    const unsigned char *c = (const unsigned char *) data;
+    for (size_t i = 0; i < len; i++) {
+        vanilla_log_no_newline("%02X", c[i]);
+    }
+}
