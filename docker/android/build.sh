@@ -1,4 +1,5 @@
 #!/bin/sh
+set -e
 cd /vanilla/android
 ./gradlew -PbuildDir=/build assemble
 zipalign -v -p 4 /build/outputs/apk/release/app-release-unsigned.apk /build/outputs/apk/release/app-release-unsigned-aligned.apk

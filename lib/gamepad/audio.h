@@ -1,6 +1,7 @@
 #ifndef GAMEPAD_AUDIO_H
 #define GAMEPAD_AUDIO_H
 
+#include <assert.h>
 #include <stddef.h>
 #include <stdint.h>
 

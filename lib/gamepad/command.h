@@ -1,6 +1,7 @@
 #ifndef GAMEPAD_COMMAND_H
 #define GAMEPAD_COMMAND_H
 
+#include <assert.h>
 #include <stddef.h>
 #include <stdint.h>
 
