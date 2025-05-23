@@ -39,8 +39,6 @@ pthread_mutex_t running_mutex;
 pthread_mutex_t main_loop_mutex;
 pthread_mutex_t action_mutex;
 pthread_mutex_t relay_mutex;
-pthread_mutex_t dump_mutex = PTHREAD_MUTEX_INITIALIZER;
-struct timeval dump_start_time;
 int running = 0;
 int main_loop = 0;
 int relay_running = 0;
@@ -55,8 +53,6 @@ typedef struct {
     int to_socket;
     sockaddr_u to_address;
     size_t to_address_size;
-	FILE *dump_file;
-	uint16_t port;
 } relay_ports;
 
 struct sync_args {
@@ -71,8 +67,6 @@ struct sync_args {
     int skt;
     sockaddr_u client;
     size_t client_size;
-	const char *playback_file;
-	const char *dump_file;
 };
 
 struct relay_info {
@@ -81,7 +75,6 @@ struct relay_info {
     sockaddr_u client;
     size_t client_size;
     in_port_t port;
-	FILE *dump_file;
 };
 
 #define THREADRESULT(x) ((void *) (uintptr_t) (x))
@@ -230,7 +223,7 @@ void *wpa_setup_environment(void *data)
     interface.driver = "nl80211";
     interface.ifname = args->wireless_interface;
     interface.confname = args->wireless_config;
-
+    
     struct wpa_global *wpa = wpa_supplicant_init(&params);
     if (!wpa) {
         nlprint("FAILED TO INIT WPA SUPPLICANT");
@@ -336,7 +329,7 @@ void dhcp_callback(const char *type, char **env, void *data)
 
         // Send request
         nl_send_auto_complete(nl, msg);
-
+        
         // Cleanup
         nlmsg_free(msg);
         rtnl_addr_put(ra);
@@ -366,7 +359,7 @@ int call_dhcp(const char *network_interface)
         nlprint("FAILED TO ALLOC NL_SOCK");
         goto exit;
     }
-
+    
     int nlr = nl_connect(nl, NETLINK_ROUTE);
     if (nlr < 0) {
         nlprint("FAILED TO CONNECT NL: %i", nlr);
@@ -393,26 +386,6 @@ exit:
     return ret;
 }
 
-void dump_data(FILE *f, uint16_t port, const void *data, size_t size)
-{
-	pthread_mutex_lock(&dump_mutex);
-
-	struct timeval now;
-	gettimeofday(&now, 0);
-
-	int64_t us = (now.tv_sec - dump_start_time.tv_sec) * 1000000 + (now.tv_usec - dump_start_time.tv_usec);
-	fwrite(&us, sizeof(us), 1, f);
-
-	fwrite(&port, sizeof(port), 1, f);
-
-	uint64_t aligned_size = size;
-	fwrite(&aligned_size, sizeof(aligned_size), 1, f);
-
-	fwrite(data, size, 1, f);
-
-	pthread_mutex_unlock(&dump_mutex);
-}
-
 void *do_relay(void *data)
 {
     relay_ports *ports = (relay_ports *) data;
@@ -423,10 +396,6 @@ void *do_relay(void *data)
         if (read_size <= 0) {
             continue;
         }
-
-		if (ports->dump_file) {
-			dump_data(ports->dump_file, ports->port, buf, read_size);
-		}
 
         if (sendto(ports->to_socket, buf, read_size, 0, (const struct sockaddr *) &ports->to_address, ports->to_address_size) == -1) {
             if (ports->to_address_size == sizeof(struct sockaddr_un)) {
@@ -479,7 +448,7 @@ int open_socket(int local, in_port_t port)
     struct timeval tv = {0};
     tv.tv_usec = 250000;
     setsockopt(skt, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
-
+    
     if (bind(skt, (const struct sockaddr *) &sa, sa_size) == -1) {
         nlprint("FAILED TO BIND PORT %u: %i", port, errno);
         close(skt);
@@ -489,24 +458,6 @@ int open_socket(int local, in_port_t port)
     }
 
     return skt;
-}
-
-sockaddr_u get_frontend_sockaddr(int local, sockaddr_u client, uint16_t port, size_t *size)
-{
-	sockaddr_u frontend_addr;
-    if (local) {
-        memset(&frontend_addr.un, 0, sizeof(frontend_addr.un));
-        frontend_addr.un.sun_family = AF_UNIX;
-        snprintf(frontend_addr.un.sun_path, sizeof(frontend_addr.un.sun_path), VANILLA_PIPE_LOCAL_SOCKET, port);
-        *size = sizeof(frontend_addr.un);
-    } else {
-        memset(&frontend_addr.in, 0, sizeof(frontend_addr.in));
-        frontend_addr.in.sin_family = AF_INET;
-        frontend_addr.in.sin_addr = client.in.sin_addr;
-        frontend_addr.in.sin_port = htons(port);
-        *size = sizeof(frontend_addr.in);
-    }
-	return frontend_addr;
 }
 
 void *open_relay(void *data)
@@ -534,18 +485,26 @@ void *open_relay(void *data)
     console_addr.sin_addr.s_addr = inet_addr("192.168.1.10");
     console_addr.sin_port = htons(port - 100);
 
+    sockaddr_u frontend_addr;
     size_t frontend_addr_size;
-	sockaddr_u frontend_addr = get_frontend_sockaddr(info->local, info->client, port, &frontend_addr_size);
+    if (info->local) {
+        memset(&frontend_addr.un, 0, sizeof(frontend_addr.un));
+        frontend_addr.un.sun_family = AF_UNIX;
+        snprintf(frontend_addr.un.sun_path, sizeof(frontend_addr.un.sun_path), VANILLA_PIPE_LOCAL_SOCKET, port);
+        frontend_addr_size = sizeof(frontend_addr.un);
+    } else {
+        memset(&frontend_addr.in, 0, sizeof(frontend_addr.in));
+        frontend_addr.in.sin_family = AF_INET;
+        frontend_addr.in.sin_addr = info->client.in.sin_addr;
+        frontend_addr.in.sin_port = htons(port);
+        frontend_addr_size = sizeof(frontend_addr.in);
+    }
 
     // nlprint("ENTERING MAIN LOOP");
     while (are_relays_running()) {
         nlprint("STARTED RELAYS");
         relay_ports console_to_frontend = create_ports(from_console, from_frontend, &frontend_addr, frontend_addr_size);
         relay_ports frontend_to_console = create_ports(from_frontend, from_console, (sockaddr_u *) &console_addr, sizeof(struct sockaddr_in));
-
-		frontend_to_console.dump_file = 0;
-		console_to_frontend.dump_file = info->dump_file;
-		console_to_frontend.port = port;
 
         pthread_t a_thread, b_thread;
         pthread_create(&a_thread, NULL, do_relay, &console_to_frontend);
@@ -576,22 +535,12 @@ void create_all_relays(struct sync_args *args)
     pthread_t vid_thread, aud_thread, msg_thread, cmd_thread, hid_thread;
     struct relay_info vid_info, aud_info, msg_info, cmd_info, hid_info;
 
-	FILE *dump = 0;
-	if (args->dump_file) {
-		dump = fopen(args->dump_file, "wb");
-		gettimeofday(&dump_start_time, 0);
-		if (!dump) {
-			nlprint("FAILED TO OPEN DUMP FILE \"%s\"", args->dump_file);
-		}
-	}
-
     // Set common info for all
     vid_info.wireless_interface = aud_info.wireless_interface = msg_info.wireless_interface = cmd_info.wireless_interface = hid_info.wireless_interface = args->wireless_interface;
     vid_info.local = aud_info.local = msg_info.local = cmd_info.local = hid_info.local = args->local;
     vid_info.client = aud_info.client = msg_info.client = cmd_info.client = hid_info.client = args->client;
     vid_info.client_size = aud_info.client_size = msg_info.client_size = cmd_info.client_size = hid_info.client_size = args->client_size;
-    vid_info.dump_file = aud_info.dump_file = msg_info.dump_file = cmd_info.dump_file = hid_info.dump_file = dump;
-
+    
     vid_info.port = PORT_VID;
     aud_info.port = PORT_AUD;
     msg_info.port = PORT_MSG;
@@ -636,10 +585,6 @@ void create_all_relays(struct sync_args *args)
     pthread_join(msg_thread, NULL);
     pthread_join(cmd_thread, NULL);
     pthread_join(hid_thread, NULL);
-
-	if (dump) {
-		fclose(dump);
-	}
 }
 
 void *thread_handler(void *data)
@@ -651,14 +596,14 @@ void *thread_handler(void *data)
     pthread_mutex_unlock(&running_mutex);
 
     void *ret = args->start_routine(data);
-
+    
     free(args);
 
     interrupt();
 
     // Locked by calling thread
     pthread_mutex_unlock(&action_mutex);
-
+    
     return ret;
 }
 
@@ -734,7 +679,7 @@ void bytes_to_str(unsigned char *data, size_t data_size, const char *separator, 
 }
 
 int create_connect_config(const char *filename, unsigned char *bssid, unsigned char *psk)
-{
+{   
     FILE *out_file = fopen(filename, "w");
     if (!out_file) {
         nlprint("FAILED TO OPEN OUTPUT CONFIG FILE");
@@ -758,7 +703,7 @@ int create_connect_config(const char *filename, unsigned char *bssid, unsigned c
         "	pbss=2\n"
         "}\n"
         "\n";
-
+    
     char bssid_str[18];
     char ssid_str[17];
     char psk_str[65];
@@ -876,7 +821,7 @@ void *sync_with_console_internal(void *data)
                         nlprint("CRED RECV: %.*s", buf_len, buf);
                     }
 
-                    if (strstr(buf, "WPS-SUCCESS")) {
+                    if (!memcmp("<3>WPS-CRED-RECEIVED", buf, 20)) {
                         nlprint("RECEIVED AUTHENTICATION FROM CONSOLE");
                         cred_received = 1;
                         break;
@@ -938,10 +883,10 @@ void *do_connect(void *data)
             while (!wpa_ctrl_pending(args->ctrl)) {
                 sleep(2);
                 nlprint("WAITING FOR CONNECTION");
-
+    
                 if (is_interrupted()) return THREADRESULT(VANILLA_ERR_GENERIC);
             }
-
+    
             char buf[1024];
             size_t actual_buf_len = sizeof(buf);
             wpa_ctrl_recv(args->ctrl, buf, &actual_buf_len);
@@ -949,16 +894,16 @@ void *do_connect(void *data)
                 && !strstr(buf, "CTRL-EVENT-BSS-REMOVED")) {
                 nlprint("CONN RECV: %.*s", actual_buf_len, buf);
             }
-
+    
             if (memcmp(buf, "<3>CTRL-EVENT-CONNECTED", 23) == 0) {
                 break;
             }
-
+    
             if (is_interrupted()) return THREADRESULT(VANILLA_ERR_GENERIC);
         }
-
+    
         nlprint("CONNECTED TO CONSOLE");
-
+    
         // Use DHCP on interface
         int r = call_dhcp(args->wireless_interface);
         if (r != VANILLA_SUCCESS) {
@@ -967,8 +912,8 @@ void *do_connect(void *data)
         } else {
             nlprint("DHCP ESTABLISHED");
         }
-
-		create_all_relays(args);
+    
+        create_all_relays(args);
     }
 
     return THREADRESULT(VANILLA_SUCCESS);
@@ -1009,88 +954,7 @@ void *vanilla_connect_to_console(void *data)
     return wpa_setup_environment(args);
 }
 
-void *do_playback(void *data)
-{
-    struct sync_args *args = (struct sync_args *) data;
-
-	FILE *f = fopen(args->playback_file, "rb");
-	if (!f) {
-		nlprint("Failed to open playback file \"%s\"", args->playback_file);
-		return THREADRESULT(VANILLA_ERR_GENERIC);
-	}
-
-	// Tell user we're connected
-	vanilla_pipe_command_t cmd;
-    cmd.control_code = VANILLA_PIPE_CC_CONNECTED;
-    sendto(args->skt, &cmd, sizeof(cmd.control_code), 0, (const struct sockaddr *) &args->client, args->client_size);
-
-	struct timeval start;
-	gettimeofday(&start, 0);
-
-	int waiting = 0;
-	int64_t timestamp;
-	char buffer[4096];
-
-	nlprint("PLAYBACK STARTED");
-
-	while (!is_interrupted()) {
-		if (!waiting) {
-			// Read next timestamp
-			fread(&timestamp, sizeof(timestamp), 1, f);
-			if (fread == 0) {
-				break;
-			}
-		}
-
-		struct timeval now;
-		gettimeofday(&now, 0);
-
-		int64_t us = (now.tv_sec - start.tv_sec) * 1000000 + (now.tv_usec - start.tv_usec);
-
-		if (us >= timestamp) {
-			waiting = 0;
-
-			// Read port
-			uint16_t port;
-			fread(&port, sizeof(port), 1, f);
-
-			// Read size of packet
-			uint64_t size;
-			fread(&size, sizeof(size), 1, f);
-
-			// Read data into buffer
-			fread(buffer, size, 1, f);
-
-			// Send data to frontend
-			// size_t frontend_addr_size;
-			// sockaddr_u frontend_addr = get_frontend_sockaddr(args->local, args->client, port, &frontend_addr_size);
-			// ssize_t sendret = sendto(args->skt, buffer, size, 0, (const struct sockaddr *) &frontend_addr, frontend_addr_size);
-			// if (sendret == -1) {
-			// 	nlprint("Failed to send playback packet to port %u", port);
-			// } else {
-			// 	nlprint("SENT %zi BYTES TO PORT %u", sendret, port);
-			// }
-
-			// Send data to frontend
-			struct sockaddr_in in = {0};
-			in.sin_family = AF_INET;
-			in.sin_port = htons(port);
-			in.sin_addr.s_addr = inet_addr("192.168.1.11");
-			ssize_t sendret = sendto(args->skt, buffer, size, 0, (const struct sockaddr *) &in, sizeof(in));
-			if (sendret == -1) {
-				nlprint("Failed to send playback packet to port %u", port);
-			} else {
-				nlprint("SENT %zi BYTES TO PORT %u", sendret, port);
-			}
-		} else {
-			waiting = 1;
-		}
-	}
-
-	return THREADRESULT(VANILLA_SUCCESS);
-}
-
-void pipe_listen(int local, const char *wireless_interface, const char *log_file, const char *playback_file, const char *dump_file)
+void pipe_listen(int local, const char *wireless_interface, const char *log_file)
 {
     // Store reference to log file
     ext_logfile = log_file;
@@ -1134,13 +998,7 @@ void pipe_listen(int local, const char *wireless_interface, const char *log_file
             goto repeat_loop;
         }
 
-        if (cmd.control_code == VANILLA_PIPE_CC_SYNC && playback_file) {
-			// Sync is not available when using a playback file
-			cmd.control_code = VANILLA_PIPE_CC_BUSY;
-			if (sendto(skt, &cmd, sizeof(cmd.control_code), 0, (const struct sockaddr *) &addr, addr_size) == -1) {
-				nlprint("FAILED TO SEND BUSY: %i", errno);
-			}
-		} else if (cmd.control_code == VANILLA_PIPE_CC_SYNC || cmd.control_code == VANILLA_PIPE_CC_CONNECT) {
+        if (cmd.control_code == VANILLA_PIPE_CC_SYNC || cmd.control_code == VANILLA_PIPE_CC_CONNECT) {
             if (pthread_mutex_trylock(&action_mutex) == 0) {
                 struct sync_args *args = malloc(sizeof(struct sync_args));
                 args->wireless_interface = wireless_interface;
@@ -1148,20 +1006,16 @@ void pipe_listen(int local, const char *wireless_interface, const char *log_file
                 args->skt = skt;
                 args->client = addr;
                 args->client_size = addr_size;
-				args->playback_file = playback_file;
-				args->dump_file = dump_file;
 
                 if (cmd.control_code == VANILLA_PIPE_CC_SYNC) {
                     args->code = ntohs(cmd.sync.code);
                     args->start_routine = vanilla_sync_with_console;
-				} else if (args->playback_file) {
-					args->start_routine = do_playback;
                 } else {
                     memcpy(args->bssid, cmd.connection.bssid.bssid, sizeof(cmd.connection.bssid.bssid));
                     memcpy(args->psk, cmd.connection.psk.psk, sizeof(cmd.connection.psk.psk));
                     args->start_routine = vanilla_connect_to_console;
                 }
-
+            
                 // Acknowledge
                 cmd.control_code = VANILLA_PIPE_CC_BIND_ACK;
                 if (sendto(skt, &cmd, sizeof(cmd.control_code), 0, (const struct sockaddr *) &addr, addr_size) == -1) {

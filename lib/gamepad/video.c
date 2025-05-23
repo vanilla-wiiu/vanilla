@@ -269,7 +269,7 @@ void write_bits(void *data, size_t buffer_size, size_t *bit_index, uint8_t value
     const size_t size_of_byte = 8;
 
     assert(bit_width <= size_of_byte);
-
+    
     // Calculate offsets
     size_t offset = *bit_index;
     uint8_t *bytes = (uint8_t *) data;
@@ -325,7 +325,7 @@ void write_exp_golomb(void *data, size_t buffer_size, size_t *bit_index, uint64_
     int bit_width = ((sizeof(value) * size_of_byte) - leading_zeros);
 
     int exp_golomb_leading_zeros = bit_width - 1;
-
+    
     for (int i = 0; i < exp_golomb_leading_zeros; i += size_of_byte) {
         write_bits(data, buffer_size, bit_index, 0, MIN(size_of_byte, exp_golomb_leading_zeros - i));
     }
@@ -409,7 +409,7 @@ size_t generate_sps_params(void *data, size_t size)
 
     // seq_scaling_matrix_present_flag
     write_bits(data, size, &bit_index, 0, 1);
-
+    
     // log2_max_frame_num_minus4
     write_exp_golomb(data, size, &bit_index, 4);
 
@@ -508,7 +508,7 @@ size_t generate_sps_params(void *data, size_t size)
 
     // RBSP trailing stop bit
     write_bits(data, size, &bit_index, 1, 1);
-
+    
     // Alignment
     const int align = 8;
     if (bit_index % align != 0) {
