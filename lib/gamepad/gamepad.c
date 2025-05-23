@@ -52,10 +52,6 @@ static inline int skterr()
 #endif
 }
 
-static pthread_mutex_t record_mutex = PTHREAD_MUTEX_INITIALIZER;
-static struct timeval record_start_time;
-static int record_active = 0;
-
 in_addr_t get_real_server_address()
 {
     if (SERVER_ADDRESS == VANILLA_ADDRESS_DIRECT) {
@@ -125,7 +121,7 @@ void set_socket_rcvtimeo(int skt, uint64_t microseconds)
 #endif // _WIN32
 }
 
-static int create_socket(int *socket_out, in_port_t port)
+int create_socket(int *socket_out, in_port_t port)
 {
     sockaddr_u addr;
     size_t addr_size;
