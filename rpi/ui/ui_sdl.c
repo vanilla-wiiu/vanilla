@@ -15,6 +15,8 @@
 #include "ui_priv.h"
 #include "ui_util.h"
 
+#define MIN(a,b) (((a)<(b))?(a):(b))
+
 typedef struct {
     SDL_Texture *texture;
     int w;
@@ -45,6 +47,12 @@ typedef struct {
     SDL_Texture *toast_tex;
     struct timeval toast_expiry;
     AVFrame *frame;
+
+	uint8_t *audio_buffer;
+	size_t audio_buffer_size;
+	size_t audio_buffer_start;
+	size_t audio_buffer_end;
+	pthread_mutex_t audio_buffer_mutex;
 } vui_sdl_context_t;
 
 static int button_map[SDL_CONTROLLER_BUTTON_MAX];
@@ -138,11 +146,30 @@ SDL_GameController *find_valid_controller()
 
 void vui_sdl_audio_handler(const void *data, size_t size, void *userdata)
 {
-    vui_sdl_context_t *sdl_ctx = (vui_sdl_context_t *) userdata;
+	vui_sdl_context_t *sdl_ctx = (vui_sdl_context_t *) userdata;
 
-    if (SDL_QueueAudio(sdl_ctx->audio, data, size) < 0) {
-        vpilog("Failed to queue audio (data: %p, size: %zu)\n", data, size);
-    }
+	if (!sdl_ctx->audio) {
+		// Buffers will not have been initialized, so return before we try using them
+		return;
+	}
+
+	pthread_mutex_lock(&sdl_ctx->audio_buffer_mutex);
+
+	for (size_t i = 0; i < size; ) {
+		size_t phys = sdl_ctx->audio_buffer_end % sdl_ctx->audio_buffer_size;
+		size_t max_write = MIN(sdl_ctx->audio_buffer_size - phys, size - i);
+		memcpy(sdl_ctx->audio_buffer + phys, ((const unsigned char *) data) + i, max_write);
+
+		i += max_write;
+		sdl_ctx->audio_buffer_end += max_write;
+
+		if (sdl_ctx->audio_buffer_end > sdl_ctx->audio_buffer_start + sdl_ctx->audio_buffer_size) {
+			vpilog("SKIPPED %zu AUDIO BYTES\n", (sdl_ctx->audio_buffer_end - sdl_ctx->audio_buffer_size) - sdl_ctx->audio_buffer_start);
+			sdl_ctx->audio_buffer_start = sdl_ctx->audio_buffer_end - sdl_ctx->audio_buffer_size;
+		}
+	}
+
+	pthread_mutex_unlock(&sdl_ctx->audio_buffer_mutex);
 }
 
 void vui_sdl_vibrate_handler(uint8_t vibrate, void *userdata)
@@ -208,6 +235,25 @@ void vui_sdl_mic_set_enabled(vui_context_t *ctx, int enabled, void *userdata)
 	}
 }
 
+void audio_callback(void *userdata, Uint8 *stream, int len)
+{
+	vui_sdl_context_t *sdl_ctx = (vui_sdl_context_t *) userdata;
+
+	pthread_mutex_lock(&sdl_ctx->audio_buffer_mutex);
+
+	if ((sdl_ctx->audio_buffer_end - sdl_ctx->audio_buffer_start) >= len) {
+		for (size_t i = 0; i < len; ) {
+			size_t phys = sdl_ctx->audio_buffer_start % sdl_ctx->audio_buffer_size;
+			size_t max_write = MIN(sdl_ctx->audio_buffer_size - phys, len - i);
+			memcpy(stream + i, sdl_ctx->audio_buffer + phys, max_write);
+			i += max_write;
+			sdl_ctx->audio_buffer_start += max_write;
+		}
+	}
+
+	pthread_mutex_unlock(&sdl_ctx->audio_buffer_mutex);
+}
+
 void mic_callback(void *userdata, Uint8 *stream, int len)
 {
 	vui_context_t *ctx = (vui_context_t *) userdata;
@@ -251,17 +297,30 @@ int vui_init_sdl(vui_context_t *ctx, int fullscreen)
     }
 
     // Open audio output device
-    SDL_AudioSpec desired = {0};
+    SDL_AudioSpec desired = {0}, obtained;
     desired.freq = 48000;
     desired.format = AUDIO_S16LSB;
     desired.channels = 2;
+	desired.callback = audio_callback;
+	desired.userdata = sdl_ctx;
 
-    sdl_ctx->audio = SDL_OpenAudioDevice(NULL, 0, &desired, NULL, 0);
+    sdl_ctx->audio = SDL_OpenAudioDevice(NULL, 0, &desired, &obtained, 0);
     if (sdl_ctx->audio) {
-        SDL_PauseAudioDevice(sdl_ctx->audio, 0);
+		// Set up buffers
+		size_t buffer_size = obtained.samples * 4; // * 2 for 16-bit, * 2 for stereo
+		buffer_size += 2048; // Pad buffer for maximum size of Wii U packet
+		sdl_ctx->audio_buffer_size = buffer_size;
+		sdl_ctx->audio_buffer = malloc(buffer_size);
+		sdl_ctx->audio_buffer_start = 0;
+		sdl_ctx->audio_buffer_end = 0;
+		pthread_mutex_init(&sdl_ctx->audio_buffer_mutex, 0);
 
+		// Set up handler for audio submitted from VPI to VUI
         ctx->audio_handler = vui_sdl_audio_handler;
         ctx->audio_handler_data = sdl_ctx;
+
+		// Finally, start audio device
+        SDL_PauseAudioDevice(sdl_ctx->audio, 0);
     } else {
         vpilog("Failed to open audio device\n");
     }
@@ -356,6 +415,17 @@ void vui_close_sdl(vui_context_t *ctx)
     if (sdl_ctx->controller) {
         SDL_GameControllerClose(sdl_ctx->controller);
     }
+
+	if (sdl_ctx->audio) {
+		SDL_CloseAudioDevice(sdl_ctx->audio);
+
+		free(sdl_ctx->audio_buffer);
+		pthread_mutex_destroy(&sdl_ctx->audio_buffer_mutex);
+	}
+
+	if (sdl_ctx->mic) {
+		SDL_CloseAudioDevice(sdl_ctx->mic);
+	}
 
     SDL_DestroyTexture(sdl_ctx->toast_tex);
     SDL_DestroyTexture(sdl_ctx->game_tex);
