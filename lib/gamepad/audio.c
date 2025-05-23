@@ -20,8 +20,8 @@
 static unsigned char queued_audio[8192];
 static size_t queued_audio_start = 0;
 static size_t queued_audio_end = 0;
-static pthread_mutex_t queued_audio_mutex;
-static pthread_cond_t queued_audio_cond;
+static pthread_mutex_t queued_audio_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t queued_audio_cond = PTHREAD_COND_INITIALIZER;
 
 int send_audio_packet(const void *data, size_t len)
 {
@@ -173,9 +173,6 @@ void *listen_audio(void *x)
     queued_audio_start = 0;
     queued_audio_end = 0;
 
-    pthread_mutex_init(&queued_audio_mutex, 0);
-	pthread_cond_init(&queued_audio_cond, 0);
-
 	pthread_t mic_thread;
 	int mic_thread_created = 1;
 	if (pthread_create(&mic_thread, 0, handle_queued_audio, info) != 0) {
@@ -197,9 +194,6 @@ void *listen_audio(void *x)
     	pthread_mutex_unlock(&queued_audio_mutex);
 		pthread_join(mic_thread, 0);
 	}
-
-    pthread_cond_destroy(&queued_audio_cond);
-	pthread_mutex_destroy(&queued_audio_mutex);
 
     pthread_exit(NULL);
 
