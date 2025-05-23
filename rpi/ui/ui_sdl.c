@@ -199,9 +199,20 @@ vui_power_state_t vui_sdl_power_state_handler(int *percent)
     return (vui_power_state_t) SDL_GetPowerInfo(NULL, percent);
 }
 
+void vui_sdl_mic_set_enabled(vui_context_t *ctx, int enabled, void *userdata)
+{
+    vui_sdl_context_t *sdl_ctx = (vui_sdl_context_t *) userdata;
+
+	if (sdl_ctx->mic) {
+        SDL_PauseAudioDevice(sdl_ctx->mic, !enabled);
+	}
+}
+
 void mic_callback(void *userdata, Uint8 *stream, int len)
 {
-    vanilla_send_audio(stream, len);
+	vui_context_t *ctx = (vui_context_t *) userdata;
+	if (ctx->mic_callback)
+    	ctx->mic_callback(ctx->mic_callback_data, stream, len);
 }
 
 int vui_init_sdl(vui_context_t *ctx, int fullscreen)
@@ -260,11 +271,10 @@ int vui_init_sdl(vui_context_t *ctx, int fullscreen)
     mic_desired.freq = 16000;
     mic_desired.format = AUDIO_S16LSB;
     mic_desired.callback = mic_callback;
+	mic_desired.userdata = ctx;
     mic_desired.channels = 1;
     sdl_ctx->mic = SDL_OpenAudioDevice(NULL, 1, &mic_desired, NULL, 0);
-    if (sdl_ctx->mic) {
-        SDL_PauseAudioDevice(sdl_ctx->mic, 0);
-    } else {
+    if (!sdl_ctx->mic) {
 		vpilog("Failed to open microphone device\n");
 	}
 
@@ -277,6 +287,9 @@ int vui_init_sdl(vui_context_t *ctx, int fullscreen)
     ctx->text_open_handler = vui_sdl_text_open_handler;
 
     ctx->power_state_handler = vui_sdl_power_state_handler;
+
+	ctx->mic_enabled_handler = vui_sdl_mic_set_enabled;
+	ctx->mic_enabled_handler_data = sdl_ctx;
 
     if (TTF_Init()) {
         vpilog("Failed to TTF_Init\n");

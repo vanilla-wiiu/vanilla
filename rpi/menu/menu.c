@@ -13,8 +13,16 @@
 #include "menu_main.h"
 #include "platform.h"
 
+void vpi_mic_callback(void *userdata, const uint8_t *data, size_t len)
+{
+	vanilla_send_audio(data, len);
+}
+
 void vpi_menu_init(vui_context_t *vui)
 {
+	// Set microphone callback
+	vui_mic_callback_set(vui, vpi_mic_callback, 0);
+
     // Start with main menu
     vpi_menu_main(vui, 0);
 }

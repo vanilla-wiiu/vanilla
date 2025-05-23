@@ -124,6 +124,8 @@ static void *handle_queued_audio(void *data)
 	}
 
     pthread_mutex_unlock(&queued_audio_mutex);
+
+	return 0;
 }
 
 void handle_audio_packet(gamepad_context_t *ctx, unsigned char *data, size_t len)
@@ -160,8 +162,6 @@ void handle_audio_packet(gamepad_context_t *ctx, unsigned char *data, size_t len
 
     uint8_t vibrate_val = ap->vibrate;
     push_event(ctx->event_loop, VANILLA_EVENT_VIBRATE, &vibrate_val, sizeof(vibrate_val));
-
-    handle_queued_audio(ctx);
 }
 
 void *listen_audio(void *x)
@@ -191,7 +191,10 @@ void *listen_audio(void *x)
     } while (!is_interrupted());
 
 	if (mic_thread_created) {
+		// Tell thread to exit
+    	pthread_mutex_lock(&queued_audio_mutex);
 		pthread_cond_broadcast(&queued_audio_cond);
+    	pthread_mutex_unlock(&queued_audio_mutex);
 		pthread_join(mic_thread, 0);
 	}
 

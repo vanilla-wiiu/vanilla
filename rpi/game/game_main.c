@@ -73,6 +73,9 @@ void *vpi_event_handler(void *data)
         case VANILLA_EVENT_ERROR:
             vpi_game_set_error(*(int *)event.data);
             break;
+		case VANILLA_EVENT_MIC:
+			vui_mic_enabled_set(vui, event.data[0]);
+			break;
         }
 
 		vanilla_free_event(&event);
@@ -101,7 +104,7 @@ void vpi_show_toast(const char *message)
     vui_strncpy(vpi_toast_string, message, sizeof(vpi_toast_string));
 
     gettimeofday(&vpi_toast_expiry, 0);
-    
+
     // Toast lasts for 2 seconds
     vpi_toast_expiry.tv_sec += 2;
 
@@ -116,7 +119,7 @@ void vpi_get_toast(int *number, char *output, size_t output_size, struct timeval
 
     if (number)
         *number = vpi_toast_number;
-    
+
     if (output && output_size) {
         vui_strncpy(output, vpi_toast_string, output_size);
     }

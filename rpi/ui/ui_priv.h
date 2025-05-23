@@ -90,7 +90,7 @@ typedef struct {
     /// @brief Caller-defined function for whenever the animation is complete
     vui_callback_t complete;
 
-    /// @brief 
+    /// @brief
     void *complete_data;
 } vui_animation_t;
 
@@ -99,6 +99,7 @@ typedef void (*vui_vibrate_handler_t)(uint8_t vibrate, void *userdata);
 typedef int (*vui_font_height_handler_t)(vui_font_size_t size, void *userdata);
 typedef void (*vui_text_open_handler_t)(vui_context_t *ctx, int textedit, int open, void *userdata);
 typedef vui_power_state_t (*vui_power_state_handler_t)(int *percent);
+typedef void (*vui_mic_enabled_handler_t)(vui_context_t *ctx, int enabled, void *userdata);
 
 typedef struct vui_context_t {
     void *platform_data;
@@ -138,6 +139,10 @@ typedef struct vui_context_t {
     struct timeval active_textedit_time;
     int quit;
     vui_power_state_handler_t power_state_handler;
+	vui_mic_callback_t mic_callback;
+	void *mic_callback_data;
+	vui_mic_enabled_handler_t mic_enabled_handler;
+	void *mic_enabled_handler_data;
 } vui_context_t;
 
 #endif // VANILLA_PI_UI_PRIV_H

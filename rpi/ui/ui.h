@@ -45,6 +45,7 @@ typedef struct vui_context_t vui_context_t;
 typedef void (*vui_callback_t)(vui_context_t *ctx, void *userdata);
 typedef void (*vui_button_callback_t)(vui_context_t *ctx, int button, void *userdata);
 typedef void (*vui_anim_step_callback_t)(vui_context_t *ctx, int64_t time, void *userdata);
+typedef void (*vui_mic_callback_t)(void *userdata, const uint8_t *stream, size_t len);
 
 typedef enum {
     VUI_DIR_LEFT,
@@ -159,5 +160,11 @@ void vui_vibrate_set(vui_context_t *ctx, uint8_t val);
  * Power-related functions
  */
 vui_power_state_t vui_power_state_get(vui_context_t *ctx, int *percent);
+
+/**
+ * Microphone-related functions
+ */
+void vui_mic_enabled_set(vui_context_t *ctx, int enabled);
+void vui_mic_callback_set(vui_context_t *ctx, vui_mic_callback_t callback, void *userdata);
 
 #endif // VANILLA_PI_UI_H

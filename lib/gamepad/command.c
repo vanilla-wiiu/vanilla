@@ -191,9 +191,12 @@ void handle_generic_packet(gamepad_context_t *info, int skt, GenericPacket *requ
     send_generic_response(skt, (CmdHeader *) &response);
 }
 
-void handle_uac_uvc_packet(int skt, UvcUacPacket *request)
+void handle_uac_uvc_packet(gamepad_context_t *info, int skt, UvcUacPacket *request)
 {
     vanilla_log("uac/uvc - mic_enable: %u, mic_freq: %u, mic_mute: %u, mic_volume: %i, mic_volume2: %i", request->uac_uvc.mic_enable, request->uac_uvc.mic_freq, request->uac_uvc.mic_mute, request->uac_uvc.mic_volume, request->uac_uvc.mic_volume_2);
+
+	uint8_t mic_enabled = request->uac_uvc.mic_enable;
+	push_event(info->event_loop, VANILLA_EVENT_MIC, &mic_enabled, sizeof(mic_enabled));
 
 	print_hex(&request->uac_uvc, sizeof(request->uac_uvc));
 	vanilla_log_no_newline("\n");
@@ -238,7 +241,7 @@ void handle_command_packet(gamepad_context_t *info, int skt, CmdHeader *request)
         }
         case CMD_UVC_UAC:
         {
-            handle_uac_uvc_packet(skt, (UvcUacPacket *)request);
+            handle_uac_uvc_packet(info, skt, (UvcUacPacket *)request);
             break;
         }
         case CMD_TIME:
