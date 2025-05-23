@@ -105,7 +105,10 @@ void send_to_console(int fd, const void *data, size_t data_size, uint16_t port)
 
     ssize_t sent = sendto(fd, data, data_size, 0, (const struct sockaddr *) &addr, addr_size);
     if (sent == -1) {
-        vanilla_log("Failed to send to Wii U socket: fd: %d, port: %d, errno: %i", fd, console_port, skterr());
+		int err = skterr();
+		if (err != 111) { // 111 is connection refused, occurs if we lose connection, but we'll already know that for other reasons so we don't need to spam the console with this error
+			vanilla_log("Failed to send to Wii U socket: fd: %d, port: %d, errno: %i", fd, console_port, skterr());
+		}
     }
 }
 

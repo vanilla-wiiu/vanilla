@@ -876,7 +876,7 @@ void *sync_with_console_internal(void *data)
                         nlprint("CRED RECV: %.*s", buf_len, buf);
                     }
 
-                    if (!memcmp("<3>WPS-CRED-RECEIVED", buf, 20)) {
+                    if (strstr(buf, "WPS-SUCCESS")) {
                         nlprint("RECEIVED AUTHENTICATION FROM CONSOLE");
                         cred_received = 1;
                         break;
