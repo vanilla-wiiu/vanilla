@@ -27,15 +27,15 @@ int main(int argc, const char **argv)
 	}
 
 	for (int i = 0; i < sizeof(bytes); i++) {
-        bytes[i] = (unsigned char) reverse_bits(bytes[i], 8);
-    }
+		bytes[i] = (unsigned char) reverse_bits(bytes[i], 8);
+	}
 
-    AudioPacket *ap = (AudioPacket *) bytes;
+	AudioPacket *ap = (AudioPacket *) bytes;
 
-    ap->format = reverse_bits(ap->format, 3);
-    ap->seq_id = reverse_bits(ap->seq_id, 10);
-    ap->payload_size = reverse_bits(ap->payload_size, 16);//ntohs(ap->payload_size);
-    ap->timestamp = reverse_bits(ap->timestamp, 32);
+	ap->format = reverse_bits(ap->format, 3);
+	ap->seq_id = reverse_bits(ap->seq_id, 10);
+	ap->payload_size = reverse_bits(ap->payload_size, 16);//ntohs(ap->payload_size);
+	ap->timestamp = reverse_bits(ap->timestamp, 32);
 
 	printf("Format: %u\n", ap->format);
 	printf("Mono: %u\n", ap->mono);
