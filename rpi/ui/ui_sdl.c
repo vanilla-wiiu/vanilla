@@ -360,24 +360,24 @@ int vui_init_sdl(vui_context_t *ctx, int fullscreen)
         return -1;
     }
 
-    char font_filename[128];
+    char font_filename[4096];
     vpi_asset_filename(font_filename, sizeof(font_filename), "font", "system.ttf");
 
     sdl_ctx->sysfont = TTF_OpenFont(font_filename, 36);
     if (!sdl_ctx->sysfont) {
-        vpilog("Failed to TTF_OpenFont\n");
+        vpilog("Failed to TTF_OpenFont: %s\n", font_filename);
         return -1;
     }
 
     sdl_ctx->sysfont_small = TTF_OpenFont(font_filename, 24);
     if (!sdl_ctx->sysfont_small) {
-        vpilog("Failed to TTF_OpenFont\n");
+        vpilog("Failed to TTF_OpenFont: %s\n", font_filename);
         return -1;
     }
 
     sdl_ctx->sysfont_tiny = TTF_OpenFont(font_filename, 16);
     if (!sdl_ctx->sysfont_tiny) {
-        vpilog("Failed to TTF_OpenFont\n");
+        vpilog("Failed to TTF_OpenFont: %s\n", font_filename);
         return -1;
     }
 
