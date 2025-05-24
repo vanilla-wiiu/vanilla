@@ -41,6 +41,7 @@ if (VANILLA_BUILD_VENDORED)
     set(LIBXML2_WITH_PYTHON OFF)
     set(LIBXML2_WITH_ICONV OFF)
     set(LIBXML2_WITH_PROGRAMS OFF)
+    set(LIBXML2_WITH_TESTS OFF)
     FetchContent_Declare(
         libxml2
         GIT_REPOSITORY https://gitlab.gnome.org/GNOME/libxml2.git
