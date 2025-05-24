@@ -207,13 +207,12 @@ void *wpa_setup_environment(void *data)
         nmdev = nm_client_get_device_by_iface(nmcli, args->wireless_interface);
         if (!nmdev) {
             nlprint("FAILED TO GET STATUS OF DEVICE %s", args->wireless_interface);
-            goto die_and_close_nmcli;
-        }
-
-        if ((is_managed = nm_device_get_managed(nmdev))) {
-            nm_device_set_managed(nmdev, FALSE);
-            nlprint("TEMPORARILY SET %s TO UNMANAGED", args->wireless_interface);
-        }
+        } else {
+			if ((is_managed = nm_device_get_managed(nmdev))) {
+				nm_device_set_managed(nmdev, FALSE);
+				nlprint("TEMPORARILY SET %s TO UNMANAGED", args->wireless_interface);
+			}
+		}
     } else {
         // Failed to get NetworkManager, host may just not have it?
         g_message("Failed to create NetworkManager client: %s", nm_err->message);
