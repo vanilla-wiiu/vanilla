@@ -49,7 +49,8 @@ if (VANILLA_BUILD_VENDORED)
     )
 
     FetchContent_MakeAvailable(SDL2 SDL2_ttf SDL2_image libxml2)
-    set(FFMPEG_INSTALL_DIR "${CMAKE_CURRENT_BINARY_DIR}/ffmpeg/install")
+    set(FFMPEG_PREFIX_DIR "${CMAKE_CURRENT_BINARY_DIR}/FFmpeg-${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}")
+    set(FFMPEG_INSTALL_DIR "${FFMPEG_PREFIX_DIR}/install")
     set(FFMPEG_CONFIGURE_ARGS
         --enable-gpl
         --disable-shared
@@ -85,17 +86,31 @@ if (VANILLA_BUILD_VENDORED)
             set(FFMPEG_TARGET_OS "darwin")
         elseif(ANDROID)
             set(FFMPEG_TARGET_OS "android")
-            string(REPLACE "-" "" _android_ver ${ANDROID_PLATFORM})
-            # message(FATAL_ERROR ${_android_ver})
+
+			# Get Android platform version (inexplicably apparently there literally isn't a better way to do this)
+            string(REPLACE "-" " " _android_platform_args ${ANDROID_PLATFORM})
+			separate_arguments(_android_platform_args)
+			list(GET _android_platform_args 1 _android_ver)
+
+			# Construct compiler
+			if("${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "aarch64")
+				set(_android_ffmpeg_cross_prefix "aarch64-linux-android${_android_ver}-")
+			elseif("${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "armv7-a")
+				set(_android_ffmpeg_cross_prefix "armv7a-linux-androideabi${_android_ver}-")
+			elseif("${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "i686")
+				set(_android_ffmpeg_cross_prefix "i686-linux-android${_android_ver}-")
+			elseif("${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "x86_64")
+				set(_android_ffmpeg_cross_prefix "x86_64-linux-android${_android_ver}-")
+			else()
+				message(FATAL_ERROR "Don't know how to compile FFmpeg on architecture ${CMAKE_SYSTEM_PROCESSOR}")
+			endif()
+
             list(APPEND FFMPEG_CONFIGURE_ARGS
-                --cross-prefix=${CMAKE_SYSTEM_PROCESSOR}-linux-${_android_ver}-
-                # --cc=${CMAKE_C_COMPILER}
-                # --host-cc=${CMAKE_C_COMPILER}
-                # --ld=${CMAKE_C_COMPILER}
-                # --host-ld=${CMAKE_C_COMPILER}
-                --host-cc=${CMAKE_SYSTEM_PROCESSOR}-linux-${_android_ver}-clang
+				--cross-prefix=${_android_ffmpeg_cross_prefix}
+				--host-cc=${_android_ffmpeg_cross_prefix}clang
+				--host-ld=${_android_ffmpeg_cross_prefix}clang
                 --extra-cflags=${CMAKE_C_FLAGS}
-                --extra-ldflags=${CMAKE_STATIC_LINKER_FLAGS}
+                --extra-ldflags=${CMAKE_SHARED_LINKER_FLAGS} # CMAKE_STATIC_LINKER_FLAGS is technically more appropriate but it's empty for some reason
                 --sysroot=${CMAKE_ANDROID_NDK}/toolchains/llvm/prebuilt/linux-${CMAKE_HOST_SYSTEM_PROCESSOR}/sysroot
                 --ar=${CMAKE_ANDROID_NDK}/toolchains/llvm/prebuilt/linux-${CMAKE_HOST_SYSTEM_PROCESSOR}/bin/llvm-ar
                 --ranlib=${CMAKE_ANDROID_NDK}/toolchains/llvm/prebuilt/linux-${CMAKE_HOST_SYSTEM_PROCESSOR}/bin/llvm-ranlib
@@ -103,7 +118,7 @@ if (VANILLA_BUILD_VENDORED)
                 --nm=${CMAKE_ANDROID_NDK}/toolchains/llvm/prebuilt/linux-${CMAKE_HOST_SYSTEM_PROCESSOR}/bin/llvm-nm
                 --strip=${CMAKE_ANDROID_NDK}/toolchains/llvm/prebuilt/linux-${CMAKE_HOST_SYSTEM_PROCESSOR}/bin/llvm-strip
             )
-            list(APPEND FFMPEG_ENV "PATH=$ENV{PATH}:${CMAKE_ANDROID_NDK}/toolchains/llvm/prebuilt/linux-${CMAKE_HOST_SYSTEM_PROCESSOR}/bin")
+            list(APPEND FFMPEG_ENV "PATH=$ENV{PATH}:${CMAKE_ANDROID_NDK}/toolchains/llvm/prebuilt/linux-${CMAKE_HOST_SYSTEM_PROCESSOR}/bin:CFLAGS=${CMAKE_C_FLAGS}:LDFLAGS=${CMAKE_SHARED_LINKER_FLAGS}")
         elseif(LINUX)
             set(FFMPEG_TARGET_OS "linux")
             list(APPEND FFMPEG_CONFIGURE_ARGS
@@ -140,9 +155,10 @@ if (VANILLA_BUILD_VENDORED)
 
     ExternalProject_Add(FFmpeg
         DOWNLOAD_DIR ${CMAKE_CURRENT_BINARY_DIR}
+		PREFIX ${FFMPEG_PREFIX_DIR}
         GIT_REPOSITORY https://git.ffmpeg.org/ffmpeg.git
         GIT_TAG n7.1
-        CONFIGURE_COMMAND ${CMAKE_COMMAND} -E env ${FFMPEG_ENV} ../FFmpeg/configure ${FFMPEG_CONFIGURE_ARGS}
+        CONFIGURE_COMMAND ${CMAKE_COMMAND} -E env ${FFMPEG_ENV} "../FFmpeg/configure" ${FFMPEG_CONFIGURE_ARGS}
         BUILD_COMMAND ${CMAKE_COMMAND} -E env ${FFMPEG_ENV} make -j${CMAKE_BUILD_PARALLEL_LEVEL}
         UPDATE_COMMAND ""
         BUILD_BYPRODUCTS

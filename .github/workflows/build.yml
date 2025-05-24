@@ -18,7 +18,7 @@ jobs:
           - os: windows
             arch: x86_64
           - os: android
-            arch: x86_64
+            arch: universal
     runs-on: ubuntu-24.04
     steps:
     - uses: actions/checkout@v4
@@ -26,7 +26,7 @@ jobs:
         submodules: recursive
 
     - name: Install dependencies for cross-compiling
-      if: ${{ matrix.platform.arch != 'x86_64' }}
+      if: ${{ matrix.platform.arch != 'x86_64' && matrix.platform.os == 'linux' }}
       run: sudo apt -y update && sudo apt -y install qemu-user-static binfmt-support
 
     - name: Restore Docker cache
@@ -35,16 +35,16 @@ jobs:
       with:
         path: path/to/dependencies
         key: ${{ matrix.platform.os }}-${{ matrix.platform.arch }}
-    
+
     - name: Build Docker image
       run: |
         cd docker/${{ matrix.platform.os }}
         docker build --build-arg ARCH=${{ matrix.platform.arch }} -t vanilla-${{ matrix.platform.os }}-${{ matrix.platform.arch }} .
-      
+
     - name: Run Docker container
       run: |
         docker run -v "${{ github.workspace }}:/vanilla" -v "${{ github.workspace }}/build:/install" -e ANDROID_SIGNING_KEY=${{ secrets.ANDROID_SIGNING_KEY }} vanilla-${{ matrix.platform.os }}-${{ matrix.platform.arch }}
-    
+
     - name: Archive
       run: |
         tar czf vanilla-${{ matrix.platform.os }}-${{ matrix.platform.arch }}.tar.gz -C "${{ github.workspace }}/build" .
@@ -63,4 +63,4 @@ jobs:
       run: |
         curl -fLOSs --retry 2 --retry-delay 60 https://github.com/probonopd/uploadtool/raw/master/upload.sh
         bash upload.sh vanilla-${{ matrix.platform.os }}-${{ matrix.platform.arch }}.tar.gz
-      
+
