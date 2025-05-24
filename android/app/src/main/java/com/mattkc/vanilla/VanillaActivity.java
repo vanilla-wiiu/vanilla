@@ -11,9 +11,8 @@ public class VanillaActivity extends SDLActivity {
 			// "SDL2_mixer",
 			// "SDL2_net",
 			"SDL2_ttf",
-			"vanilla-pi",
 			"xml2",
-			"main"
+			"vanilla-pi"
 		};
 	}
 }
