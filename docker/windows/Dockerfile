@@ -1,7 +1,7 @@
 FROM ubuntu:24.04
 
 RUN apt -y update
-RUN DEBIAN_FRONTEND=noninteractive TZ=Etc/UTC apt -y install gcc-mingw-w64 git wget make nasm
+RUN DEBIAN_FRONTEND=noninteractive TZ=Etc/UTC apt -y install gcc-mingw-w64 g++-mingw-w64 git wget make nasm
 
 # Install newer version of CMake
 ENV CMAKE_VER=3.31.5
