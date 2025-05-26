@@ -126,18 +126,26 @@ void init_gamepad()
 
 SDL_GameController *find_valid_controller()
 {
-	for (int i = 0; i < SDL_NumJoysticks(); i++) {
-		SDL_GameController *c = SDL_GameControllerOpen(i);
-		if (c) {
-            // Enable gyro/accelerometer
-            SDL_GameControllerSetSensorEnabled(c, SDL_SENSOR_ACCEL, 1);
-            SDL_GameControllerSetSensorEnabled(c, SDL_SENSOR_GYRO, 1);
+	SDL_GameController *c = NULL;
 
-			return c;
+	vpilog("Looking for game controllers...\n");
+	for (int i = 0; i < SDL_NumJoysticks(); i++) {
+		vpilog("  Found %i: %s\n", i, SDL_GameControllerNameForIndex(i));
+		if (!c) {
+			c = SDL_GameControllerOpen(i);
+			if (c) {
+				// Enable gyro/accelerometer
+				SDL_GameControllerSetSensorEnabled(c, SDL_SENSOR_ACCEL, 1);
+				SDL_GameControllerSetSensorEnabled(c, SDL_SENSOR_GYRO, 1);
+			}
 		}
 	}
 
-	return NULL;
+	if (c) {
+		vpilog("Using game controller \"%s\"\n", SDL_GameControllerName(c));
+	}
+
+	return c;
 }
 
 void vui_sdl_audio_handler(const void *data, size_t size, void *userdata)
