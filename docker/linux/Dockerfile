@@ -6,9 +6,9 @@ ENV ARCH=${ARCH}
 ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ=Etc/UTC
 
-RUN if [ "${ARCH}" = "aarch64" ]; then export DEBARCH="arm64"; export DEBGCC="gcc-aarch64-linux-gnu"; \
-    elif [ "${ARCH}" = "x86_64" ]; then export DEBARCH="amd64"; export DEBGCC="gcc"; \
-    else export DEBARCH="${ARCH}"; export DEBGCC="gcc"; fi \
+RUN if [ "${ARCH}" = "aarch64" ]; then export DEBARCH="arm64"; export DEBGCC="gcc-aarch64-linux-gnu g++-aarch64-linux-gnu"; \
+    elif [ "${ARCH}" = "x86_64" ]; then export DEBARCH="amd64"; export DEBGCC="gcc g++"; \
+    else export DEBARCH="${ARCH}"; export DEBGCC="gcc g++"; fi \
     && dpkg --add-architecture $DEBARCH \
     && apt -y update \
     && apt -y install $DEBGCC ninja-build nasm git wget pkg-config make \
