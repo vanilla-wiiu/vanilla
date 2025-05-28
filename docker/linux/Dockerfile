@@ -27,24 +27,26 @@ RUN if [ "${ARCH}" = "aarch64" ]; then export DEBARCH="arm64"; export DEBGCC="gc
     && apt -y install libnm-dev:$DEBARCH \
     && apt -y install libdrm-dev:$DEBARCH \
     && apt -y install libxi-dev:$DEBARCH \
-    && apt -y install libxcb-xinput-dev:$DEBARCH
-# RUN apt -y install libpipewire-dev:$DEBARCH
-
-# RUN dnf -y update
-# RUN dnf -y install 'dnf-command(config-manager)'
-# RUN dnf -y config-manager --set-enabled powertools
-# RUN dnf -y install gcc-toolset-14
-# RUN dnf -y install wget
-# RUN dnf -y install git
-# RUN dnf -y install nasm
-# RUN dnf -y install libnl3-devel
-# RUN dnf -y install openssl-devel
-# RUN dnf -y install pulseaudio-libs-devel
-# RUN dnf -y install alsa-lib-devel
-# RUN dnf -y install libX11-devel
-# RUN dnf -y install libXext-devel
-# RUN dnf -y install wayland-devel
-# RUN dnf -y install libdrm-devel
+    && apt -y install libxcb-xinput-dev:$DEBARCH \
+    && apt -y install libdbus-1-dev:$DEBARCH \
+    && apt -y install libibus-1.0-dev:$DEBARCH \
+    && apt -y install libsndio-dev:$DEBARCH \
+    && apt -y install libxrandr-dev:$DEBARCH \
+    && apt -y install libsamplerate0-dev:$DEBARCH \
+    && apt -y install libpipewire-0.3-dev:$DEBARCH \
+    && apt -y install libjack-dev:$DEBARCH \
+    && apt -y install libxcursor-dev:$DEBARCH \
+    && apt -y install libxss-dev:$DEBARCH \
+    && apt -y install libdecor-0-dev:$DEBARCH \
+    && apt -y install libudev-dev:$DEBARCH \
+    && apt -y install libxinerama-dev:$DEBARCH \
+    && apt -y install libxv-dev:$DEBARCH \
+    && apt -y install libxxf86vm-dev:$DEBARCH \
+    && apt -y install libxt-dev:$DEBARCH \
+    && apt -y install libsm-dev:$DEBARCH \
+    && apt -y install libice-dev:$DEBARCH \
+    && apt -y install libgbm-dev:$DEBARCH \
+    && apt -y install libxkbcommon-dev:$DEBARCH
 
 # Install newer version of CMake
 ENV CMAKE_VER=3.31.5
