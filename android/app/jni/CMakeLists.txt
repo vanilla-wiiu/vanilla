@@ -8,6 +8,3 @@ project(GAME)
 
 # Your game and its CMakeLists.txt are in a subfolder named "src"
 add_subdirectory(../../.. "${CMAKE_SOURCE_DIR}/build")
-
-# add_subdirectory(src)
-
