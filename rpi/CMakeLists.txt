@@ -41,7 +41,7 @@ function(compile_ffmpeg _target_name _system_name _system_processor)
         elseif(APPLE)
             set(FFMPEG_TARGET_OS "darwin")
 			set(FFMPEG_LDFLAGS "${CMAKE_C_FLAGS} -arch ${_system_processor} -mmacosx-version-min=${CMAKE_OSX_DEPLOYMENT_TARGET} -L${CMAKE_OSX_SYSROOT}/usr/lib -lSystem")
-			set(FFMPEG_CFLAGS "${CMAKE_C_FLAGS} -arch ${_system_processor} -mmacosx-version-min=${CMAKE_OSX_DEPLOYMENT_TARGET} -I${CMAKE_OSX_SYSROOT}/usr/include")
+			set(FFMPEG_CFLAGS "${CMAKE_C_FLAGS} -arch ${_system_processor} -mmacosx-version-min=${CMAKE_OSX_DEPLOYMENT_TARGET} -w -I${CMAKE_OSX_SYSROOT}/usr/include")
             list(APPEND FFMPEG_CONFIGURE_ARGS
 				--disable-asm
 				--nm=${CMAKE_NM}
@@ -120,7 +120,7 @@ function(compile_ffmpeg _target_name _system_name _system_processor)
             IMPORTED_LOCATION ${_component_lib}
         )
         list(APPEND FFMPEG_FILES ${_component_lib})
-        add_dependencies("${_target_name}::${_component}" FFmpeg)
+        add_dependencies("${_target_name}::${_component}" ${_target_name})
     endforeach()
 
     list(APPEND FFMPEG_FILES ${FFMPEG_INCLUDE_DIR})
@@ -195,18 +195,27 @@ if (VANILLA_BUILD_VENDORED)
 
 		# lipo both binaries together
 		foreach(_component ${_ffmpeg_components})
+			# Determine which architectures we will "lipo" together
 			set(_lipo_inputs "")
+			set(_lipo_files "")
 			foreach (_arch ${CMAKE_OSX_ARCHITECTURES})
-				get_property(_basename TARGET FFmpeg_${_arch}::${_component} PROPERTY LOCATION)
-				list(APPEND _lipo_inputs "${_basename}")
+				# Append target
+				list(APPEND _lipo_inputs FFmpeg_${_arch}::${_component})
+
+				# Append filename
+				get_property(_lib_file TARGET FFmpeg_${_arch}::${_component} PROPERTY LOCATION)
+				list(APPEND _lipo_files ${_lib_file})
 			endforeach()
 
+			# Create command to lipo architectures together
 			set(_component_lib "${CMAKE_CURRENT_BINARY_DIR}/${_component}.a")
 			add_custom_command(
 				OUTPUT ${_component_lib}
-				COMMAND lipo -create -output ${_component_lib} ${_lipo_inputs}
+				COMMAND lipo -create -output ${_component_lib} ${_lipo_files}
 				DEPENDS ${_lipo_inputs}
 			)
+
+			# Add as static library
 			add_custom_target("FFmpeg_${_component}" DEPENDS ${_component_lib})
 			add_library("FFmpeg::${_component}" STATIC IMPORTED)
 			add_dependencies("FFmpeg::${_component}" "FFmpeg_${_component}")
