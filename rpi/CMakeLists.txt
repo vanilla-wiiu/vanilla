@@ -2,6 +2,142 @@ cmake_minimum_required(VERSION 3.22)
 
 set(_sdl_lib SDL2::SDL2)
 set(_vanilla_pi_libs "")
+set(_ffmpeg_components avformat avcodec avutil swscale)
+
+function(compile_ffmpeg _target_name _system_name _system_processor)
+	set(FFMPEG_PREFIX_DIR "${CMAKE_CURRENT_BINARY_DIR}/FFmpeg-${_system_name}-${_system_processor}")
+    set(FFMPEG_INSTALL_DIR "${FFMPEG_PREFIX_DIR}/install")
+    set(FFMPEG_CONFIGURE_ARGS
+        --enable-gpl
+        --disable-shared
+        --enable-static
+        --disable-programs
+        --prefix=${FFMPEG_INSTALL_DIR}
+        --disable-doc
+        --disable-swresample
+        --disable-postproc
+        --disable-avfilter
+        --disable-encoders
+        --disable-decoders
+        --disable-demuxers
+        --disable-muxers
+        --disable-network
+        --enable-muxer=mp4
+        --enable-muxer=image2
+        --enable-decoder=h264
+        --enable-encoder=png
+    )
+    if (CMAKE_CROSSCOMPILING)
+        set(FFMPEG_TARGET_OS ${_system_name})
+        set(FFMPEG_ENV "")
+        if (MINGW)
+            set(FFMPEG_TARGET_OS "mingw32")
+            list(APPEND FFMPEG_CONFIGURE_ARGS
+                --cross-prefix=${_system_processor}-w64-mingw32-
+                --host-cc=${CMAKE_C_COMPILER} # HACK: FFmpeg complains about "lack of C11 support" without this because it can't find "gcc"
+            )
+        elseif(MSVC)
+            set(FFMPEG_TARGET_OS "win32")
+        elseif(APPLE)
+            set(FFMPEG_TARGET_OS "darwin")
+			set(FFMPEG_LDFLAGS "${CMAKE_C_FLAGS} -arch ${_system_processor} -mmacosx-version-min=${CMAKE_OSX_DEPLOYMENT_TARGET} -L${CMAKE_OSX_SYSROOT}/usr/lib -lSystem")
+			set(FFMPEG_CFLAGS "${CMAKE_C_FLAGS} -arch ${_system_processor} -mmacosx-version-min=${CMAKE_OSX_DEPLOYMENT_TARGET} -I${CMAKE_OSX_SYSROOT}/usr/include")
+            list(APPEND FFMPEG_CONFIGURE_ARGS
+				--disable-asm
+				--nm=${CMAKE_NM}
+				--ar=${CMAKE_AR}
+				--ranlib=${CMAKE_RANLIB}
+				--cc=${CMAKE_C_COMPILER}
+				--cxx=${CMAKE_CXX_COMPILER}
+				--ld=${CMAKE_C_COMPILER}
+				--strip=${CMAKE_STRIP}
+                --host-cc=${CMAKE_C_COMPILER}
+                --host-ld=${CMAKE_C_COMPILER}
+				--extra-cflags=${FFMPEG_CFLAGS}
+				--extra-cxxflags=${FFMPEG_CFLAGS}
+				--extra-ldflags=${FFMPEG_LDFLAGS}
+            )
+        elseif(ANDROID)
+            set(FFMPEG_TARGET_OS "android")
+
+			# Get Android platform version (inexplicably apparently there literally isn't a better way to do this)
+            string(REPLACE "-" " " _android_platform_args ${ANDROID_PLATFORM})
+			separate_arguments(_android_platform_args)
+			list(GET _android_platform_args 1 _android_ver)
+
+			# Construct compiler
+			if("${_system_processor}" STREQUAL "aarch64")
+				set(_android_ffmpeg_cross_prefix "aarch64-linux-android${_android_ver}-")
+			elseif("${_system_processor}" STREQUAL "armv7-a")
+				set(_android_ffmpeg_cross_prefix "armv7a-linux-androideabi${_android_ver}-")
+			elseif("${_system_processor}" STREQUAL "i686")
+				set(_android_ffmpeg_cross_prefix "i686-linux-android${_android_ver}-")
+			elseif("${_system_processor}" STREQUAL "x86_64")
+				set(_android_ffmpeg_cross_prefix "x86_64-linux-android${_android_ver}-")
+			else()
+				message(FATAL_ERROR "Don't know how to compile FFmpeg on architecture ${_system_processor}")
+			endif()
+
+            list(APPEND FFMPEG_CONFIGURE_ARGS
+				--cross-prefix=${_android_ffmpeg_cross_prefix}
+				--host-cc=${_android_ffmpeg_cross_prefix}clang
+				--host-ld=${_android_ffmpeg_cross_prefix}clang
+                --extra-cflags=${CMAKE_C_FLAGS}
+                --extra-ldflags=${CMAKE_SHARED_LINKER_FLAGS} # CMAKE_STATIC_LINKER_FLAGS is technically more appropriate but it's empty for some reason
+                --sysroot=${CMAKE_ANDROID_NDK}/toolchains/llvm/prebuilt/linux-${CMAKE_HOST_SYSTEM_PROCESSOR}/sysroot
+                --ar=${CMAKE_ANDROID_NDK}/toolchains/llvm/prebuilt/linux-${CMAKE_HOST_SYSTEM_PROCESSOR}/bin/llvm-ar
+                --ranlib=${CMAKE_ANDROID_NDK}/toolchains/llvm/prebuilt/linux-${CMAKE_HOST_SYSTEM_PROCESSOR}/bin/llvm-ranlib
+                --disable-asm
+                --nm=${CMAKE_ANDROID_NDK}/toolchains/llvm/prebuilt/linux-${CMAKE_HOST_SYSTEM_PROCESSOR}/bin/llvm-nm
+                --strip=${CMAKE_ANDROID_NDK}/toolchains/llvm/prebuilt/linux-${CMAKE_HOST_SYSTEM_PROCESSOR}/bin/llvm-strip
+            )
+            list(APPEND FFMPEG_ENV "PATH=$ENV{PATH}:${CMAKE_ANDROID_NDK}/toolchains/llvm/prebuilt/linux-${CMAKE_HOST_SYSTEM_PROCESSOR}/bin:CFLAGS=${CMAKE_C_FLAGS}:LDFLAGS=${CMAKE_SHARED_LINKER_FLAGS}")
+        elseif(LINUX)
+            set(FFMPEG_TARGET_OS "linux")
+            list(APPEND FFMPEG_CONFIGURE_ARGS
+                --cross-prefix=${CMAKE_CROSS_PREFIX}
+                --host-cc=${CMAKE_C_COMPILER}
+            )
+        endif()
+        list(APPEND FFMPEG_CONFIGURE_ARGS
+            --enable-cross-compile
+            --arch=${_system_processor}
+            --target-os=${FFMPEG_TARGET_OS}
+        )
+    endif()
+
+    set(FFMPEG_FILES "")
+    set(FFMPEG_INCLUDE_DIR "${FFMPEG_INSTALL_DIR}/include")
+    foreach(_component ${_ffmpeg_components})
+        add_library("${_target_name}::${_component}" SHARED IMPORTED)
+        if (MSVC)
+            set(_component_lib "${FFMPEG_INSTALL_DIR}/bin/${_component}.lib")
+        else()
+            set(_component_lib "${FFMPEG_INSTALL_DIR}/lib/lib${_component}.a")
+        endif()
+        set_target_properties("${_target_name}::${_component}" PROPERTIES
+            IMPORTED_IMPLIB ${_component_lib}
+            IMPORTED_LOCATION ${_component_lib}
+        )
+        list(APPEND FFMPEG_FILES ${_component_lib})
+        add_dependencies("${_target_name}::${_component}" FFmpeg)
+    endforeach()
+
+    list(APPEND FFMPEG_FILES ${FFMPEG_INCLUDE_DIR})
+    include_directories(${FFMPEG_INCLUDE_DIR})
+
+    ExternalProject_Add(${_target_name}
+        DOWNLOAD_DIR ${CMAKE_CURRENT_BINARY_DIR}
+		PREFIX ${FFMPEG_PREFIX_DIR}
+        GIT_REPOSITORY https://git.ffmpeg.org/ffmpeg.git
+        GIT_TAG n7.1
+        CONFIGURE_COMMAND ${CMAKE_COMMAND} -E env ${FFMPEG_ENV} "../${_target_name}/configure" ${FFMPEG_CONFIGURE_ARGS}
+        BUILD_COMMAND ${CMAKE_COMMAND} -E env ${FFMPEG_ENV} make -j${CMAKE_BUILD_PARALLEL_LEVEL}
+        UPDATE_COMMAND ""
+        BUILD_BYPRODUCTS
+            ${FFMPEG_FILES}
+    )
+endfunction()
 
 if (VANILLA_BUILD_VENDORED)
     # Static build
@@ -50,121 +186,38 @@ if (VANILLA_BUILD_VENDORED)
     )
 
     FetchContent_MakeAvailable(SDL2 SDL2_ttf SDL2_image libxml2)
-    set(FFMPEG_PREFIX_DIR "${CMAKE_CURRENT_BINARY_DIR}/FFmpeg-${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}")
-    set(FFMPEG_INSTALL_DIR "${FFMPEG_PREFIX_DIR}/install")
-    set(FFMPEG_CONFIGURE_ARGS
-        --enable-gpl
-        --disable-shared
-        --enable-static
-        --disable-programs
-        --prefix=${FFMPEG_INSTALL_DIR}
-        --disable-doc
-        --disable-swresample
-        --disable-postproc
-        --disable-avfilter
-        --disable-encoders
-        --disable-decoders
-        --disable-demuxers
-        --disable-muxers
-        --disable-network
-        --enable-muxer=mp4
-        --enable-muxer=image2
-        --enable-decoder=h264
-        --enable-encoder=png
-    )
-    if (CMAKE_CROSSCOMPILING)
-        set(FFMPEG_TARGET_OS ${CMAKE_SYSTEM_NAME})
-        set(FFMPEG_ENV "")
-        if (MINGW)
-            set(FFMPEG_TARGET_OS "mingw32")
-            list(APPEND FFMPEG_CONFIGURE_ARGS
-                --cross-prefix=${CMAKE_SYSTEM_PROCESSOR}-w64-mingw32-
-                --host-cc=${CMAKE_C_COMPILER} # HACK: FFmpeg complains about "lack of C11 support" without this because it can't find "gcc"
-            )
-        elseif(MSVC)
-            set(FFMPEG_TARGET_OS "win32")
-        elseif(APPLE)
-            set(FFMPEG_TARGET_OS "darwin")
-        elseif(ANDROID)
-            set(FFMPEG_TARGET_OS "android")
 
-			# Get Android platform version (inexplicably apparently there literally isn't a better way to do this)
-            string(REPLACE "-" " " _android_platform_args ${ANDROID_PLATFORM})
-			separate_arguments(_android_platform_args)
-			list(GET _android_platform_args 1 _android_ver)
+	if (APPLE)
+		# Compile FFmpeg for both x86_64 and arm64
+		foreach (_arch ${CMAKE_OSX_ARCHITECTURES})
+			compile_ffmpeg("FFmpeg_${_arch}" "${CMAKE_SYSTEM_NAME}" "${_arch}")
+		endforeach()
 
-			# Construct compiler
-			if("${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "aarch64")
-				set(_android_ffmpeg_cross_prefix "aarch64-linux-android${_android_ver}-")
-			elseif("${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "armv7-a")
-				set(_android_ffmpeg_cross_prefix "armv7a-linux-androideabi${_android_ver}-")
-			elseif("${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "i686")
-				set(_android_ffmpeg_cross_prefix "i686-linux-android${_android_ver}-")
-			elseif("${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "x86_64")
-				set(_android_ffmpeg_cross_prefix "x86_64-linux-android${_android_ver}-")
-			else()
-				message(FATAL_ERROR "Don't know how to compile FFmpeg on architecture ${CMAKE_SYSTEM_PROCESSOR}")
-			endif()
+		# lipo both binaries together
+		foreach(_component ${_ffmpeg_components})
+			set(_lipo_inputs "")
+			foreach (_arch ${CMAKE_OSX_ARCHITECTURES})
+				get_property(_basename TARGET FFmpeg_${_arch}::${_component} PROPERTY LOCATION)
+				list(APPEND _lipo_inputs "${_basename}")
+			endforeach()
 
-            list(APPEND FFMPEG_CONFIGURE_ARGS
-				--cross-prefix=${_android_ffmpeg_cross_prefix}
-				--host-cc=${_android_ffmpeg_cross_prefix}clang
-				--host-ld=${_android_ffmpeg_cross_prefix}clang
-                --extra-cflags=${CMAKE_C_FLAGS}
-                --extra-ldflags=${CMAKE_SHARED_LINKER_FLAGS} # CMAKE_STATIC_LINKER_FLAGS is technically more appropriate but it's empty for some reason
-                --sysroot=${CMAKE_ANDROID_NDK}/toolchains/llvm/prebuilt/linux-${CMAKE_HOST_SYSTEM_PROCESSOR}/sysroot
-                --ar=${CMAKE_ANDROID_NDK}/toolchains/llvm/prebuilt/linux-${CMAKE_HOST_SYSTEM_PROCESSOR}/bin/llvm-ar
-                --ranlib=${CMAKE_ANDROID_NDK}/toolchains/llvm/prebuilt/linux-${CMAKE_HOST_SYSTEM_PROCESSOR}/bin/llvm-ranlib
-                --disable-asm
-                --nm=${CMAKE_ANDROID_NDK}/toolchains/llvm/prebuilt/linux-${CMAKE_HOST_SYSTEM_PROCESSOR}/bin/llvm-nm
-                --strip=${CMAKE_ANDROID_NDK}/toolchains/llvm/prebuilt/linux-${CMAKE_HOST_SYSTEM_PROCESSOR}/bin/llvm-strip
-            )
-            list(APPEND FFMPEG_ENV "PATH=$ENV{PATH}:${CMAKE_ANDROID_NDK}/toolchains/llvm/prebuilt/linux-${CMAKE_HOST_SYSTEM_PROCESSOR}/bin:CFLAGS=${CMAKE_C_FLAGS}:LDFLAGS=${CMAKE_SHARED_LINKER_FLAGS}")
-        elseif(LINUX)
-            set(FFMPEG_TARGET_OS "linux")
-            list(APPEND FFMPEG_CONFIGURE_ARGS
-                --cross-prefix=${CMAKE_CROSS_PREFIX}
-                --host-cc=${CMAKE_C_COMPILER}
-            )
-        endif()
-        list(APPEND FFMPEG_CONFIGURE_ARGS
-            --enable-cross-compile
-            --arch=${CMAKE_SYSTEM_PROCESSOR}
-            --target-os=${FFMPEG_TARGET_OS}
-        )
-    endif()
-
-    set(FFMPEG_FILES "")
-    set(FFMPEG_INCLUDE_DIR "${FFMPEG_INSTALL_DIR}/include")
-    foreach(_component avformat avcodec avutil swscale)
-        add_library("FFmpeg::${_component}" SHARED IMPORTED)
-        if (MSVC)
-            set(_component_lib "${FFMPEG_INSTALL_DIR}/bin/${_component}.lib")
-        else()
-            set(_component_lib "${FFMPEG_INSTALL_DIR}/lib/lib${_component}.a")
-        endif()
-        set_target_properties("FFmpeg::${_component}" PROPERTIES
-            IMPORTED_IMPLIB ${_component_lib}
-            IMPORTED_LOCATION ${_component_lib}
-        )
-        list(APPEND FFMPEG_FILES ${_component_lib})
-        add_dependencies("FFmpeg::${_component}" FFmpeg)
-    endforeach()
-
-    list(APPEND FFMPEG_FILES ${FFMPEG_INCLUDE_DIR})
-    include_directories(${FFMPEG_INCLUDE_DIR})
-
-    ExternalProject_Add(FFmpeg
-        DOWNLOAD_DIR ${CMAKE_CURRENT_BINARY_DIR}
-		PREFIX ${FFMPEG_PREFIX_DIR}
-        GIT_REPOSITORY https://git.ffmpeg.org/ffmpeg.git
-        GIT_TAG n7.1
-        CONFIGURE_COMMAND ${CMAKE_COMMAND} -E env ${FFMPEG_ENV} "../FFmpeg/configure" ${FFMPEG_CONFIGURE_ARGS}
-        BUILD_COMMAND ${CMAKE_COMMAND} -E env ${FFMPEG_ENV} make -j${CMAKE_BUILD_PARALLEL_LEVEL}
-        UPDATE_COMMAND ""
-        BUILD_BYPRODUCTS
-            ${FFMPEG_FILES}
-    )
+			set(_component_lib "${CMAKE_CURRENT_BINARY_DIR}/${_component}.a")
+			add_custom_command(
+				OUTPUT ${_component_lib}
+				COMMAND lipo -create -output ${_component_lib} ${_lipo_inputs}
+				DEPENDS ${_lipo_inputs}
+			)
+			add_custom_target("FFmpeg_${_component}" DEPENDS ${_component_lib})
+			add_library("FFmpeg::${_component}" STATIC IMPORTED)
+			add_dependencies("FFmpeg::${_component}" "FFmpeg_${_component}")
+			set_target_properties("FFmpeg::${_component}" PROPERTIES
+				IMPORTED_IMPLIB ${_component_lib}
+				IMPORTED_LOCATION ${_component_lib}
+			)
+		endforeach()
+	else()
+		compile_ffmpeg("FFmpeg" "${CMAKE_SYSTEM_NAME}" "${CMAKE_SYSTEM_PROCESSOR}")
+	endif()
 endif()
 
 list(APPEND VANILLA_PI_SRC
@@ -201,11 +254,18 @@ list(APPEND VANILLA_PI_SRC
 if (ANDROID)
     add_library(vanilla-pi SHARED ${VANILLA_PI_SRC})
 else()
-    add_executable(vanilla-pi ${VANILLA_PI_SRC})
+    add_executable(vanilla-pi MACOSX_BUNDLE ${VANILLA_PI_SRC})
 endif()
 
-# Ensure executable is installed
-install(TARGETS vanilla-pi)
+if (APPLE)
+	# Set bundle name to be more user-friendly
+	set_target_properties(vanilla-pi PROPERTIES
+		OUTPUT_NAME Vanilla
+	)
+else()
+	# Ensure executable is installed
+	install(TARGETS vanilla-pi)
+endif()
 
 # Find packages (unless using vendored build)
 if (NOT VANILLA_BUILD_VENDORED)
@@ -242,6 +302,10 @@ target_link_libraries(vanilla-pi PRIVATE
     FFmpeg::swscale
     ${_vanilla_pi_libs}
 )
+
+if (APPLE)
+	target_link_libraries(vanilla-pi PRIVATE "-framework VideoToolbox" "-framework CoreMedia" iconv)
+endif()
 
 if (LINUX)
     # Assume this platform is capable of running vanilla-pipe
@@ -284,6 +348,12 @@ if(ANDROID)
     add_custom_command(
         TARGET vanilla-pi POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/assets" "${CMAKE_CURRENT_SOURCE_DIR}/../android/app/src/main/assets"
+    )
+elseif(APPLE)
+	# Put assets in correct place relative to build
+    add_custom_command(
+        TARGET vanilla-pi POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory_if_different "${CMAKE_CURRENT_SOURCE_DIR}/assets" "$<TARGET_FILE_DIR:vanilla-pi>/../Resources/assets"
     )
 else()
     # Put assets in correct place relative to build

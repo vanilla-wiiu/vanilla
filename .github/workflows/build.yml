@@ -19,6 +19,8 @@ jobs:
             arch: x86_64
           - os: android
             arch: universal
+          - os: macos
+            arch: universal
     runs-on: ubuntu-24.04
     steps:
     - uses: actions/checkout@v4

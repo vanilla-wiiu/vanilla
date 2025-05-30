@@ -342,16 +342,19 @@ void connect_as_gamepad_internal(thread_data_t *data)
         push_event(data->event_loop, VANILLA_EVENT_ERROR, &cnn, sizeof(cnn));
 
         pthread_create(&video_thread, NULL, listen_video, &info);
-        pthread_setname_np(video_thread, "vanilla-video");
-
         pthread_create(&audio_thread, NULL, listen_audio, &info);
-        pthread_setname_np(audio_thread, "vanilla-audio");
-
         pthread_create(&input_thread, NULL, listen_input, &info);
-        pthread_setname_np(input_thread, "vanilla-input");
-
         pthread_create(&cmd_thread, NULL, listen_command, &info);
+
+#ifndef __APPLE__
+		// macOS has a different implementation that requires this to be called
+		// from the thread. Since thread name is only really important for
+		// profiling, and that mostly happens on Linux, we just don't bother.
+        pthread_setname_np(video_thread, "vanilla-video");
+        pthread_setname_np(audio_thread, "vanilla-audio");
+        pthread_setname_np(input_thread, "vanilla-input");
         pthread_setname_np(cmd_thread, "vanilla-cmd");
+#endif
 
         while (!is_interrupted()) {
             vanilla_pipe_command_t pipe_state;
