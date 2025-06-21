@@ -1,3 +1,5 @@
+include(ExternalProject)
+
 # Add vanilla-pipe executalbe
 add_executable(vanilla-pipe
     main.c
@@ -7,10 +9,57 @@ add_executable(vanilla-pipe
 # Install vanilla-pipe
 install(TARGETS vanilla-pipe)
 
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(OPENSSL REQUIRED libssl libcrypto)
-pkg_check_modules(LIBNM REQUIRED libnm)
-# pkg_check_modules(LIBNL3 REQUIRED libnl-3.0 libnl-route-3.0 libnl-genl-3.0)
+if (VANILLA_BUILD_VENDORED)
+	# Build OpenSSL
+	set(OPENSSL_DIR ${CMAKE_CURRENT_BINARY_DIR}/openssl)
+	set(OPENSSL_INSTALL_DIR ${OPENSSL_DIR}/install)
+	set(OPENSSL_PROCESSOR ${CMAKE_SYSTEM_PROCESSOR})
+	ExternalProject_Add(openssl
+		SOURCE_DIR ${OPENSSL_DIR}
+		BINARY_DIR ${OPENSSL_DIR}
+		GIT_REPOSITORY https://github.com/openssl/openssl.git
+		GIT_TAG openssl-3.5.0
+		CONFIGURE_COMMAND ./Configure --prefix=${OPENSSL_INSTALL_DIR} linux-${OPENSSL_PROCESSOR}
+		UPDATE_COMMAND ""
+		# BUILD_BYPRODUCTS
+		# 	${WPA_SUPPLICANT_BYPRODUCTS}
+		# 	${HOSTAP_DIR}/wpa_supplicant/libwpa_client.a
+	)
+	set(OPENSSL_LIBRARIES "${OPENSSL_DIR}/libssl.a" "${OPENSSL_DIR}/libcrypto.a")
+	add_dependencies(vanilla-pipe openssl)
+
+	# Build LibNL
+	set(LIBNL_DIR ${CMAKE_CURRENT_BINARY_DIR}/libnl)
+	set(LIBNL_INSTALL_DIR ${LIBNL_DIR}/install)
+	ExternalProject_Add(libnl
+		SOURCE_DIR ${LIBNL_DIR}
+		BINARY_DIR ${LIBNL_DIR}
+		GIT_REPOSITORY https://github.com/thom311/libnl.git
+		GIT_TAG libnl3_11_0
+		CONFIGURE_COMMAND autoreconf -i && ./configure --prefix=${LIBNL_INSTALL_DIR} --host=${CMAKE_SYSTEM_PROCESSOR}-linux-gnu
+		UPDATE_COMMAND ""
+		# BUILD_BYPRODUCTS
+		# 	${WPA_SUPPLICANT_BYPRODUCTS}
+		# 	${HOSTAP_DIR}/wpa_supplicant/libwpa_client.a
+	)
+	set(LibNL_LIBRARY "${LIBNL_INSTALL_DIR}/lib/libnl-3.a")
+	set(LibNL_ROUTE_LIBRARY "${LIBNL_INSTALL_DIR}/lib/libnl-route-3.a")
+	set(LibNL_GENL_LIBRARY "${LIBNL_INSTALL_DIR}/lib/libnl-genl-3.a")
+	set(LibNL_INCLUDE_DIR "${LIBNL_INSTALL_DIR}/include/libnl3")
+	add_dependencies(vanilla-pipe libnl)
+
+	# Build libnm
+	find_package(PkgConfig REQUIRED)
+	pkg_check_modules(LIBNM REQUIRED libnm)
+else()
+	# Find LibNL
+	find_package(LibNL REQUIRED)
+
+	# Find OpenSSL and libnm
+	find_package(PkgConfig REQUIRED)
+	pkg_check_modules(OPENSSL REQUIRED libssl libcrypto)
+	pkg_check_modules(LIBNM REQUIRED libnm)
+endif()
 
 # Build WPA supplicant
 #
@@ -18,7 +67,6 @@ pkg_check_modules(LIBNM REQUIRED libnm)
 #       no static library build path out of the box, we just build the objects
 #       straight in and use it like a static library anyway. It's a little hacky
 #       to list all of the expected build objects, but hey it works.
-include(ExternalProject)
 set(HOSTAP_DIR ${CMAKE_CURRENT_BINARY_DIR}/hostap)
 set(WPA_SUPPLICANT_OBJECTS
     wpa_supplicant/wpa_supplicant.o
@@ -117,7 +165,7 @@ ExternalProject_Add(hostap
     BINARY_DIR ${HOSTAP_DIR}
     GIT_REPOSITORY https://github.com/rolandoislas/drc-hostap.git
     CONFIGURE_COMMAND ${CMAKE_COMMAND} -E copy_if_different conf/wpa_supplicant.config wpa_supplicant/.config
-    BUILD_COMMAND make -C wpa_supplicant wpa_supplicant libwpa_client.a
+    BUILD_COMMAND make -C wpa_supplicant -j${CMAKE_BUILD_PARALLEL_LEVEL} wpa_supplicant libwpa_client.a
     INSTALL_COMMAND ""
     UPDATE_COMMAND ""
     BUILD_BYPRODUCTS
@@ -140,9 +188,6 @@ add_dependencies(wpa_supplicant_drc hostap)
 
 # Compile custom dhclient library
 add_subdirectory(dhcp EXCLUDE_FROM_ALL)
-
-# Find LibNL
-find_package(LibNL REQUIRED)
 
 # Define vanilla-pipe include directories
 target_include_directories(vanilla-pipe PRIVATE
