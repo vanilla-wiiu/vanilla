@@ -9,6 +9,15 @@ add_executable(vanilla-pipe
 # Install vanilla-pipe
 install(TARGETS vanilla-pipe)
 
+option(VANILLA_BUILD_USE_LIBNM "Build with support for communicating to NetworkManager" ON)
+if (VANILLA_BUILD_USE_LIBNM)
+	find_package(PkgConfig REQUIRED)
+	pkg_check_modules(LIBNM REQUIRED libnm)
+	target_link_libraries(vanilla-pipe PRIVATE ${LIBNM_LIBRARIES})
+	target_include_directories(vanilla-pipe PRIVATE ${LIBNM_INCLUDE_DIRS})
+	target_compile_definitions(vanilla-pipe PRIVATE USE_LIBNM)
+endif()
+
 if (VANILLA_BUILD_VENDORED)
 	# Build OpenSSL
 	set(OPENSSL_DIR ${CMAKE_CURRENT_BINARY_DIR}/openssl)
@@ -47,18 +56,12 @@ if (VANILLA_BUILD_VENDORED)
 	set(LibNL_GENL_LIBRARY "${LIBNL_INSTALL_DIR}/lib/libnl-genl-3.a")
 	set(LibNL_INCLUDE_DIR "${LIBNL_INSTALL_DIR}/include/libnl3")
 	add_dependencies(vanilla-pipe libnl)
-
-	# Build libnm
-	find_package(PkgConfig REQUIRED)
-	pkg_check_modules(LIBNM REQUIRED libnm)
 else()
 	# Find LibNL
 	find_package(LibNL REQUIRED)
 
 	# Find OpenSSL and libnm
-	find_package(PkgConfig REQUIRED)
-	pkg_check_modules(OPENSSL REQUIRED libssl libcrypto)
-	pkg_check_modules(LIBNM REQUIRED libnm)
+	find_package(OpenSSL REQUIRED)
 endif()
 
 # Build WPA supplicant
@@ -196,7 +199,6 @@ target_include_directories(vanilla-pipe PRIVATE
     ${HOSTAP_DIR}/wpa_supplicant
     ${CMAKE_SOURCE_DIR}/lib
     ${LibNL_INCLUDE_DIR}
-    ${LIBNM_INCLUDE_DIRS}
 )
 
 # Link our library with the client library
@@ -207,7 +209,6 @@ target_link_libraries(vanilla-pipe PRIVATE
     ${LibNL_LIBRARY}
     ${LibNL_ROUTE_LIBRARY}
     ${LibNL_GENL_LIBRARY}
-    ${LIBNM_LIBRARIES}
     ${OPENSSL_LIBRARIES}
     wpa_supplicant_drc
 )

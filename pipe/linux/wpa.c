@@ -27,8 +27,10 @@
 #include "vanilla.h"
 #include "wpa.h"
 
+#ifdef USE_LIBNM
 // NOTE: This header must be below others because it defines things that break other headers
 #include <libnm/NetworkManager.h>
+#endif
 
 #include <utils/common.h>
 #include <wpa_supplicant_i.h>
@@ -198,6 +200,7 @@ void *wpa_setup_environment(void *data)
 
     struct sync_args *args = (struct sync_args *) data;
 
+#ifdef USE_LIBNM
     // Check status of interface with NetworkManager
     GError *nm_err;
     NMClient *nmcli = nm_client_new(NULL, &nm_err);
@@ -218,6 +221,7 @@ void *wpa_setup_environment(void *data)
         g_message("Failed to create NetworkManager client: %s", nm_err->message);
         g_error_free(nm_err);
     }
+#endif
 
     // Start modified WPA supplicant
     struct wpa_params params = {0};
@@ -273,6 +277,7 @@ die_and_kill:
     wpa_supplicant_deinit(wpa);
 
 die_and_reenable_managed:
+#ifdef USE_LIBNM
     if (is_managed) {
         nlprint("SETTING %s BACK TO MANAGED", args->wireless_interface);
         nm_device_set_managed(nmdev, TRUE);
@@ -282,6 +287,7 @@ die_and_close_nmcli:
     if (nmcli) {
         g_object_unref(nmcli);
     }
+#endif
 
 die:
     return ret;
