@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="120mm" height="120mm" viewBox="-60 -60 120 120" version="1.1" id="svg3">
+  <defs id="defs3">
+    <linearGradient id="linearGradient2">
+      <stop style="stop-color:#0097c9;stop-opacity:1;" offset="0" id="stop2"/>
+      <stop style="stop-color:#23caff;stop-opacity:1;" offset="0.8433" id="stop3"/>
+    </linearGradient>
+    <radialGradient id="radialGradient3" cx="0" cy="0" r="60" gradientUnits="userSpaceOnUse" href="#linearGradient2"/>
+  </defs>
+  <g id="Template">
+    <rect style="fill:url(#radialGradient3);fill-opacity:1;stroke-width:5.85001" id="rect1" width="120" height="120" x="-60" y="-60"/>
+  </g>
+</svg>
