@@ -11,7 +11,7 @@ RUN if [ "${ARCH}" = "aarch64" ]; then export DEBARCH="arm64"; export DEBGCC="gc
     else export DEBARCH="${ARCH}"; export DEBGCC="gcc g++"; fi \
     && dpkg --add-architecture $DEBARCH \
     && apt -y update \
-    && apt -y install $DEBGCC ninja-build nasm git wget pkg-config make \
+    && apt -y install $DEBGCC ninja-build nasm git wget pkg-config make autoconf libtool bison flex \
     && apt -y install libnl-genl-3-dev:$DEBARCH \
     && apt -y install libssl-dev:$DEBARCH \
     && apt -y install libpulse-dev:$DEBARCH \
