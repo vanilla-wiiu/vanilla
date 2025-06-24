@@ -27,7 +27,8 @@ function(compile_ffmpeg _target_name _system_name _system_processor)
         --enable-decoder=h264
         --enable-encoder=png
     )
-    if (CMAKE_CROSSCOMPILING)
+    if (NOT "${CMAKE_HOST_SYSTEM_PROCESSOR}" STREQUAL "${_system_processor}"
+		OR NOT "${CMAKE_HOST_SYSTEM_NAME}" STREQUAL "${_system_name}")
         set(FFMPEG_TARGET_OS ${_system_name})
         set(FFMPEG_ENV "")
         if (MINGW)
@@ -95,7 +96,7 @@ function(compile_ffmpeg _target_name _system_name _system_processor)
         elseif(LINUX)
             set(FFMPEG_TARGET_OS "linux")
             list(APPEND FFMPEG_CONFIGURE_ARGS
-                --cross-prefix=${CMAKE_CROSS_PREFIX}
+                --cross-prefix=${_system_processor}-linux-gnu-
                 --host-cc=${CMAKE_C_COMPILER}
             )
         endif()

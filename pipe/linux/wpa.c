@@ -3,6 +3,7 @@
 #include <arpa/inet.h>
 #include <errno.h>
 #include <libgen.h>
+#include <linux/version.h>
 #include <net/if.h>
 #include <netlink/route/addr.h>
 #include <pthread.h>
@@ -334,8 +335,10 @@ void dhcp_callback(const char *type, char **env, void *data)
         struct nl_msg *msg;
         rtnl_addr_build_add_request(ra, 0, &msg);
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,18,00)
         // Make this route the lowest possible priority so the system doesn't favor it over other connections
         nla_put_u32(msg, IFA_RT_PRIORITY, UINT32_MAX);
+#endif
 
         // Send request
         nl_send_auto_complete(nl, msg);

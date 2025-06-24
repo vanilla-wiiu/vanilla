@@ -4,7 +4,7 @@ EXTRA_CMAKE_FLAGS=
 
 if [ "$ARCH" = "aarch64" ]
 then
-    EXTRA_CMAKE_FLAGS="-DCMAKE_CROSSCOMPILING=ON -DCMAKE_SYSTEM_PROCESSOR=aarch64 -DCMAKE_SYSTEM_NAME=Linux -DCMAKE_CROSS_PREFIX=aarch64-linux-gnu-"
+    EXTRA_CMAKE_FLAGS="-DCMAKE_CROSSCOMPILING=ON -DCMAKE_SYSTEM_PROCESSOR=aarch64 -DCMAKE_SYSTEM_NAME=Linux"
     export PKG_CONFIG_PATH=/usr/lib/aarch64-linux-gnu/pkgconfig
     export PATH=$PATH:/usr/lib/aarch64-linux-gnu
     export CC=aarch64-linux-gnu-gcc

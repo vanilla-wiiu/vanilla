@@ -28,7 +28,7 @@ if (VANILLA_BUILD_VENDORED)
 		BINARY_DIR ${OPENSSL_DIR}
 		GIT_REPOSITORY https://github.com/openssl/openssl.git
 		GIT_TAG openssl-3.5.0
-		CONFIGURE_COMMAND ./Configure --prefix=${OPENSSL_INSTALL_DIR} linux-${OPENSSL_PROCESSOR}
+		CONFIGURE_COMMAND env CC=${CMAKE_C_COMPILER} ./Configure --prefix=${OPENSSL_INSTALL_DIR} linux-${OPENSSL_PROCESSOR} no-apps no-docs  no-quic no-http
 		UPDATE_COMMAND ""
 		# BUILD_BYPRODUCTS
 		# 	${WPA_SUPPLICANT_BYPRODUCTS}
@@ -163,12 +163,21 @@ foreach(_wpa_supplicant_obj ${WPA_SUPPLICANT_OBJECTS})
     list(APPEND WPA_SUPPLICANT_BYPRODUCTS "${_wpa_supplicant_obj_path}")
 endforeach()
 
+set(HOSTAP_ENV
+	CC=${CMAKE_C_COMPILER}
+)
+if (VANILLA_BUILD_VENDORED)
+	list(APPEND HOSTAP_ENV
+		PKG_CONFIG_PATH=${LIBNL_INSTALL_DIR}/lib/pkgconfig
+		CFLAGS="-I${LIBNL_INSTALL_DIR}/include/libnl3"
+	)
+endif()
 ExternalProject_Add(hostap
     SOURCE_DIR ${HOSTAP_DIR}
     BINARY_DIR ${HOSTAP_DIR}
     GIT_REPOSITORY https://github.com/rolandoislas/drc-hostap.git
     CONFIGURE_COMMAND ${CMAKE_COMMAND} -E copy_if_different conf/wpa_supplicant.config wpa_supplicant/.config
-    BUILD_COMMAND make -C wpa_supplicant -j${CMAKE_BUILD_PARALLEL_LEVEL} wpa_supplicant libwpa_client.a
+    BUILD_COMMAND env ${HOSTAP_ENV} make -C wpa_supplicant -j${CMAKE_BUILD_PARALLEL_LEVEL} wpa_supplicant libwpa_client.a
     INSTALL_COMMAND ""
     UPDATE_COMMAND ""
     BUILD_BYPRODUCTS
