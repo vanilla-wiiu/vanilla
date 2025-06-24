@@ -12,15 +12,12 @@ RUN if [ "${ARCH}" = "aarch64" ]; then export DEBARCH="arm64"; export DEBGCC="gc
     && dpkg --add-architecture $DEBARCH \
     && apt -y update \
     && apt -y install $DEBGCC ninja-build nasm git wget pkg-config make autoconf libtool bison flex \
-    && apt -y install libnl-genl-3-dev:$DEBARCH \
-    && apt -y install libssl-dev:$DEBARCH \
     && apt -y install libpulse-dev:$DEBARCH \
     && apt -y install libasound2-dev:$DEBARCH \
     && apt -y install libx11-dev:$DEBARCH \
     && apt -y install libdrm-dev:$DEBARCH \
     && apt -y install libwayland-dev:$DEBARCH \
     && apt -y install libxext-dev:$DEBARCH \
-    && apt -y install libnl-route-3-dev:$DEBARCH \
     && apt -y install libxcb-xinput-dev:$DEBARCH \
     && apt -y install libgl1-mesa-dev:$DEBARCH \
     && apt -y install libopengl-dev:$DEBARCH \
