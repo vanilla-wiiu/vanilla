@@ -697,6 +697,22 @@ void vui_sdl_draw_button(vui_context_t *vui, vui_sdl_context_t *sdl_ctx, vui_but
                 text_rect.x = icon_x + icon_size + btn_padding;
             }
         }
+        else {
+            if (btn->style == VUI_BUTTON_STYLE_CORNER) {
+                // we apply the formula of the circle quarter centroid
+                // https://www.efunda.com/math/areas/CircleQuarter.cfm
+                float off = (4.0f * rect.w) / (3.0f * M_PI);
+                int scrw, scrh;
+                vui_get_screen_size(vui, &scrw, &scrh);
+                // we also verify which corner on the screen the button is placed
+                // in order to adjust the offset
+                float cx = rect.x + (btn->x < scrw / 2.0f ? off : (rect.w - off));
+                float cy = rect.y + (btn->y < scrh / 2.0f ? off : (rect.w - off));
+                text_rect.x = (int)(cx - text_rect.w / 2.0f);
+                text_rect.y = (int)(cy - text_rect.h / 2.0f);
+            }
+        }
+
 
         SDL_RenderCopy(sdl_ctx->renderer, texture, NULL, &text_rect);
         SDL_DestroyTexture(texture);
