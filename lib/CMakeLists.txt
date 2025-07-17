@@ -1,4 +1,4 @@
-add_library(vanilla STATIC
+add_library(libvanilla STATIC
     gamepad/audio.c
     gamepad/command.c
     gamepad/gamepad.c
@@ -8,19 +8,20 @@ add_library(vanilla STATIC
     vanilla.c
 )
 
-target_include_directories(vanilla PRIVATE
+target_include_directories(libvanilla PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
-set_target_properties(vanilla PROPERTIES PUBLIC_HEADER "vanilla.h")
+set_target_properties(libvanilla PROPERTIES PREFIX "")
+set_target_properties(libvanilla PROPERTIES PUBLIC_HEADER "vanilla.h")
 
 if (NOT ANDROID)
-    target_link_libraries(vanilla PRIVATE
+    target_link_libraries(libvanilla PRIVATE
         pthread
     )
 endif()
 
-install(TARGETS vanilla)
+install(TARGETS libvanilla)
 
 if (VANILLA_BUILD_TESTS)
     function(add_test TEST_NAME TEST_FILES)
@@ -28,7 +29,7 @@ if (VANILLA_BUILD_TESTS)
             ${TEST_FILES}
         )
 
-        target_link_libraries(${TEST_NAME} PRIVATE vanilla m)
+        target_link_libraries(${TEST_NAME} PRIVATE libvanilla m)
         target_include_directories(${TEST_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
     endfunction()
 
