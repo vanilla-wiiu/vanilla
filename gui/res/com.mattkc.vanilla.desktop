@@ -2,7 +2,7 @@
 Version=1.0
 Name=Vanilla
 Comment=Open Source Wii U Gamepad Implementation
-Exec=vanilla-gui
+Exec=vanilla
 Icon=com.mattkc.vanilla_rounded
 Terminal=false
 Type=Application
