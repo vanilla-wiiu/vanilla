@@ -12,7 +12,7 @@ public class VanillaActivity extends SDLActivity {
 			// "SDL2_net",
 			"SDL2_ttf",
 			"xml2",
-			"vanilla-pi"
+			"vanilla-gui"
 		};
 	}
 }

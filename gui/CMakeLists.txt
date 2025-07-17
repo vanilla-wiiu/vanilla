@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.22)
 
 set(_sdl_lib SDL2::SDL2)
-set(_vanilla_pi_libs "")
+set(_vanilla_gui_libs "")
 set(_ffmpeg_components avformat avcodec avutil swscale)
 
 function(compile_ffmpeg _target_name _system_name _system_processor)
@@ -150,7 +150,7 @@ if (VANILLA_BUILD_VENDORED)
 
     # Link zlib for PNG
     if (UNIX)
-        list(APPEND _vanilla_pi_libs "z")
+        list(APPEND _vanilla_gui_libs "z")
     endif()
 
     include(FetchContent)
@@ -230,7 +230,7 @@ if (VANILLA_BUILD_VENDORED)
 	endif()
 endif()
 
-list(APPEND VANILLA_PI_SRC
+list(APPEND VANILLA_GUI_SRC
     config.c
     def.c
     # drm.c
@@ -262,19 +262,19 @@ list(APPEND VANILLA_PI_SRC
 
 # Declare executable
 if (ANDROID)
-    add_library(vanilla-pi SHARED ${VANILLA_PI_SRC})
+    add_library(vanilla-gui SHARED ${VANILLA_GUI_SRC})
 else()
-    add_executable(vanilla-pi MACOSX_BUNDLE ${VANILLA_PI_SRC})
+    add_executable(vanilla-gui MACOSX_BUNDLE ${VANILLA_GUI_SRC})
 endif()
 
 if (APPLE)
 	# Set bundle name to be more user-friendly
-	set_target_properties(vanilla-pi PROPERTIES
+	set_target_properties(vanilla-gui PROPERTIES
 		OUTPUT_NAME Vanilla
 	)
 else()
 	# Ensure executable is installed
-	install(TARGETS vanilla-pi)
+	install(TARGETS vanilla-gui)
 endif()
 
 # Find packages (unless using vendored build)
@@ -284,7 +284,7 @@ if (NOT VANILLA_BUILD_VENDORED)
     find_package(SDL2_image REQUIRED)
 endif()
 
-target_link_libraries(vanilla-pi PRIVATE
+target_link_libraries(vanilla-gui PRIVATE
     ${_sdl_lib}
     SDL2::SDL2main
     SDL2_ttf
@@ -294,7 +294,7 @@ target_link_libraries(vanilla-pi PRIVATE
 )
 
 if (ANDROID)
-    target_link_libraries(vanilla-pi PRIVATE
+    target_link_libraries(vanilla-gui PRIVATE
         SDL2main
         log
     )
@@ -305,48 +305,48 @@ if (NOT VANILLA_BUILD_VENDORED)
     find_package(FFmpeg REQUIRED COMPONENTS avformat avcodec avutil swscale)
 endif()
 
-target_link_libraries(vanilla-pi PRIVATE
+target_link_libraries(vanilla-gui PRIVATE
     FFmpeg::avformat
     FFmpeg::avcodec
     FFmpeg::avutil
     FFmpeg::swscale
-    ${_vanilla_pi_libs}
+    ${_vanilla_gui_libs}
 )
 
 if (APPLE)
-	target_link_libraries(vanilla-pi PRIVATE "-framework VideoToolbox" "-framework CoreMedia" iconv)
+	target_link_libraries(vanilla-gui PRIVATE "-framework VideoToolbox" "-framework CoreMedia" iconv)
 endif()
 
 if (LINUX)
     # Assume this platform is capable of running vanilla-pipe
-    target_compile_definitions(vanilla-pi PRIVATE VANILLA_PIPE_AVAILABLE)
+    target_compile_definitions(vanilla-gui PRIVATE VANILLA_PIPE_AVAILABLE)
 
     # Link with DRM if available
     find_package(DRM)
     if (DRM_FOUND)
-        target_link_libraries(vanilla-pi PRIVATE ${DRM_LIBRARIES})
-        target_include_directories(vanilla-pi PRIVATE ${DRM_INCLUDE_DIRS})
+        target_link_libraries(vanilla-gui PRIVATE ${DRM_LIBRARIES})
+        target_include_directories(vanilla-gui PRIVATE ${DRM_INCLUDE_DIRS})
     endif()
 endif()
 
 # Find libxml2 (used for storing/parsing user config)
 if (VANILLA_BUILD_VENDORED)
-    target_link_libraries(vanilla-pi PRIVATE LibXml2::LibXml2)
+    target_link_libraries(vanilla-gui PRIVATE LibXml2::LibXml2)
 else()
     find_package(LibXML2 REQUIRED)
-    target_link_libraries(vanilla-pi PRIVATE ${LibXML2_LIBRARIES})
-    target_include_directories(vanilla-pi PRIVATE ${LibXML2_INCLUDE_DIR})
+    target_link_libraries(vanilla-gui PRIVATE ${LibXML2_LIBRARIES})
+    target_include_directories(vanilla-gui PRIVATE ${LibXML2_INCLUDE_DIR})
 endif()
 
 
 # Link with winsock2 on Windows
 if (WIN32)
-    set_target_properties(vanilla-pi PROPERTIES WIN32_EXECUTABLE true)
-    target_link_libraries(vanilla-pi PRIVATE wsock32 ws2_32)
+    set_target_properties(vanilla-gui PROPERTIES WIN32_EXECUTABLE true)
+    target_link_libraries(vanilla-gui PRIVATE wsock32 ws2_32)
 endif()
 
 # Set up include directories around the repository
-target_include_directories(vanilla-pi PRIVATE
+target_include_directories(vanilla-gui PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/../lib"
     "${CMAKE_CURRENT_SOURCE_DIR}"
     "${CMAKE_CURRENT_SOURCE_DIR}/.."
@@ -356,28 +356,28 @@ target_include_directories(vanilla-pi PRIVATE
 if(ANDROID)
     # Put assets in correct place relative to build
     add_custom_command(
-        TARGET vanilla-pi POST_BUILD
+        TARGET vanilla-gui POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/assets" "${CMAKE_CURRENT_SOURCE_DIR}/../android/app/src/main/assets"
     )
 elseif(APPLE)
 	# Put assets in correct place relative to build
     add_custom_command(
-        TARGET vanilla-pi POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_directory_if_different "${CMAKE_CURRENT_SOURCE_DIR}/assets" "$<TARGET_FILE_DIR:vanilla-pi>/../Resources/assets"
+        TARGET vanilla-gui POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory_if_different "${CMAKE_CURRENT_SOURCE_DIR}/assets" "$<TARGET_FILE_DIR:vanilla-gui>/../Resources/assets"
     )
 else()
     # Put assets in correct place relative to build
     add_custom_command(
-        TARGET vanilla-pi POST_BUILD
+        TARGET vanilla-gui POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_directory_if_different "${CMAKE_CURRENT_SOURCE_DIR}/assets" "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/../share/vanilla/assets"
     )
 
     if(WIN32)
-        set(_vanilla_pi_asset_destination "bin")
+        set(_vanilla_gui_asset_destination "bin")
     else()
-        set(_vanilla_pi_asset_destination "share/vanilla")
+        set(_vanilla_gui_asset_destination "share/vanilla")
     endif()
-    install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/assets" DESTINATION "${_vanilla_pi_asset_destination}")
+    install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/assets" DESTINATION "${_vanilla_gui_asset_destination}")
 
     if (LINUX)
         install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/res/com.mattkc.vanilla.desktop" DESTINATION share/applications)
