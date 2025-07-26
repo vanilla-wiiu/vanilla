@@ -76,8 +76,8 @@ exit:
 }
 
 void display_cli_help() {
-	vpilog("Usage: vanilla-pi [options]\n\n");
+	vpilog("Usage: vanilla [options]\n\n");
 	vpilog("Options:\n");
-	vpilog("	-w, --window	Run Vanilla-Pi in a window\n");
+	vpilog("	-w, --window	Run Vanilla in a window\n");
 	vpilog("	-h, --help	Show this help message\n");
 }
