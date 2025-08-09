@@ -7,10 +7,10 @@ then
   echo "$0 must be run as root"
   exit 1
 fi
+POLKIT_ACTION_DST="/usr/share/polkit-1/actions/com.mattkc.vanilla.policy"
+POLKIT_RULE_DST="/usr/share/polkit-1/rules.d/com.mattkc.vanilla.rules"
 
 if [ "$1" == "--uninstall" ]; then
-	POLKIT_ACTION_DST="/usr/share/polkit-1/actions/com.mattkc.vanilla.policy"
-	POLKIT_RULE_DST="/usr/share/polkit-1/rules.d/com.mattkc.vanilla.rules"
 	sudo rm -vf $PLKIT_ACTION_DST POLKIT_RULE_DST
 fi
 
@@ -69,8 +69,6 @@ do
   fi
 done
 
-POLKIT_ACTION_DST="/usr/share/polkit-1/actions/com.mattkc.vanilla.policy"
-POLKIT_RULE_DST="/usr/share/polkit-1/rules.d/com.mattkc.vanilla.rules"
 echo ""
 
 POLICY_TEMPLATE='<?xml version="1.0" encoding="UTF-8"?>
