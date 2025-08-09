@@ -8,6 +8,12 @@ then
   exit 1
 fi
 
+if [ "$1" == "--uninstall" ]; then
+	POLKIT_ACTION_DST="/usr/share/polkit-1/actions/com.mattkc.vanilla.policy"
+	POLKIT_RULE_DST="/usr/share/polkit-1/rules.d/com.mattkc.vanilla.rules"
+	sudo rm -vf $PLKIT_ACTION_DST POLKIT_RULE_DST
+fi
+
 echo "--------------------------------------------------------------------------------"
 echo "vanilla-pipe Polkit Install Script"
 echo "--------------------------------------------------------------------------------"
@@ -105,5 +111,5 @@ echo "Installing Polkit rule to ${POLKIT_RULE_DST}"
 echo "$RULES_TEMPLATE" > "${POLKIT_RULE_DST}"
 
 echo ""
-echo "Installation done. If you wish to undo this, simply remove the two files"
-echo "listed above."
+echo "Installation done. If you wish to undo this, simply run this script
+with the --uninstall flag."
