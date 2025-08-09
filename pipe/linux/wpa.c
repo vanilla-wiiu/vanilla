@@ -195,11 +195,79 @@ void *start_wpa(void *arg)
     return THREADRESULT(wpa_supplicant_run((struct wpa_global *) arg));
 }
 
+ssize_t run_process_and_read_stdout(const char **args, char *read_buffer, size_t read_buffer_len)
+{
+	// Create pipe so we can read from the forked child
+	int pipefd[2];
+	pipe(pipefd);
+
+	// Perform fork
+	pid_t pid = fork();
+
+	// Handle fork
+	switch (pid) {
+	case -1:
+		// Fork failed for some reason, report the errno
+		fprintf(stderr, "Failed to fork to run process: %i\n", errno);
+		return -1;
+	case 0:
+		// We are the child process, go ahead and run exec
+		close(pipefd[0]); // Close reading pipe
+
+		dup2(pipefd[1], STDOUT_FILENO); // Set stdout to write
+		// dup2(pipefd[1], STDERR_FILENO); // Set stderr to write
+
+		close(pipefd[1]); // Done with this for now
+
+		execvp(args[0], (char * const *) args);
+		break;
+	default:
+		// We are the parent process. Read from stdout.
+
+		close(pipefd[1]); // Close write, don't need it
+
+		ssize_t read_len = 0;
+		char *read_buffer_now = read_buffer;
+		if (read_buffer && read_buffer_len) {
+			do {
+				read_buffer_now += read_len;
+				read_len = read(pipefd[0], read_buffer_now, read_buffer_len - (read_buffer_now - read_buffer));
+			} while (read_len > 0 && read_buffer_now != (read_buffer + read_buffer_len));
+		}
+
+		int status;
+		if (waitpid(pid, &status, 0) == -1) {
+			fprintf(stderr, "Failed to waitpid: %i\n", errno);
+			return -1;
+		}
+
+		if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
+			return read_buffer_now - read_buffer;
+		} else {
+			fprintf(stderr, "Subprocess failed with status: 0x%x\n", status);
+			return -1;
+		}
+		break;
+	}
+}
+
 void *wpa_setup_environment(void *data)
 {
     void *ret = THREADRESULT(VANILLA_ERR_GENERIC);
 
     struct sync_args *args = (struct sync_args *) data;
+
+	// If this is the Steam Deck, we must switch the backend from `iwd` to `wpa_supplicant`
+	int sd_wifi_backend_changed = 0;
+	{
+		char sd_wifi_backend_buf[100];
+		ssize_t ret = run_process_and_read_stdout((const char *[]) {"steamos-wifi-set-backend", "--check", NULL}, sd_wifi_backend_buf, sizeof(sd_wifi_backend_buf));
+		if (ret > 0 && !strcmp("iwd", sd_wifi_backend_buf)) {
+			nlprint("STEAM DECK: SETTING WIFI BACKEND TO WPA_SUPPLICANT");
+			sd_wifi_backend_changed = 1;
+			run_process_and_read_stdout((const char *[]) {"steamos-wifi-set-backend", "wpa_supplicant", NULL}, 0, 0);
+		}
+	}
 
 #ifdef USE_LIBNM
     // Check status of interface with NetworkManager
@@ -289,6 +357,12 @@ die_and_close_nmcli:
         g_object_unref(nmcli);
     }
 #endif
+
+	if (sd_wifi_backend_changed) {
+		// Restore iwd
+		nlprint("STEAM DECK: SETTING WIFI BACKEND TO IWD");
+		run_process_and_read_stdout((const char *[]) {"steamos-wifi-set-backend", "iwd", NULL}, 0, 0);
+	}
 
 die:
     return ret;

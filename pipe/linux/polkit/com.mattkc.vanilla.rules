@@ -1,0 +1,12 @@
+/**
+ * Allow all users to run vanilla-pipe as root without having to enter a password
+ *
+ * This provides convenience, especially on platforms more suited for touch
+ * controls, however it could be dangerous to allow a program unrestricted
+ * administrator access, so it should be used with caution.
+ */
+polkit.addRule(function(action, subject) {
+    if (action.id == "com.mattkc.vanilla") {
+        return polkit.Result.YES;
+    }
+});
