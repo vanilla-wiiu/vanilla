@@ -18,7 +18,7 @@
 #include "game/game_main.h"
 #include "pipemgmt.h"
 
-void display_cli_help();
+void display_cli_help(const char **argv);
 
 int SDL_main(int argc, const char **argv)
 {
@@ -31,12 +31,12 @@ int SDL_main(int argc, const char **argv)
 			consumed = 1;
 		}
 		else if (!strcmp(argv[i], "-h") || !strcmp(argv[i], "--help")) {
-			display_cli_help();
+			display_cli_help(argv);
 			return 0;
 		}
 		if (consumed <= 0) {
 			vpilog("Invalid argument(s): %s\n\n", argv[i]);
-			display_cli_help();
+			display_cli_help(argv);
 			return 1;
 		}
 	}
@@ -75,8 +75,8 @@ exit:
     return ret;
 }
 
-void display_cli_help() {
-	vpilog("Usage: vanilla [options]\n\n");
+void display_cli_help(const char **argv) {
+	vpilog("Usage: %s [options]\n\n", argv[0]);
 	vpilog("Options:\n");
 	vpilog("	-w, --window	Run Vanilla in a window\n");
 	vpilog("	-h, --help	Show this help message\n");
