@@ -11,7 +11,7 @@ POLKIT_ACTION_DST="/usr/share/polkit-1/actions/com.mattkc.vanilla.policy"
 POLKIT_RULE_DST="/usr/share/polkit-1/rules.d/com.mattkc.vanilla.rules"
 
 if [ "$1" == "--uninstall" ]; then
-	rm -vf $PLKIT_ACTION_DST POLKIT_RULE_DST
+	rm -vf $POLKIT_ACTION_DST $POLKIT_RULE_DST
 fi
 
 echo "--------------------------------------------------------------------------------"
