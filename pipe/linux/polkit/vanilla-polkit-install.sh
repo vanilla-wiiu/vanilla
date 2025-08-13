@@ -7,6 +7,12 @@ then
   echo "$0 must be run as root"
   exit 1
 fi
+POLKIT_ACTION_DST="/usr/share/polkit-1/actions/com.mattkc.vanilla.policy"
+POLKIT_RULE_DST="/usr/share/polkit-1/rules.d/com.mattkc.vanilla.rules"
+
+if [ "$1" == "--uninstall" ]; then
+	rm -vf $POLKIT_ACTION_DST $POLKIT_RULE_DST
+fi
 
 echo "--------------------------------------------------------------------------------"
 echo "vanilla-pipe Polkit Install Script"
@@ -63,8 +69,6 @@ do
   fi
 done
 
-POLKIT_ACTION_DST="/usr/share/polkit-1/actions/com.mattkc.vanilla.policy"
-POLKIT_RULE_DST="/usr/share/polkit-1/rules.d/com.mattkc.vanilla.rules"
 echo ""
 
 POLICY_TEMPLATE='<?xml version="1.0" encoding="UTF-8"?>
@@ -105,5 +109,5 @@ echo "Installing Polkit rule to ${POLKIT_RULE_DST}"
 echo "$RULES_TEMPLATE" > "${POLKIT_RULE_DST}"
 
 echo ""
-echo "Installation done. If you wish to undo this, simply remove the two files"
-echo "listed above."
+echo "Installation done. If you wish to undo this, simply run this script
+with the --uninstall flag."
