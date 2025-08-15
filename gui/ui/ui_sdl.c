@@ -2,6 +2,7 @@
 
 #include <math.h>
 #include <SDL2/SDL.h>
+#include <SDL2/SDL_hints.h>
 #include <SDL_image.h>
 #include <SDL_power.h>
 #include <SDL_ttf.h>
@@ -409,6 +410,10 @@ int vui_init_sdl(vui_context_t *ctx, int fullscreen)
     sdl_ctx->controller = find_valid_controller();
 
     sdl_ctx->frame = av_frame_alloc();
+
+	// Enable Steam Deck gyroscopes even while Steam is open and in gaming mode
+	SDL_SetHint("SDL_GAMECONTROLLER_ALLOW_STEAM_VIRTUAL_GAMEPAD", "0");
+	SDL_SetHint(SDL_HINT_GAMECONTROLLER_IGNORE_DEVICES, "");
 
 	// Initialize gamepad lookup tables
 	init_gamepad();

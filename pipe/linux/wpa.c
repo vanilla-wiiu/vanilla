@@ -260,9 +260,9 @@ void *wpa_setup_environment(void *data)
 	// If this is the Steam Deck, we must switch the backend from `iwd` to `wpa_supplicant`
 	int sd_wifi_backend_changed = 0;
 	{
-		char sd_wifi_backend_buf[100];
+		char sd_wifi_backend_buf[100] = {0};
 		ssize_t ret = run_process_and_read_stdout((const char *[]) {"steamos-wifi-set-backend", "--check", NULL}, sd_wifi_backend_buf, sizeof(sd_wifi_backend_buf));
-		if (ret > 0 && !strcmp("iwd", sd_wifi_backend_buf)) {
+		if (ret > 0 && !strcmp("iwd\n", sd_wifi_backend_buf)) {
 			nlprint("STEAM DECK: SETTING WIFI BACKEND TO WPA_SUPPLICANT");
 			sd_wifi_backend_changed = 1;
 			run_process_and_read_stdout((const char *[]) {"steamos-wifi-set-backend", "wpa_supplicant", NULL}, 0, 0);
