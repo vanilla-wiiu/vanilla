@@ -135,15 +135,15 @@ int vpi_start_pipe()
             pthread_create(&pipe_log_thread, 0, vpi_pipe_log_thread, (void *) (intptr_t) pipe_err);
         } else {
             vpilog("GOT INVALID SIGNAL: %.*s\n", sizeof(ready_buf), ready_buf);
-            
+
             // Kill seems to break a lot of things so I guess we'll just leave it orphaned
             // kill(pipe_pid, SIGKILL);
-            close(in_pipes[1]);
             close(err_pipes[0]);
         }
 
         close(err_pipes[1]);
         close(in_pipes[0]);
+        close(in_pipes[1]);
 
         return ret;
     }
@@ -153,8 +153,9 @@ void vpi_stop_pipe()
 {
     if (pipe_pid != -1) {
         // Signal to pipe to quit
-        ssize_t s = write(pipe_input, "QUIT\n", 5);
-        close(pipe_input);
+        // ssize_t s = write(pipe_input, "QUIT\n", 5);
+        // close(pipe_input);
+		kill(pipe_pid, SIGTERM);
 
         // Wait for our log thread to quit
         pthread_join(pipe_log_thread, 0);
