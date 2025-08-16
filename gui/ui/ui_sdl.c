@@ -276,6 +276,10 @@ void mic_callback(void *userdata, Uint8 *stream, int len)
 
 int vui_init_sdl(vui_context_t *ctx, int fullscreen)
 {
+	// Enable Steam Deck gyroscopes even while Steam is open and in gaming mode
+	SDL_SetHintWithPriority("SDL_GAMECONTROLLER_ALLOW_STEAM_VIRTUAL_GAMEPAD", "0", SDL_HINT_OVERRIDE);
+	SDL_SetHintWithPriority(SDL_HINT_GAMECONTROLLER_IGNORE_DEVICES, "", SDL_HINT_OVERRIDE);
+
     // Initialize SDL
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER) < 0) {
         vpilog("Failed to initialize SDL: %s\n", SDL_GetError());
@@ -410,10 +414,6 @@ int vui_init_sdl(vui_context_t *ctx, int fullscreen)
     sdl_ctx->controller = find_valid_controller();
 
     sdl_ctx->frame = av_frame_alloc();
-
-	// Enable Steam Deck gyroscopes even while Steam is open and in gaming mode
-	SDL_SetHintWithPriority("SDL_GAMECONTROLLER_ALLOW_STEAM_VIRTUAL_GAMEPAD", "0", SDL_HINT_OVERRIDE);
-	SDL_SetHintWithPriority(SDL_HINT_GAMECONTROLLER_IGNORE_DEVICES, "", SDL_HINT_OVERRIDE);
 
 	// Initialize gamepad lookup tables
 	init_gamepad();
