@@ -412,8 +412,8 @@ int vui_init_sdl(vui_context_t *ctx, int fullscreen)
     sdl_ctx->frame = av_frame_alloc();
 
 	// Enable Steam Deck gyroscopes even while Steam is open and in gaming mode
-	SDL_SetHintWithPriority("SDL_GAMECONTROLLER_ALLOW_STEAM_VIRTUAL_GAMEPAD", "0");
-	SDL_SetHintWithPriority(SDL_HINT_GAMECONTROLLER_IGNORE_DEVICES, "");
+	SDL_SetHintWithPriority("SDL_GAMECONTROLLER_ALLOW_STEAM_VIRTUAL_GAMEPAD", "0", SDL_HINT_OVERRIDE);
+	SDL_SetHintWithPriority(SDL_HINT_GAMECONTROLLER_IGNORE_DEVICES, "", SDL_HINT_OVERRIDE);
 
 	// Initialize gamepad lookup tables
 	init_gamepad();
