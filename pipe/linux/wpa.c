@@ -166,28 +166,6 @@ void sigint_handler(int signum)
         nlprint("RECEIVED TERMINATE SIGNAL");
     }
     quit_loop();
-    signal(signum, SIG_DFL);
-}
-
-void *read_stdin(void *arg)
-{
-    char *line = NULL;
-    size_t size = 0;
-    ssize_t read_size = 0;
-
-    while ((read_size = getline(&line, &size, stdin)) != -1) {
-        if (read_size == 0) {
-            continue;
-        }
-
-        line[read_size-1] = '\0';
-        if (!strcasecmp(line, "quit") || !strcasecmp(line, "exit") || !strcasecmp(line, "bye")) {
-            quit_loop();
-        }
-    }
-
-    free(line);
-    return NULL;
 }
 
 void *start_wpa(void *arg)
@@ -331,6 +309,9 @@ void *wpa_setup_environment(void *data)
         goto die_and_close;
     }
 
+	signal(SIGINT, sigint_handler);
+	signal(SIGTERM, sigint_handler);
+
     args->ctrl = ctrl;
     ret = args->start_routine(args);
 
@@ -341,7 +322,7 @@ die_and_close:
     wpa_ctrl_close(ctrl);
 
 die_and_kill:
-    pthread_kill(wpa_thread, SIGINT);
+    pthread_cancel(wpa_thread);
     pthread_join(wpa_thread, NULL);
     wpa_supplicant_deinit(wpa);
 
@@ -1063,11 +1044,8 @@ void pipe_listen(int local, const char *wireless_interface, const char *log_file
     pthread_mutex_init(&action_mutex, NULL);
     pthread_mutex_init(&main_loop_mutex, NULL);
 
-    signal(SIGINT, sigint_handler);
-    signal(SIGTERM, sigint_handler);
-
-    pthread_t stdin_thread;
-    pthread_create(&stdin_thread, NULL, read_stdin, NULL);
+	signal(SIGINT, sigint_handler);
+	signal(SIGTERM, sigint_handler);
 
     main_loop = 1;
 
@@ -1138,11 +1116,6 @@ repeat_loop:
     // Wait for any potential running actions to complete
     pthread_mutex_lock(&action_mutex);
     pthread_mutex_unlock(&action_mutex);
-
-    // Interrupt our stdin thread
-    signal(SIGINT, SIG_DFL);
-    signal(SIGTERM, SIG_DFL);
-    pthread_kill(stdin_thread, SIGINT);
 
     pthread_mutex_destroy(&main_loop_mutex);
     pthread_mutex_destroy(&action_mutex);
