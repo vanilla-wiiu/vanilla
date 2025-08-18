@@ -26,7 +26,6 @@ function(compile_ffmpeg _target_name _system_name _system_processor)
         --enable-muxer=image2
         --enable-decoder=h264
         --enable-encoder=png
-		--enable-vaapi
     )
     if (NOT "${CMAKE_HOST_SYSTEM_PROCESSOR}" STREQUAL "${_system_processor}"
 		OR NOT "${CMAKE_HOST_SYSTEM_NAME}" STREQUAL "${_system_name}")
@@ -99,6 +98,7 @@ function(compile_ffmpeg _target_name _system_name _system_processor)
             list(APPEND FFMPEG_CONFIGURE_ARGS
                 --cross-prefix=${_system_processor}-linux-gnu-
                 --host-cc=${CMAKE_C_COMPILER}
+				--enable-vaapi
             )
         endif()
         list(APPEND FFMPEG_CONFIGURE_ARGS
