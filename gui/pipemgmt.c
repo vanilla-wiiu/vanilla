@@ -49,6 +49,27 @@ void *vpi_pipe_log_thread(void *data)
     return 0;
 }
 
+struct sigaction old_sigaction;
+void sigint_handler(int signal)
+{
+    // On the Steam Deck, if the user selects "exit game", we get handed a
+    // SIGINT and SIGTERM, but then get SIGKILL'd shortly afterwards, before we
+    // can properly clean everything up and send `vanilla-pipe` a "quit" signal.
+    // This means `vanilla-pipe` often gets stuck in limbo, and even worse, the
+    // Deck's Wi-Fi interface remains under its control until reboot.
+    //
+    // To resolve this, we make sure the first thing we do upon receiving SIGINT
+    // or SIGTERM is to tell the pipe to quit, so hopefully even if we are killed,
+    // it can go on without us.
+    vpi_stop_pipe();
+
+    vanilla_stop();
+
+    // vpi_stop_pipe should have restored the old sigaction (SDL2's), so let's
+    // follow that through
+    raise(signal);
+}
+
 int vpi_start_pipe()
 {
     if (pipe_pid != -1) {
@@ -111,6 +132,12 @@ int vpi_start_pipe()
         // Continuation of parent
         int ret = VANILLA_ERR_GENERIC;
 
+        struct sigaction sa;
+        sa.sa_handler = sigint_handler;
+        sigemptyset(&sa.sa_mask);
+        sa.sa_flags = 0;
+        sigaction(SIGINT, &sa, &old_sigaction);
+
         char ready_buf[500];
         memset(ready_buf, 0, sizeof(ready_buf));
         size_t read_count = 0;
@@ -164,6 +191,9 @@ void vpi_stop_pipe()
 
         waitpid(pipe_pid, 0, 0);
         pipe_pid = -1;
+
+        // Restore old sigaction
+        sigaction(signal, &old_sigaction, NULL);
     }
 }
 
