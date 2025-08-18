@@ -36,15 +36,15 @@
 #include <utils/common.h>
 #include <wpa_supplicant_i.h>
 
-const char *wpa_ctrl_interface = "/var/run/wpa_supplicant_drc";
+static const char *wpa_ctrl_interface = "/var/run/wpa_supplicant_drc";
 
-pthread_mutex_t running_mutex;
-pthread_mutex_t main_loop_mutex;
-pthread_mutex_t action_mutex;
-pthread_mutex_t relay_mutex;
-int running = 0;
-int main_loop = 0;
-int relay_running = 0;
+static pthread_mutex_t running_mutex;
+static pthread_mutex_t main_loop_mutex;
+static pthread_mutex_t action_mutex;
+static pthread_mutex_t relay_mutex;
+static int running = 0;
+static int main_loop = 0;
+static int relay_running = 0;
 
 typedef union {
     struct sockaddr_in in;
@@ -168,6 +168,57 @@ void sigint_handler(int signum)
     quit_loop();
 }
 
+void *read_stdin(void *arg)
+{
+    char line[256];
+    ssize_t read_size = 0;
+
+	fd_set fds;
+
+	struct timeval tv = {0, 10000}; // 10ms
+
+
+    pthread_mutex_lock(&main_loop_mutex);
+	while (main_loop) {
+		pthread_mutex_unlock(&main_loop_mutex);
+
+		FD_ZERO(&fds);
+		FD_SET(STDIN_FILENO, &fds);
+
+		int sel = select(STDIN_FILENO + 1, &fds, NULL, NULL, &tv);
+		if (sel > 0) {
+			char c;
+			ssize_t s = read(STDIN_FILENO, &c, 1);
+			if (s > 0) {
+				if (c == '\n') {
+					// Add null terminator
+					line[read_size] = 0;
+
+					// Parse line
+					if (!strcasecmp(line, "quit") || !strcasecmp(line, "exit") || !strcasecmp(line, "bye")) {
+						quit_loop();
+					}
+
+					read_size = 0;
+				} else if (c == EOF) {
+					break;
+				} else {
+					line[read_size] = c;
+					read_size = (read_size + 1) % sizeof(line);
+				}
+			} else if (s < 0) {
+				perror("read()");
+			}
+		} else if (sel < 0) {
+			perror("select()");
+		}
+		pthread_mutex_lock(&main_loop_mutex);
+	}
+	pthread_mutex_unlock(&main_loop_mutex);
+
+    return NULL;
+}
+
 void *start_wpa(void *arg)
 {
     return THREADRESULT(wpa_supplicant_run((struct wpa_global *) arg));
@@ -186,7 +237,7 @@ ssize_t run_process_and_read_stdout(const char **args, char *read_buffer, size_t
 	switch (pid) {
 	case -1:
 		// Fork failed for some reason, report the errno
-		fprintf(stderr, "Failed to fork to run process: %i\n", errno);
+		nlprint("Failed to fork to run process: %i", errno);
 		return -1;
 	case 0:
 		// We are the child process, go ahead and run exec
@@ -198,35 +249,52 @@ ssize_t run_process_and_read_stdout(const char **args, char *read_buffer, size_t
 		close(pipefd[1]); // Done with this for now
 
 		execvp(args[0], (char * const *) args);
-		break;
+
+		// Exit immediately if for some reason execvp failed
+		_exit(0);
 	default:
-		// We are the parent process. Read from stdout.
+		// We are the parent process. Read from stdout until EOF.
 
 		close(pipefd[1]); // Close write, don't need it
 
 		ssize_t read_len = 0;
 		char *read_buffer_now = read_buffer;
+		char * const read_buffer_end = read_buffer + read_buffer_len;
 		if (read_buffer && read_buffer_len) {
-			do {
+			while (read_buffer_now != read_buffer_end) {
+				read_len = read(pipefd[0], read_buffer_now, read_buffer_end - read_buffer_now);
+				if (read_len <= 0) {
+					break;
+				}
 				read_buffer_now += read_len;
-				read_len = read(pipefd[0], read_buffer_now, read_buffer_len - (read_buffer_now - read_buffer));
-			} while (read_len > 0 && read_buffer_now != (read_buffer + read_buffer_len));
+			}
 		}
+
+		close(pipefd[0]); // Close read, we're done reading
 
 		int status;
 		if (waitpid(pid, &status, 0) == -1) {
-			fprintf(stderr, "Failed to waitpid: %i\n", errno);
+			nlprint("Failed to waitpid: %i", errno);
 			return -1;
 		}
 
 		if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
 			return read_buffer_now - read_buffer;
 		} else {
-			fprintf(stderr, "Subprocess failed with status: 0x%x\n", status);
+			nlprint("Subprocess failed with status: 0x%x", status);
 			return -1;
 		}
-		break;
 	}
+}
+
+void set_signals()
+{
+	struct sigaction sa;
+	sa.sa_handler = sigint_handler;
+	sigemptyset(&sa.sa_mask);
+	sa.sa_flags = 0;
+	sigaction(SIGINT, &sa, NULL);
+	sigaction(SIGTERM, &sa, NULL);
 }
 
 void *wpa_setup_environment(void *data)
@@ -285,6 +353,9 @@ void *wpa_setup_environment(void *data)
         goto die_and_reenable_managed;
     }
 
+	// wpa_supplicant may have replaced our signals, so lets re-set them
+	set_signals();
+
     struct wpa_supplicant *wpa_s = wpa_supplicant_add_iface(wpa, &interface, NULL);
     if (!wpa_s) {
         nlprint("FAILED TO ADD WPA IFACE");
@@ -308,9 +379,6 @@ void *wpa_setup_environment(void *data)
         nlprint("FAILED TO ATTACH TO WPA");
         goto die_and_close;
     }
-
-	signal(SIGINT, sigint_handler);
-	signal(SIGTERM, sigint_handler);
 
     args->ctrl = ctrl;
     ret = args->start_routine(args);
@@ -1044,8 +1112,10 @@ void pipe_listen(int local, const char *wireless_interface, const char *log_file
     pthread_mutex_init(&action_mutex, NULL);
     pthread_mutex_init(&main_loop_mutex, NULL);
 
-	signal(SIGINT, sigint_handler);
-	signal(SIGTERM, sigint_handler);
+	pthread_t stdin_thread;
+	pthread_create(&stdin_thread, NULL, read_stdin, NULL);
+
+	set_signals();
 
     main_loop = 1;
 
@@ -1116,6 +1186,9 @@ repeat_loop:
     // Wait for any potential running actions to complete
     pthread_mutex_lock(&action_mutex);
     pthread_mutex_unlock(&action_mutex);
+
+	// Wait for stdin thread
+	pthread_join(stdin_thread, NULL);
 
     pthread_mutex_destroy(&main_loop_mutex);
     pthread_mutex_destroy(&action_mutex);

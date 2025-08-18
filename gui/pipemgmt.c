@@ -138,12 +138,12 @@ int vpi_start_pipe()
 
             // Kill seems to break a lot of things so I guess we'll just leave it orphaned
             // kill(pipe_pid, SIGKILL);
+            close(in_pipes[1]);
             close(err_pipes[0]);
         }
 
         close(err_pipes[1]);
         close(in_pipes[0]);
-        close(in_pipes[1]);
 
         return ret;
     }
@@ -152,10 +152,10 @@ int vpi_start_pipe()
 void vpi_stop_pipe()
 {
     if (pipe_pid != -1) {
-        // Signal to pipe to quit
-        // ssize_t s = write(pipe_input, "QUIT\n", 5);
-        // close(pipe_input);
-		kill(pipe_pid, SIGTERM);
+        // Signal to pipe to quit. We must send it through stdin because the pipe
+        // runs under root, so we have no permission to send it SIGINT or SIGTERM.
+        ssize_t s = write(pipe_input, "QUIT\n", 5);
+        close(pipe_input);
 
         // Wait for our log thread to quit
         pthread_join(pipe_log_thread, 0);

@@ -6,7 +6,6 @@
 #include <sys/types.h>
 
 struct wpa_ctrl;
-extern const char *wpa_ctrl_interface;
 
 void wpa_ctrl_command(struct wpa_ctrl *ctrl, const char *cmd, char *buf, size_t *buf_len);
 int start_wpa_supplicant(const char *wireless_interface, const char *config_file, pid_t *pid);
