@@ -1103,6 +1103,7 @@ int get_texture_from_cpu_frame(vui_sdl_context_t *sdl_ctx, AVFrame *f)
 	return 1;
 }
 
+#ifdef VANILLA_HAS_EGL
 int check_has_EGL_EXT_image_dma_buf_import()
 {
 	// Determine if we have this EGL extension or not
@@ -1147,9 +1148,11 @@ int check_has_EGL_EXT_image_dma_buf_import()
 	// 	has_eglCreateImage = true;
 	// }
 }
+#endif // VANILLA_HAS_EGL
 
 int get_texture_from_drm_prime_frame(vui_sdl_context_t *sdl_ctx, AVFrame *f)
 {
+#ifdef VANILLA_HAS_EGL
 	if (!sdl_ctx->game_tex) {
 		sdl_ctx->game_tex = SDL_CreateTexture(
 			sdl_ctx->renderer,
@@ -1214,6 +1217,10 @@ int get_texture_from_drm_prime_frame(vui_sdl_context_t *sdl_ctx, AVFrame *f)
 	}
 
 	return 1;
+#else
+	vpilog("No EGL support to display VAAPI texture\n");
+	return 0;
+#endif
 }
 
 int vui_update_sdl(vui_context_t *vui)

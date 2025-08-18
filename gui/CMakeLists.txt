@@ -329,8 +329,11 @@ if (LINUX)
         target_include_directories(vanilla PRIVATE ${DRM_INCLUDE_DIRS})
 	endif()
 
-	find_package(OpenGL COMPONENTS EGL REQUIRED)
-    target_link_libraries(vanilla PRIVATE OpenGL::EGL)
+	find_package(OpenGL COMPONENTS EGL)
+	if (OpenGL_EGL_FOUND)
+    	target_link_libraries(vanilla PRIVATE OpenGL::EGL)
+		target_compile_definitions(vanilla PRIVATE VANILLA_HAS_EGL)
+	endif()
 endif()
 
 # Find libxml2 (used for storing/parsing user config)
