@@ -1290,7 +1290,7 @@ int vui_update_sdl(vui_context_t *vui)
         main_tex = sdl_ctx->layer_data[0];
     } else {
         pthread_mutex_lock(&vpi_decoding_mutex);
-		if (vpi_present_frame && vpi_present_frame->data[0]) {
+		if (vpi_present_frame && vpi_present_frame->format != -1) {
 			av_frame_move_ref(sdl_ctx->frame, vpi_present_frame);
 		}
 		pthread_mutex_unlock(&vpi_decoding_mutex);
@@ -1298,13 +1298,15 @@ int vui_update_sdl(vui_context_t *vui)
         AVFrame *f = sdl_ctx->frame;
         SDL_Texture *t = sdl_ctx->game_tex;
 
-		if (f->data[0]) {
+		if (f->format != -1) {
             switch (f->format) {
             case AV_PIX_FMT_DRM_PRIME:
+				vpilog("decode drm prime frame...\n");
                 break;
             case AV_PIX_FMT_VAAPI:
+				vpilog("decode vaapi frame...\n");
                 break;
-            default:
+            case AV_PIX_FMT_YUV420P:
                 SDL_UpdateYUVTexture(t, NULL,
                                     f->data[0], f->linesize[0],
                                     f->data[1], f->linesize[1],

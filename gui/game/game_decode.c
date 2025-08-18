@@ -314,7 +314,7 @@ int vpi_decode_record(const char *filename)
 	vanilla_request_idr();
 
 	gettimeofday(&recording_start, 0);
-	
+
 	char buf[VPI_TOAST_MAX_LEN];
 	snprintf(buf, sizeof(buf), lang(VPI_LANG_RECORDING_START), filename);
 	vpi_show_toast(buf);
@@ -370,12 +370,6 @@ int decode()
 			vpilog("Failed to receive frame from decoder: %i\n", err);
 			ret = 0;
 			break;
-		} else if (!decoding_frame->data[0]) {
-			vpilog("WE GOT A NULL DATA[0] STRAIGHT FROM THE DECODER?????\n");
-			abort();
-		} else if ((decoding_frame->flags & AV_FRAME_FLAG_CORRUPT) != 0) {
-			vpilog("GOT A CORRUPT FRAME??????\n");
-			abort();
 		} else {
 			pthread_mutex_lock(&vpi_decoding_mutex);
 
@@ -390,7 +384,7 @@ int decode()
 				screenshot_buf[0] = 0;
 			}
 			pthread_mutex_unlock(&screenshot_mutex);
-			
+
 			pthread_cond_broadcast(&decoding_wait_cond);
 			pthread_mutex_unlock(&vpi_decoding_mutex);
 		}
@@ -526,14 +520,14 @@ void *vpi_decode_loop(void *)
 		pthread_mutex_lock(&recording_mutex);
 		if (recording_fmt_ctx) {
 			video_packet->stream_index = VIDEO_STREAM_INDEX;
-	
+
 			int64_t ts = get_recording_timestamp(recording_vstr->time_base);
-	
+
 			video_packet->dts = ts;
 			video_packet->pts = ts;
 
 			av_interleaved_write_frame(recording_fmt_ctx, video_packet);
-			
+
 			// av_interleaved_write_frame() eventually calls av_packet_unref(),
 			// so we must put the references back in
 			video_packet->data = vpi_decode_data;
