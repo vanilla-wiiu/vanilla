@@ -61,10 +61,10 @@ void sigint_handler(int signal)
     //
     // To resolve this, we make sure the first thing we do upon receiving SIGINT
     // or SIGTERM is to tell the pipe to quit, so hopefully even if we are killed,
-    // it can go on without us.
+    // it can clean itself up without us.
     vpi_stop_pipe();
 
-    // vpi_stop_pipe should have restored the old sigaction (SDL2's), so let's
+    // vpi_stop_pipe should have restored the old sigaction (SDL's), so let's
     // follow that through
     raise(signal);
 }
