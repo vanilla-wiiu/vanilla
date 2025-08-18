@@ -407,25 +407,65 @@ void vpi_decode_screenshot(const char *filename)
 	pthread_mutex_unlock(&screenshot_mutex);
 }
 
+static enum AVPixelFormat vaapi_get_format(struct AVCodecContext *s, const enum AVPixelFormat *fmt)
+{
+	while (*fmt != AV_PIX_FMT_NONE) {
+        if (*fmt == AV_PIX_FMT_VAAPI) {
+            return *fmt;
+		}
+        fmt++;
+    }
+
+    return AV_PIX_FMT_NONE;
+}
+
+static enum AVPixelFormat drm_get_format(struct AVCodecContext *s, const enum AVPixelFormat *fmt)
+{
+	while (*fmt != AV_PIX_FMT_NONE) {
+        if (*fmt == AV_PIX_FMT_DRM_PRIME) {
+            return *fmt;
+		}
+        fmt++;
+    }
+
+    return AV_PIX_FMT_NONE;
+}
+
 void *vpi_decode_loop(void *)
 {
     int ret = VANILLA_PI_ERR_DECODER;
     int ffmpeg_err;
 
     // Initialize FFmpeg
-    int using_v4l2m2m = 0;
 	const AVCodec *codec = 0;
+	enum AVPixelFormat (*get_format)(struct AVCodecContext *s, const enum AVPixelFormat * fmt);
 
-    if (using_v4l2m2m) {
-        codec = avcodec_find_decoder_by_name("h264_v4l2m2m");
-    }
-    if (!codec) {
-        codec = avcodec_find_decoder(AV_CODEC_ID_H264);
-        using_v4l2m2m = 0;
-    }
+	// Test for VAAPI
+	AVBufferRef *hw_device_ctx = 0;
+	if ((ffmpeg_err = av_hwdevice_ctx_create(&hw_device_ctx, AV_HWDEVICE_TYPE_VAAPI, 0, 0, 0)) >= 0) {
+		vpilog("Decoding: VAAPI\n");
+		codec = avcodec_find_decoder(AV_CODEC_ID_H264);
+		get_format = vaapi_get_format;
+	} else if ((ffmpeg_err = av_hwdevice_ctx_create(&hw_device_ctx, AV_HWDEVICE_TYPE_DRM, "/dev/dri/card0", 0, 0)) >= 0) {
+		vpilog("Decoding: DRM\n");
+		codec = avcodec_find_decoder_by_name("h264_v4l2m2m");
+		get_format = drm_get_format;
+	}
+
+	// If we couldn't find a decoder (regardless of if we found hwaccel), fallback to software
+	if (!codec) {
+		if (hw_device_ctx) {
+			av_buffer_unref(&hw_device_ctx);
+		}
+		vpilog("Decoding: Software\n");
+		codec = avcodec_find_decoder(AV_CODEC_ID_H264);
+		get_format = 0;
+	}
+
+	// If we couldn't find a hardware or software decoder, fail
 	if (!codec) {
 		vpilog("No decoder was available\n");
-		goto exit;
+		goto free_hwctx;
 	}
 
     video_codec_ctx = avcodec_alloc_context3(codec);
@@ -434,16 +474,13 @@ void *vpi_decode_loop(void *)
 		goto free_context;
 	}
 
-    if (using_v4l2m2m) {
-        ffmpeg_err = av_hwdevice_ctx_create(&video_codec_ctx->hw_device_ctx, AV_HWDEVICE_TYPE_DRM, "/dev/dri/card0", NULL, 0);
-        if (ffmpeg_err < 0) {
-            vpilog("Failed to create hwdevice context: %s (%i)\n", av_err2str(ffmpeg_err), ffmpeg_err);
-            goto free_context;
-        }
+    if (hw_device_ctx) {
+        video_codec_ctx->hw_device_ctx = av_buffer_ref(hw_device_ctx);
+	}
 
-        // MAKE SURE WE GET DRM PRIME FRAMES BY OVERRIDING THE GET_FORMAT FUNCTION
-        video_codec_ctx->get_format = get_format;
-    }
+	if (get_format) {
+		video_codec_ctx->get_format = get_format;
+	}
 
 	ffmpeg_err = avcodec_open2(video_codec_ctx, codec, NULL);
     if (ffmpeg_err < 0) {
@@ -543,6 +580,11 @@ free_decode_frame:
 
 free_context:
     avcodec_free_context(&video_codec_ctx);
+
+free_hwctx:
+	if (hw_device_ctx) {
+		av_buffer_unref(&hw_device_ctx);
+	}
 
 exit:
     if (ret != VANILLA_SUCCESS) {

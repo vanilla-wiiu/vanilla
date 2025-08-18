@@ -1295,12 +1295,23 @@ int vui_update_sdl(vui_context_t *vui)
 		}
 		pthread_mutex_unlock(&vpi_decoding_mutex);
 
-		if (sdl_ctx->frame->data[0]) {
-			SDL_UpdateYUVTexture(sdl_ctx->game_tex, NULL,
-								 sdl_ctx->frame->data[0], sdl_ctx->frame->linesize[0],
-								 sdl_ctx->frame->data[1], sdl_ctx->frame->linesize[1],
-								 sdl_ctx->frame->data[2], sdl_ctx->frame->linesize[2]);
-			av_frame_unref(sdl_ctx->frame);
+        AVFrame *f = sdl_ctx->frame;
+        SDL_Texture *t = sdl_ctx->game_tex;
+
+		if (f->data[0]) {
+            switch (f->format) {
+            case AV_PIX_FMT_DRM_PRIME:
+                break;
+            case AV_PIX_FMT_VAAPI:
+                break;
+            default:
+                SDL_UpdateYUVTexture(t, NULL,
+                                    f->data[0], f->linesize[0],
+                                    f->data[1], f->linesize[1],
+                                    f->data[2], f->linesize[2]);
+                break;
+            }
+			av_frame_unref(f);
 		}
         main_tex = sdl_ctx->layer_data[0];
 
