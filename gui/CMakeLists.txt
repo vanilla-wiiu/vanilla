@@ -3,7 +3,6 @@ cmake_minimum_required(VERSION 3.22)
 set(_sdl_lib SDL2::SDL2)
 set(_vanilla_gui_libs "")
 set(_ffmpeg_components avformat avcodec avutil swscale)
-find_package(OpenGL COMPONENTS EGL REQUIRED)
 
 function(compile_ffmpeg _target_name _system_name _system_processor)
 	set(FFMPEG_PREFIX_DIR "${CMAKE_CURRENT_BINARY_DIR}/FFmpeg-${_system_name}-${_system_processor}")
@@ -293,7 +292,6 @@ target_link_libraries(vanilla PRIVATE
     SDL2_image
     libvanilla
     m
-	OpenGL::EGL
 )
 
 if (ANDROID)
@@ -329,7 +327,10 @@ if (LINUX)
     if (DRM_FOUND)
         target_link_libraries(vanilla PRIVATE ${DRM_LIBRARIES})
         target_include_directories(vanilla PRIVATE ${DRM_INCLUDE_DIRS})
-    endif()
+	endif()
+
+	find_package(OpenGL COMPONENTS EGL REQUIRED)
+    target_link_libraries(vanilla PRIVATE OpenGL::EGL)
 endif()
 
 # Find libxml2 (used for storing/parsing user config)

@@ -1103,6 +1103,51 @@ int get_texture_from_cpu_frame(vui_sdl_context_t *sdl_ctx, AVFrame *f)
 	return 1;
 }
 
+int check_has_EGL_EXT_image_dma_buf_import()
+{
+	// Determine if we have this EGL extension or not
+	const char *egl_extensions = eglQueryString(eglGetCurrentDisplay(), EGL_EXTENSIONS);
+	if (!egl_extensions) {
+		return 0;
+	}
+
+	char *extensions = SDL_strdup(egl_extensions);
+	if (!extensions) {
+		return 0;
+	}
+
+	char *saveptr, *token;
+	token = SDL_strtokr(extensions, " ", &saveptr);
+	if (!token) {
+		SDL_free(extensions);
+		return 0;
+	}
+
+	int ret = 0;
+	do {
+		if (SDL_strcmp(token, "EGL_EXT_image_dma_buf_import") == 0
+			|| SDL_strcmp(token, "EGL_EXT_image_dma_buf_import_modifiers") == 0) {
+			ret = 1;
+		}
+	} while ((token = SDL_strtokr(NULL, " ", &saveptr)) != NULL);
+
+	SDL_free(extensions);
+
+	return ret;
+
+	// if (SDL_GL_ExtensionSupported("GL_OES_EGL_image")) {
+	// 	glEGLImageTargetTexture2DOESFunc = (PFNGLEGLIMAGETARGETTEXTURE2DOESPROC)eglGetProcAddress("glEGLImageTargetTexture2DOES");
+	// }
+
+	// glActiveTextureARBFunc = (PFNGLACTIVETEXTUREARBPROC)SDL_GL_GetProcAddress("glActiveTextureARB");
+
+	// if (has_EGL_EXT_image_dma_buf_import &&
+	// 	glEGLImageTargetTexture2DOESFunc &&
+	// 	glActiveTextureARBFunc) {
+	// 	has_eglCreateImage = true;
+	// }
+}
+
 int get_texture_from_drm_prime_frame(vui_sdl_context_t *sdl_ctx, AVFrame *f)
 {
 	if (!sdl_ctx->game_tex) {
@@ -1120,45 +1165,11 @@ int get_texture_from_drm_prime_frame(vui_sdl_context_t *sdl_ctx, AVFrame *f)
 		}
 	}
 
-	int has_EGL_EXT_image_dma_buf_import = 1;
+	static int has_EGL_EXT_image_dma_buf_import = -1;
+	if (has_EGL_EXT_image_dma_buf_import == -1) {
+		has_EGL_EXT_image_dma_buf_import = check_has_EGL_EXT_image_dma_buf_import();
+	}
 
-	// const char *egl_extensions = eglQueryString(eglGetCurrentDisplay(), EGL_EXTENSIONS);
-	// if (!egl_extensions) {
-	// 	return false;
-	// }
-
-	// char *extensions = SDL_strdup(egl_extensions);
-	// if (!extensions) {
-	// 	return false;
-	// }
-
-	// char *saveptr, *token;
-	// token = SDL_strtok_r(extensions, " ", &saveptr);
-	// if (!token) {
-	// 	SDL_free(extensions);
-	// 	return false;
-	// }
-	// do {
-	// 	if (SDL_strcmp(token, "EGL_EXT_image_dma_buf_import") == 0) {
-	// 		has_EGL_EXT_image_dma_buf_import = true;
-	// 	} else if (SDL_strcmp(token, "EGL_EXT_image_dma_buf_import_modifiers") == 0) {
-	// 		has_EGL_EXT_image_dma_buf_import_modifiers = true;
-	// 	}
-	// } while ((token = SDL_strtok_r(NULL, " ", &saveptr)) != NULL);
-
-	// SDL_free(extensions);
-
-	// if (SDL_GL_ExtensionSupported("GL_OES_EGL_image")) {
-	// 	glEGLImageTargetTexture2DOESFunc = (PFNGLEGLIMAGETARGETTEXTURE2DOESPROC)eglGetProcAddress("glEGLImageTargetTexture2DOES");
-	// }
-
-	// glActiveTextureARBFunc = (PFNGLACTIVETEXTUREARBPROC)SDL_GL_GetProcAddress("glActiveTextureARB");
-
-	// if (has_EGL_EXT_image_dma_buf_import &&
-	// 	glEGLImageTargetTexture2DOESFunc &&
-	// 	glActiveTextureARBFunc) {
-	// 	has_eglCreateImage = true;
-	// }
 
 	const AVDRMFrameDescriptor *desc = (const AVDRMFrameDescriptor *)f->data[0];
 
