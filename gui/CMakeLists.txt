@@ -329,6 +329,7 @@ if (LINUX)
         target_include_directories(vanilla PRIVATE ${DRM_INCLUDE_DIRS})
 	endif()
 
+	# TODO: A more comprehensive "Find" for libva
 	find_package(OpenGL COMPONENTS EGL)
 	if (OpenGL_EGL_FOUND)
     	target_link_libraries(vanilla PRIVATE OpenGL::EGL va va-drm va-x11 X11)

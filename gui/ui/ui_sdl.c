@@ -3,9 +3,6 @@
 #include <math.h>
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_hints.h>
-#include <SDL2/SDL_egl.h>
-#include <SDL2/SDL_opengl.h>
-#include <SDL2/SDL_opengles2.h>
 #include <SDL_image.h>
 #include <SDL_power.h>
 #include <SDL_ttf.h>
@@ -13,6 +10,12 @@
 #include <vanilla.h>
 #include <libavutil/hwcontext.h>
 #include <libavutil/hwcontext_drm.h>
+
+#ifdef VANILLA_HAS_EGL
+#include <SDL2/SDL_egl.h>
+#include <SDL2/SDL_opengl.h>
+#include <SDL2/SDL_opengles2.h>
+#endif
 
 #include "game/game_decode.h"
 #include "game/game_main.h"
