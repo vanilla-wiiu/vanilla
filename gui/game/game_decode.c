@@ -123,6 +123,27 @@ int dump_frame_to_file(const AVFrame *frame, const char *filename)
 		goto exit_and_free_avpacket;
 	}
 
+	AVFrame *swframe = 0;
+	if (frame->format != AV_PIX_FMT_YUV420P) {
+		// Assume this frame is hardware accelerated and we need to download it
+		// to CPU memory
+		swframe = av_frame_alloc();
+		if (!swframe) {
+			vpilog("Failed to allocate CPU frame for screenshot\n");
+			ret = AVERROR(EINVAL);
+			goto exit_and_free_avpacket;
+		}
+
+		if (av_hwframe_transfer_data(swframe, frame, 0) < 0) {
+			vpilog("Failed to transfer data from hardware for screenshot\n");
+			ret = AVERROR(EINVAL);
+			goto exit_and_free_swframe;
+		}
+
+		// Use this CPU frame instead from now on
+		frame = swframe;
+	}
+
 	struct SwsContext *osws_ctx = sws_getContext(
 		frame->width, frame->height, frame->format,
 		frame->width, frame->height, opix_fmt,
@@ -185,6 +206,11 @@ exit_and_free_frame:
 
 exit_and_free_swscontext:
 	sws_freeContext(osws_ctx);
+
+exit_and_free_swframe:
+	if (swframe) {
+		av_frame_free(&swframe);
+	}
 
 exit_and_free_avpacket:
 	av_packet_free(&opkt);

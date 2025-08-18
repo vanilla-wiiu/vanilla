@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.22)
 set(_sdl_lib SDL2::SDL2)
 set(_vanilla_gui_libs "")
 set(_ffmpeg_components avformat avcodec avutil swscale)
+find_package(OpenGL COMPONENTS EGL REQUIRED)
 
 function(compile_ffmpeg _target_name _system_name _system_processor)
 	set(FFMPEG_PREFIX_DIR "${CMAKE_CURRENT_BINARY_DIR}/FFmpeg-${_system_name}-${_system_processor}")
@@ -26,6 +27,7 @@ function(compile_ffmpeg _target_name _system_name _system_processor)
         --enable-muxer=image2
         --enable-decoder=h264
         --enable-encoder=png
+		--enable-vaapi
     )
     if (NOT "${CMAKE_HOST_SYSTEM_PROCESSOR}" STREQUAL "${_system_processor}"
 		OR NOT "${CMAKE_HOST_SYSTEM_NAME}" STREQUAL "${_system_name}")
@@ -291,6 +293,7 @@ target_link_libraries(vanilla PRIVATE
     SDL2_image
     libvanilla
     m
+	OpenGL::EGL
 )
 
 if (ANDROID)

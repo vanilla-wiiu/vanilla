@@ -3,11 +3,16 @@
 #include <math.h>
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_hints.h>
+#include <SDL2/SDL_egl.h>
+#include <SDL2/SDL_opengl.h>
+#include <SDL2/SDL_opengles2.h>
 #include <SDL_image.h>
 #include <SDL_power.h>
 #include <SDL_ttf.h>
 #include <pthread.h>
 #include <vanilla.h>
+#include <libavutil/hwcontext.h>
+#include <libavutil/hwcontext_drm.h>
 
 #include "game/game_decode.h"
 #include "game/game_main.h"
@@ -280,6 +285,9 @@ int vui_init_sdl(vui_context_t *ctx, int fullscreen)
 	SDL_SetHintWithPriority("SDL_GAMECONTROLLER_ALLOW_STEAM_VIRTUAL_GAMEPAD", "0", SDL_HINT_OVERRIDE);
 	SDL_SetHintWithPriority(SDL_HINT_GAMECONTROLLER_IGNORE_DEVICES, "", SDL_HINT_OVERRIDE);
 
+	// One-time setup for SDL NV12
+	SDL_SetHintWithPriority("SDL_RENDER_OPENGL_NV12_RG_SHADER", "1", SDL_HINT_OVERRIDE);
+
     // Initialize SDL
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER) < 0) {
         vpilog("Failed to initialize SDL: %s\n", SDL_GetError());
@@ -398,10 +406,7 @@ int vui_init_sdl(vui_context_t *ctx, int fullscreen)
     TTF_SetFontWrappedAlign(sdl_ctx->sysfont_small, TTF_WRAPPED_ALIGN_CENTER);
     TTF_SetFontWrappedAlign(sdl_ctx->sysfont_tiny, TTF_WRAPPED_ALIGN_CENTER);
 
-    sdl_ctx->game_tex = SDL_CreateTexture(sdl_ctx->renderer, SDL_PIXELFORMAT_IYUV, SDL_TEXTUREACCESS_STREAMING, ctx->screen_width, ctx->screen_height);
-    SDL_SetRenderTarget(sdl_ctx->renderer, sdl_ctx->game_tex);
-    SDL_SetRenderDrawColor(sdl_ctx->renderer, 0, 0, 0, 0);
-    SDL_RenderClear(sdl_ctx->renderer);
+	sdl_ctx->game_tex = 0;
 
     sdl_ctx->background = 0;
     sdl_ctx->last_shown_toast = 0;
@@ -446,7 +451,7 @@ void vui_close_sdl(vui_context_t *ctx)
 	}
 
     SDL_DestroyTexture(sdl_ctx->toast_tex);
-    SDL_DestroyTexture(sdl_ctx->game_tex);
+    if (sdl_ctx->game_tex) SDL_DestroyTexture(sdl_ctx->game_tex);
     SDL_DestroyTexture(sdl_ctx->background);
 
     for (int i = 0; i < MAX_BUTTON_COUNT; i++) {
@@ -1069,6 +1074,137 @@ int32_t pack_float(float f)
     return x;
 }
 
+int get_texture_from_cpu_frame(vui_sdl_context_t *sdl_ctx, AVFrame *f)
+{
+	if (!sdl_ctx->game_tex) {
+		sdl_ctx->game_tex = SDL_CreateTexture(
+			sdl_ctx->renderer,
+			SDL_PIXELFORMAT_IYUV,
+			SDL_TEXTUREACCESS_STREAMING,
+			f->width,
+			f->height
+		);
+		if (!sdl_ctx->game_tex) {
+			vpilog("Failed to create texture for CPU frame\n");
+		}
+	}
+	// SDL_SetRenderTarget(sdl_ctx->renderer, sdl_ctx->game_tex);
+	// SDL_SetRenderDrawColor(sdl_ctx->renderer, 0, 0, 0, 0);
+	// SDL_RenderClear(sdl_ctx->renderer);
+	int ret = SDL_UpdateYUVTexture(sdl_ctx->game_tex, NULL,
+						f->data[0], f->linesize[0],
+						f->data[1], f->linesize[1],
+						f->data[2], f->linesize[2]);
+	if (ret != 0) {
+		vpilog("Failed to update YUV texture for CPU frame: %s\n", SDL_GetError());
+		return 0;
+	}
+
+	return 1;
+}
+
+int get_texture_from_drm_prime_frame(vui_sdl_context_t *sdl_ctx, AVFrame *f)
+{
+	if (!sdl_ctx->game_tex) {
+		sdl_ctx->game_tex = SDL_CreateTexture(
+			sdl_ctx->renderer,
+			SDL_PIXELFORMAT_NV12,
+			SDL_TEXTUREACCESS_STATIC,
+			f->width,
+			f->height
+		);
+
+		if (!sdl_ctx->game_tex) {
+			vpilog("Failed to create texture for DRM PRIME frame\n");
+			return 0;
+		}
+	}
+
+	int has_EGL_EXT_image_dma_buf_import = 1;
+
+	// const char *egl_extensions = eglQueryString(eglGetCurrentDisplay(), EGL_EXTENSIONS);
+	// if (!egl_extensions) {
+	// 	return false;
+	// }
+
+	// char *extensions = SDL_strdup(egl_extensions);
+	// if (!extensions) {
+	// 	return false;
+	// }
+
+	// char *saveptr, *token;
+	// token = SDL_strtok_r(extensions, " ", &saveptr);
+	// if (!token) {
+	// 	SDL_free(extensions);
+	// 	return false;
+	// }
+	// do {
+	// 	if (SDL_strcmp(token, "EGL_EXT_image_dma_buf_import") == 0) {
+	// 		has_EGL_EXT_image_dma_buf_import = true;
+	// 	} else if (SDL_strcmp(token, "EGL_EXT_image_dma_buf_import_modifiers") == 0) {
+	// 		has_EGL_EXT_image_dma_buf_import_modifiers = true;
+	// 	}
+	// } while ((token = SDL_strtok_r(NULL, " ", &saveptr)) != NULL);
+
+	// SDL_free(extensions);
+
+	// if (SDL_GL_ExtensionSupported("GL_OES_EGL_image")) {
+	// 	glEGLImageTargetTexture2DOESFunc = (PFNGLEGLIMAGETARGETTEXTURE2DOESPROC)eglGetProcAddress("glEGLImageTargetTexture2DOES");
+	// }
+
+	// glActiveTextureARBFunc = (PFNGLACTIVETEXTUREARBPROC)SDL_GL_GetProcAddress("glActiveTextureARB");
+
+	// if (has_EGL_EXT_image_dma_buf_import &&
+	// 	glEGLImageTargetTexture2DOESFunc &&
+	// 	glActiveTextureARBFunc) {
+	// 	has_eglCreateImage = true;
+	// }
+
+	const AVDRMFrameDescriptor *desc = (const AVDRMFrameDescriptor *)f->data[0];
+
+	PFNGLACTIVETEXTUREARBPROC glActiveTextureARB = SDL_GL_GetProcAddress("glActiveTextureARB");
+	PFNGLEGLIMAGETARGETTEXTURE2DOESPROC glEGLImageTargetTexture2DOES = (PFNGLEGLIMAGETARGETTEXTURE2DOESPROC)eglGetProcAddress("glEGLImageTargetTexture2DOES");
+	EGLDisplay display = eglGetCurrentDisplay();
+
+	int image_index = 0;
+
+	for (int i = 0; i < desc->nb_layers; i++) {
+		const AVDRMLayerDescriptor *layer = &desc->layers[i];
+		for (int j = 0; j < layer->nb_planes; j++) {
+			const AVDRMPlaneDescriptor *plane = &layer->planes[j];
+			const AVDRMObjectDescriptor *object = &desc->objects[plane->object_index];
+
+			const EGLAttrib EGL_DMA_BUF_PLANE0_MODIFIER_LO_EXT_OR_NONE = has_EGL_EXT_image_dma_buf_import ? EGL_DMA_BUF_PLANE0_MODIFIER_LO_EXT : EGL_NONE;
+
+			EGLAttrib attr[] = {
+				EGL_LINUX_DRM_FOURCC_EXT, 					layer->format,
+				EGL_WIDTH,									f->width / (image_index + 1),
+				EGL_HEIGHT,									f->height / (image_index + 1),
+				EGL_DMA_BUF_PLANE0_FD_EXT,					object->fd,
+				EGL_DMA_BUF_PLANE0_OFFSET_EXT,				plane->offset,
+				EGL_DMA_BUF_PLANE0_PITCH_EXT,				plane->pitch,
+				EGL_DMA_BUF_PLANE0_MODIFIER_LO_EXT_OR_NONE,	(object->format_modifier >> 0) & 0xFFFFFFFF,
+				EGL_DMA_BUF_PLANE0_MODIFIER_HI_EXT,			(object->format_modifier >> 32) & 0xFFFFFFFF,
+				EGL_NONE
+			};
+
+			EGLImage image = eglCreateImage(display, EGL_NO_CONTEXT, EGL_LINUX_DMA_BUF_EXT, 0, attr);
+			if (image == EGL_NO_IMAGE) {
+				vpilog("Failed to create EGLImage: %d", glGetError());
+				return 0;
+			}
+
+			SDL_GL_BindTexture(sdl_ctx->game_tex, 0, 0);
+			glActiveTextureARB(GL_TEXTURE0_ARB + image_index);
+			glEGLImageTargetTexture2DOES(GL_TEXTURE_2D, image);
+			image_index++;
+			SDL_GL_UnbindTexture(sdl_ctx->game_tex);
+		}
+	}
+
+	return 1;
+}
+
 int vui_update_sdl(vui_context_t *vui)
 {
     vui_sdl_context_t *sdl_ctx = (vui_sdl_context_t *) vui->platform_data;
@@ -1295,31 +1431,39 @@ int vui_update_sdl(vui_context_t *vui)
 		}
 		pthread_mutex_unlock(&vpi_decoding_mutex);
 
-        AVFrame *f = sdl_ctx->frame;
-        SDL_Texture *t = sdl_ctx->game_tex;
-
-		if (f->format != -1) {
-            switch (f->format) {
+		if (sdl_ctx->frame->format != -1) {
+            switch (sdl_ctx->frame->format) {
             case AV_PIX_FMT_DRM_PRIME:
-				vpilog("decode drm prime frame...\n");
+				get_texture_from_drm_prime_frame(sdl_ctx, sdl_ctx->frame);
                 break;
             case AV_PIX_FMT_VAAPI:
-				vpilog("decode vaapi frame...\n");
+			{
+				AVFrame *drm = av_frame_alloc();
+				if (drm) {
+					drm->format = AV_PIX_FMT_DRM_PRIME;
+					if (av_hwframe_map(drm, sdl_ctx->frame, 0) >= 0) {
+						get_texture_from_drm_prime_frame(sdl_ctx, drm);
+					} else {
+						vpilog("Failed to map DRM PRIME frame from VAAPI\n");
+					}
+					av_frame_free(&drm);
+				} else {
+					vpilog("Failed to allocate DRM PRIME frame from VAAPI\n");
+				}
                 break;
+			}
             case AV_PIX_FMT_YUV420P:
-                SDL_UpdateYUVTexture(t, NULL,
-                                    f->data[0], f->linesize[0],
-                                    f->data[1], f->linesize[1],
-                                    f->data[2], f->linesize[2]);
+				get_texture_from_cpu_frame(sdl_ctx, sdl_ctx->frame);
                 break;
             }
-			av_frame_unref(f);
+			av_frame_unref(sdl_ctx->frame);
 		}
-        main_tex = sdl_ctx->layer_data[0];
 
-        SDL_SetRenderTarget(renderer, main_tex);
-        SDL_RenderCopy(renderer, sdl_ctx->game_tex, 0, 0);
-        // main_tex = sdl_ctx->game_tex;
+		if (sdl_ctx->game_tex) {
+			main_tex = sdl_ctx->layer_data[0];
+			SDL_SetRenderTarget(renderer, main_tex);
+			SDL_RenderCopy(renderer, sdl_ctx->game_tex, 0, 0);
+		}
     }
 
     // Draw toast on screen if necessary
