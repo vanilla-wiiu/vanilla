@@ -49,6 +49,26 @@ void *vpi_pipe_log_thread(void *data)
     return 0;
 }
 
+struct sigaction old_sigint_action;
+struct sigaction old_sigterm_action;
+void sigint_handler(int signal)
+{
+    // On the Steam Deck, if the user selects "exit game", we get handed a
+    // SIGINT and SIGTERM, but then get SIGKILL'd shortly afterwards, before we
+    // can properly clean everything up and send `vanilla-pipe` a "quit" signal.
+    // This means `vanilla-pipe` often gets stuck in limbo, and even worse, the
+    // Deck's Wi-Fi interface remains under its control until reboot.
+    //
+    // To resolve this, we make sure the first thing we do upon receiving SIGINT
+    // or SIGTERM is to tell the pipe to quit, so hopefully even if we are killed,
+    // it can clean itself up without us.
+    vpi_stop_pipe();
+
+    // vpi_stop_pipe should have restored the old sigaction (SDL's), so let's
+    // follow that through
+    raise(signal);
+}
+
 int vpi_start_pipe()
 {
     if (pipe_pid != -1) {
@@ -111,6 +131,13 @@ int vpi_start_pipe()
         // Continuation of parent
         int ret = VANILLA_ERR_GENERIC;
 
+        struct sigaction sa;
+        sa.sa_handler = sigint_handler;
+        sigemptyset(&sa.sa_mask);
+        sa.sa_flags = 0;
+        sigaction(SIGINT, &sa, &old_sigint_action);
+        sigaction(SIGTERM, &sa, &old_sigterm_action);
+
         char ready_buf[500];
         memset(ready_buf, 0, sizeof(ready_buf));
         size_t read_count = 0;
@@ -135,7 +162,7 @@ int vpi_start_pipe()
             pthread_create(&pipe_log_thread, 0, vpi_pipe_log_thread, (void *) (intptr_t) pipe_err);
         } else {
             vpilog("GOT INVALID SIGNAL: %.*s\n", sizeof(ready_buf), ready_buf);
-            
+
             // Kill seems to break a lot of things so I guess we'll just leave it orphaned
             // kill(pipe_pid, SIGKILL);
             close(in_pipes[1]);
@@ -152,7 +179,8 @@ int vpi_start_pipe()
 void vpi_stop_pipe()
 {
     if (pipe_pid != -1) {
-        // Signal to pipe to quit
+        // Signal to pipe to quit. We must send it through stdin because the pipe
+        // runs under root, so we have no permission to send it SIGINT or SIGTERM.
         ssize_t s = write(pipe_input, "QUIT\n", 5);
         close(pipe_input);
 
@@ -163,6 +191,10 @@ void vpi_stop_pipe()
 
         waitpid(pipe_pid, 0, 0);
         pipe_pid = -1;
+
+        // Restore old sigaction
+        sigaction(SIGINT, &old_sigint_action, NULL);
+        sigaction(SIGTERM, &old_sigterm_action, NULL);
     }
 }
 
