@@ -291,6 +291,9 @@ int vui_init_sdl(vui_context_t *ctx, int fullscreen)
 	// One-time setup for SDL NV12
 	SDL_SetHintWithPriority("SDL_RENDER_OPENGL_NV12_RG_SHADER", "1", SDL_HINT_OVERRIDE);
 
+	// VAAPI doesn't work with xwayland, so if Wayland is available, use it by default
+	SDL_SetHintWithPriority("SDL_HINT_VIDEODRIVER", "wayland,x11", SDL_HINT_OVERRIDE);
+
     // Initialize SDL
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER) < 0) {
         vpilog("Failed to initialize SDL: %s\n", SDL_GetError());
