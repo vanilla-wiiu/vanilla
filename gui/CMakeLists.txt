@@ -331,7 +331,7 @@ if (LINUX)
 
 	find_package(OpenGL COMPONENTS EGL)
 	if (OpenGL_EGL_FOUND)
-    	target_link_libraries(vanilla PRIVATE OpenGL::EGL)
+    	target_link_libraries(vanilla PRIVATE OpenGL::EGL va)
 		target_compile_definitions(vanilla PRIVATE VANILLA_HAS_EGL)
 	endif()
 endif()
