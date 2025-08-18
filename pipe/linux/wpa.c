@@ -172,11 +172,8 @@ void *read_stdin(void *arg)
 {
     char line[256];
     ssize_t read_size = 0;
-
 	fd_set fds;
-
 	struct timeval tv = {0, 10000}; // 10ms
-
 
     pthread_mutex_lock(&main_loop_mutex);
 	while (main_loop) {

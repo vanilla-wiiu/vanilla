@@ -64,8 +64,6 @@ void sigint_handler(int signal)
     // it can go on without us.
     vpi_stop_pipe();
 
-    vanilla_stop();
-
     // vpi_stop_pipe should have restored the old sigaction (SDL2's), so let's
     // follow that through
     raise(signal);
