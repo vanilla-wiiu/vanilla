@@ -1207,7 +1207,7 @@ int get_texture_from_drm_prime_frame(vui_sdl_context_t *sdl_ctx, AVFrame *f)
 
 			EGLImage image = eglCreateImage(display, EGL_NO_CONTEXT, EGL_LINUX_DMA_BUF_EXT, 0, attr);
 			if (image == EGL_NO_IMAGE) {
-				vpilog("Failed to create EGLImage: %d", glGetError());
+				vpilog("Failed to create EGLImage: %d\n", eglGetError());
 				return 0;
 			}
 
