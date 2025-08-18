@@ -49,7 +49,8 @@ void *vpi_pipe_log_thread(void *data)
     return 0;
 }
 
-struct sigaction old_sigaction;
+struct sigaction old_sigint_action;
+struct sigaction old_sigterm_action;
 void sigint_handler(int signal)
 {
     // On the Steam Deck, if the user selects "exit game", we get handed a
@@ -136,7 +137,8 @@ int vpi_start_pipe()
         sa.sa_handler = sigint_handler;
         sigemptyset(&sa.sa_mask);
         sa.sa_flags = 0;
-        sigaction(SIGINT, &sa, &old_sigaction);
+        sigaction(SIGINT, &sa, &old_sigint_action);
+        sigaction(SIGTERM, &sa, &old_sigterm_action);
 
         char ready_buf[500];
         memset(ready_buf, 0, sizeof(ready_buf));
@@ -193,7 +195,8 @@ void vpi_stop_pipe()
         pipe_pid = -1;
 
         // Restore old sigaction
-        sigaction(signal, &old_sigaction, NULL);
+        sigaction(SIGINT, &old_sigint_action, NULL);
+        sigaction(SIGTERM, &old_sigterm_action, NULL);
     }
 }
 
