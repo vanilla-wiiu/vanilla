@@ -267,13 +267,13 @@ ssize_t run_process_and_read_stdout(const char **args, char *read_buffer, size_t
 			}
 		}
 
-		close(pipefd[0]); // Close read, we're done reading
-
 		int status;
 		if (waitpid(pid, &status, 0) == -1) {
 			nlprint("Failed to waitpid: %i", errno);
 			return -1;
 		}
+
+		close(pipefd[0]); // Close read, we're done reading
 
 		if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
 			return read_buffer_now - read_buffer;
