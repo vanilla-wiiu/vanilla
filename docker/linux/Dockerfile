@@ -20,6 +20,7 @@ RUN if [ "${ARCH}" = "aarch64" ]; then export DEBARCH="arm64"; export DEBGCC="gc
     && apt -y install libxext-dev:$DEBARCH \
     && apt -y install libxcb-xinput-dev:$DEBARCH \
     && apt -y install libgl1-mesa-dev:$DEBARCH \
+    && apt -y install libegl-dev:$DEBARCH \
     && apt -y install libopengl-dev:$DEBARCH \
     && apt -y install libnm-dev:$DEBARCH \
     && apt -y install libdrm-dev:$DEBARCH \
@@ -43,6 +44,7 @@ RUN if [ "${ARCH}" = "aarch64" ]; then export DEBARCH="arm64"; export DEBGCC="gc
     && apt -y install libsm-dev:$DEBARCH \
     && apt -y install libice-dev:$DEBARCH \
     && apt -y install libgbm-dev:$DEBARCH \
+    && apt -y install libva-dev:$DEBARCH \
     && apt -y install libxkbcommon-dev:$DEBARCH
 
 # Install newer version of CMake

@@ -98,6 +98,7 @@ function(compile_ffmpeg _target_name _system_name _system_processor)
             list(APPEND FFMPEG_CONFIGURE_ARGS
                 --cross-prefix=${_system_processor}-linux-gnu-
                 --host-cc=${CMAKE_C_COMPILER}
+				--enable-vaapi
             )
         endif()
         list(APPEND FFMPEG_CONFIGURE_ARGS
@@ -326,7 +327,14 @@ if (LINUX)
     if (DRM_FOUND)
         target_link_libraries(vanilla PRIVATE ${DRM_LIBRARIES})
         target_include_directories(vanilla PRIVATE ${DRM_INCLUDE_DIRS})
-    endif()
+	endif()
+
+	# TODO: A more comprehensive "Find" for libva
+	find_package(OpenGL COMPONENTS EGL)
+	if (OpenGL_EGL_FOUND)
+    	target_link_libraries(vanilla PRIVATE OpenGL::EGL va va-drm va-x11 X11)
+		target_compile_definitions(vanilla PRIVATE VANILLA_HAS_EGL)
+	endif()
 endif()
 
 # Find libxml2 (used for storing/parsing user config)

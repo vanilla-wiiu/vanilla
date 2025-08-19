@@ -98,7 +98,7 @@ void vpi_display_update(vui_context_t *vui, int64_t time, void *v)
         case VANILLA_ERR_CONNECTED:
             // Wait for frame before enabling "game mode"
             pthread_mutex_lock(&vpi_decode_loop_mutex);
-            if (vpi_present_frame && vpi_present_frame->data[0]) {
+            if (vpi_present_frame && vpi_present_frame->format != -1) {
                 vui_game_mode_set(vui, 1);
 				vui_audio_set_enabled(vui, 1);
                 vpi_game_set_error(VANILLA_SUCCESS);
