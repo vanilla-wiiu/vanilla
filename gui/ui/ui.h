@@ -134,6 +134,7 @@ int vui_rect_create(vui_context_t *ctx, int x, int y, int w, int h, int border_r
  * Image-related functions
  */
 int vui_image_create(vui_context_t *ctx, int x, int y, int w, int h, const char *image, int layer);
+void vui_image_update(vui_context_t *ctx, int image, const char *file);
 void vui_image_destroy(vui_context_t *ctx, int image);
 
 /**

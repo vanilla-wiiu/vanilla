@@ -839,11 +839,17 @@ int vui_image_create(vui_context_t *ctx, int x, int y, int w, int h, const char 
     img->w = w;
     img->h = h;
 
-    vui_strncpy(img->image, image, sizeof(img->image));
+	vui_image_update(ctx, index, image);
 
     img->layer = layer;
 
     return index;
+}
+
+void vui_image_update(vui_context_t *ctx, int image, const char *file)
+{
+    vui_image_t *img = &ctx->images[image];
+    vui_strncpy(img->image, file, sizeof(img->image));
 }
 
 void vui_image_destroy(vui_context_t *ctx, int image)

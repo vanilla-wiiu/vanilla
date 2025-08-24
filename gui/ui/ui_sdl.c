@@ -1050,7 +1050,7 @@ void vui_draw_sdl(vui_context_t *ctx, SDL_Renderer *renderer)
     // Draw images
     for (int i = 0; i < MAX_BUTTON_COUNT; i++) {
         vui_image_t *img = &ctx->images[i];
-        if (!img->valid) {
+        if (!img->valid || img->image[0] == 0) {
             continue;
         }
 

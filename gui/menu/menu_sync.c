@@ -40,6 +40,9 @@ static const char *suit_icons_white[4] = {
     "club_white.svg",
 };
 
+#define DOT_COUNT 9
+static int dots[DOT_COUNT];
+
 void vpi_sync_menu_back_action(vui_context_t *vui, int btn, void *v)
 {
     vui_transition_fade_layer_out(vui, (int) (intptr_t) v, vpi_menu_main, (void *) (intptr_t) 1);
@@ -67,21 +70,11 @@ int intpow(int x, unsigned int p)
 
 void sync_animation_step(vui_context_t *ctx, int64_t time, void *userdata)
 {
-    int progress_lbl = (int) (intptr_t) userdata;
-    
-    static const int utf8_char_len = 3; // Somewhat hacky, but the important thing is that it works
-    static const int progress_txt_len = 9;
-    static const size_t progress_txt_sz = progress_txt_len * utf8_char_len + 1;
-
-    char progress_txt[progress_txt_sz];
-    progress_txt[progress_txt_sz-1] = 0;
-
-    int64_t m = int64min((sin(time * 0.000004) * 0.5 + 0.5) * progress_txt_len, progress_txt_len - 1);
-    for (int i = 0; i < progress_txt_len; i++) {
-        memcpy(progress_txt + utf8_char_len * i, (i == m) ? "\xE2\xAC\xA4" : "\xE2\x80\xA2", utf8_char_len);
-    }
-
-    vui_label_update_text(ctx, progress_lbl, progress_txt);
+    int64_t m = int64min((sin(time * 0.000004) * 0.5 + 0.5) * DOT_COUNT, DOT_COUNT - 1);
+	for (int i = 0; i < DOT_COUNT; i++) {
+		const char *file = (i == m) ? "circle_big.svg" : "circle_small.svg";
+		vui_image_update(ctx, dots[i], file);
+	}
 
     // Poll Vanilla for sync status
     vanilla_event_t event;
@@ -150,15 +143,24 @@ void start_syncing(vui_context_t *vui, void *v)
         code += sync_str[i] * intpow(10, SYNC_BTN_COUNT - 1 - i);
     }
 
-    int progress_lbl = vui_label_create(vui, bkg_rect.x, bkg_rect.y + bkg_rect.h*2/5, bkg_rect.w, bkg_rect.h, "", vui_color_create(1,1,1,1), VUI_FONT_SIZE_NORMAL, sync_fglayer);
-    sync_animation_step(vui, 0, (void *) (intptr_t) progress_lbl);
+	const int DOT_SIZE = 32;
+	const int DOT_PADDING = 16;
+	const int DOT_WIDTH = DOT_SIZE*DOT_COUNT + DOT_PADDING*(DOT_COUNT-1);
+	const int DOT_X = bkg_rect.x + bkg_rect.w/2 - DOT_WIDTH/2;
+	const int DOT_Y = bkg_rect.y + bkg_rect.h*2/5;
+	for (int i = 0; i < DOT_COUNT; i++) {
+		dots[i] = vui_image_create(vui, DOT_X + (DOT_SIZE + DOT_PADDING) * i, DOT_Y, DOT_SIZE, DOT_SIZE, "", sync_fglayer);
+	}
+
+    // int progress_lbl = vui_label_create(vui, bkg_rect.x, , bkg_rect.w, bkg_rect.h, "", vui_color_create(1,1,1,1), VUI_FONT_SIZE_NORMAL, sync_fglayer);
+    sync_animation_step(vui, 0, 0);
 
     vui_button_create(vui, bkg_rect.x + bkg_rect.w/2 - BTN_SZ*3/2, bkg_rect.y + bkg_rect.h * 3 / 4, BTN_SZ*3, BTN_SZ, lang(VPI_LANG_CANCEL_BTN), 0, VUI_BUTTON_STYLE_BUTTON, sync_fglayer, cancel_sync, 0);
 
     int ret = vanilla_sync(code, vpi_config.server_address);
     if (ret == VANILLA_SUCCESS) {
         vui_transition_fade_layer_in(vui, sync_fglayer, 0, 0);
-        vui_start_passive_animation(vui, sync_animation_step, (void *) (intptr_t) progress_lbl);
+        vui_start_passive_animation(vui, sync_animation_step, 0);
     } else {
         vpi_sync_show_error(vui, (void *) (intptr_t) ret);
     }
@@ -188,11 +190,11 @@ void sync_btn_clicked(vui_context_t *vui, int button, void *data)
     // Add char to string
     if (append != -1) {
         sync_str[sync_str_len] = append;
-        
+
         const int icon_space = sync_entry_rect.w/4;
         const int icon_w = intmin(icon_space, sync_entry_rect.h);
         sync_entry_images[sync_str_len] = vui_image_create(vui, sync_entry_rect.x + icon_space * sync_str_len + icon_space/2 - icon_w/2, sync_entry_rect.y + sync_entry_rect.h / 2 - icon_w/2, icon_w, icon_w, suit_icons_white[sync_str[sync_str_len]], sync_fglayer);
-        
+
         sync_str_len++;
 
         if (sync_str_len == SYNC_BTN_COUNT) {
