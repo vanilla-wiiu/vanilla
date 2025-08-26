@@ -12,6 +12,6 @@ then
 fi
 
 mkdir -p /build
-cmake -S /vanilla -B /build -DVANILLA_BUILD_VENDORED=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo $EXTRA_CMAKE_FLAGS
+cmake -S /vanilla -B /build -DVANILLA_BUILD_VENDORED=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo -DVANILLA_INSTALL_POLKIT_RULE=OFF $EXTRA_CMAKE_FLAGS
 cmake --build /build --parallel
 cmake --install /build --prefix "/install"

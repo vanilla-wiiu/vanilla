@@ -229,11 +229,16 @@ target_link_libraries(vanilla-pipe PRIVATE
 )
 
 # Handle polkit files
-set(PIPE_BIN "${CMAKE_INSTALL_PREFIX}/bin/vanilla-pipe")
-configure_file(
-	"${CMAKE_CURRENT_SOURCE_DIR}/polkit/com.mattkc.vanilla.policy.in"
-	"${CMAKE_CURRENT_BINARY_DIR}/polkit/com.mattkc.vanilla.policy"
-	@ONLY
-)
-install(FILES "${CMAKE_CURRENT_BINARY_DIR}/polkit/com.mattkc.vanilla.policy" DESTINATION share/polkit-1/actions)
-install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/polkit/com.mattkc.vanilla.rules" DESTINATION share/polkit-1/rules.d)
+if (VANILLA_INSTALL_POLKIT_RULE)
+	set(PIPE_BIN "${CMAKE_INSTALL_PREFIX}/bin/vanilla-pipe")
+	configure_file(
+		"${CMAKE_CURRENT_SOURCE_DIR}/polkit/com.mattkc.vanilla.policy.in"
+		"${CMAKE_CURRENT_BINARY_DIR}/polkit/com.mattkc.vanilla.policy"
+		@ONLY
+	)
+	install(FILES "${CMAKE_CURRENT_BINARY_DIR}/polkit/com.mattkc.vanilla.policy" DESTINATION share/polkit-1/actions)
+	install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/polkit/com.mattkc.vanilla.rules" DESTINATION share/polkit-1/rules.d)
+else()
+	# Install script that can do it later
+	install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/polkit/vanilla-polkit-install.sh" DESTINATION bin)
+endif()
