@@ -285,8 +285,8 @@ void mic_callback(void *userdata, Uint8 *stream, int len)
 int vui_init_sdl(vui_context_t *ctx, int fullscreen)
 {
 	// Enable Steam Deck gyroscopes even while Steam is open and in gaming mode
-	SDL_SetHint("SDL_GAMECONTROLLER_ALLOW_STEAM_VIRTUAL_GAMEPAD", "0");
-	SDL_SetHint(SDL_HINT_GAMECONTROLLER_IGNORE_DEVICES, "");
+	SDL_SetHintWithPriority("SDL_GAMECONTROLLER_ALLOW_STEAM_VIRTUAL_GAMEPAD", "0", SDL_HINT_OVERRIDE);
+	SDL_SetHintWithPriority(SDL_HINT_GAMECONTROLLER_IGNORE_DEVICES, "", SDL_HINT_OVERRIDE);
 
 	// One-time setup for SDL NV12
 	SDL_SetHint("SDL_RENDER_OPENGL_NV12_RG_SHADER", "1");
