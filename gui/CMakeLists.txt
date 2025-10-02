@@ -318,10 +318,29 @@ if (APPLE)
 	target_link_libraries(vanilla PRIVATE "-framework VideoToolbox" "-framework CoreMedia" iconv)
 endif()
 
-if (LINUX)
-    # Assume this platform is capable of running vanilla-pipe
+if (VANILLA_BUILD_PIPE)
+	# Assume this platform is capable of running vanilla-pipe
     target_compile_definitions(vanilla PRIVATE VANILLA_PIPE_AVAILABLE)
+    target_compile_definitions(vanilla PRIVATE VANILLA_POLKIT_AGENT)
 
+	# Add polkit include headers
+	target_include_directories(vanilla PRIVATE
+		/usr/include/polkit-1
+		/usr/include/glib-2.0
+		/usr/lib/glib-2.0/include
+	)
+
+	# Add glib
+	target_link_libraries(vanilla PRIVATE
+		glib-2.0
+		gobject-2.0
+		gio-2.0
+		polkit-agent-1
+		polkit-gobject-1
+	)
+endif()
+
+if (LINUX)
     # Link with DRM if available
     find_package(DRM)
     if (DRM_FOUND)
