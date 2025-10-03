@@ -19,14 +19,21 @@
 #include "platform.h"
 
 static pid_t pipe_pid = -1;
+static pid_t potential_pipe_pid = -1;
 static int pipe_input;
 static int pipe_err;
 static pthread_t pipe_log_thread = 0;
+
+static int err_pipes[2], in_pipes[2];
 
 #ifdef VANILLA_POLKIT_AGENT
 #define POLKIT_AGENT_I_KNOW_API_IS_SUBJECT_TO_CHANGE
 #include <polkit/polkit.h>
 #include <polkitagent/polkitagent.h>
+
+static gpointer polkit_handle = 0;
+static GMainContext *gmainctx = 0;
+static PolkitAgentSession *pk_session = 0;
 
 typedef struct {
 	PolkitAgentListener parent;
@@ -36,29 +43,84 @@ typedef struct {
 	PolkitAgentListenerClass parent_class;
 } VanillaPolkitListenerClass;
 
+static VanillaPolkitListener *listener = 0;
+static vpi_pw_callback pk_pw_callback = 0;
+static void *pk_pw_callback_userdata = 0;
+static PolkitIdentity *pk_identity = 0;
+static int pk_attempts = 0;
+static int pk_ignore_complete = 0;
+static char pk_cookie[256]; // TODO: No actual idea how long a Polkit cookie usually is
+static GTask *pk_task = 0;
+
 G_DEFINE_TYPE(VanillaPolkitListener, vanilla_polkit_listener, POLKIT_AGENT_TYPE_LISTENER)
+
+static void try_again();
 
 static void on_request(PolkitAgentSession *s, const gchar *prompt, gboolean echo_on, gpointer user_data)
 {
-	vpilog("Request for password auth!");
-	polkit_agent_session_response(s, "cum!");
+	vpilog("Polkit authentication requested\n");
+	pk_session = s;
 }
 
 static void on_show_info(PolkitAgentSession *s, const gchar *text, gpointer user_data)
 {
-	if (text) g_printerr("%s\n", text);
+	vpilog("Info\n");
+	if (text) vpilog("%s\n", text);
 }
 
 static void on_show_error(PolkitAgentSession *s, const gchar *text, gpointer user_data)
 {
-	if (text) g_printerr("Error: %s\n", text);
+	vpilog("Error\n");
+	if (text) vpilog("Error: %s\n", text);
 }
 
 static void on_complete(PolkitAgentSession *s, gboolean gained, gpointer data)
 {
-	GTask *task = G_TASK(data);
-	g_task_return_boolean(task, gained);
-	g_object_unref(task);
+	vpilog("Complete: %i\n", gained);
+
+	g_task_return_boolean(pk_task, gained);
+
+	g_object_unref(pk_session);
+	pk_session = 0;
+
+	if (!pk_ignore_complete) {
+		pk_attempts++;
+
+		if (pk_pw_callback) {
+			int cb_ret;
+			if (gained) {
+				cb_ret = VPI_POLKIT_RESULT_SUCCESS;
+			} else if (pk_attempts < 3) {
+				cb_ret = VPI_POLKIT_RESULT_RETRY;
+				try_again();
+			} else {
+				cb_ret = VPI_POLKIT_RESULT_FAIL;
+			}
+			pk_pw_callback(cb_ret, pk_pw_callback_userdata);
+		}
+	}
+}
+
+static void try_again()
+{
+	pk_ignore_complete = 0;
+
+	g_main_context_push_thread_default(gmainctx);
+
+	PolkitAgentSession *session = polkit_agent_session_new(pk_identity, pk_cookie);
+	g_signal_connect(session, "request",    G_CALLBACK(on_request), NULL);
+	g_signal_connect(session, "show-info",  G_CALLBACK(on_show_info), NULL);
+	g_signal_connect(session, "show-error", G_CALLBACK(on_show_error), NULL);
+
+	// When session completes, call the async callback with success/failure.
+	g_signal_connect(session, "completed", G_CALLBACK(on_complete), NULL);
+
+	// Start PAM conversation
+	polkit_agent_session_initiate(session);
+
+	vpilog("Polkit session initiated\n");
+
+	g_main_context_pop_thread_default(gmainctx);
 }
 
 static void vanilla_polkit_initiate_authentication(PolkitAgentListener  *listener,
@@ -72,26 +134,24 @@ static void vanilla_polkit_initiate_authentication(PolkitAgentListener  *listene
 													GAsyncReadyCallback   callback,
 													gpointer              user_data)
 {
-	// Choose the first identity proposed by polkit. Real agents offer a chooser.
-	PolkitIdentity *id = (PolkitIdentity *) identities->data;
+	g_main_context_push_thread_default(gmainctx);
 
-	PolkitAgentSession *session = polkit_agent_session_new(id, cookie);
-	g_signal_connect(session, "request",    G_CALLBACK(on_request),   NULL);
-	g_signal_connect(session, "show-info",  G_CALLBACK(on_show_info), NULL);
-	g_signal_connect(session, "show-error", G_CALLBACK(on_show_error),NULL);
+	pk_task = g_task_new(listener, cancellable, callback, user_data);
 
-	// When session completes, call the async callback with success/failure.
-	g_signal_connect(session, "completed", G_CALLBACK(on_complete), g_task_new(listener, NULL, NULL, NULL));
+	pk_identity = identities->data;
+	g_object_ref(pk_identity);
 
-	// Start PAM conversation
-	polkit_agent_session_initiate(session);
+	strncpy(pk_cookie, cookie, sizeof(pk_cookie));
+
+	try_again();
+
+	g_main_context_pop_thread_default(gmainctx);
 }
 
 static gboolean vanilla_polkit_initiate_authentication_finish(PolkitAgentListener *listener,
                                                   GAsyncResult        *res,
                                                   GError             **error)
 {
-	// We returned via GTask above; propagate boolean result.
 	return g_task_propagate_boolean(G_TASK(res), error);
 }
 
@@ -103,7 +163,6 @@ static void vanilla_polkit_listener_class_init(VanillaPolkitListenerClass *self)
 
 static void vanilla_polkit_listener_init(VanillaPolkitListener *self)
 {
-
 }
 #endif
 
@@ -153,6 +212,105 @@ void sigint_handler(int signal)
     raise(signal);
 }
 
+void vpi_close_polkit_session()
+{
+#ifdef VANILLA_POLKIT_AGENT
+	if (polkit_handle) {
+		pk_ignore_complete = 1;
+		if (pk_session) {
+			polkit_agent_session_cancel(pk_session);
+			g_object_unref(pk_session);
+			pk_session = 0;
+		}
+
+		vpilog("Unregistering Polkit listener\n");
+		polkit_agent_listener_unregister(polkit_handle);
+
+		g_object_unref(listener);
+		listener = 0;
+
+		g_main_context_unref(gmainctx);
+		gmainctx = 0;
+
+		if (pk_identity) {
+			g_object_unref(pk_identity);
+			pk_identity = 0;
+		}
+	}
+#endif
+}
+
+void vpi_cancel_pw()
+{
+	// Close existing pkexec process
+	if (potential_pipe_pid != -1) {
+		kill(potential_pipe_pid, SIGTERM);
+		potential_pipe_pid = -1;
+		close(in_pipes[1]);
+		close(err_pipes[0]);
+
+		close(err_pipes[1]);
+		close(in_pipes[0]);
+	}
+	vpi_close_polkit_session();
+}
+
+void vpi_submit_pw(const char *s, vpi_pw_callback callback, void *userdata)
+{
+	pk_pw_callback = callback;
+	pk_pw_callback_userdata = userdata;
+	polkit_agent_session_response(pk_session, s);
+}
+
+#include <SDL2/SDL.h>
+int vpi_start_epilog()
+{
+	int ret = VANILLA_ERR_GENERIC;
+
+	vpi_update_pipe();
+
+	char ready_buf[500];
+	memset(ready_buf, 0, sizeof(ready_buf));
+	size_t read_count = 0;
+	while (read_count < sizeof(ready_buf)) {
+		vpilog("waiting for read...\n");
+		ssize_t this_read = read(err_pipes[0], ready_buf + read_count, sizeof(ready_buf));
+		if (this_read > 0) {
+			read_count += this_read;
+			break;
+		}
+
+		if (this_read <= 0) {
+			break;
+		}
+	}
+	if (!memcmp(ready_buf, "READY", 5)) {
+		ret = VANILLA_SUCCESS;
+
+		pipe_input = in_pipes[1];
+		pipe_err = err_pipes[0];
+
+		pthread_create(&pipe_log_thread, 0, vpi_pipe_log_thread, (void *) (intptr_t) pipe_err);
+
+		pipe_pid = potential_pipe_pid;
+	} else {
+		vpilog("GOT INVALID SIGNAL: %.*s\n", sizeof(ready_buf), ready_buf);
+
+		// Kill seems to break a lot of things so I guess we'll just leave it orphaned
+		// kill(pipe_pid, SIGKILL);
+		pipe_pid = -1;
+		close(in_pipes[1]);
+		close(err_pipes[0]);
+	}
+
+	close(err_pipes[1]);
+	close(in_pipes[0]);
+
+	vpi_close_polkit_session();
+
+	return ret;
+}
+
 int vpi_start_pipe()
 {
     if (pipe_pid != -1) {
@@ -161,26 +319,35 @@ int vpi_start_pipe()
     }
 
 #ifdef VANILLA_POLKIT_AGENT
-	gpointer polkit_handle = 0;
 	{
 		g_autoptr(PolkitSubject) subject = polkit_unix_session_new_for_process_sync(getpid(), NULL, NULL);
 		g_autoptr(GError) error = NULL;
 
-		VanillaPolkitListener *listener = g_object_new(vanilla_polkit_listener_get_type(), NULL);
+		pk_session = 0;
+		pk_attempts = 0;
+
+		gmainctx = g_main_context_new();
+  		g_main_context_push_thread_default(gmainctx);
+
+		listener = g_object_new(vanilla_polkit_listener_get_type(), NULL);
+		vpilog("Registered Polkit listener\n");
 		polkit_handle = polkit_agent_listener_register(
 			POLKIT_AGENT_LISTENER(listener),
 			POLKIT_AGENT_REGISTER_FLAGS_NONE,
 			subject,
 			NULL, NULL, &error
 		);
+		g_main_context_pop_thread_default(gmainctx);
 		if (!polkit_handle) {
-			g_printerr("Failed to register Polkit listener: %s\n", error->message);
+			g_main_context_unref(gmainctx);
+			gmainctx = 0;
+
+			vpilog("Failed to register Polkit listener: %s\n", error->message);
 		}
 	}
 #endif
 
     // Set up pipes so child stdout can be read by the parent process
-    int err_pipes[2], in_pipes[2];
     pipe(in_pipes);
     pipe(err_pipes);
 
@@ -224,6 +391,7 @@ int vpi_start_pipe()
         strcat(exe, "/vanilla-pipe");
 
         r = execlp(pkexec, pkexec, exe, "-local", vpi_config.wireless_interface, (const char *) 0);
+        // r = execlp(pkexec, pkexec, "/usr/bin/gparted", (const char *) 0);
 
         // Handle failure to execute, use _exit so we don't interfere with the host
         _exit(1);
@@ -241,48 +409,34 @@ int vpi_start_pipe()
         sigaction(SIGINT, &sa, &old_sigint_action);
         sigaction(SIGTERM, &sa, &old_sigterm_action);
 
-        char ready_buf[500];
-        memset(ready_buf, 0, sizeof(ready_buf));
-        size_t read_count = 0;
-        while (read_count < sizeof(ready_buf)) {
-            ssize_t this_read = read(err_pipes[0], ready_buf + read_count, sizeof(ready_buf));
-            if (this_read > 0) {
-                read_count += this_read;
-                break;
-            }
+		potential_pipe_pid = pid;
 
-            if (this_read <= 0) {
-                break;
-            }
-        }
-        if (!memcmp(ready_buf, "READY", 5)) {
-            ret = VANILLA_SUCCESS;
-            pipe_pid = pid;
-
-            pipe_input = in_pipes[1];
-            pipe_err = err_pipes[0];
-
-            pthread_create(&pipe_log_thread, 0, vpi_pipe_log_thread, (void *) (intptr_t) pipe_err);
-        } else {
-            vpilog("GOT INVALID SIGNAL: %.*s\n", sizeof(ready_buf), ready_buf);
-
-            // Kill seems to break a lot of things so I guess we'll just leave it orphaned
-            // kill(pipe_pid, SIGKILL);
-            close(in_pipes[1]);
-            close(err_pipes[0]);
-        }
-
-        close(err_pipes[1]);
-        close(in_pipes[0]);
-
-#ifdef VANILLA_POLKIT_AGENT
 		if (polkit_handle) {
-			polkit_agent_listener_unregister(polkit_handle);
+			// We'll need to handle this...
+			ret = VANILLA_REQUIRES_PASSWORD_HANDLING;
+
+			// Keep handling synchronous by waiting for polkit to send us a
+			// "request" signal before returning to the password prompt
+			while (!pk_session) {
+				g_main_context_iteration(gmainctx, 1);
+			}
+		} else {
+			// Polkit will be handled for us, wait for it to finish
+			ret = vpi_start_epilog();
 		}
-#endif
 
         return ret;
     }
+}
+
+#include <SDL2/SDL.h>
+void vpi_update_pipe()
+{
+	if (gmainctx) {
+		while (g_main_context_pending(gmainctx)) {
+			g_main_context_iteration(gmainctx, 0);
+		}
+	}
 }
 
 void vpi_stop_pipe()
@@ -311,6 +465,11 @@ void vpi_stop_pipe()
 
 // Empty function
 void vpi_stop_pipe()
+{
+}
+
+// Empty function
+void vpi_update_pipe()
 {
 }
 

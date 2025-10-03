@@ -626,7 +626,7 @@ void vui_label_update_visible(vui_context_t *ctx, int index, int visible)
     lbl->visible = visible;
 }
 
-int vui_textedit_create(vui_context_t *ctx, int x, int y, int w, int h, const char *initial_text, vui_font_size_t size, int layer)
+int vui_textedit_create(vui_context_t *ctx, int x, int y, int w, int h, const char *initial_text, vui_font_size_t size, int password, int layer)
 {
     if (ctx->textedit_count == MAX_BUTTON_COUNT) {
         return -1;
@@ -640,6 +640,7 @@ int vui_textedit_create(vui_context_t *ctx, int x, int y, int w, int h, const ch
     edit->y = y;
     edit->w = w;
     edit->h = h;
+	edit->password = password;
 
     edit->layer = layer;
     edit->size = size;

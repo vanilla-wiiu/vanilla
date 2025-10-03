@@ -52,6 +52,7 @@ typedef struct {
     int visible;
     int enabled;
     int cursor;
+	int password;
 } vui_textedit_t;
 
 typedef struct {

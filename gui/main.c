@@ -59,6 +59,7 @@ int SDL_main(int argc, const char **argv)
     vpi_menu_init(vui);
 
     while (vui_update_sdl(vui)) {
+        vpi_update_pipe();
     }
 
     ret = 0;

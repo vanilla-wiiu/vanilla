@@ -251,6 +251,7 @@ list(APPEND VANILLA_GUI_SRC
     menu/menu_region.c
     menu/menu_rename.c
     menu/menu_settings.c
+    menu/menu_sudo.c
     menu/menu_sync.c
     pipemgmt.c
     platform.c

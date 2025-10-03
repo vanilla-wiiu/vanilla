@@ -114,7 +114,7 @@ void vui_label_update_visible(vui_context_t *ctx, int label, int visible);
 /**
  * TextEdit-related functions
  */
-int vui_textedit_create(vui_context_t *ctx, int x, int y, int w, int h, const char *initial_text, vui_font_size_t size, int layer);
+int vui_textedit_create(vui_context_t *ctx, int x, int y, int w, int h, const char *initial_text, vui_font_size_t size, int password, int layer);
 void vui_textedit_get_text(vui_context_t *ctx, int textedit, char *output, size_t output_size);
 void vui_textedit_update_text(vui_context_t *ctx, int textedit, const char *text);
 void vui_textedit_update_visible(vui_context_t *ctx, int textedit, int visible);
