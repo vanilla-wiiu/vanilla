@@ -47,6 +47,7 @@ typedef enum {
     VPI_LANG_REGION_EUROPE,
     VPI_LANG_QUIT,
     VPI_LANG_AUTH_FAIL,
+	VPI_LANG_AUTH_DONT_ASK_AGAIN,
     __VPI_LANG_T_COUNT
 } vpi_lang_t;
 

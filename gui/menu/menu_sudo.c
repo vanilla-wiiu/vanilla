@@ -17,6 +17,7 @@ static void *g_cancel_data;
 static int ok_btn;
 static int cancel_btn;
 static int err_lbl;
+static int remember_btn;
 
 static void return_to_main(vui_context_t *vui, int btn, void *v)
 {
@@ -41,6 +42,11 @@ static void pw_callback(int result, void *v)
 	case VPI_POLKIT_RESULT_SUCCESS:
 	{
 		int r = vpi_start_epilog();
+
+		if (vui_button_get_checked(vui, remember_btn)) {
+			vanilla_install_polkit(vpi_config.server_address);
+		}
+
 		if (r == VANILLA_SUCCESS) {
 			vui_transition_fade_layer_out(vui, fglayer, g_success_action, g_success_data);
 		} else {
@@ -54,6 +60,7 @@ static void pw_callback(int result, void *v)
 
 		vui_button_update_enabled(vui, ok_btn, 1);
 		vui_button_update_enabled(vui, cancel_btn, 1);
+		vui_button_update_enabled(vui, remember_btn, 1);
 		vui_textedit_update_enabled(vui, textedit, 1);
 		break;
 	case VPI_POLKIT_RESULT_FAIL:
@@ -70,8 +77,14 @@ static void submit_pw(vui_context_t *vui, int btn, void *v)
 
 	vui_button_update_enabled(vui, ok_btn, 0);
 	vui_button_update_enabled(vui, cancel_btn, 0);
+	vui_button_update_enabled(vui, remember_btn, 0);
 	vui_textedit_update_enabled(vui, textedit, 0);
 	vui_label_update_text(vui, err_lbl, "");
+}
+
+static void dont_ask_again_btn_pressed(vui_context_t *vui, int btn, void *userdata)
+{
+	vui_button_update_checked(vui, btn, !vui_button_get_checked(vui, btn));
 }
 
 void vpi_menu_sudo(vui_context_t *vui, vui_callback_t success_action, void *success_data, vui_callback_t cancel_action, void *cancel_data, int fade_fglayer)
@@ -97,20 +110,16 @@ void vpi_menu_sudo(vui_context_t *vui, vui_callback_t success_action, void *succ
 	g_cancel_action = cancel_action;
 	g_cancel_data = cancel_data;
 
-	err_lbl = vui_label_create(vui, bkg_rect.x, bkg_rect.y + bkg_rect.h*6/10, bkg_rect.w, bkg_rect.h, "", vui_color_create(1,0,0,1), VUI_FONT_SIZE_TINY, fglayer);
+	err_lbl = vui_label_create(vui, bkg_rect.x, bkg_rect.y + bkg_rect.h*11/20, bkg_rect.w, bkg_rect.h, "", vui_color_create(1,0,0,1), VUI_FONT_SIZE_TINY, fglayer);
 
     static const int ok_btn_w = BTN_SZ * 3;
     static const int cancel_btn_w = BTN_SZ * 3;
 
+	remember_btn = vui_button_create(vui, bkg_rect.w/2 - textedit_w/2, bkg_rect.y + bkg_rect.h * 6 / 10, textedit_w, BTN_SZ * 3 / 4, lang(VPI_LANG_AUTH_DONT_ASK_AGAIN), 0, VUI_BUTTON_STYLE_BUTTON, fglayer, dont_ask_again_btn_pressed, 0);
+	vui_button_update_checkable(vui, remember_btn, 1);
+
     ok_btn = vui_button_create(vui, bkg_rect.x + bkg_rect.w/2 - (ok_btn_w + cancel_btn_w)/2, bkg_rect.y + bkg_rect.h * 3 / 4, ok_btn_w, BTN_SZ, lang(VPI_LANG_OK_BTN), 0, VUI_BUTTON_STYLE_BUTTON, fglayer, submit_pw, 0);
     cancel_btn = vui_button_create(vui, bkg_rect.x + bkg_rect.w/2 - (ok_btn_w + cancel_btn_w)/2 + ok_btn_w, bkg_rect.y + bkg_rect.h * 3 / 4, cancel_btn_w, BTN_SZ, lang(VPI_LANG_CANCEL_BTN), 0, VUI_BUTTON_STYLE_BUTTON, fglayer, return_to_main,  (void *) (intptr_t) fglayer);
 
-	// if (fade_fglayer) {
-	// 	vpilog("fade fglayer only!\n");
-	// 	vui_transition_fade_layer_in(vui, fglayer, 0, 0);
-	// } else {
-	// 	vpilog("fade from black\n");
-	// 	vui_transition_fade_black_out(vui, 0, 0);
-	// }
 	vui_transition_fade_layer_in(vui, fade_fglayer ? fglayer : bglayer, 0, 0);
 }

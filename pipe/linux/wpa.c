@@ -1087,6 +1087,65 @@ void *vanilla_connect_to_console(void *data)
     return wpa_setup_environment(args);
 }
 
+int install_polkit()
+{
+	static const char *POLKIT_ACTION_DST = "/usr/share/polkit-1/actions/com.mattkc.vanilla.policy";
+	static const char *POLKIT_RULE_DST = "/usr/share/polkit-1/rules.d/com.mattkc.vanilla.rules";
+
+	static const char *ACTION_TEMPLATE =
+		"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+		"<!DOCTYPE policyconfig PUBLIC \"-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN\" \"http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd\">\n"
+		"<policyconfig>\n"
+		"  <vendor>MattKC</vendor>\n"
+		"  <vendor_url>https://mattkc.com</vendor_url>\n"
+		"  <action id=\"com.mattkc.vanilla\">\n"
+		"    <description>Run Vanilla Pipe as root</description>\n"
+		"    <message>Authentication is required to run Vanilla Pipe as root</message>\n"
+		"    <defaults>\n"
+		"      <allow_any>auth_admin</allow_any>\n"
+		"      <allow_inactive>auth_admin</allow_inactive>\n"
+		"      <allow_active>auth_admin</allow_active>\n"
+		"    </defaults>\n"
+		"    <annotate key=\"org.freedesktop.policykit.exec.path\">%s</annotate>\n"
+		"    <annotate key=\"org.freedesktop.policykit.exec.allow_gui\">true</annotate>\n"
+		"  </action>\n"
+		"</policyconfig>\n";
+
+	static const char *RULE_TEMPLATE =
+		"/**\n"
+		" * Allow all users to run vanilla-pipe as root without having to enter a password\n"
+		" *\n"
+		" * This provides convenience, especially on platforms more suited for touch\n"
+		" * controls, however it could be dangerous to allow a program unrestricted\n"
+		" * administrator access, so it should be used with caution.\n"
+		" */\n"
+		"polkit.addRule(function(action, subject) {\n"
+		"    if (action.id == \"com.mattkc.vanilla\") {\n"
+		"        return polkit.Result.YES;\n"
+		"    }\n"
+		"});\n";
+
+	// Get current filename
+	char exe[4096];
+	ssize_t link_len = readlink("/proc/self/exe", exe, sizeof(exe));
+	exe[link_len] = 0;
+
+	int ret = VANILLA_ERR_GENERIC;
+
+	FILE *action = fopen(POLKIT_ACTION_DST, "w");
+	FILE *rule = fopen(POLKIT_RULE_DST, "w");
+	if (action && rule) {
+		fprintf(action, ACTION_TEMPLATE, exe);
+		fprintf(rule, RULE_TEMPLATE);
+		ret = VANILLA_SUCCESS;
+	}
+
+	if (action)	fclose(action);
+	if (rule) fclose(rule);
+
+	return ret;
+}
+
 void pipe_listen(int local, const char *wireless_interface, const char *log_file)
 {
     // Store reference to log file
@@ -1167,6 +1226,15 @@ void pipe_listen(int local, const char *wireless_interface, const char *log_file
                     nlprint("FAILED TO SEND BUSY: %i", errno);
                 }
             }
+		} else if (cmd.control_code == VANILLA_PIPE_CC_INSTALL_POLKIT) {
+			// Write Polkit rule and action
+			install_polkit();
+
+			// Acknowledge
+			cmd.control_code = VANILLA_PIPE_CC_BIND_ACK;
+			if (sendto(skt, &cmd, sizeof(cmd.control_code), 0, (const struct sockaddr *) &addr, addr_size) == -1) {
+				nlprint("FAILED TO SEND ACK: %i", errno);
+			}
         } else if (cmd.control_code == VANILLA_PIPE_CC_UNBIND) {
             nlprint("RECEIVED UNBIND SIGNAL");
             interrupt();

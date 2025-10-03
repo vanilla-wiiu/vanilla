@@ -46,6 +46,7 @@ static const char *lang_str[__VPI_LANG_T_COUNT] = {
     "Europe",
     "Quit",
 	"Authentication failed. Please try again.",
+	"Don't ask again",
 };
 
 const char *lang(vpi_lang_t id)

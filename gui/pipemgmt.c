@@ -47,10 +47,10 @@ static VanillaPolkitListener *listener = 0;
 static vpi_pw_callback pk_pw_callback = 0;
 static void *pk_pw_callback_userdata = 0;
 static PolkitIdentity *pk_identity = 0;
+static GTask *pk_task = 0;
 static int pk_attempts = 0;
 static int pk_ignore_complete = 0;
 static char pk_cookie[256]; // TODO: No actual idea how long a Polkit cookie usually is
-static GTask *pk_task = 0;
 
 G_DEFINE_TYPE(VanillaPolkitListener, vanilla_polkit_listener, POLKIT_AGENT_TYPE_LISTENER)
 
@@ -78,8 +78,6 @@ static void on_complete(PolkitAgentSession *s, gboolean gained, gpointer data)
 {
 	vpilog("Complete: %i\n", gained);
 
-	g_task_return_boolean(pk_task, gained);
-
 	g_object_unref(pk_session);
 	pk_session = 0;
 
@@ -90,11 +88,18 @@ static void on_complete(PolkitAgentSession *s, gboolean gained, gpointer data)
 			int cb_ret;
 			if (gained) {
 				cb_ret = VPI_POLKIT_RESULT_SUCCESS;
+				g_task_return_boolean(pk_task, gained);
+				g_object_unref(pk_task);
+				pk_task = 0;
 			} else if (pk_attempts < 3) {
 				cb_ret = VPI_POLKIT_RESULT_RETRY;
 				try_again();
 			} else {
 				cb_ret = VPI_POLKIT_RESULT_FAIL;
+				g_task_return_error(pk_task, g_error_new_literal(G_IO_ERROR, G_IO_ERROR_FAILED, "Maximum retries exceeded"));
+				// g_task_return_boolean(pk_task, gained);
+				g_object_unref(pk_task);
+				pk_task = 0;
 			}
 			pk_pw_callback(cb_ret, pk_pw_callback_userdata);
 		}
@@ -136,10 +141,10 @@ static void vanilla_polkit_initiate_authentication(PolkitAgentListener  *listene
 {
 	g_main_context_push_thread_default(gmainctx);
 
-	pk_task = g_task_new(listener, cancellable, callback, user_data);
-
 	pk_identity = identities->data;
 	g_object_ref(pk_identity);
+
+	pk_task = g_task_new(listener, cancellable, callback, user_data);
 
 	strncpy(pk_cookie, cookie, sizeof(pk_cookie));
 
@@ -155,7 +160,18 @@ static gboolean vanilla_polkit_initiate_authentication_finish(PolkitAgentListene
 	return g_task_propagate_boolean(G_TASK(res), error);
 }
 
-static void vanilla_polkit_listener_class_init(VanillaPolkitListenerClass *self) {
+static void vanilla_polkit_listener_finalize(GObject *object)
+{
+	g_return_if_fail(object != NULL);
+	g_return_if_fail(G_TYPE_CHECK_INSTANCE_TYPE((object), vanilla_polkit_listener_get_type()));
+	G_OBJECT_CLASS(vanilla_polkit_listener_parent_class)->finalize(object);
+}
+
+static void vanilla_polkit_listener_class_init(VanillaPolkitListenerClass *self)
+{
+	GObjectClass *g_object_class = G_OBJECT_CLASS(self);
+	g_object_class->finalize = vanilla_polkit_listener_finalize;
+
 	PolkitAgentListenerClass *lklass = POLKIT_AGENT_LISTENER_CLASS(self);
 	lklass->initiate_authentication        = vanilla_polkit_initiate_authentication;
 	lklass->initiate_authentication_finish = vanilla_polkit_initiate_authentication_finish;
@@ -219,12 +235,18 @@ void vpi_close_polkit_session()
 		pk_ignore_complete = 1;
 		if (pk_session) {
 			polkit_agent_session_cancel(pk_session);
-			g_object_unref(pk_session);
 			pk_session = 0;
+		}
+
+		if (pk_task) {
+			g_task_return_boolean(pk_task, 0);
+			g_object_unref(pk_task);
+			pk_task = 0;
 		}
 
 		vpilog("Unregistering Polkit listener\n");
 		polkit_agent_listener_unregister(polkit_handle);
+		polkit_handle = 0;
 
 		g_object_unref(listener);
 		listener = 0;
@@ -262,18 +284,14 @@ void vpi_submit_pw(const char *s, vpi_pw_callback callback, void *userdata)
 	polkit_agent_session_response(pk_session, s);
 }
 
-#include <SDL2/SDL.h>
 int vpi_start_epilog()
 {
 	int ret = VANILLA_ERR_GENERIC;
-
-	vpi_update_pipe();
 
 	char ready_buf[500];
 	memset(ready_buf, 0, sizeof(ready_buf));
 	size_t read_count = 0;
 	while (read_count < sizeof(ready_buf)) {
-		vpilog("waiting for read...\n");
 		ssize_t this_read = read(err_pipes[0], ready_buf + read_count, sizeof(ready_buf));
 		if (this_read > 0) {
 			read_count += this_read;
@@ -320,29 +338,46 @@ int vpi_start_pipe()
 
 #ifdef VANILLA_POLKIT_AGENT
 	{
-		g_autoptr(PolkitSubject) subject = polkit_unix_session_new_for_process_sync(getpid(), NULL, NULL);
-		g_autoptr(GError) error = NULL;
+		PolkitAuthority *auth = polkit_authority_get_sync(NULL, NULL);
+		PolkitSubject *sub = polkit_unix_process_new_for_owner(getpid(), 0, -1);
+		PolkitAuthorizationResult *res =
+			polkit_authority_check_authorization_sync(
+				auth, sub, "com.mattkc.vanilla", NULL,
+				POLKIT_CHECK_AUTHORIZATION_FLAGS_NONE, NULL, NULL);
 
-		pk_session = 0;
-		pk_attempts = 0;
+		gboolean ok = res && polkit_authorization_result_get_is_authorized(res);
 
-		gmainctx = g_main_context_new();
-  		g_main_context_push_thread_default(gmainctx);
+		if (res) g_object_unref(res);
+		g_object_unref(sub);
+		g_object_unref(auth);
 
-		listener = g_object_new(vanilla_polkit_listener_get_type(), NULL);
-		vpilog("Registered Polkit listener\n");
-		polkit_handle = polkit_agent_listener_register(
-			POLKIT_AGENT_LISTENER(listener),
-			POLKIT_AGENT_REGISTER_FLAGS_NONE,
-			subject,
-			NULL, NULL, &error
-		);
-		g_main_context_pop_thread_default(gmainctx);
-		if (!polkit_handle) {
-			g_main_context_unref(gmainctx);
-			gmainctx = 0;
+		// gboolean ok = polkit_authorization_result_get_is_authorized(res);
+		// gboolean chall = polkit_authorization_result_get_is_challenge(res);
+		if (!ok) {
+			g_autoptr(PolkitSubject) subject = polkit_unix_session_new_for_process_sync(getpid(), NULL, NULL);
+			g_autoptr(GError) error = NULL;
 
-			vpilog("Failed to register Polkit listener: %s\n", error->message);
+			pk_session = 0;
+			pk_attempts = 0;
+
+			gmainctx = g_main_context_new();
+			g_main_context_push_thread_default(gmainctx);
+
+			listener = g_object_new(vanilla_polkit_listener_get_type(), NULL);
+			vpilog("Registered Polkit listener\n");
+			polkit_handle = polkit_agent_listener_register(
+				POLKIT_AGENT_LISTENER(listener),
+				POLKIT_AGENT_REGISTER_FLAGS_NONE,
+				subject,
+				NULL, NULL, &error
+			);
+			g_main_context_pop_thread_default(gmainctx);
+			if (!polkit_handle) {
+				g_main_context_unref(gmainctx);
+				gmainctx = 0;
+
+				vpilog("Failed to register Polkit listener: %s\n", error->message);
+			}
 		}
 	}
 #endif
@@ -429,7 +464,6 @@ int vpi_start_pipe()
     }
 }
 
-#include <SDL2/SDL.h>
 void vpi_update_pipe()
 {
 	if (gmainctx) {
@@ -459,6 +493,7 @@ void vpi_stop_pipe()
         sigaction(SIGINT, &old_sigint_action, NULL);
         sigaction(SIGTERM, &old_sigterm_action, NULL);
     }
+	vpi_close_polkit_session();
 }
 
 #else
