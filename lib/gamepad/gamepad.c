@@ -279,6 +279,35 @@ exit_pipe:
         close(skt);
 }
 
+int install_polkit_internal(thread_data_t *data, int install)
+{
+    clear_interrupt();
+
+    SERVER_ADDRESS = data->server_address;
+
+    int ret = VANILLA_ERR_GENERIC;
+
+    int pipe_cc_skt = -1;
+    if (SERVER_ADDRESS != VANILLA_ADDRESS_DIRECT) {
+        vanilla_pipe_command_t cmd;
+        cmd.control_code = install ? VANILLA_PIPE_CC_INSTALL_POLKIT : VANILLA_PIPE_CC_UNINSTALL_POLKIT;
+
+        // Connect to backend pipe
+        ret = connect_to_backend(&pipe_cc_skt, &cmd, sizeof(cmd.control_code) + sizeof(cmd.connection));
+
+		// No interrupt is required here because VANILLA_PIPE_CC_INSTALL_POLKIT
+		// does not start a thread in the pipe
+    }
+
+    if (pipe_cc_skt != -1) {
+        // Disconnect from pipe if necessary
+        send_unbind_cc(pipe_cc_skt);
+        close(pipe_cc_skt);
+    }
+
+	return ret;
+}
+
 void connect_as_gamepad_internal(thread_data_t *data)
 {
     clear_interrupt();

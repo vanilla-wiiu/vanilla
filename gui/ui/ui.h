@@ -84,6 +84,7 @@ void vui_set_background(vui_context_t *ctx, const char *background_image);
  */
 int vui_layer_create(vui_context_t *ctx);
 void vui_layer_set_opacity(vui_context_t *ctx, int layer, float opacity);
+void vui_layer_set_enabled(vui_context_t *ctx, int layer, int enabled);
 void vui_layer_set_bgcolor(vui_context_t *ctx, int layer, vui_color_t color);
 int vui_layer_destroy(vui_context_t *ctx);
 
@@ -114,7 +115,7 @@ void vui_label_update_visible(vui_context_t *ctx, int label, int visible);
 /**
  * TextEdit-related functions
  */
-int vui_textedit_create(vui_context_t *ctx, int x, int y, int w, int h, const char *initial_text, vui_font_size_t size, int layer);
+int vui_textedit_create(vui_context_t *ctx, int x, int y, int w, int h, const char *initial_text, vui_font_size_t size, int password, int layer);
 void vui_textedit_get_text(vui_context_t *ctx, int textedit, char *output, size_t output_size);
 void vui_textedit_update_text(vui_context_t *ctx, int textedit, const char *text);
 void vui_textedit_update_visible(vui_context_t *ctx, int textedit, int visible);

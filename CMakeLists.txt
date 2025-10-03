@@ -23,7 +23,6 @@ OPTION(VANILLA_BUILD_GUI "Build SDL2 GUI app" ON)
 OPTION(VANILLA_BUILD_TESTS "Build unit tests for Vanilla" OFF)
 OPTION(VANILLA_BUILD_PIPE "Build vanilla-pipe for connecting to Wii U (Linux only)" ${LINUX})
 OPTION(VANILLA_BUILD_VENDORED "Build Vanilla with \"vendored\" third-party libraries" ${vendored_default})
-OPTION(VANILLA_INSTALL_POLKIT_RULE "Install vanilla-pipe with Polkit rule to allow use without entering password" ON)
 
 add_subdirectory(lib)
 if (VANILLA_BUILD_PIPE)

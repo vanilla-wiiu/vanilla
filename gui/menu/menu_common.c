@@ -6,6 +6,7 @@
 #include "lang.h"
 #include "menu_connection.h"
 #include "menu_main.h"
+#include "menu_sudo.h"
 #include "menu_sync.h"
 #include "pipemgmt.h"
 #include "ui/ui_anim.h"
@@ -23,7 +24,7 @@ void vpi_menu_create_background(vui_context_t *vui, int layer, vui_rect_t *bkg_r
     bkg_rect->y = m;
     bkg_rect->w = scrw-m-m;
     bkg_rect->h = scrh-m-m;
-    
+
     vui_rect_create(vui, bkg_rect->x, bkg_rect->y, bkg_rect->w, bkg_rect->h, scrh*1/10, vui_color_create(0, 0, 0, 0.66f), layer);
 }
 
@@ -78,6 +79,8 @@ void vpi_menu_start_pipe(vui_context_t *vui, int fade_fglayer, vui_callback_t su
         int r = vpi_start_pipe();
         if (r == VANILLA_SUCCESS) {
             success_action(vui, success_data);
+		} else if (r == VANILLA_REQUIRES_PASSWORD_HANDLING) {
+			vpi_menu_sudo(vui, success_action, success_data, cancel_action, cancel_data, fade_fglayer);
         } else {
             if (cancel_action) {
                 cancel_action(vui, cancel_data);

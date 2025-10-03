@@ -125,6 +125,9 @@ typedef struct {
 int vanilla_start(uint32_t server_address, vanilla_bssid_t bssid, vanilla_psk_t psk);
 int vanilla_sync(uint16_t code, uint32_t server_address);
 
+int vanilla_install_polkit(uint32_t server_address);
+int vanilla_uninstall_polkit(uint32_t server_address);
+
 int vanilla_poll_event(vanilla_event_t *event);
 int vanilla_wait_event(vanilla_event_t *event);
 int vanilla_free_event(vanilla_event_t *event);

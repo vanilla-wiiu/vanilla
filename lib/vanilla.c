@@ -203,6 +203,20 @@ int vanilla_sync(uint16_t code, uint32_t server_address)
     return vanilla_start_internal(server_address, (vanilla_bssid_t){.bssid = {0}}, (vanilla_psk_t){.psk = {0}}, sync_internal, (void *) (uintptr_t) code);
 }
 
+int vanilla_install_polkit(uint32_t server_address)
+{
+	thread_data_t data;
+	data.server_address = server_address;
+	return install_polkit_internal(&data, 1);
+}
+
+int vanilla_uninstall_polkit(uint32_t server_address)
+{
+	thread_data_t data;
+	data.server_address = server_address;
+	return install_polkit_internal(&data, 0);
+}
+
 int vanilla_poll_event(vanilla_event_t *event)
 {
     return get_event(&event_loop, event, 0);

@@ -25,6 +25,8 @@
 #include "ui_util.h"
 
 #define MIN(a,b) (((a)<(b))?(a):(b))
+#define PW_CHAR_SIZE 20
+#define PW_CHAR_PAD 2
 
 typedef struct {
     SDL_Texture *texture;
@@ -56,6 +58,7 @@ typedef struct {
     SDL_Texture *toast_tex;
     struct timeval toast_expiry;
     AVFrame *frame;
+	SDL_Texture *pw_tex;
 
 	uint8_t *audio_buffer;
 	size_t audio_buffer_size;
@@ -422,6 +425,7 @@ int vui_init_sdl(vui_context_t *ctx, int fullscreen)
     sdl_ctx->background = 0;
     sdl_ctx->last_shown_toast = 0;
     sdl_ctx->toast_tex = 0;
+	sdl_ctx->pw_tex = 0;
     memset(sdl_ctx->layer_data, 0, sizeof(sdl_ctx->layer_data));
     memset(sdl_ctx->label_data, 0, sizeof(sdl_ctx->label_data));
     memset(sdl_ctx->button_cache, 0, sizeof(sdl_ctx->button_cache));
@@ -459,6 +463,11 @@ void vui_close_sdl(vui_context_t *ctx)
 
 	if (sdl_ctx->mic) {
 		SDL_CloseAudioDevice(sdl_ctx->mic);
+	}
+
+	if (sdl_ctx->pw_tex) {
+		SDL_DestroyTexture(sdl_ctx->pw_tex);
+		sdl_ctx->pw_tex = 0;
 	}
 
     SDL_DestroyTexture(sdl_ctx->toast_tex);
@@ -902,24 +911,51 @@ void vui_draw_sdl(vui_context_t *ctx, SDL_Renderer *renderer)
         TTF_Font *font = get_font(sdl_ctx, edit->size);
 
         if (edit->text[0]) {
-            SDL_Surface *surface = TTF_RenderUTF8_Blended(font, edit->text, c);
-            SDL_Texture *texture = SDL_CreateTextureFromSurface(sdl_ctx->renderer, surface);
 
-            SDL_Rect src;
-            src.x = src.y = 0;
-            src.w = surface->w;
-            src.h = surface->h;
+			if (edit->password) {
+				if (!sdl_ctx->pw_tex) {
+					sdl_ctx->pw_tex = vui_sdl_load_texture(sdl_ctx->renderer, "circle_big.svg");
+				}
 
-            if (src.w > rect.w) {
-                src.w = rect.w;
-            } else {
-                rect.w = src.w;
-            }
+				uint8_t f = (edit->enabled ? 1 : 0.5f) * 0xFF;
+				SDL_SetTextureAlphaMod(sdl_ctx->pw_tex, f);
+				SDL_SetTextureColorMod(sdl_ctx->pw_tex, f, f, f);
 
-            SDL_RenderCopy(renderer, texture, &src, &rect);
+				const char *cc = edit->text;
+				SDL_Rect pwr;
+				pwr.x = rect.x;
+				pwr.y = rect.y + rect.h/2 - PW_CHAR_SIZE/2;
+				pwr.w = PW_CHAR_SIZE;
+				pwr.h = PW_CHAR_SIZE;
+				while (*cc != 0) {
+					SDL_RenderCopy(renderer, sdl_ctx->pw_tex, 0, &pwr);
+					cc++;
+					pwr.x += PW_CHAR_SIZE + PW_CHAR_PAD;
+				}
+			} else {
+				SDL_Surface *surface = TTF_RenderUTF8_Blended(font, edit->text, c);
+				SDL_Texture *texture = SDL_CreateTextureFromSurface(sdl_ctx->renderer, surface);
+				SDL_Rect src;
+				src.x = src.y = 0;
 
-            SDL_FreeSurface(surface);
-            SDL_DestroyTexture(texture);
+				src.w = surface->w;
+				src.h = surface->h;
+
+				if (src.w > rect.w) {
+					src.w = rect.w;
+				} else {
+					rect.w = src.w;
+				}
+
+				uint8_t f = (edit->enabled ? 1 : 0.5f) * 0xFF;
+				SDL_SetTextureAlphaMod(texture, f);
+				SDL_SetTextureColorMod(texture, f, f, f);
+
+				SDL_RenderCopy(renderer, texture, &src, &rect);
+
+				SDL_FreeSurface(surface);
+				SDL_DestroyTexture(texture);
+			}
         }
 
         if (ctx->active_textedit == i) {
@@ -927,23 +963,27 @@ void vui_draw_sdl(vui_context_t *ctx, SDL_Renderer *renderer)
             gettimeofday(&now, 0);
             time_t diff = (now.tv_sec - ctx->active_textedit_time.tv_sec) * 1000000 + (now.tv_usec - ctx->active_textedit_time.tv_usec);
             if ((diff % 1000000) < 500000) {
-                char tmp_ate[MAX_BUTTON_TEXT];
-
                 char *copy_end = edit->text;
                 for (int i = 0; i < edit->cursor; i++) {
                     copy_end = vui_utf8_advance(copy_end);
                 }
 
                 size_t len = copy_end - edit->text;
-                strncpy(tmp_ate, edit->text, len);
-                tmp_ate[len] = 0;
 
-                int tw;
-                TTF_SizeUTF8(font, tmp_ate, &tw, 0);
-                int cursor_x = rect.x + tw;
+				int cursor_x;
+				if (edit->password) {
+					cursor_x = rect.x + (PW_CHAR_SIZE + PW_CHAR_PAD) * len - PW_CHAR_PAD/2;
+				} else {
+                	char tmp_ate[MAX_BUTTON_TEXT];
+					strncpy(tmp_ate, edit->text, len);
+					tmp_ate[len] = 0;
 
-                SDL_SetRenderDrawColor(renderer, c.r, c.g, c.b, c.a);
-                SDL_RenderDrawLine(renderer, cursor_x, rect.y, cursor_x, rect.y + rect.h);
+					int tw;
+					TTF_SizeUTF8(font, tmp_ate, &tw, 0);
+					cursor_x = rect.x + tw;
+				}
+				SDL_SetRenderDrawColor(renderer, c.r, c.g, c.b, c.a);
+				SDL_RenderDrawLine(renderer, cursor_x, rect.y, cursor_x, rect.y + rect.h);
             }
         }
     }
@@ -1442,9 +1482,18 @@ int vui_update_sdl(vui_context_t *vui)
         vui_draw_sdl(vui, renderer);
 
         // Flatten layers
-        for (int i = vui->layers - 1; i > 0; i--) {
-            SDL_Texture *bg = sdl_ctx->layer_data[i-1];
-            SDL_Texture *fg = sdl_ctx->layer_data[i];
+		int el[MAX_BUTTON_COUNT];
+		int el_count = 0;
+		for (int i = 0; i < vui->layers; i++) {
+			if (vui->layer_enabled[i]) {
+				el[el_count] = i;
+				el_count++;
+			}
+		}
+
+        for (int i = el_count - 1; i > 0; i--) {
+            SDL_Texture *bg = sdl_ctx->layer_data[el[i-1]];
+            SDL_Texture *fg = sdl_ctx->layer_data[el[i]];
 
             SDL_SetRenderTarget(renderer, bg);
             SDL_SetTextureColorMod(fg, vui->layer_opacity[i] * 0xFF, vui->layer_opacity[i] * 0xFF, vui->layer_opacity[i] * 0xFF);

@@ -6,7 +6,7 @@
 #include "ui.h"
 
 #define MAX_BUTTON_COUNT 16
-#define MAX_BUTTON_TEXT 256
+#define MAX_BUTTON_TEXT 512
 
 typedef struct {
     int x;
@@ -52,6 +52,7 @@ typedef struct {
     int visible;
     int enabled;
     int cursor;
+	int password;
 } vui_textedit_t;
 
 typedef struct {
@@ -121,6 +122,7 @@ typedef struct vui_context_t {
     int screen_height;
     int layers;
     float layer_opacity[MAX_BUTTON_COUNT];
+    int layer_enabled[MAX_BUTTON_COUNT];
     vui_color_t layer_color[MAX_BUTTON_COUNT];
     char background_image[MAX_BUTTON_TEXT];
     int background_enabled;

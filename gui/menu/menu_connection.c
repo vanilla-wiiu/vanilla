@@ -142,7 +142,7 @@ static void local_connection_menu(vui_context_t *vui, void *v)
     update_wireless_buttons(vui);
 
     vpi_menu_create_back_button(vui, fglayer, return_to_connection, (void *) (intptr_t) fglayer);
-    
+
     vui_transition_fade_layer_in(vui, fglayer, 0, 0);
 }
 
@@ -193,11 +193,11 @@ static void via_server_connection_menu(vui_context_t *vui, void *v)
         ip_text = inet_ntoa(in);
     }
 
-    ip_textedit = vui_textedit_create(vui, textedit_x, bkg_rect.y + bkg_rect.h * 3 / 7, textedit_w, textedit_h, ip_text, VUI_FONT_SIZE_NORMAL, fglayer);
+    ip_textedit = vui_textedit_create(vui, textedit_x, bkg_rect.y + bkg_rect.h * 3 / 7, textedit_w, textedit_h, ip_text, VUI_FONT_SIZE_NORMAL, 0, fglayer);
 
     error_lbl = vui_label_create(vui, textedit_x, bkg_rect.y + bkg_rect.h * 4 / 7, textedit_w, BTN_SZ, "Invalid IP address", vui_color_create(1,0,0,1), VUI_FONT_SIZE_SMALL, fglayer);
     vui_label_update_visible(vui, error_lbl, 0);
-    
+
     vui_button_create(vui, textedit_x, bkg_rect.y + bkg_rect.h * 5 / 7, textedit_w, BTN_SZ, lang(VPI_LANG_OK_BTN), 0, VUI_BUTTON_STYLE_BUTTON, fglayer, check_ip_address, (void *) (intptr_t) fglayer);
 
     vpi_menu_create_back_button(vui, fglayer, return_to_connection, (void *) (intptr_t) fglayer);
@@ -259,7 +259,7 @@ void vpi_menu_connection_and_return_to(vui_context_t *vui, int fade_fglayer, vui
 
     // Back button
     vpi_menu_create_back_button(vui, fglayer, return_to_settings, (void *) (intptr_t) bglayer);
-    
+
     vui_transition_fade_layer_in(vui, fade_fglayer ? fglayer : bglayer, 0, 0);
 
     g_continue_callback = success_callback;
