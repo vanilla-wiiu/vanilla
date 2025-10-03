@@ -45,7 +45,7 @@ typedef struct thread_data_t
 
 void sync_internal(thread_data_t *data);
 void connect_as_gamepad_internal(thread_data_t *data);
-int install_polkit_internal(thread_data_t *data);
+int install_polkit_internal(thread_data_t *data, int install);
 void send_to_console(int fd, const void *data, size_t data_size, uint16_t port);
 int push_event(event_loop_t *loop, int type, const void *data, size_t size);
 int get_event(event_loop_t *loop, vanilla_event_t *event, int wait);

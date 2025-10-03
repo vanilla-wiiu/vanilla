@@ -50,7 +50,8 @@ static const char *lang_str[__VPI_LANG_T_COUNT] = {
 	"WARNING",
 	"This option will install a Polkit rule that will allow Vanilla's backend to run as root without password entry.\n\nThere are inherent risks to bypassing security systems. Only enable this if you are willing to accept those risks.\n\nNOTE: If you are using the Steam Deck, this will also disable read-only access to your system partition.",
 	"I acknowledge",
-	"Enable Root Password Skip"
+	"Enable Root Password Skip",
+	"Disable Root Password Skip"
 };
 
 const char *lang(vpi_lang_t id)

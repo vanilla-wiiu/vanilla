@@ -279,7 +279,7 @@ exit_pipe:
         close(skt);
 }
 
-int install_polkit_internal(thread_data_t *data)
+int install_polkit_internal(thread_data_t *data, int install)
 {
     clear_interrupt();
 
@@ -290,7 +290,7 @@ int install_polkit_internal(thread_data_t *data)
     int pipe_cc_skt = -1;
     if (SERVER_ADDRESS != VANILLA_ADDRESS_DIRECT) {
         vanilla_pipe_command_t cmd;
-        cmd.control_code = VANILLA_PIPE_CC_INSTALL_POLKIT;
+        cmd.control_code = install ? VANILLA_PIPE_CC_INSTALL_POLKIT : VANILLA_PIPE_CC_UNINSTALL_POLKIT;
 
         // Connect to backend pipe
         ret = connect_to_backend(&pipe_cc_skt, &cmd, sizeof(cmd.control_code) + sizeof(cmd.connection));

@@ -1087,11 +1087,14 @@ void *vanilla_connect_to_console(void *data)
     return wpa_setup_environment(args);
 }
 
+int uninstall_polkit()
+{
+	unlink(POLKIT_ACTION_DST);
+	unlink(POLKIT_RULE_DST);
+}
+
 int install_polkit()
 {
-	static const char *POLKIT_ACTION_DST = "/usr/share/polkit-1/actions/com.mattkc.vanilla.policy";
-	static const char *POLKIT_RULE_DST = "/usr/share/polkit-1/rules.d/com.mattkc.vanilla.rules";
-
 	static const char *ACTION_TEMPLATE =
 		"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
 		"<!DOCTYPE policyconfig PUBLIC \"-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN\" \"http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd\">\n"
@@ -1229,9 +1232,14 @@ void pipe_listen(int local, const char *wireless_interface, const char *log_file
                     nlprint("FAILED TO SEND BUSY: %i", errno);
                 }
             }
-		} else if (cmd.control_code == VANILLA_PIPE_CC_INSTALL_POLKIT) {
-			// Write Polkit rule and action
-			install_polkit();
+		} else if (cmd.control_code == VANILLA_PIPE_CC_INSTALL_POLKIT || cmd.control_code == VANILLA_PIPE_CC_UNINSTALL_POLKIT) {
+			if (cmd.control_code == VANILLA_PIPE_CC_INSTALL_POLKIT) {
+				// Write Polkit rule and action
+				install_polkit();
+			} else {
+				// Delete Polkit rule and action
+				uninstall_polkit();
+			}
 
 			// Acknowledge
 			cmd.control_code = VANILLA_PIPE_CC_BIND_ACK;
