@@ -84,6 +84,7 @@ void vui_set_background(vui_context_t *ctx, const char *background_image);
  */
 int vui_layer_create(vui_context_t *ctx);
 void vui_layer_set_opacity(vui_context_t *ctx, int layer, float opacity);
+void vui_layer_set_enabled(vui_context_t *ctx, int layer, int enabled);
 void vui_layer_set_bgcolor(vui_context_t *ctx, int layer, vui_color_t color);
 int vui_layer_destroy(vui_context_t *ctx);
 

@@ -1130,6 +1130,9 @@ int install_polkit()
 	ssize_t link_len = readlink("/proc/self/exe", exe, sizeof(exe));
 	exe[link_len] = 0;
 
+	// If on the Steam Deck, ensure the system partition is writeable
+	run_process_and_read_stdout((const char *[]) {"steamos-readonly", "disable", NULL}, 0, 0);
+
 	int ret = VANILLA_ERR_GENERIC;
 
 	FILE *action = fopen(POLKIT_ACTION_DST, "w");

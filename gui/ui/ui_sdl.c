@@ -917,6 +917,10 @@ void vui_draw_sdl(vui_context_t *ctx, SDL_Renderer *renderer)
 					sdl_ctx->pw_tex = vui_sdl_load_texture(sdl_ctx->renderer, "circle_big.svg");
 				}
 
+				uint8_t f = (edit->enabled ? 1 : 0.5f) * 0xFF;
+				SDL_SetTextureAlphaMod(sdl_ctx->pw_tex, f);
+				SDL_SetTextureColorMod(sdl_ctx->pw_tex, f, f, f);
+
 				const char *cc = edit->text;
 				SDL_Rect pwr;
 				pwr.x = rect.x;
@@ -1478,9 +1482,18 @@ int vui_update_sdl(vui_context_t *vui)
         vui_draw_sdl(vui, renderer);
 
         // Flatten layers
-        for (int i = vui->layers - 1; i > 0; i--) {
-            SDL_Texture *bg = sdl_ctx->layer_data[i-1];
-            SDL_Texture *fg = sdl_ctx->layer_data[i];
+		int el[MAX_BUTTON_COUNT];
+		int el_count = 0;
+		for (int i = 0; i < vui->layers; i++) {
+			if (vui->layer_enabled[i]) {
+				el[el_count] = i;
+				el_count++;
+			}
+		}
+
+        for (int i = el_count - 1; i > 0; i--) {
+            SDL_Texture *bg = sdl_ctx->layer_data[el[i-1]];
+            SDL_Texture *fg = sdl_ctx->layer_data[el[i]];
 
             SDL_SetRenderTarget(renderer, bg);
             SDL_SetTextureColorMod(fg, vui->layer_opacity[i] * 0xFF, vui->layer_opacity[i] * 0xFF, vui->layer_opacity[i] * 0xFF);

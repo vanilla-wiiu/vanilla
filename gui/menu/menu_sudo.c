@@ -1,9 +1,12 @@
-#include "menu_rename.h"
+#include "menu_sudo.h"
+
+#ifdef VANILLA_PIPE_AVAILABLE
 
 #include "config.h"
 #include "lang.h"
 #include "menu_common.h"
 #include "menu_main.h"
+#include "menu_sudo_warning.h"
 #include "ui/ui_anim.h"
 #include "pipemgmt.h"
 
@@ -18,6 +21,9 @@ static int ok_btn;
 static int cancel_btn;
 static int err_lbl;
 static int remember_btn;
+static int warning_layer;
+
+static int remember_warning_displayed = 0;
 
 static void return_to_main(vui_context_t *vui, int btn, void *v)
 {
@@ -82,9 +88,34 @@ static void submit_pw(vui_context_t *vui, int btn, void *v)
 	vui_label_update_text(vui, err_lbl, "");
 }
 
+static void hide_warning(vui_context_t *vui, int enable)
+{
+	vui_layer_set_enabled(vui, warning_layer, 0);
+	vui_layer_set_enabled(vui, fglayer, 1);
+	vui_button_update_checked(vui, remember_btn, enable);
+	if (enable) remember_warning_displayed = 1;
+}
+
+static void hide_warning_and_ack(vui_context_t *vui, int btn, void *v)
+{
+	hide_warning(vui, 1);
+}
+
+static void hide_warning_and_cancel(vui_context_t *vui, int btn, void *v)
+{
+	hide_warning(vui, 0);
+}
+
 static void dont_ask_again_btn_pressed(vui_context_t *vui, int btn, void *userdata)
 {
-	vui_button_update_checked(vui, btn, !vui_button_get_checked(vui, btn));
+	int v = !vui_button_get_checked(vui, btn);
+
+	if (v == 1 && !remember_warning_displayed) {
+		vui_layer_set_enabled(vui, warning_layer, 1);
+		vui_layer_set_enabled(vui, fglayer, 0);
+	} else {
+		vui_button_update_checked(vui, btn, v);
+	}
 }
 
 void vpi_menu_sudo(vui_context_t *vui, vui_callback_t success_action, void *success_data, vui_callback_t cancel_action, void *cancel_data, int fade_fglayer)
@@ -121,5 +152,11 @@ void vpi_menu_sudo(vui_context_t *vui, vui_callback_t success_action, void *succ
     ok_btn = vui_button_create(vui, bkg_rect.x + bkg_rect.w/2 - (ok_btn_w + cancel_btn_w)/2, bkg_rect.y + bkg_rect.h * 3 / 4, ok_btn_w, BTN_SZ, lang(VPI_LANG_OK_BTN), 0, VUI_BUTTON_STYLE_BUTTON, fglayer, submit_pw, 0);
     cancel_btn = vui_button_create(vui, bkg_rect.x + bkg_rect.w/2 - (ok_btn_w + cancel_btn_w)/2 + ok_btn_w, bkg_rect.y + bkg_rect.h * 3 / 4, cancel_btn_w, BTN_SZ, lang(VPI_LANG_CANCEL_BTN), 0, VUI_BUTTON_STYLE_BUTTON, fglayer, return_to_main,  (void *) (intptr_t) fglayer);
 
+	warning_layer = vui_layer_create(vui);
+	vpi_menu_create_sudo_warning(vui, warning_layer, hide_warning_and_ack, 0, hide_warning_and_cancel, 0);
+	vui_layer_set_enabled(vui, warning_layer, 0);
+
 	vui_transition_fade_layer_in(vui, fade_fglayer ? fglayer : bglayer, 0, 0);
 }
+
+#endif // VANILLA_PIPE_AVAILABLE

@@ -15,6 +15,10 @@
 #include <unistd.h>
 #include <vanilla.h>
 
+#define POLKIT_AGENT_I_KNOW_API_IS_SUBJECT_TO_CHANGE
+#include <polkit/polkit.h>
+#include <polkitagent/polkitagent.h>
+
 #include "config.h"
 #include "platform.h"
 
@@ -25,11 +29,6 @@ static int pipe_err;
 static pthread_t pipe_log_thread = 0;
 
 static int err_pipes[2], in_pipes[2];
-
-#ifdef VANILLA_POLKIT_AGENT
-#define POLKIT_AGENT_I_KNOW_API_IS_SUBJECT_TO_CHANGE
-#include <polkit/polkit.h>
-#include <polkitagent/polkitagent.h>
 
 static gpointer polkit_handle = 0;
 static GMainContext *gmainctx = 0;
@@ -180,7 +179,6 @@ static void vanilla_polkit_listener_class_init(VanillaPolkitListenerClass *self)
 static void vanilla_polkit_listener_init(VanillaPolkitListener *self)
 {
 }
-#endif
 
 void *vpi_pipe_log_thread(void *data)
 {
@@ -230,7 +228,6 @@ void sigint_handler(int signal)
 
 void vpi_close_polkit_session()
 {
-#ifdef VANILLA_POLKIT_AGENT
 	if (polkit_handle) {
 		pk_ignore_complete = 1;
 		if (pk_session) {
@@ -259,7 +256,6 @@ void vpi_close_polkit_session()
 			pk_identity = 0;
 		}
 	}
-#endif
 }
 
 void vpi_cancel_pw()
@@ -336,7 +332,6 @@ int vpi_start_pipe()
         return VANILLA_SUCCESS;
     }
 
-#ifdef VANILLA_POLKIT_AGENT
 	{
 		PolkitAuthority *auth = polkit_authority_get_sync(NULL, NULL);
 		PolkitSubject *sub = polkit_unix_process_new_for_owner(getpid(), 0, -1);
@@ -380,7 +375,6 @@ int vpi_start_pipe()
 			}
 		}
 	}
-#endif
 
     // Set up pipes so child stdout can be read by the parent process
     pipe(in_pipes);

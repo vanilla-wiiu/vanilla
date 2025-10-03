@@ -252,6 +252,7 @@ list(APPEND VANILLA_GUI_SRC
     menu/menu_rename.c
     menu/menu_settings.c
     menu/menu_sudo.c
+    menu/menu_sudo_warning.c
     menu/menu_sync.c
     pipemgmt.c
     platform.c
@@ -322,23 +323,12 @@ endif()
 if (VANILLA_BUILD_PIPE)
 	# Assume this platform is capable of running vanilla-pipe
     target_compile_definitions(vanilla PRIVATE VANILLA_PIPE_AVAILABLE)
-    target_compile_definitions(vanilla PRIVATE VANILLA_POLKIT_AGENT)
 
-	# Add polkit include headers
-	target_include_directories(vanilla PRIVATE
-		/usr/include/polkit-1
-		/usr/include/glib-2.0
-		/usr/lib/glib-2.0/include
-	)
-
-	# Add glib
-	target_link_libraries(vanilla PRIVATE
-		glib-2.0
-		gobject-2.0
-		gio-2.0
-		polkit-agent-1
-		polkit-gobject-1
-	)
+	# Find Polkit and GLIB libraries
+	find_package(PkgConfig)
+	pkg_check_modules(PC_POLKIT polkit-agent-1 REQUIRED IMPORTED_TARGET)
+	target_include_directories(vanilla PRIVATE ${PC_POLKIT_INCLUDE_DIRS})
+	target_link_libraries(vanilla PRIVATE ${PC_POLKIT_LIBRARIES})
 endif()
 
 if (LINUX)

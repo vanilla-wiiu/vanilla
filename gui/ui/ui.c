@@ -52,6 +52,7 @@ void vui_reset(vui_context_t *ctx)
     ctx->button_active = -1;
     ctx->layers = 1;
     ctx->layer_opacity[0] = 1;
+	ctx->layer_enabled[0] = 1;
     ctx->selected_button = -1;
     ctx->cancel_button = -1;
     ctx->active_textedit = -1;
@@ -365,7 +366,7 @@ void vui_process_mousedown(vui_context_t *ctx, int x, int y)
     for (int i = 0; i < ctx->button_count; i++) {
         vui_button_t *btn = &ctx->buttons[i];
 
-        if (btn->visible && btn->enabled && point_inside_button(btn, x, y)) {
+        if (btn->visible && btn->enabled && point_inside_button(btn, x, y) && ctx->layer_enabled[btn->layer]) {
             press_button(ctx, i);
             button_pressed = 1;
             break;
@@ -377,7 +378,7 @@ void vui_process_mousedown(vui_context_t *ctx, int x, int y)
         for (int i = 0; i < ctx->textedit_count; i++) {
             vui_textedit_t *edit = &ctx->textedits[i];
 
-            if (edit->visible && edit->enabled && point_inside_textedit(edit, x, y)) {
+            if (edit->visible && edit->enabled && point_inside_textedit(edit, x, y) && ctx->layer_enabled[edit->layer]) {
                 new_active_textedit = i;
                 break;
             }
@@ -545,6 +546,7 @@ int vui_layer_create(vui_context_t *ctx)
 
     // Set layer defaults
     ctx->layer_opacity[cur_layer] = 1.0f;
+	ctx->layer_enabled[cur_layer] = 1;
 
     vui_color_t *layerbg = &ctx->layer_color[cur_layer];
     layerbg->r = 0;
@@ -570,6 +572,11 @@ int vui_layer_destroy(vui_context_t *ctx)
 void vui_layer_set_opacity(vui_context_t *ctx, int layer, float opacity)
 {
     ctx->layer_opacity[layer] = opacity;
+}
+
+void vui_layer_set_enabled(vui_context_t *ctx, int layer, int enabled)
+{
+	ctx->layer_enabled[layer] = enabled;
 }
 
 vui_color_t vui_color_create(float r, float g, float b, float a)
