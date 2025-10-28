@@ -96,10 +96,18 @@ function(compile_ffmpeg _target_name _system_name _system_processor)
         elseif(LINUX)
             set(FFMPEG_TARGET_OS "linux")
             list(APPEND FFMPEG_CONFIGURE_ARGS
+                --cc=${CMAKE_C_COMPILER}
+                --nm=${CMAKE_NM}
+                --ar=${CMAKE_AR}
+                --ranlib=${CMAKE_RANLIB}
                 --cross-prefix=${_system_processor}-linux-gnu-
                 --host-cc=${CMAKE_C_COMPILER}
-				--enable-vaapi
             )
+            if (NOT "${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "armhf")
+                list(APPEND FFMPEG_CONFIGURE_ARGS
+                    --enable-vaapi
+                )
+            endif()
         endif()
         list(APPEND FFMPEG_CONFIGURE_ARGS
             --enable-cross-compile

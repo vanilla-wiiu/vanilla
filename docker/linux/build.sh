@@ -9,6 +9,13 @@ then
     export PATH=$PATH:/usr/lib/aarch64-linux-gnu
     export CC=aarch64-linux-gnu-gcc
     export AR=aarch64-linux-gnu-ar
+elif [ "$ARCH" = "armhf" ]
+then
+    EXTRA_CMAKE_FLAGS="-DCMAKE_CROSSCOMPILING=ON -DCMAKE_SYSTEM_PROCESSOR=armhf -DCMAKE_SYSTEM_NAME=Linux"
+    export PKG_CONFIG_PATH=/usr/lib/arm-linux-gnueabihf/pkgconfig
+    export PATH=$PATH:/usr/lib/arm-linux-gnueabihf
+    export CC=arm-linux-gnueabihf-gcc
+    export AR=arm-linux-gnueabihf-ar
 fi
 
 mkdir -p /build

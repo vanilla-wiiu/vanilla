@@ -22,13 +22,18 @@ if (VANILLA_BUILD_VENDORED)
 	# Build OpenSSL
 	set(OPENSSL_DIR ${CMAKE_CURRENT_BINARY_DIR}/openssl)
 	set(OPENSSL_INSTALL_DIR ${OPENSSL_DIR}/install)
-	set(OPENSSL_PROCESSOR ${CMAKE_SYSTEM_PROCESSOR})
+	if ("${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "armhf")
+		set(OPENSSL_PROCESSOR "armv4")
+	else()
+		set(OPENSSL_PROCESSOR ${CMAKE_SYSTEM_PROCESSOR})
+	endif()
 	ExternalProject_Add(openssl
 		SOURCE_DIR ${OPENSSL_DIR}
 		BINARY_DIR ${OPENSSL_DIR}
 		GIT_REPOSITORY https://github.com/openssl/openssl.git
 		GIT_TAG openssl-3.5.0
 		CONFIGURE_COMMAND env CC=${CMAKE_C_COMPILER} ./Configure --prefix=${OPENSSL_INSTALL_DIR} linux-${OPENSSL_PROCESSOR}
+		INSTALL_COMMAND make install_sw
 		UPDATE_COMMAND ""
 		# BUILD_BYPRODUCTS
 		# 	${WPA_SUPPLICANT_BYPRODUCTS}
@@ -40,12 +45,17 @@ if (VANILLA_BUILD_VENDORED)
 	# Build LibNL
 	set(LIBNL_DIR ${CMAKE_CURRENT_BINARY_DIR}/libnl)
 	set(LIBNL_INSTALL_DIR ${LIBNL_DIR}/install)
+	if ("${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "armhf")
+		set(LIBNL_HOST arm-linux-gnueabihf)
+	else()
+		set(LIBNL_HOST ${CMAKE_SYSTEM_PROCESSOR}-linux-gnu)
+	endif()
 	ExternalProject_Add(libnl
 		SOURCE_DIR ${LIBNL_DIR}
 		BINARY_DIR ${LIBNL_DIR}
 		GIT_REPOSITORY https://github.com/thom311/libnl.git
 		GIT_TAG libnl3_11_0
-		CONFIGURE_COMMAND autoreconf -i && ./configure --prefix=${LIBNL_INSTALL_DIR} --host=${CMAKE_SYSTEM_PROCESSOR}-linux-gnu
+		CONFIGURE_COMMAND autoreconf -i && ./configure --prefix=${LIBNL_INSTALL_DIR} --host=${LIBNL_HOST}
 		UPDATE_COMMAND ""
 		# BUILD_BYPRODUCTS
 		# 	${WPA_SUPPLICANT_BYPRODUCTS}
