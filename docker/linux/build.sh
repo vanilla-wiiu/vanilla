@@ -16,7 +16,7 @@ then
     export PATH=$PATH:/usr/lib/arm-linux-gnueabihf
     export CC=arm-linux-gnueabihf-gcc
     export AR=arm-linux-gnueabihf-ar
-	export CFLAGS="-march=armv6zk -mfpu=vfp -mfloat-abi=hard"
+	export CFLAGS="-march=armv6zk -mfpu=vfp -mfloat-abi=hard -marm"
 fi
 
 mkdir -p /build
