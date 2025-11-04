@@ -11,7 +11,7 @@ then
     export AR=aarch64-linux-gnu-ar
 elif [ "$ARCH" = "armhf" ]
 then
-    EXTRA_CMAKE_FLAGS="-DCMAKE_CROSSCOMPILING=ON -DCMAKE_SYSTEM_PROCESSOR=armhf -DCMAKE_SYSTEM_NAME=Linux -DCMAKE_C_FLAGS='-march=armv6zk -mfpu=vfp -mfloat-abi=hard -marm'"
+    EXTRA_CMAKE_FLAGS="-DCMAKE_CROSSCOMPILING=ON -DCMAKE_SYSTEM_PROCESSOR=armhf -DCMAKE_SYSTEM_NAME=Linux -DCMAKE_C_FLAGS=\"-march=armv6zk -mfpu=vfp -mfloat-abi=hard -marm\""
     export PKG_CONFIG_PATH=/usr/lib/arm-linux-gnueabihf/pkgconfig
     export PATH=$PATH:/usr/lib/arm-linux-gnueabihf
     export CC=arm-linux-gnueabihf-gcc
