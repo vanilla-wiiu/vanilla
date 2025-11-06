@@ -15,8 +15,6 @@ jobs:
             arch: x86_64
           - os: linux
             arch: aarch64
-          - os: linux
-            arch: armhf
           - os: windows
             arch: x86_64
           - os: android

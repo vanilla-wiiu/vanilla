@@ -22,11 +22,13 @@ if (VANILLA_BUILD_VENDORED)
 	# Build OpenSSL
 	set(OPENSSL_DIR ${CMAKE_CURRENT_BINARY_DIR}/openssl)
 	set(OPENSSL_INSTALL_DIR ${OPENSSL_DIR}/install)
-	if ("${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "armhf")
+	set(OPENSSL_PROCESSOR ${CMAKE_SYSTEM_PROCESSOR})
+	set(OPENSSL_EXTRA_FLAGS "")
+	if ("${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "arm")
 		set(OPENSSL_PROCESSOR "armv4")
-	else()
-		set(OPENSSL_PROCESSOR ${CMAKE_SYSTEM_PROCESSOR})
+		set(OPENSSL_EXTRA_FLAGS "${CMAKE_C_FLAGS}")
 	endif()
+	set(OPENSSL_LIBRARIES "${OPENSSL_DIR}/libssl.a" "${OPENSSL_DIR}/libcrypto.a")
 	ExternalProject_Add(openssl
 		SOURCE_DIR ${OPENSSL_DIR}
 		BINARY_DIR ${OPENSSL_DIR}
@@ -35,21 +37,23 @@ if (VANILLA_BUILD_VENDORED)
 		CONFIGURE_COMMAND env CC=${CMAKE_C_COMPILER} ./Configure --prefix=${OPENSSL_INSTALL_DIR} linux-${OPENSSL_PROCESSOR}
 		INSTALL_COMMAND make install_sw
 		UPDATE_COMMAND ""
-		# BUILD_BYPRODUCTS
-		# 	${WPA_SUPPLICANT_BYPRODUCTS}
-		# 	${HOSTAP_DIR}/wpa_supplicant/libwpa_client.a
+		BUILD_BYPRODUCTS
+			${OPENSSL_LIBRARIES}
 	)
-	set(OPENSSL_LIBRARIES "${OPENSSL_DIR}/libssl.a" "${OPENSSL_DIR}/libcrypto.a")
 	add_dependencies(vanilla-pipe openssl)
 
 	# Build LibNL
 	set(LIBNL_DIR ${CMAKE_CURRENT_BINARY_DIR}/libnl)
 	set(LIBNL_INSTALL_DIR ${LIBNL_DIR}/install)
-	if ("${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "armhf")
+	if ("${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "arm")
 		set(LIBNL_HOST arm-linux-gnueabihf)
 	else()
 		set(LIBNL_HOST ${CMAKE_SYSTEM_PROCESSOR}-linux-gnu)
 	endif()
+	set(LibNL_LIBRARY "${LIBNL_INSTALL_DIR}/lib/libnl-3.a")
+	set(LibNL_ROUTE_LIBRARY "${LIBNL_INSTALL_DIR}/lib/libnl-route-3.a")
+	set(LibNL_GENL_LIBRARY "${LIBNL_INSTALL_DIR}/lib/libnl-genl-3.a")
+	set(LibNL_INCLUDE_DIR "${LIBNL_INSTALL_DIR}/include/libnl3")
 	ExternalProject_Add(libnl
 		SOURCE_DIR ${LIBNL_DIR}
 		BINARY_DIR ${LIBNL_DIR}
@@ -57,14 +61,12 @@ if (VANILLA_BUILD_VENDORED)
 		GIT_TAG libnl3_11_0
 		CONFIGURE_COMMAND autoreconf -i && ./configure --prefix=${LIBNL_INSTALL_DIR} --host=${LIBNL_HOST}
 		UPDATE_COMMAND ""
-		# BUILD_BYPRODUCTS
-		# 	${WPA_SUPPLICANT_BYPRODUCTS}
-		# 	${HOSTAP_DIR}/wpa_supplicant/libwpa_client.a
+		BUILD_BYPRODUCTS
+			${LibNL_LIBRARY}
+			${LibNL_ROUTE_LIBRARY}
+			${LibNL_GENL_LIBRARY}
+			${LibNL_INCLUDE_DIR}
 	)
-	set(LibNL_LIBRARY "${LIBNL_INSTALL_DIR}/lib/libnl-3.a")
-	set(LibNL_ROUTE_LIBRARY "${LIBNL_INSTALL_DIR}/lib/libnl-route-3.a")
-	set(LibNL_GENL_LIBRARY "${LIBNL_INSTALL_DIR}/lib/libnl-genl-3.a")
-	set(LibNL_INCLUDE_DIR "${LIBNL_INSTALL_DIR}/include/libnl3")
 	add_dependencies(vanilla-pipe libnl)
 else()
 	# Find LibNL

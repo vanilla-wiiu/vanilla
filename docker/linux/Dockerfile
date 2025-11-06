@@ -8,7 +8,6 @@ ENV TZ=Etc/UTC
 
 RUN if [ "${ARCH}" = "aarch64" ]; then export DEBARCH="arm64"; export DEBGCC="gcc-aarch64-linux-gnu g++-aarch64-linux-gnu"; \
     elif [ "${ARCH}" = "x86_64" ]; then export DEBARCH="amd64"; export DEBGCC="gcc g++"; \
-    elif [ "${ARCH}" = "armhf" ]; then export DEBARCH="armhf"; export DEBGCC="gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf"; \
     else export DEBARCH="${ARCH}"; export DEBGCC="gcc g++"; fi \
     && dpkg --add-architecture $DEBARCH \
     && apt -y update \

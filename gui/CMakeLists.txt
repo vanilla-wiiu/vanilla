@@ -102,8 +102,10 @@ function(compile_ffmpeg _target_name _system_name _system_processor)
                 --ranlib=${CMAKE_RANLIB}
                 --cross-prefix=${_system_processor}-linux-gnu-
                 --host-cc=${CMAKE_C_COMPILER}
+                --extra-cflags=${CMAKE_C_FLAGS}
+                --extra-ldflags=${CMAKE_SHARED_LINKER_FLAGS}
             )
-            if (NOT "${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "armhf")
+            if (NOT "${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "arm")
                 list(APPEND FFMPEG_CONFIGURE_ARGS
                     --enable-vaapi
                 )
@@ -332,11 +334,14 @@ if (VANILLA_BUILD_PIPE)
 	# Assume this platform is capable of running vanilla-pipe
     target_compile_definitions(vanilla PRIVATE VANILLA_PIPE_AVAILABLE)
 
-	# Find Polkit and GLIB libraries
-	find_package(PkgConfig)
-	pkg_check_modules(PC_POLKIT polkit-agent-1 REQUIRED IMPORTED_TARGET)
-	target_include_directories(vanilla PRIVATE ${PC_POLKIT_INCLUDE_DIRS})
-	target_link_libraries(vanilla PRIVATE ${PC_POLKIT_LIBRARIES})
+	OPTION(VANILLA_BUILD_USE_POLKIT "Enable Polkit-based authentication" ON)
+	if (VANILLA_BUILD_USE_POLKIT)
+		# Find Polkit and GLIB libraries
+		find_package(PkgConfig)
+		pkg_check_modules(PC_POLKIT polkit-agent-1 REQUIRED IMPORTED_TARGET)
+		target_include_directories(vanilla PRIVATE ${PC_POLKIT_INCLUDE_DIRS})
+		target_link_libraries(vanilla PRIVATE ${PC_POLKIT_LIBRARIES})
+	endif()
 endif()
 
 if (LINUX)
