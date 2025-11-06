@@ -261,8 +261,6 @@ list(APPEND VANILLA_GUI_SRC
     menu/menu_region.c
     menu/menu_rename.c
     menu/menu_settings.c
-    menu/menu_sudo.c
-    menu/menu_sudo_warning.c
     menu/menu_sync.c
     pipemgmt.c
     platform.c
@@ -341,6 +339,12 @@ if (VANILLA_BUILD_PIPE)
 		pkg_check_modules(PC_POLKIT polkit-agent-1 REQUIRED IMPORTED_TARGET)
 		target_include_directories(vanilla PRIVATE ${PC_POLKIT_INCLUDE_DIRS})
 		target_link_libraries(vanilla PRIVATE ${PC_POLKIT_LIBRARIES})
+		target_compile_definitions(vanilla PRIVATE VANILLA_POLKIT_AVAILABLE)
+
+		list(APPEND VANILLA_GUI_SRC
+			menu/menu_sudo.c
+			menu/menu_sudo_warning.c
+		)
 	endif()
 endif()
 

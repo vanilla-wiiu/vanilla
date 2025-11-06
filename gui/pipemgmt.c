@@ -15,10 +15,6 @@
 #include <unistd.h>
 #include <vanilla.h>
 
-#define POLKIT_AGENT_I_KNOW_API_IS_SUBJECT_TO_CHANGE
-#include <polkit/polkit.h>
-#include <polkitagent/polkitagent.h>
-
 #include "config.h"
 #include "platform.h"
 
@@ -29,6 +25,11 @@ static int pipe_err;
 static pthread_t pipe_log_thread = 0;
 
 static int err_pipes[2], in_pipes[2];
+
+#ifdef VANILLA_POLKIT_AVAILABLE
+#define POLKIT_AGENT_I_KNOW_API_IS_SUBJECT_TO_CHANGE
+#include <polkit/polkit.h>
+#include <polkitagent/polkitagent.h>
 
 static gpointer polkit_handle = 0;
 static GMainContext *gmainctx = 0;
@@ -179,6 +180,7 @@ static void vanilla_polkit_listener_class_init(VanillaPolkitListenerClass *self)
 static void vanilla_polkit_listener_init(VanillaPolkitListener *self)
 {
 }
+#endif
 
 void *vpi_pipe_log_thread(void *data)
 {
@@ -226,6 +228,7 @@ void sigint_handler(int signal)
     raise(signal);
 }
 
+#ifdef VANILLA_POLKIT_AVAILABLE
 void vpi_close_polkit_session()
 {
 	if (polkit_handle) {
@@ -279,6 +282,7 @@ void vpi_submit_pw(const char *s, vpi_pw_callback callback, void *userdata)
 	pk_pw_callback_userdata = userdata;
 	polkit_agent_session_response(pk_session, s);
 }
+#endif
 
 int vpi_start_epilog()
 {
@@ -320,7 +324,9 @@ int vpi_start_epilog()
 	close(err_pipes[1]);
 	close(in_pipes[0]);
 
+#ifdef VANILLA_POLKIT_AVAILABLE
 	vpi_close_polkit_session();
+#endif
 
 	return ret;
 }
@@ -332,6 +338,7 @@ int vpi_start_pipe()
         return VANILLA_SUCCESS;
     }
 
+#ifdef VANILLA_POLKIT_AVAILABLE
 	{
 		PolkitAuthority *auth = polkit_authority_get_sync(NULL, NULL);
 		PolkitSubject *sub = polkit_unix_process_new_for_owner(getpid(), 0, -1);
@@ -375,6 +382,7 @@ int vpi_start_pipe()
 			}
 		}
 	}
+#endif
 
     // Set up pipes so child stdout can be read by the parent process
     pipe(in_pipes);
@@ -440,6 +448,7 @@ int vpi_start_pipe()
 
 		potential_pipe_pid = pid;
 
+#ifdef VANILLA_POLKIT_AVAILABLE
 		if (polkit_handle) {
 			// We'll need to handle this...
 			ret = VANILLA_REQUIRES_PASSWORD_HANDLING;
@@ -450,9 +459,12 @@ int vpi_start_pipe()
 				g_main_context_iteration(gmainctx, 1);
 			}
 		} else {
+#endif
 			// Polkit will be handled for us, wait for it to finish
 			ret = vpi_start_epilog();
+#ifdef VANILLA_POLKIT_AVAILABLE
 		}
+#endif
 
         return ret;
     }
@@ -460,11 +472,13 @@ int vpi_start_pipe()
 
 void vpi_update_pipe()
 {
+#ifdef VANILLA_POLKIT_AVAILABLE
 	if (gmainctx) {
 		while (g_main_context_pending(gmainctx)) {
 			g_main_context_iteration(gmainctx, 0);
 		}
 	}
+#endif
 }
 
 void vpi_stop_pipe()
@@ -487,7 +501,9 @@ void vpi_stop_pipe()
         sigaction(SIGINT, &old_sigint_action, NULL);
         sigaction(SIGTERM, &old_sigterm_action, NULL);
     }
+#ifdef VANILLA_POLKIT_AVAILABLE
 	vpi_close_polkit_session();
+#endif
 }
 
 #else

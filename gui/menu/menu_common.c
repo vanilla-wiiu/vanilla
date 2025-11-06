@@ -79,8 +79,10 @@ void vpi_menu_start_pipe(vui_context_t *vui, int fade_fglayer, vui_callback_t su
         int r = vpi_start_pipe();
         if (r == VANILLA_SUCCESS) {
             success_action(vui, success_data);
+#ifdef VANILLA_POLKIT_AVAILABLE
 		} else if (r == VANILLA_REQUIRES_PASSWORD_HANDLING) {
 			vpi_menu_sudo(vui, success_action, success_data, cancel_action, cancel_data, fade_fglayer);
+#endif
         } else {
             if (cancel_action) {
                 cancel_action(vui, cancel_data);

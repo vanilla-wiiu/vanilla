@@ -43,6 +43,7 @@ static void thunk_to_quit(vui_context_t *vui, int button, void *v)
     vpi_menu_quit_vanilla(vui);
 }
 
+#ifdef VANILLA_POLKIT_AVAILABLE
 static void do_polkit_install(vui_context_t *vui, void *v)
 {
 	int install = (intptr_t) v;
@@ -92,6 +93,7 @@ static void transition_to_uninstall_polkit_rule(vui_context_t *vui, int button, 
     int layer = (intptr_t) v;
     vui_transition_fade_layer_out(vui, layer, thunk_to_start_pipe_for_polkit_rule_install, 0);
 }
+#endif
 
 void vpi_menu_settings(vui_context_t *vui, void *v)
 {
@@ -119,7 +121,7 @@ void vpi_menu_settings(vui_context_t *vui, void *v)
         0,
     };
 
-#ifdef VANILLA_PIPE_AVAILABLE
+#ifdef VANILLA_POLKIT_AVAILABLE
 	int pw_skip_str;
 	vui_button_callback_t pw_skip_action;
 	if (access(POLKIT_ACTION_DST, F_OK) == 0) {
