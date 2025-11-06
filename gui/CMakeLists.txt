@@ -271,6 +271,17 @@ list(APPEND VANILLA_GUI_SRC
     ui/ui_util.h
 )
 
+if (VANILLA_BUILD_PIPE)
+	OPTION(VANILLA_BUILD_USE_POLKIT "Enable Polkit-based authentication" ON)
+endif()
+
+if (VANILLA_BUILD_USE_POLKIT)
+	list(APPEND VANILLA_GUI_SRC
+		menu/menu_sudo.c
+		menu/menu_sudo_warning.c
+	)
+endif()
+
 # Declare executable
 if (ANDROID)
     add_library(vanilla SHARED ${VANILLA_GUI_SRC})
@@ -331,21 +342,15 @@ endif()
 if (VANILLA_BUILD_PIPE)
 	# Assume this platform is capable of running vanilla-pipe
     target_compile_definitions(vanilla PRIVATE VANILLA_PIPE_AVAILABLE)
+endif()
 
-	OPTION(VANILLA_BUILD_USE_POLKIT "Enable Polkit-based authentication" ON)
-	if (VANILLA_BUILD_USE_POLKIT)
-		# Find Polkit and GLIB libraries
-		find_package(PkgConfig)
-		pkg_check_modules(PC_POLKIT polkit-agent-1 REQUIRED IMPORTED_TARGET)
-		target_include_directories(vanilla PRIVATE ${PC_POLKIT_INCLUDE_DIRS})
-		target_link_libraries(vanilla PRIVATE ${PC_POLKIT_LIBRARIES})
-		target_compile_definitions(vanilla PRIVATE VANILLA_POLKIT_AVAILABLE)
-
-		list(APPEND VANILLA_GUI_SRC
-			menu/menu_sudo.c
-			menu/menu_sudo_warning.c
-		)
-	endif()
+if (VANILLA_BUILD_USE_POLKIT)
+	# Find Polkit and GLIB libraries
+	find_package(PkgConfig)
+	pkg_check_modules(PC_POLKIT polkit-agent-1 REQUIRED IMPORTED_TARGET)
+	target_include_directories(vanilla PRIVATE ${PC_POLKIT_INCLUDE_DIRS})
+	target_link_libraries(vanilla PRIVATE ${PC_POLKIT_LIBRARIES})
+	target_compile_definitions(vanilla PRIVATE VANILLA_POLKIT_AVAILABLE)
 endif()
 
 if (LINUX)
