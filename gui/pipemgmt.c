@@ -417,9 +417,6 @@ int vpi_start_pipe()
 
         setsid();
 
-        // Execute process (this will replace the running code)
-        const char *pkexec = "pkexec";
-
         // Get current working directory
         char exe[4096];
         ssize_t link_len = readlink("/proc/self/exe", exe, sizeof(exe));
@@ -427,8 +424,13 @@ int vpi_start_pipe()
         dirname(exe);
         strcat(exe, "/vanilla-pipe");
 
+        // Execute process (this will replace the running code)
+#ifdef VANILLA_POLKIT_AVAILABLE
+        const char *pkexec = "pkexec";
         r = execlp(pkexec, pkexec, exe, "-local", vpi_config.wireless_interface, (const char *) 0);
-        // r = execlp(pkexec, pkexec, "/usr/bin/gparted", (const char *) 0);
+#else
+		r = execlp(exe, exe, "-local", vpi_config.wireless_interface, (const char *) 0);
+#endif
 
         // Handle failure to execute, use _exit so we don't interfere with the host
         _exit(1);
