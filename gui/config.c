@@ -135,7 +135,7 @@ void vpi_config_init()
                             console = console->next;
                         }
                     } else if (!strcmp((const char *) child->name, "server")) {
-                        vpi_config.server_address = strtol((const char *) child->children->content, 0, 16);
+                        vpi_config.server_address = strtoul((const char *) child->children->content, 0, 16);
                     } else if (!strcmp((const char *) child->name, "wireless")) {
                         if (child->children) {
                             vui_strncpy(vpi_config.wireless_interface, (const char *) child->children->content, sizeof(vpi_config.wireless_interface));
