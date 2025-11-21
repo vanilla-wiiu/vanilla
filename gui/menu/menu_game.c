@@ -173,13 +173,6 @@ size_t build_avcc(uint8_t *dst, size_t cap,
     return (size_t)(p - dst);
 }
 
-typedef struct {
-    AVCodecContext *codec_ctx;
-    AVPacket *pkt;
-    AVFrame *frame;
-    AVBufferRef *hw_device_ctx;
-} vpi_game_state_t;
-
 static enum AVPixelFormat vaapi_get_format(struct AVCodecContext *s, const enum AVPixelFormat *fmt)
 {
 	while (*fmt != AV_PIX_FMT_NONE) {
@@ -204,7 +197,14 @@ static enum AVPixelFormat drm_get_format(struct AVCodecContext *s, const enum AV
     return AV_PIX_FMT_NONE;
 }
 
-int vpi_game_init(vpi_game_state_t *s)
+typedef struct {
+    AVCodecContext *codec_ctx;
+    AVPacket *pkt;
+    AVFrame *frame;
+    AVBufferRef *hw_device_ctx;
+} vpi_decode_state_t;
+
+int vpi_decode_init(vpi_decode_state_t *s)
 {
     int ffmpeg_err;
 
@@ -299,7 +299,7 @@ int vpi_game_init(vpi_game_state_t *s)
     return VANILLA_SUCCESS;
 }
 
-void vpi_game_exit(vpi_game_state_t *s)
+void vpi_decode_exit(vpi_decode_state_t *s)
 {
     if (s->frame)
         av_frame_free(&s->frame);
@@ -315,13 +315,6 @@ void vpi_game_exit(vpi_game_state_t *s)
 
 	if (s->hw_device_ctx)
 		av_buffer_unref(&s->hw_device_ctx);
-}
-
-void vpi_game_free(vpi_game_state_t *s)
-{
-    vpilog("freed state!\n");
-    vpi_game_exit(s);
-    free(s);
 }
 
 int64_t get_recording_timestamp(AVRational timebase)
@@ -523,17 +516,12 @@ void vpi_game_shutdown()
     vpi_game_shutdown_queued = 1;
 }
 
-static void vpi_do_shutdown(vui_context_t *vui, vpi_game_state_t *state)
-{
-    vpi_game_free(state);
-    vanilla_stop();
-    vpi_menu_main(vui, 0);
-    vpi_game_shutdown_queued = 0;
-}
-
 void vpi_display_update(vui_context_t *vui, int64_t time, void *v)
 {
-    vpi_game_state_t *s = (vpi_game_state_t *) v;
+    static vpi_decode_state_t s;
+    static int vpi_decode_alloc = 0;
+
+    int queued_error = VANILLA_SUCCESS;
 
     vanilla_event_t event;
     while (vanilla_poll_event(&event)) {
@@ -541,67 +529,78 @@ void vpi_display_update(vui_context_t *vui, int64_t time, void *v)
 
         switch (event.type) {
         case VANILLA_EVENT_VIDEO:
-            // Send packet to decoder
-            s->pkt->data = event.data;
-            s->pkt->size = event.size;
-
-            if (recording_fmt_ctx) {
-                s->pkt->stream_index = VIDEO_STREAM_INDEX;
-
-                int64_t ts = get_recording_timestamp(recording_vstr->time_base);
-
-                s->pkt->dts = ts;
-                s->pkt->pts = ts;
-
-                av_interleaved_write_frame(recording_fmt_ctx, s->pkt);
-
-                // av_interleaved_write_frame() eventually calls av_packet_unref(),
-                // so we must put the references back in
-                s->pkt->data = event.data;
-                s->pkt->size = event.size;
+            if (!vpi_decode_alloc) {
+                int ret = vpi_decode_init(&s);
+                if (ret >= 0) {
+                    vpi_decode_alloc = 1;
+                }
             }
 
-            int err = avcodec_send_packet(s->codec_ctx, s->pkt);
+            if (vpi_decode_alloc) {
+                AVPacket *pkt = s.pkt;
 
-            if (err < 0) {
-                vpilog("Failed to send packet to decoder: %s (%i)\n", av_err2str(err), err);
-                // return 0;
+                // Send packet to decoder
+                pkt->data = event.data;
+                pkt->size = event.size;
 
-                vanilla_request_idr();
-            } else {
-                int err;
+                if (recording_fmt_ctx) {
+                    pkt->stream_index = VIDEO_STREAM_INDEX;
 
-                int ret = 1;
+                    int64_t ts = get_recording_timestamp(recording_vstr->time_base);
 
-                // Retrieve frame from decoder
-                while (1) {
-                    err = avcodec_receive_frame(s->codec_ctx, s->frame);
-                    if (err == AVERROR(EAGAIN)) {
-                        // Decoder wants another packet before it can output a frame. Silently exit.
-                        break;
-                    } else if (err < 0) {
-                        vpilog("Failed to receive frame from decoder: %i\n", err);
-                        ret = 0;
-                        break;
-                    } else {
-                        // Swap refs from decoding_frame to present_frame
-                        av_frame_unref(vpi_present_frame);
-                        av_frame_move_ref(vpi_present_frame, s->frame);
+                    pkt->dts = ts;
+                    pkt->pts = ts;
 
-                        if (!vui_game_mode_get(vui)) {
-                            vui_game_mode_set(vui, 1);
-                            vui_audio_set_enabled(vui, 1);
-                        }
+                    av_interleaved_write_frame(recording_fmt_ctx, pkt);
 
-                        if (screenshot_buf[0] != 0) {
-                            // Dump this frame into file
-                            dump_frame_to_file(vpi_present_frame, screenshot_buf);
-                            screenshot_buf[0] = 0;
-                        }
-                    }
+                    // av_interleaved_write_frame() eventually calls av_packet_unref(),
+                    // so we must put the references back in
+                    pkt->data = event.data;
+                    pkt->size = event.size;
                 }
 
-                // return ret;
+                int err = avcodec_send_packet(s.codec_ctx, pkt);
+
+                if (err < 0) {
+                    vpilog("Failed to send packet to decoder: %s (%i)\n", av_err2str(err), err);
+                    // return 0;
+
+                    vanilla_request_idr();
+                } else {
+                    int err;
+
+                    int ret = 1;
+
+                    // Retrieve frame from decoder
+                    while (1) {
+                        err = avcodec_receive_frame(s.codec_ctx, s.frame);
+                        if (err == AVERROR(EAGAIN)) {
+                            // Decoder wants another packet before it can output a frame. Silently exit.
+                            break;
+                        } else if (err < 0) {
+                            vpilog("Failed to receive frame from decoder: %i\n", err);
+                            ret = 0;
+                            break;
+                        } else {
+                            // Swap refs from decoding_frame to present_frame
+                            av_frame_unref(vpi_present_frame);
+                            av_frame_move_ref(vpi_present_frame, s.frame);
+
+                            if (!vui_game_mode_get(vui)) {
+                                vui_game_mode_set(vui, 1);
+                                vui_audio_set_enabled(vui, 1);
+                            }
+
+                            if (screenshot_buf[0] != 0) {
+                                // Dump this frame into file
+                                dump_frame_to_file(vpi_present_frame, screenshot_buf);
+                                screenshot_buf[0] = 0;
+                            }
+                        }
+                    }
+
+                    // return ret;
+                }
             }
             break;
         case VANILLA_EVENT_AUDIO:
@@ -629,12 +628,11 @@ void vpi_display_update(vui_context_t *vui, int64_t time, void *v)
                 vui_game_mode_set(vui, 0);
                 break;
             case VANILLA_ERR_SHUTDOWN:
-                vpi_do_shutdown(vui, s);
+                vpi_game_shutdown_queued = 1;
                 break;
             default:
-                vpi_game_free(s);
-                vanilla_stop();
-                show_error(vui, (void*)(intptr_t) backend_err);
+                vpi_game_shutdown_queued = 1;
+                queued_error = backend_err;
             };
             break;
         }
@@ -649,7 +647,17 @@ void vpi_display_update(vui_context_t *vui, int64_t time, void *v)
     update_battery_information(vui, time);
 
     if (vpi_game_shutdown_queued) {
-        vpi_do_shutdown(vui, s);
+        if (vpi_decode_alloc) {
+            vpi_decode_exit(&s);
+            vpi_decode_alloc = 0;
+        }
+        vanilla_stop();
+        if (queued_error) {
+            show_error(vui, (void*)(intptr_t) queued_error);
+        } else {
+            vpi_menu_main(vui, 0);
+        }
+        vpi_game_shutdown_queued = 0;
     }
 }
 
@@ -680,6 +688,7 @@ void vpi_menu_game_start(vui_context_t *vui, void *v)
         vui_get_screen_size(vui, &scrw, &scrh);
         status_lbl = vui_label_create(vui, 0, scrh * 2 / 5, scrw, scrh, buf, vui_color_create(0.5f,0.5f,0.5f,1), VUI_FONT_SIZE_NORMAL, fglayer);
 
+        // TODO: `state` does not get freed if
         const int cancel_btn_w = BTN_SZ*3;
         int cancel_btn = vui_button_create(vui, scrw/2 - cancel_btn_w/2, scrh * 3 / 5, cancel_btn_w, BTN_SZ, lang(VPI_LANG_CANCEL_BTN), 0, VUI_BUTTON_STYLE_BUTTON, fglayer, cancel_connect, (void *) (intptr_t) fglayer);
 
@@ -687,16 +696,7 @@ void vpi_menu_game_start(vui_context_t *vui, void *v)
 
         vpi_game_shutdown_queued = 0;
 
-        vpi_game_state_t *state = (vpi_game_state_t *) malloc(sizeof(vpi_game_state_t));
-        memset(state, 0, sizeof(vpi_game_state_t));
-        int r = vpi_game_init(state);
-        if (r != VANILLA_SUCCESS) {
-            vpi_game_free(state);
-            vanilla_stop();
-            show_error(vui, (void*)(intptr_t) r);
-        } else {
-            vui_start_passive_animation(vui, vpi_display_update, state);
-        }
+        vui_start_passive_animation(vui, vpi_display_update, 0);
     }
 }
 

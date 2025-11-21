@@ -10,6 +10,7 @@
 #include <vanilla.h>
 #include <libavutil/hwcontext.h>
 #include <libavutil/hwcontext_drm.h>
+#include <unistd.h>
 
 #ifdef VANILLA_HAS_EGL
 #include <SDL2/SDL_egl.h>
@@ -1220,27 +1221,23 @@ int check_has_EGL_EXT_image_dma_buf_import()
 }
 #endif // VANILLA_HAS_EGL
 
-#define MAX_DMABUF_IMAGES 32
+#define MAX_DMABUF_IMAGES 2048
 typedef struct {
     int fd;
     EGLImage image;
     int width;
     int height;
+    uint32_t drm_format;
+    ptrdiff_t pitch;
+    ptrdiff_t offset;
+    uint64_t modifier;
 } drm_cached_image_t;
 static size_t egl_image_count = 0;
 static drm_cached_image_t egl_image_cache[MAX_DMABUF_IMAGES];
 
-EGLImage get_drm_cached_image(const AVDRMLayerDescriptor *layer, const AVDRMPlaneDescriptor *plane, const AVDRMObjectDescriptor *object, int width, int height)
+EGLImage create_egl_image(const AVDRMLayerDescriptor *layer, const AVDRMPlaneDescriptor *plane, const AVDRMObjectDescriptor *object, int width, int height)
 {
-    // Find cached image
-    for (int i = 0; i < egl_image_count; i++) {
-        drm_cached_image_t *c = &egl_image_cache[i];
-        if (c->fd == object->fd && c->width == width && c->height == height) {
-            return egl_image_cache[i].image;
-        }
-    }
-
-	static int has_EGL_EXT_image_dma_buf_import = -1;
+    static int has_EGL_EXT_image_dma_buf_import = -1;
 	if (has_EGL_EXT_image_dma_buf_import == -1) {
 		has_EGL_EXT_image_dma_buf_import = check_has_EGL_EXT_image_dma_buf_import();
 	}
@@ -1260,17 +1257,47 @@ EGLImage get_drm_cached_image(const AVDRMLayerDescriptor *layer, const AVDRMPlan
     };
 
 	EGLDisplay display = eglGetCurrentDisplay();
-    EGLImage image = eglCreateImage(display, EGL_NO_CONTEXT, EGL_LINUX_DMA_BUF_EXT, 0, attr);
-    if (image == EGL_NO_IMAGE) {
-        vpilog("Failed to create EGLImage: 0x%x (display: %p)\n", eglGetError(), display);
-        return 0;
+    return eglCreateImage(display, EGL_NO_CONTEXT, EGL_LINUX_DMA_BUF_EXT, 0, attr);
+}
+
+EGLImage get_drm_cached_image(const AVDRMLayerDescriptor *layer, const AVDRMPlaneDescriptor *plane, const AVDRMObjectDescriptor *object, int width, int height)
+{
+    const int ENABLED_DRM_CACHE = 1;
+
+    // Find cached image
+    for (int i = 0; i < egl_image_count; i++) {
+        drm_cached_image_t *c = &egl_image_cache[i];
+        if (c->pitch == plane->pitch
+            && c->offset == plane->offset
+            && c->modifier == object->format_modifier
+            && c->width == width
+            && c->height == height) {
+            vpilog("Used cached image!\n");
+            return egl_image_cache[i].image;
+        }
     }
 
-    drm_cached_image_t *c = &egl_image_cache[egl_image_count];
-    c->fd = object->fd;
-    c->width = width;
-    c->height = height;
-    c->image = image;
+    EGLImage image = create_egl_image(layer, plane, object, width, height);
+    if (image == EGL_NO_IMAGE) {
+        vpilog("Failed to create EGLImage: 0x%x (display: %p)\n", eglGetError(), eglGetCurrentDisplay());
+        return image;
+    }
+
+    if (ENABLED_DRM_CACHE) {
+        drm_cached_image_t *c = &egl_image_cache[egl_image_count];
+        c->fd = dup(object->fd);
+        c->width = width;
+        c->height = height;
+        c->image = image;
+        c->pitch = plane->pitch;
+        c->offset = plane->offset;
+        c->modifier = object->format_modifier;
+        egl_image_count++;
+        vpilog("Created CACHE image for fd %i!\n", object->fd);
+    } else {
+        vpilog("Created UNCACHED image for fd %i!\n", object->fd);
+    }
+
 
     return image;
 }
@@ -1323,6 +1350,8 @@ int get_texture_from_drm_prime_frame(vui_sdl_context_t *sdl_ctx, AVFrame *f)
 			glEGLImageTargetTexture2DOES(GL_TEXTURE_2D, image);
 			image_index++;
 			SDL_GL_UnbindTexture(sdl_ctx->game_tex);
+
+            // eglDestroyImage(eglGetCurrentDisplay(), image);
 		}
 	}
 
@@ -1537,6 +1566,14 @@ int vui_update_sdl(vui_context_t *vui)
     SDL_Texture *main_tex;
 
     if (!vui->game_mode) {
+        while (egl_image_count > 0) {
+            egl_image_count--;
+
+            drm_cached_image_t *t = &egl_image_cache[egl_image_count];
+            eglDestroyImage(eglGetCurrentDisplay(), t->image);
+            close(t->fd);
+        }
+
         // Draw vui to a custom texture
         vui_draw_sdl(vui, renderer);
 
