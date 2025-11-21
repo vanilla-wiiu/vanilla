@@ -13,6 +13,7 @@
 #include <unistd.h>
 
 #ifdef VANILLA_HAS_EGL
+#include <EGL/egl.h>
 #include <SDL2/SDL_egl.h>
 #include <SDL2/SDL_opengl.h>
 #include <SDL2/SDL_opengles2.h>
