@@ -13,7 +13,6 @@
 #include <unistd.h>
 
 #ifdef VANILLA_HAS_EGL
-#include <EGL/egl.h>
 #include <SDL2/SDL_egl.h>
 #include <SDL2/SDL_opengl.h>
 #include <SDL2/SDL_opengles2.h>
@@ -1220,7 +1219,6 @@ int check_has_EGL_EXT_image_dma_buf_import()
 	// 	has_eglCreateImage = true;
 	// }
 }
-#endif // VANILLA_HAS_EGL
 
 #define MAX_DMABUF_IMAGES 2048
 typedef struct {
@@ -1302,6 +1300,7 @@ EGLImage get_drm_cached_image(const AVDRMLayerDescriptor *layer, const AVDRMPlan
 
     return image;
 }
+#endif // VANILLA_HAS_EGL
 
 int get_texture_from_drm_prime_frame(vui_sdl_context_t *sdl_ctx, AVFrame *f)
 {
