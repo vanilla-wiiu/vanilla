@@ -2,6 +2,7 @@
 #define VANILLA_PI_MENU_GAME_H
 
 #include <libavutil/frame.h>
+#include <sys/time.h>
 
 #include "ui/ui.h"
 
