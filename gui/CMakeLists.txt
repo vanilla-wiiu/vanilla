@@ -363,13 +363,11 @@ if (LINUX)
 
 	# TODO: A more comprehensive "Find" for libva
 	OPTION(VANILLA_BUILD_USE_VAAPI "Enable VAAPI hardware decoding" ON)
-	if (VANILLA_BUILD_USE_VAAPI)
-		find_package(OpenGL COMPONENTS EGL REQUIRED)
-		if (OpenGL_EGL_FOUND)
-			target_link_libraries(vanilla PRIVATE OpenGL::EGL va va-drm va-x11 X11)
-			target_compile_definitions(vanilla PRIVATE VANILLA_HAS_EGL)
-		endif()
-	endif()
+    find_package(OpenGL COMPONENTS EGL REQUIRED)
+    if (OpenGL_EGL_FOUND)
+        target_link_libraries(vanilla PRIVATE OpenGL::EGL va va-drm va-x11 X11)
+        target_compile_definitions(vanilla PRIVATE VANILLA_HAS_EGL)
+    endif()
 endif()
 
 # Find libxml2 (used for storing/parsing user config)
