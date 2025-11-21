@@ -1566,6 +1566,7 @@ int vui_update_sdl(vui_context_t *vui)
     SDL_Texture *main_tex;
 
     if (!vui->game_mode) {
+#ifdef VANILLA_HAS_EGL
         while (egl_image_count > 0) {
             egl_image_count--;
 
@@ -1573,6 +1574,7 @@ int vui_update_sdl(vui_context_t *vui)
             eglDestroyImage(eglGetCurrentDisplay(), t->image);
             close(t->fd);
         }
+#endif // VANILLA_HAS_EGL
 
         // Draw vui to a custom texture
         vui_draw_sdl(vui, renderer);

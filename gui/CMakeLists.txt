@@ -346,7 +346,7 @@ endif()
 
 if (VANILLA_BUILD_USE_POLKIT)
 	# Find Polkit and GLIB libraries
-	find_package(PkgConfig)
+	find_package(PkgConfig REQUIRED)
 	pkg_check_modules(PC_POLKIT polkit-agent-1 REQUIRED IMPORTED_TARGET)
 	target_include_directories(vanilla PRIVATE ${PC_POLKIT_INCLUDE_DIRS})
 	target_link_libraries(vanilla PRIVATE ${PC_POLKIT_LIBRARIES})
@@ -359,15 +359,22 @@ if (LINUX)
     if (DRM_FOUND)
         target_link_libraries(vanilla PRIVATE ${DRM_LIBRARIES})
         target_include_directories(vanilla PRIVATE ${DRM_INCLUDE_DIRS})
+
+		find_package(OpenGL COMPONENTS EGL)
 	endif()
 
 	# TODO: A more comprehensive "Find" for libva
 	OPTION(VANILLA_BUILD_USE_VAAPI "Enable VAAPI hardware decoding" ON)
-    find_package(OpenGL COMPONENTS EGL REQUIRED)
-    if (OpenGL_EGL_FOUND)
-        target_link_libraries(vanilla PRIVATE OpenGL::EGL va va-drm va-x11 X11)
-        target_compile_definitions(vanilla PRIVATE VANILLA_HAS_EGL)
-    endif()
+	if (VANILLA_BUILD_USE_VAAPI)
+		target_link_libraries(vanilla PRIVATE va va-drm va-x11 X11)
+	endif()
+
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(EGL REQUIRED egl)
+    target_include_directories(vanilla PRIVATE ${EGL_INCLUDE_DIRS})
+    target_link_directories(vanilla PRIVATE ${EGL_LIBRARY_DIRS})
+    target_link_libraries(vanilla PRIVATE ${EGL_LIBRARIES})
+    target_compile_definitions(vanilla PRIVATE VANILLA_HAS_EGL)
 endif()
 
 # Find libxml2 (used for storing/parsing user config)
