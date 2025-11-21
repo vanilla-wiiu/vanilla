@@ -923,7 +923,7 @@ void vui_process_keyup(vui_context_t *ctx, int button)
 vui_power_state_t vui_power_state_get(vui_context_t *ctx, int *percent)
 {
     if (ctx->power_state_handler) {
-        return ctx->power_state_handler(percent);
+        return ctx->power_state_handler(ctx, percent);
     } else {
         if (percent) {
             *percent = -1;

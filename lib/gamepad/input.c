@@ -112,7 +112,7 @@ uint16_t resolve_axis_value(float axis, float neg, float pos, int flip)
     if (flip) {
         val = -val;
     }
-    
+
     return ((int) (val * 1024)) + 2048;
 }
 
@@ -160,7 +160,7 @@ void set_battery_status(int status)
     pthread_mutex_unlock(&button_mtx);
 }
 
-void send_input(int socket_hid)
+void send_input(int socket_hid, const sockaddr_u *addr, size_t addr_size)
 {
     InputPacket ip;
     memset(&ip, 0, sizeof(ip));
@@ -213,7 +213,7 @@ void send_input(int socket_hid)
     ip.buttons = htons(button_mask);
 
     button_mask = 0;
-    
+
     if (current_buttons[VANILLA_BTN_L3]) button_mask |= 0x80;
     if (current_buttons[VANILLA_BTN_R3]) button_mask |= 0x40;
     if (current_buttons[VANILLA_BTN_TV]) button_mask |= 0x20;
@@ -242,7 +242,7 @@ void send_input(int socket_hid)
 
     ip.fw_version_neg = 215;
 
-    send_to_console(socket_hid, &ip, sizeof(ip), PORT_HID);
+    send_to_sockaddr(socket_hid, &ip, sizeof(ip), addr, addr_size);
 }
 
 void *listen_input(void *x)
@@ -251,14 +251,18 @@ void *listen_input(void *x)
 
     pthread_mutex_init(&button_mtx, NULL);
 
+    sockaddr_u addr;
+    size_t addr_size;
+    create_server_sockaddr(&addr, &addr_size, PORT_HID - 100, 0);
+
     do {
-        send_input(info->socket_hid);
-        usleep(5 * 1000); // Produces 200Hz input, probably no need to go higher for the Wii U (supposedly the real gamepad is 180Hz)
+        send_input(info->socket_hid, &addr, addr_size);
+        usleep(5555); // Roughly 180Hz, same as the original gamepad
     } while (!is_interrupted());
 
     pthread_mutex_destroy(&button_mtx);
 
     pthread_exit(NULL);
-    
+
     return NULL;
 }

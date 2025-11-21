@@ -195,6 +195,8 @@ void vanilla_set_battery_status(int battery_status);
 /**
  * Retrieve SPS/PPS parameters for H.264 packeting
  */
+size_t vanilla_generate_sps_params(void *data, size_t data_size);
+size_t vanilla_generate_pps_params(void *data, size_t data_size);
 size_t vanilla_generate_h264_header(void *data, size_t size);
 
 /**

@@ -2,16 +2,6 @@
 
 #include "gamepad.h"
 
-#ifdef _WIN32
-#include <winsock2.h>
-typedef uint32_t in_addr_t;
-typedef uint16_t in_port_t;
-#else
-#include <arpa/inet.h>
-#include <errno.h>
-#include <sys/un.h>
-#endif
-
 #include <assert.h>
 #include <pthread.h>
 #include <signal.h>
@@ -35,13 +25,6 @@ static const int MAX_PIPE_RETRY = 5;
 #define EVENT_BUFFER_ARENA_SIZE VANILLA_MAX_EVENT_COUNT * 2
 uint8_t *EVENT_BUFFER_ARENA[EVENT_BUFFER_ARENA_SIZE] = {0};
 pthread_mutex_t event_buffer_mutex = PTHREAD_MUTEX_INITIALIZER;
-
-typedef union {
-    struct sockaddr_in in;
-#ifndef _WIN32
-    struct sockaddr_un un;
-#endif
-} sockaddr_u;
 
 static inline int skterr()
 {
@@ -90,6 +73,22 @@ void create_sockaddr(sockaddr_u *addr, size_t *size, in_addr_t inaddr, uint16_t 
 #endif
 }
 
+void create_server_sockaddr(sockaddr_u *addr, size_t *size, uint16_t port, int delete)
+{
+    return create_sockaddr(addr, size, get_real_server_address(), port, delete);
+}
+
+void send_to_sockaddr(int fd, const void *data, size_t data_size, const sockaddr_u *sockaddr, size_t sockaddr_size)
+{
+    ssize_t sent = sendto(fd, data, data_size, 0, (const struct sockaddr *) sockaddr, sockaddr_size);
+    if (sent == -1) {
+		int err = skterr();
+		if (err != 111) { // 111 is connection refused, occurs if we lose connection, but we'll already know that for other reasons so we don't need to spam the console with this error
+			vanilla_log("Failed to send to Wii U socket: fd: %d, errno: %i", fd, skterr());
+		}
+    }
+}
+
 void send_to_console(int fd, const void *data, size_t data_size, uint16_t port)
 {
     sockaddr_u addr;
@@ -97,15 +96,9 @@ void send_to_console(int fd, const void *data, size_t data_size, uint16_t port)
 
     in_port_t console_port = port - 100;
 
-    create_sockaddr(&addr, &addr_size, get_real_server_address(), console_port, 0);
+    create_server_sockaddr(&addr, &addr_size, console_port, 0);
 
-    ssize_t sent = sendto(fd, data, data_size, 0, (const struct sockaddr *) &addr, addr_size);
-    if (sent == -1) {
-		int err = skterr();
-		if (err != 111) { // 111 is connection refused, occurs if we lose connection, but we'll already know that for other reasons so we don't need to spam the console with this error
-			vanilla_log("Failed to send to Wii U socket: fd: %d, port: %d, errno: %i", fd, console_port, skterr());
-		}
-    }
+    send_to_sockaddr(fd, data, data_size, &addr, addr_size);
 }
 
 void set_socket_rcvtimeo(int skt, uint64_t microseconds)
@@ -147,6 +140,13 @@ int create_socket(int *socket_out, in_port_t port)
     (*socket_out) = skt;
 
     set_socket_rcvtimeo(skt, 250000);
+
+    int sock = socket(AF_INET, SOCK_DGRAM, 0);
+    int rcvbuf = 4 * 1024 * 1024;  // 4 MiB
+    int sndbuf = 4 * 1024 * 1024;
+
+    setsockopt(sock, SOL_SOCKET, SO_RCVBUF, &rcvbuf, sizeof(rcvbuf));
+    setsockopt(sock, SOL_SOCKET, SO_SNDBUF, &sndbuf, sizeof(sndbuf));
 
     return VANILLA_SUCCESS;
 }
@@ -439,47 +439,67 @@ exit:
     wait_for_interrupt();
 }
 
-int push_event(event_loop_t *loop, int type, const void *data, size_t size)
+int acquire_event(event_loop_t *loop, vanilla_event_t **event)
 {
-    int ret = VANILLA_SUCCESS;
+	int ret = VANILLA_SUCCESS;
 
     pthread_mutex_lock(&loop->mutex);
 
-    if (size <= EVENT_BUFFER_SIZE) {
-        // Prevent rollover by skipping oldest event if necessary
-        if (loop->new_index == loop->used_index + VANILLA_MAX_EVENT_COUNT) {
-            vanilla_free_event(&loop->events[loop->used_index % VANILLA_MAX_EVENT_COUNT]);
-            vanilla_log("SKIPPED EVENT TO PREVENT ROLLOVER (%lu > %lu + %lu)", loop->new_index, loop->used_index, VANILLA_MAX_EVENT_COUNT);
-            loop->used_index++;
-        }
+	// Prevent rollover by skipping oldest event if necessary
+	if (loop->new_index == loop->used_index + VANILLA_MAX_EVENT_COUNT) {
+		vanilla_free_event(&loop->events[loop->used_index % VANILLA_MAX_EVENT_COUNT]);
+		vanilla_log("SKIPPED EVENT TO PREVENT ROLLOVER (%lu > %lu + %lu)", loop->new_index, loop->used_index, VANILLA_MAX_EVENT_COUNT);
+		loop->used_index++;
+	}
 
-        vanilla_event_t *ev = &loop->events[loop->new_index % VANILLA_MAX_EVENT_COUNT];
+	vanilla_event_t *ev = &loop->events[loop->new_index % VANILLA_MAX_EVENT_COUNT];
 
-        assert(!ev->data);
+	assert(!ev->data);
 
-        ev->data = get_event_buffer();
-        if (!ev->data) {
-            vanilla_log("OUT OF MEMORY FOR NEW EVENTS");
-            ret = VANILLA_ERR_OUT_OF_MEMORY;
-            goto exit;
-        }
+	ev->data = get_event_buffer();
+	// if (!ev->data) {
+	// 	vanilla_log("OUT OF MEMORY FOR NEW EVENTS");
+	// 	ret = VANILLA_ERR_OUT_OF_MEMORY;
+	// }
 
-        ev->type = type;
-        memcpy(ev->data, data, size);
-        ev->size = size;
+	*event = ev;
 
-        loop->new_index++;
+	return ret;
+}
 
-        pthread_cond_broadcast(&loop->waitcond);
-    } else {
-        vanilla_log("FAILED TO PUSH EVENT: wanted %lu, only had %lu. This is a bug, please report to developers.", size, EVENT_BUFFER_SIZE);
-        ret = VANILLA_ERR_INVALID_ARGUMENT;
-    }
+int release_event(event_loop_t *loop)
+{
+	loop->new_index++;
+
+    pthread_cond_broadcast(&loop->waitcond);
+
+    // } else {
+    //     vanilla_log("FAILED TO PUSH EVENT: wanted %lu, only had %lu. This is a bug, please report to developers.", size, EVENT_BUFFER_SIZE);
+    //     ret = VANILLA_ERR_INVALID_ARGUMENT;
+    // }
 
 exit:
     pthread_mutex_unlock(&loop->mutex);
 
-    return ret;
+    return VANILLA_SUCCESS;
+}
+
+int push_event(event_loop_t *loop, int type, const void *data, size_t size)
+{
+	vanilla_event_t *ev;
+
+    int ret = acquire_event(loop, &ev);
+	if (ret != VANILLA_SUCCESS) {
+		return ret;
+	}
+
+	ev->type = type;
+	memcpy(ev->data, data, size);
+	ev->size = size;
+
+	ret = release_event(loop);
+
+	return ret;
 }
 
 int get_event(event_loop_t *loop, vanilla_event_t *event, int wait)

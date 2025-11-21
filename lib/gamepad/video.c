@@ -41,10 +41,8 @@ static int idr_is_queued = 0;
 
 #define VIDEO_PACKET_CACHE_MAX 1024
 static VideoPacket video_packet_cache[VIDEO_PACKET_CACHE_MAX];
-static size_t video_packet_cache_index = 0;
-static uint8_t video_packet[100000];
-
-static size_t generated_sps_params_size = 0;
+VideoPacket *video_packet_pool[VIDEO_PACKET_CACHE_MAX];
+static size_t video_packet_pool_index = 0;
 
 static const uint8_t VANILLA_PPS_PARAMS[] = {
     0x00, 0x00, 0x00, 0x01, 0x68, 0xee, 0x06, 0x0c, 0xe8
@@ -63,6 +61,80 @@ void send_idr_request_to_console(int socket_msg)
     unsigned char idr_request[] = {1, 0, 0, 0}; // Undocumented
     vanilla_log("SENDING IDR");
     send_to_console(socket_msg, idr_request, sizeof(idr_request), PORT_MSG);
+}
+
+static uint8_t *write_slice_nal(int is_idr, int frame_decode_num, uint8_t *out)
+{
+	uint32_t slice_header = is_idr ? 0x25b804ff : (0x21e003ff | ((frame_decode_num & 0xff) << 13));
+    *((uint32_t *)out) = htobe32(slice_header);
+    return out + sizeof(uint32_t);
+
+
+    static uint8_t idr_num = 0;
+
+    uint8_t slice_nal[200];
+    size_t bit_index = 0;
+
+    // forbidden_zero_bit
+    write_bits(slice_nal, sizeof(slice_nal), &bit_index, 0, 1);
+
+    // nal_ref_idc
+    write_bits(slice_nal, sizeof(slice_nal), &bit_index, is_idr ? 3 : 1, 2);
+
+    // nal_unit_type
+    write_bits(slice_nal, sizeof(slice_nal), &bit_index, is_idr ? 5 : 1, 5);
+
+    // first_mb_in_slice
+    write_exp_golomb(slice_nal, sizeof(slice_nal), &bit_index, 0);
+
+    // slice_type
+    write_exp_golomb(slice_nal, sizeof(slice_nal), &bit_index, is_idr ? 2 : 0);
+
+    // pic_parameter_set_id
+    write_exp_golomb(slice_nal, sizeof(slice_nal), &bit_index, 0);
+
+    // frame_num
+    const int fn_bits = 8;
+    write_bits(slice_nal, sizeof(slice_nal), &bit_index, frame_decode_num, fn_bits);
+
+    if (is_idr) {
+        // idr_pic_id
+        write_exp_golomb(slice_nal, sizeof(slice_nal), &bit_index, idr_num);
+        idr_num++;
+
+        // dec_ref_pic_marking() for IDR:
+        write_bits(slice_nal, sizeof(slice_nal), &bit_index, 0, 1);     // no_output_of_prior_pics_flag
+        write_bits(slice_nal, sizeof(slice_nal), &bit_index, 0, 1);     // long_term_reference_flag
+    } else {
+        // num_ref_idx_active_override_flag
+        write_bits(slice_nal, sizeof(slice_nal), &bit_index, 1, 1);
+
+        // num_ref_idx_l0_active_minus1
+        write_exp_golomb(slice_nal, sizeof(slice_nal), &bit_index, 0);
+
+        // ref_pic_list_modification_flag_l0 = 0 (no modifications)
+        write_bits(slice_nal, sizeof(slice_nal), &bit_index, 0, 1);
+
+        // dec_ref_pic_marking() for non-IDR:
+        write_bits(slice_nal, sizeof(slice_nal), &bit_index, 0, 1);     // adaptive_ref_pic_marking_mode_flag = 0
+
+        // CABAC: entropy_coding_mode_flag==1 and P-slice → must write cabac_init_idc
+        write_exp_golomb(slice_nal, sizeof(slice_nal), &bit_index, 0);          // cabac_init_idc = 0 (good default)
+    }
+
+    // slice_qp_delta
+    write_signed_exp_golomb(slice_nal, sizeof(slice_nal), &bit_index, 0);
+
+    // deblocking_filter_control_present_flag == 1 → must write
+    write_exp_golomb(slice_nal, sizeof(slice_nal), &bit_index, 0);          // disable_deblocking_filter_idc = 0
+    write_signed_exp_golomb(slice_nal, sizeof(slice_nal), &bit_index, 0);          // slice_alpha_c0_offset_div2
+    write_signed_exp_golomb(slice_nal, sizeof(slice_nal), &bit_index, 0);          // slice_beta_offset_div2
+
+    size_t bytes = (bit_index + 7) >> 3;
+    memcpy(out, slice_nal, bytes);
+    out += bytes;
+
+    return out;
 }
 
 void handle_video_packet(gamepad_context_t *ctx, VideoPacket *vp, size_t size, int socket_msg)
@@ -88,50 +160,39 @@ void handle_video_packet(gamepad_context_t *ctx, VideoPacket *vp, size_t size, i
     int is_idr = 0;
     for (int i = 0; i < sizeof(vp->extended_header); i++) {
         if (vp->extended_header[i] == 0x80) {
-            // vanilla_log("GOT IDR");
-
             is_idr = 1;
-
-            // pthread_mutex_lock(&video_mutex);
-            // if (idr_is_queued) {
-            //     idr_is_queued = 0;
-            // }
-            // pthread_mutex_unlock(&video_mutex);
             break;
         }
     }
 
-    // Check seq ID
-    static int seq_id_expected = -1;
-    int seq_matched = 1;
-    if (seq_id_expected == -1) {
-        seq_id_expected = vp->seq_id;
-    } else if (seq_id_expected != vp->seq_id) {
-        seq_matched = 0;
-    }
-    seq_id_expected = (vp->seq_id + 1) & 0x3ff;  // 10 bit number
-    static int is_streaming = 0;
-    if (!seq_matched) {
-        is_streaming = 0;
-    }
-
     // Check if this is the beginning of the packet
-    static VideoPacket *video_segments[1024];
+    static VideoPacket *video_segments[VIDEO_PACKET_CACHE_MAX];
     static int video_packet_seq = -1;
     static int video_packet_seq_end = -1;
+    static int video_complete_frame = 0;
+
+	static uint8_t frame_decode_num = 0;
 
     if (vp->frame_begin) {
         video_packet_seq = vp->seq_id;
         video_packet_seq_end = -1;
 
-        if (!is_streaming) {
-            if (is_idr) {
-                is_streaming = 1;
-            } else {
-                send_idr_request_to_console(socket_msg);
-                return;
+        for (size_t i = 0; i < VIDEO_PACKET_CACHE_MAX; i++) {
+            if (video_segments[i]) {
+                video_packet_pool_index--;
+                video_packet_pool[video_packet_pool_index] = video_segments[i];
+                video_segments[i] = NULL;
             }
         }
+
+		frame_decode_num++;
+
+        if (!video_complete_frame && !is_idr) {
+            send_idr_request_to_console(socket_msg);
+            return;
+        }
+
+        video_complete_frame = 0;
     }
 
     pthread_mutex_lock(&video_mutex);
@@ -141,64 +202,147 @@ void handle_video_packet(gamepad_context_t *ctx, VideoPacket *vp, size_t size, i
     }
     pthread_mutex_unlock(&video_mutex);
 
+    // vanilla_log("set seq_id %i = %p", vp->seq_id, vp);
     video_segments[vp->seq_id] = vp;
 
-    if (vp->frame_end) {
+	if (vp->frame_end)
         video_packet_seq_end = vp->seq_id;
-    }
 
-    if (video_packet_seq_end != -1) {
-        // int complete_frame = 1;
-        if (is_streaming) {
-            // Encapsulate packet data into NAL unit
-            static int frame_decode_num = 0;
-            uint8_t *nals_current = video_packet + generated_sps_params_size;
-
-            int slice_header = is_idr ? 0x25b804ff : (0x21e003ff | ((frame_decode_num & 0xff) << 13));
-
-            // begin slice nalu
-            uint8_t slice[] = {0x00, 0x00, 0x00, 0x01,
-                            (uint8_t) ((slice_header >> 24) & 0xff),
-                            (uint8_t) ((slice_header >> 16) & 0xff),
-                            (uint8_t) ((slice_header >> 8) & 0xff),
-                            (uint8_t) (slice_header & 0xff)
-            };
-            memcpy(nals_current, slice, sizeof(slice));
-            nals_current += sizeof(slice);
-
-            // Get pointer to first packet's payload
+    if (video_packet_seq != -1 && video_packet_seq_end != -1) {
+        int complete_frame = 1;
+        {
             int current_index = video_packet_seq;
-            uint8_t *from = video_segments[current_index]->payload;
-
-            memcpy(nals_current, from, 2);
-            nals_current += 2;
-
-            // Escape codes
-            int byte = 2;
             while (1) {
-                uint8_t *data = video_segments[current_index]->payload;
-                size_t pkt_size = video_segments[current_index]->payload_size;
-                while (byte < pkt_size) {
-                    if (data[byte] <= 3 && *(nals_current - 2) == 0 && *(nals_current - 1) == 0) {
-                        *nals_current = 3;
-                        nals_current++;
-                    }
-                    *nals_current = data[byte];
-                    nals_current++;
-                    byte++;
+                if (!video_segments[current_index]) {
+                    complete_frame = 0;
+                    vanilla_log("damn, incomplete frame (missing %i)", current_index);
+                    break;
                 }
 
                 if (current_index == video_packet_seq_end) {
                     break;
                 }
 
-                byte = 0;
                 current_index = (current_index + 1) % VIDEO_PACKET_CACHE_MAX;
             }
+        }
 
-            // Skip IDR parameters if not an IDR frame
-            uint8_t *nals = (is_idr) ? video_packet : (video_packet + generated_sps_params_size);
-            push_event(ctx->event_loop, VANILLA_EVENT_VIDEO, nals, (nals_current - nals));
+        if (complete_frame) {
+            video_complete_frame = 1;
+
+			// Encapsulate packet data into NAL unit
+			vanilla_event_t *event;
+			int ret = acquire_event(ctx->event_loop, &event);
+
+			event->type = VANILLA_EVENT_VIDEO;
+
+			uint8_t *video_packet = event->data;
+
+			const int OLD_CODE = 1;
+			if (OLD_CODE) {
+				uint8_t *nals_current = video_packet;
+                static const char *frame_start_word = "\x00\x00\x00\x01";
+
+				if (is_idr) {
+					uint8_t sps[200], pps[200];
+					size_t sps_size = generate_sps_params(sps, sizeof(sps));
+					size_t pps_size = generate_pps_params(pps, sizeof(pps));
+
+					memcpy(nals_current, frame_start_word, 4);
+					nals_current += 4;
+
+					memcpy(nals_current, sps, sps_size);
+					nals_current += sps_size;
+
+					memcpy(nals_current, pps, pps_size);
+					nals_current += pps_size;
+				}
+
+                memcpy(nals_current, frame_start_word, 4);
+                nals_current += 4;
+
+                nals_current = write_slice_nal(is_idr, frame_decode_num, nals_current);
+
+				// Get pointer to first packet's payload
+				int current_index = video_packet_seq;
+				uint8_t *from = video_segments[current_index]->payload;
+
+				memcpy(nals_current, from, 2);
+				nals_current += 2;
+
+				// Escape codes
+				int byte = 2;
+				while (1) {
+					uint8_t *data = video_segments[current_index]->payload;
+					size_t pkt_size = video_segments[current_index]->payload_size;
+					while (byte < pkt_size) {
+						if (data[byte] <= 3 && *(nals_current - 2) == 0 && *(nals_current - 1) == 0) {
+							*nals_current = 3;
+							nals_current++;
+						}
+						*nals_current = data[byte];
+						nals_current++;
+						byte++;
+					}
+
+					if (current_index == video_packet_seq_end) {
+						break;
+					}
+
+					byte = 0;
+					current_index = (current_index + 1) % VIDEO_PACKET_CACHE_MAX;
+				}
+
+				event->size = (nals_current - video_packet);
+			} else {
+				uint8_t *out = video_packet;
+				out += 4; // Make room for size
+
+                out = write_slice_nal(is_idr, frame_decode_num, out);
+
+				// vanilla_log_no_newline("generated slice NAL header:");
+				// for (size_t i = 0; i < bytes; i++) {
+				// 	vanilla_log_no_newline(" %02x", slice_nal[i] & 0xFF);
+				// }
+				// vanilla_log_no_newline("\n");
+
+				// uint32_t slice_header = is_idr ? 0x25b804ff : (0x21e003ff | ((0 & 0xff) << 13));
+				// *(uint32_t*)out = htobe32(slice_header);
+				// out += sizeof(uint32_t);
+
+				int i = video_packet_seq;
+
+				size_t offset = 0;
+				while (1) {
+					uint8_t *data = video_segments[i]->payload;
+					size_t sz = video_segments[i]->payload_size - offset;
+
+					memcpy(out, data + offset, sz);
+					out += sz;
+
+					offset = 0;
+
+					if (i == video_packet_seq_end) {
+						break;
+					}
+
+					i = (i + 1) % VIDEO_PACKET_CACHE_MAX;
+				}
+
+				// Go back and write size
+				*((uint32_t *)video_packet) = htobe32(out - (video_packet + 4));
+
+				event->size = (out - video_packet);
+			}
+
+			// vanilla_log_no_newline("a few bytes from the packet:");
+			// for (size_t i = 0; i < 64; i++) {
+			// 	// vanilla_log_no_newline(" %02x", video_segments[video_packet_seq]->payload[i] & 0xFF);
+			// 	vanilla_log_no_newline(" %02x", video_packet[i] & 0xFF);
+			// }
+			// vanilla_log_no_newline("\n");
+
+			release_event(ctx->event_loop);
         } else {
             // We didn't receive the complete frame so we'll skip it here
         }
@@ -228,32 +372,31 @@ void *listen_video(void *x)
     gamepad_context_t *info = (gamepad_context_t *) x;
     ssize_t size;
 
-    // Set up IDR nals on video_packet
-    uint8_t *nals_current = video_packet;
-
-    static const char *frame_start_word = "\x00\x00\x00\x01";
-    memcpy(nals_current, frame_start_word, 4);
-    nals_current += 4;
-    generated_sps_params_size += 4;
-
-    size_t generated_sps = generate_sps_params(nals_current, sizeof(video_packet));
-    nals_current += generated_sps;
-    generated_sps_params_size += generated_sps;
-
-    memcpy(nals_current, VANILLA_PPS_PARAMS, sizeof(VANILLA_PPS_PARAMS));
-    nals_current += sizeof(VANILLA_PPS_PARAMS);
-    generated_sps_params_size += sizeof(VANILLA_PPS_PARAMS);
-
     pthread_mutex_init(&video_mutex, NULL);
 
+    // Initialize video packet pool
+    for (size_t i = 0; i < VIDEO_PACKET_CACHE_MAX; i++) {
+        video_packet_pool[i] = &video_packet_cache[i];
+    }
+
     do {
-        VideoPacket *vp = &video_packet_cache[video_packet_cache_index % VIDEO_PACKET_CACHE_MAX];
-        video_packet_cache_index++;
+        if (video_packet_pool_index == VIDEO_PACKET_CACHE_MAX) {
+            // We should never get here. If we do, something has gone seriously wrong.
+            vanilla_log("FATAL: EXHAUSTED VIDEO PACKET CACHE");
+            break;
+        }
+
+        VideoPacket *vp = video_packet_pool[video_packet_pool_index];
+        video_packet_pool[video_packet_pool_index] = NULL;
+        video_packet_pool_index++;
         void *data = vp;
 
         size = recv(info->socket_vid, data, sizeof(VideoPacket), 0);
         if (size > 0) {
             handle_video_packet(info, vp, size, info->socket_msg);
+        } else {
+            video_packet_pool_index--;
+            video_packet_pool[video_packet_pool_index] = vp;
         }
     } while (!is_interrupted());
 
@@ -269,7 +412,7 @@ void write_bits(void *data, size_t buffer_size, size_t *bit_index, uint8_t value
     const size_t size_of_byte = 8;
 
     assert(bit_width <= size_of_byte);
-    
+
     // Calculate offsets
     size_t offset = *bit_index;
     uint8_t *bytes = (uint8_t *) data;
@@ -325,7 +468,7 @@ void write_exp_golomb(void *data, size_t buffer_size, size_t *bit_index, uint64_
     int bit_width = ((sizeof(value) * size_of_byte) - leading_zeros);
 
     int exp_golomb_leading_zeros = bit_width - 1;
-    
+
     for (int i = 0; i < exp_golomb_leading_zeros; i += size_of_byte) {
         write_bits(data, buffer_size, bit_index, 0, MIN(size_of_byte, exp_golomb_leading_zeros - i));
     }
@@ -348,8 +491,31 @@ void write_exp_golomb(void *data, size_t buffer_size, size_t *bit_index, uint64_
     }
 }
 
+// void write_signed_exp_golomb(void *data, size_t buffer_size, size_t *bit_index, int64_t value)
+// {
+//     uint64_t codeNum = (value <= 0) ? (uint64_t)(-value*2) : (uint64_t)(value*2-1);
+//     write_exp_golomb(data, buffer_size, bit_index, codeNum-1);
+// }
+
+void write_signed_exp_golomb(void *data, size_t buffer_size, size_t *bit_index, int64_t value)
+{
+    uint64_t codeNum;
+
+    if (value > 0) {
+        codeNum = ((uint64_t)value << 1) - 1;  // 2*v - 1
+    } else {
+        // value <= 0
+        codeNum = (uint64_t)(-value) << 1;     // -2*v
+    }
+
+    write_exp_golomb(data, buffer_size, bit_index, codeNum);
+}
+
 size_t generate_sps_params(void *data, size_t size)
 {
+    // memcpy(data, VANILLA_SPS_PARAMS, MIN(sizeof(VANILLA_SPS_PARAMS), size));
+    // return sizeof(VANILLA_SPS_PARAMS);
+
     //
     // Reference: https://www.cardinalpeak.com/blog/the-h-264-sequence-parameter-set
     //
@@ -409,7 +575,7 @@ size_t generate_sps_params(void *data, size_t size)
 
     // seq_scaling_matrix_present_flag
     write_bits(data, size, &bit_index, 0, 1);
-    
+
     // log2_max_frame_num_minus4
     write_exp_golomb(data, size, &bit_index, 4);
 
@@ -420,7 +586,7 @@ size_t generate_sps_params(void *data, size_t size)
     write_exp_golomb(data, size, &bit_index, 1);
 
     // gaps_in_frame_num_value_allowed_flag
-    write_bits(data, size, &bit_index, 0, 1);
+    write_bits(data, size, &bit_index, 1, 1);
 
     // pic_width_in_mbs_minus1
     write_exp_golomb(data, size, &bit_index, 53);
@@ -508,7 +674,7 @@ size_t generate_sps_params(void *data, size_t size)
 
     // RBSP trailing stop bit
     write_bits(data, size, &bit_index, 1, 1);
-    
+
     // Alignment
     const int align = 8;
     if (bit_index % align != 0) {
@@ -522,4 +688,24 @@ size_t generate_pps_params(void *data, size_t size)
 {
     memcpy(data, VANILLA_PPS_PARAMS, MIN(sizeof(VANILLA_PPS_PARAMS), size));
     return sizeof(VANILLA_PPS_PARAMS);
+
+	// size_t bit_index = 0;
+
+    // // forbidden_zero_bit
+    // write_bits(data, size, &bit_index, 0, 1);
+
+    // // nal_ref_idc = 3 (important)
+    // write_bits(data, size, &bit_index, 3, 2);
+
+    // // nal_unit_type = 8 (PPS)
+    // write_bits(data, size, &bit_index, 7, 5);
+
+	// // pic_parameter_set_id
+	// write_exp_golomb(data, size, &bit_index, 0);
+
+	// // seq_parameter_set_id
+	// write_exp_golomb(data, size, &bit_index, 0);
+
+	// // entropy_coding_mode_flag
+	// write_exp_golomb(data, size, &bit_index, 0);
 }

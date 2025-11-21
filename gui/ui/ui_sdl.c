@@ -17,9 +17,8 @@
 #include <SDL2/SDL_opengles2.h>
 #endif
 
-#include "game/game_decode.h"
-#include "game/game_main.h"
 #include "menu/menu.h"
+#include "menu/menu_game.h"
 #include "platform.h"
 #include "ui_priv.h"
 #include "ui_util.h"
@@ -65,6 +64,11 @@ typedef struct {
 	size_t audio_buffer_start;
 	size_t audio_buffer_end;
 	pthread_mutex_t audio_buffer_mutex;
+
+	Uint32 last_power_state_check;
+	vui_power_state_t last_power_state;
+
+	uint16_t last_vibration_state;
 } vui_sdl_context_t;
 
 static int button_map[SDL_CONTROLLER_BUTTON_MAX];
@@ -193,7 +197,10 @@ void vui_sdl_vibrate_handler(uint8_t vibrate, void *userdata)
     vui_sdl_context_t *sdl_ctx = (vui_sdl_context_t *) userdata;
     if (sdl_ctx->controller) {
         uint16_t amount = vibrate ? 0xFFFF : 0;
-		SDL_GameControllerRumble(sdl_ctx->controller, amount, amount, 0);
+		if (sdl_ctx->last_vibration_state != amount) {
+			SDL_GameControllerRumble(sdl_ctx->controller, amount, amount, 0);
+			sdl_ctx->last_vibration_state = amount;
+		}
     }
 }
 
@@ -237,9 +244,19 @@ void vui_sdl_text_open_handler(vui_context_t *ctx, int textedit, int open, void 
     }
 }
 
-vui_power_state_t vui_sdl_power_state_handler(int *percent)
+vui_power_state_t vui_sdl_power_state_handler(vui_context_t *ctx, int *percent)
 {
-    return (vui_power_state_t) SDL_GetPowerInfo(NULL, percent);
+	vui_sdl_context_t *sdl_ctx = (vui_sdl_context_t *) ctx->platform_data;
+
+	// Turns out checking the power state is an expensive operation. Let's
+	// limit checks to once per minute and cache the result.
+	Uint32 now = SDL_GetTicks();
+	if (now >= sdl_ctx->last_power_state_check + 60000) {
+		sdl_ctx->last_power_state = (vui_power_state_t) SDL_GetPowerInfo(NULL, percent);
+		sdl_ctx->last_power_state_check = now;
+	}
+
+	return sdl_ctx->last_power_state;
 }
 
 void vui_sdl_audio_set_enabled(vui_context_t *ctx, int enabled, void *userdata)
@@ -264,7 +281,7 @@ void audio_callback(void *userdata, Uint8 *stream, int len)
 
 	if ((sdl_ctx->audio_buffer_end - sdl_ctx->audio_buffer_start) >= len) {
 		for (size_t i = 0; i < len; ) {
-			size_t phys = sdl_ctx->audio_buffer_start % sdl_ctx->audio_buffer_size;
+            size_t phys = sdl_ctx->audio_buffer_start % sdl_ctx->audio_buffer_size;
 			size_t max_write = MIN(sdl_ctx->audio_buffer_size - phys, len - i);
 			memcpy(stream + i, sdl_ctx->audio_buffer + phys, max_write);
 			i += max_write;
@@ -346,8 +363,7 @@ int vui_init_sdl(vui_context_t *ctx, int fullscreen)
     sdl_ctx->audio = SDL_OpenAudioDevice(NULL, 0, &desired, &obtained, 0);
     if (sdl_ctx->audio) {
 		// Set up buffers
-		size_t buffer_size = obtained.samples * 4; // * 2 for 16-bit, * 2 for stereo
-		buffer_size += 2048; // Pad buffer for maximum size of Wii U packet
+		size_t buffer_size = obtained.samples * 4 * 3; // * 2 for 16-bit, * 2 for stereo, * 3 so there's plenty of buffer
 		sdl_ctx->audio_buffer_size = buffer_size;
 		sdl_ctx->audio_buffer = malloc(buffer_size);
 		sdl_ctx->audio_buffer_start = 0;
@@ -382,6 +398,7 @@ int vui_init_sdl(vui_context_t *ctx, int fullscreen)
 
     ctx->vibrate_handler = vui_sdl_vibrate_handler;
     ctx->vibrate_handler_data = sdl_ctx;
+	sdl_ctx->last_vibration_state = 0;
 
     ctx->font_height_handler = vui_sdl_font_height_handler;
     ctx->font_height_handler_data = sdl_ctx;
@@ -389,6 +406,8 @@ int vui_init_sdl(vui_context_t *ctx, int fullscreen)
     ctx->text_open_handler = vui_sdl_text_open_handler;
 
     ctx->power_state_handler = vui_sdl_power_state_handler;
+	sdl_ctx->last_power_state_check = 0;
+	sdl_ctx->last_power_state = VUI_POWERSTATE_UNKNOWN;
 
     if (TTF_Init()) {
         vpilog("Failed to TTF_Init\n");
@@ -1224,11 +1243,18 @@ int get_texture_from_drm_prime_frame(vui_sdl_context_t *sdl_ctx, AVFrame *f)
 		has_EGL_EXT_image_dma_buf_import = check_has_EGL_EXT_image_dma_buf_import();
 	}
 
-
 	const AVDRMFrameDescriptor *desc = (const AVDRMFrameDescriptor *)f->data[0];
 
-	PFNGLACTIVETEXTUREARBPROC glActiveTextureARB = SDL_GL_GetProcAddress("glActiveTextureARB");
-	PFNGLEGLIMAGETARGETTEXTURE2DOESPROC glEGLImageTargetTexture2DOES = (PFNGLEGLIMAGETARGETTEXTURE2DOESPROC)eglGetProcAddress("glEGLImageTargetTexture2DOES");
+	static PFNGLACTIVETEXTUREARBPROC glActiveTextureARB = NULL;
+	if (!glActiveTextureARB) {
+		glActiveTextureARB = SDL_GL_GetProcAddress("glActiveTextureARB");
+	}
+
+	static PFNGLEGLIMAGETARGETTEXTURE2DOESPROC glEGLImageTargetTexture2DOES = NULL;
+	if (!glEGLImageTargetTexture2DOES) {
+		glEGLImageTargetTexture2DOES = (PFNGLEGLIMAGETARGETTEXTURE2DOESPROC)eglGetProcAddress("glEGLImageTargetTexture2DOES");
+	}
+
 	EGLDisplay display = eglGetCurrentDisplay();
 
 	int image_index = 0;
@@ -1503,11 +1529,9 @@ int vui_update_sdl(vui_context_t *vui)
 
         main_tex = sdl_ctx->layer_data[0];
     } else {
-        pthread_mutex_lock(&vpi_decoding_mutex);
 		if (vpi_present_frame && vpi_present_frame->format != -1) {
 			av_frame_move_ref(sdl_ctx->frame, vpi_present_frame);
 		}
-		pthread_mutex_unlock(&vpi_decoding_mutex);
 
 		if (sdl_ctx->frame->format != -1) {
             switch (sdl_ctx->frame->format) {

@@ -247,8 +247,8 @@ list(APPEND VANILLA_GUI_SRC
     # drm.c
     lang.c
     #game/game_decode_ffmpeg.c
-    game/game_decode.c
-    game/game_main.c
+    # game/game_decode.c
+    # game/game_main.c
     main.c
     menu/menu.c
     menu/menu_common.c
