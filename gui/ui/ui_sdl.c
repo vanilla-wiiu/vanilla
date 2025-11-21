@@ -1220,6 +1220,61 @@ int check_has_EGL_EXT_image_dma_buf_import()
 }
 #endif // VANILLA_HAS_EGL
 
+#define MAX_DMABUF_IMAGES 32
+typedef struct {
+    int fd;
+    EGLImage image;
+    int width;
+    int height;
+} drm_cached_image_t;
+static size_t egl_image_count = 0;
+static drm_cached_image_t egl_image_cache[MAX_DMABUF_IMAGES];
+
+EGLImage get_drm_cached_image(const AVDRMLayerDescriptor *layer, const AVDRMPlaneDescriptor *plane, const AVDRMObjectDescriptor *object, int width, int height)
+{
+    // Find cached image
+    for (int i = 0; i < egl_image_count; i++) {
+        drm_cached_image_t *c = &egl_image_cache[i];
+        if (c->fd == object->fd && c->width == width && c->height == height) {
+            return egl_image_cache[i].image;
+        }
+    }
+
+	static int has_EGL_EXT_image_dma_buf_import = -1;
+	if (has_EGL_EXT_image_dma_buf_import == -1) {
+		has_EGL_EXT_image_dma_buf_import = check_has_EGL_EXT_image_dma_buf_import();
+	}
+
+    const EGLAttrib EGL_DMA_BUF_PLANE0_MODIFIER_LO_EXT_OR_NONE = has_EGL_EXT_image_dma_buf_import ? EGL_DMA_BUF_PLANE0_MODIFIER_LO_EXT : EGL_NONE;
+
+    EGLAttrib attr[] = {
+        EGL_LINUX_DRM_FOURCC_EXT, 					layer->format,
+        EGL_WIDTH,									width,
+        EGL_HEIGHT,									height,
+        EGL_DMA_BUF_PLANE0_FD_EXT,					object->fd,
+        EGL_DMA_BUF_PLANE0_OFFSET_EXT,				plane->offset,
+        EGL_DMA_BUF_PLANE0_PITCH_EXT,				plane->pitch,
+        EGL_DMA_BUF_PLANE0_MODIFIER_LO_EXT_OR_NONE,	(object->format_modifier >> 0) & 0xFFFFFFFF,
+        EGL_DMA_BUF_PLANE0_MODIFIER_HI_EXT,			(object->format_modifier >> 32) & 0xFFFFFFFF,
+        EGL_NONE
+    };
+
+	EGLDisplay display = eglGetCurrentDisplay();
+    EGLImage image = eglCreateImage(display, EGL_NO_CONTEXT, EGL_LINUX_DMA_BUF_EXT, 0, attr);
+    if (image == EGL_NO_IMAGE) {
+        vpilog("Failed to create EGLImage: 0x%x (display: %p)\n", eglGetError(), display);
+        return 0;
+    }
+
+    drm_cached_image_t *c = &egl_image_cache[egl_image_count];
+    c->fd = object->fd;
+    c->width = width;
+    c->height = height;
+    c->image = image;
+
+    return image;
+}
+
 int get_texture_from_drm_prime_frame(vui_sdl_context_t *sdl_ctx, AVFrame *f)
 {
 #ifdef VANILLA_HAS_EGL
@@ -1238,11 +1293,6 @@ int get_texture_from_drm_prime_frame(vui_sdl_context_t *sdl_ctx, AVFrame *f)
 		}
 	}
 
-	static int has_EGL_EXT_image_dma_buf_import = -1;
-	if (has_EGL_EXT_image_dma_buf_import == -1) {
-		has_EGL_EXT_image_dma_buf_import = check_has_EGL_EXT_image_dma_buf_import();
-	}
-
 	const AVDRMFrameDescriptor *desc = (const AVDRMFrameDescriptor *)f->data[0];
 
 	static PFNGLACTIVETEXTUREARBPROC glActiveTextureARB = NULL;
@@ -1255,8 +1305,6 @@ int get_texture_from_drm_prime_frame(vui_sdl_context_t *sdl_ctx, AVFrame *f)
 		glEGLImageTargetTexture2DOES = (PFNGLEGLIMAGETARGETTEXTURE2DOESPROC)eglGetProcAddress("glEGLImageTargetTexture2DOES");
 	}
 
-	EGLDisplay display = eglGetCurrentDisplay();
-
 	int image_index = 0;
 
 	for (int i = 0; i < desc->nb_layers; i++) {
@@ -1265,25 +1313,10 @@ int get_texture_from_drm_prime_frame(vui_sdl_context_t *sdl_ctx, AVFrame *f)
 			const AVDRMPlaneDescriptor *plane = &layer->planes[j];
 			const AVDRMObjectDescriptor *object = &desc->objects[plane->object_index];
 
-			const EGLAttrib EGL_DMA_BUF_PLANE0_MODIFIER_LO_EXT_OR_NONE = has_EGL_EXT_image_dma_buf_import ? EGL_DMA_BUF_PLANE0_MODIFIER_LO_EXT : EGL_NONE;
-
-			EGLAttrib attr[] = {
-				EGL_LINUX_DRM_FOURCC_EXT, 					layer->format,
-				EGL_WIDTH,									f->width / (image_index + 1),
-				EGL_HEIGHT,									f->height / (image_index + 1),
-				EGL_DMA_BUF_PLANE0_FD_EXT,					object->fd,
-				EGL_DMA_BUF_PLANE0_OFFSET_EXT,				plane->offset,
-				EGL_DMA_BUF_PLANE0_PITCH_EXT,				plane->pitch,
-				EGL_DMA_BUF_PLANE0_MODIFIER_LO_EXT_OR_NONE,	(object->format_modifier >> 0) & 0xFFFFFFFF,
-				EGL_DMA_BUF_PLANE0_MODIFIER_HI_EXT,			(object->format_modifier >> 32) & 0xFFFFFFFF,
-				EGL_NONE
-			};
-
-			EGLImage image = eglCreateImage(display, EGL_NO_CONTEXT, EGL_LINUX_DMA_BUF_EXT, 0, attr);
-			if (image == EGL_NO_IMAGE) {
-				vpilog("Failed to create EGLImage: 0x%x (display: %p)\n", eglGetError(), display);
-				return 0;
-			}
+            EGLImage image = get_drm_cached_image(layer, plane, object, f->width / (image_index + 1), f->height / (image_index + 1));
+            if (!image) {
+                return 0;
+            }
 
 			SDL_GL_BindTexture(sdl_ctx->game_tex, 0, 0);
 			glActiveTextureARB(GL_TEXTURE0_ARB + image_index);
