@@ -1273,8 +1273,8 @@ int get_texture_from_drm_prime_frame(vui_sdl_context_t *sdl_ctx, AVFrame *f)
                 EGL_DMA_BUF_PLANE0_FD_EXT,					object->fd,
                 EGL_DMA_BUF_PLANE0_OFFSET_EXT,				plane->offset,
                 EGL_DMA_BUF_PLANE0_PITCH_EXT,				plane->pitch,
-                EGL_DMA_BUF_PLANE0_MODIFIER_LO_EXT_OR_NONE,	(object->format_modifier >> 0) & 0xFFFFFFFF,
-                EGL_DMA_BUF_PLANE0_MODIFIER_HI_EXT,			(object->format_modifier >> 32) & 0xFFFFFFFF,
+                // EGL_DMA_BUF_PLANE0_MODIFIER_LO_EXT_OR_NONE,	(object->format_modifier >> 0) & 0xFFFFFFFF,
+                // EGL_DMA_BUF_PLANE0_MODIFIER_HI_EXT,			(object->format_modifier >> 32) & 0xFFFFFFFF,
                 EGL_NONE
             };
 
