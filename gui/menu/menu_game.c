@@ -366,7 +366,12 @@ int dump_frame_to_file(const AVFrame *frame, const char *filename)
 	ocodec_ctx->pix_fmt = opix_fmt;
 	ocodec_ctx->codec_id = codec_id;
 	ocodec_ctx->time_base = (AVRational){1, 1};
+
+#if LIBAVCODEC_VERSION_INT >= AV_VERSION_INT(60, 2, 100)
 	ocodec_ctx->frame_num = 1;
+#else
+	ocodec_ctx->frame_number = 1;
+#endif
 
 	if (ofmt->flags & AVFMT_GLOBALHEADER) {
 		ocodec_ctx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
