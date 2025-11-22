@@ -1551,7 +1551,6 @@ int vui_update_sdl(vui_context_t *vui)
 		if (sdl_ctx->frame->format != -1) {
             switch (sdl_ctx->frame->format) {
             case AV_PIX_FMT_DRM_PRIME:
-                vpilog("uploading drm prime frame\n");
 				get_texture_from_drm_prime_frame(sdl_ctx, sdl_ctx->frame);
                 break;
             case AV_PIX_FMT_VAAPI:
@@ -1571,7 +1570,6 @@ int vui_update_sdl(vui_context_t *vui)
                 break;
 			}
             case AV_PIX_FMT_YUV420P:
-                vpilog("uploading yuv420p frame\n");
 				get_texture_from_cpu_frame(sdl_ctx, sdl_ctx->frame);
                 break;
             }

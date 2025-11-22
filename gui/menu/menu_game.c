@@ -253,7 +253,7 @@ int vpi_decode_init(vpi_decode_state_t *s)
 		s->codec_ctx->get_format = get_format;
 	}
 
-    const int BUILD_AVCC = 1;
+    const int BUILD_AVCC = 0;
     if (BUILD_AVCC) {
         uint8_t sps[100], pps[100];
         uint16_t sps_size = vanilla_generate_sps_params(sps, sizeof(sps));
