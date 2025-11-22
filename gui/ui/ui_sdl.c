@@ -1325,6 +1325,7 @@ int vui_update_sdl(vui_context_t *vui)
 
     SDL_Renderer *renderer = sdl_ctx->renderer;
 
+    Uint32 ttts = SDL_GetTicks();
     SDL_Event ev;
     while (SDL_PollEvent(&ev)) {
         switch (ev.type) {
@@ -1515,6 +1516,7 @@ int vui_update_sdl(vui_context_t *vui)
             break;
         }
     }
+    vpilog("SDL event poll took %i ms\n", (SDL_GetTicks() - ttts));
 
     {
         Uint32 ttt = SDL_GetTicks();
@@ -1522,6 +1524,7 @@ int vui_update_sdl(vui_context_t *vui)
         vpilog("vui_update took %i ms\n", (SDL_GetTicks() - ttt));
     }
 
+    Uint32 tttu = SDL_GetTicks();
     SDL_Texture *main_tex;
 
     if (!vui->game_mode) {
@@ -1592,107 +1595,114 @@ int vui_update_sdl(vui_context_t *vui)
 			SDL_RenderCopy(renderer, sdl_ctx->game_tex, 0, 0);
 		}
     }
+    vpilog("principle drawing took: %i ms\n", (SDL_GetTicks() - tttu));
 
-    // Draw toast on screen if necessary
-    const int TOAST_PADDING = 12;
-    int cur_toast;
-    vpi_get_toast(&cur_toast, 0, 0, 0);
-    if (cur_toast != sdl_ctx->last_shown_toast) {
-        // Get toast information
-        char toast_str[VPI_TOAST_MAX_LEN];
-        vpi_get_toast(&cur_toast, toast_str, sizeof(toast_str), &sdl_ctx->toast_expiry);
+    {
+        Uint32 tt = SDL_GetTicks();
 
-        sdl_ctx->last_shown_toast = cur_toast;
+        // Draw toast on screen if necessary
+        const int TOAST_PADDING = 12;
+        int cur_toast;
+        vpi_get_toast(&cur_toast, 0, 0, 0);
+        if (cur_toast != sdl_ctx->last_shown_toast) {
+            // Get toast information
+            char toast_str[VPI_TOAST_MAX_LEN];
+            vpi_get_toast(&cur_toast, toast_str, sizeof(toast_str), &sdl_ctx->toast_expiry);
 
-        const int toast_w = vui->screen_width/2;
+            sdl_ctx->last_shown_toast = cur_toast;
 
-        SDL_Color c;
-        c.r = c.g = c.b = 0x40;
-        c.a = 0xFF;
+            const int toast_w = vui->screen_width/2;
 
-        SDL_Surface *surface = TTF_RenderUTF8_Blended_Wrapped(sdl_ctx->sysfont_small, toast_str, c, toast_w - TOAST_PADDING - TOAST_PADDING);
-        SDL_Texture *texture = SDL_CreateTextureFromSurface(renderer, surface);
+            SDL_Color c;
+            c.r = c.g = c.b = 0x40;
+            c.a = 0xFF;
 
-        const int toast_h = surface->h + TOAST_PADDING + TOAST_PADDING;
-        sdl_ctx->toast_tex = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_TARGET, toast_w, toast_h);
-        SDL_SetTextureBlendMode(sdl_ctx->toast_tex, SDL_BLENDMODE_BLEND);
+            SDL_Surface *surface = TTF_RenderUTF8_Blended_Wrapped(sdl_ctx->sysfont_small, toast_str, c, toast_w - TOAST_PADDING - TOAST_PADDING);
+            SDL_Texture *texture = SDL_CreateTextureFromSurface(renderer, surface);
 
-        SDL_SetRenderTarget(renderer, sdl_ctx->toast_tex);
+            const int toast_h = surface->h + TOAST_PADDING + TOAST_PADDING;
+            sdl_ctx->toast_tex = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_TARGET, toast_w, toast_h);
+            SDL_SetTextureBlendMode(sdl_ctx->toast_tex, SDL_BLENDMODE_BLEND);
+
+            SDL_SetRenderTarget(renderer, sdl_ctx->toast_tex);
+            SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
+            SDL_RenderClear(renderer);
+
+            SDL_SetRenderDrawColor(renderer, 0xFF, 0xFF, 0xFF, 0xF0);
+            const int TOAST_BORDER_RADIUS = TOAST_PADDING;
+            for (int y = 0; y < toast_h; y++) {
+                const int x_inset = calculate_x_inset(y, toast_h, TOAST_BORDER_RADIUS);
+                SDL_RenderDrawLine(renderer, x_inset, y, toast_w - x_inset, y);
+            }
+
+            SDL_Rect dst_rect;
+            dst_rect.x = dst_rect.y = TOAST_PADDING;
+            dst_rect.w = surface->w;
+            dst_rect.h = surface->h;
+            SDL_RenderCopy(renderer, texture, 0, &dst_rect);
+
+            SDL_DestroyTexture(texture);
+            SDL_FreeSurface(surface);
+        }
+        if (sdl_ctx->toast_tex) {
+            // Draw toast to screen
+            SDL_SetRenderTarget(renderer, main_tex);
+
+            // Get texture size
+            int toast_w, toast_h;
+            SDL_QueryTexture(sdl_ctx->toast_tex, 0, 0, &toast_w, &toast_h);
+
+            // Calculate dst rect
+            SDL_Rect dst_rect;
+            dst_rect.w = toast_w;
+            dst_rect.h = toast_h;
+            dst_rect.y = vui->screen_height - dst_rect.h - TOAST_PADDING - TOAST_PADDING;
+            dst_rect.x = vui->screen_width/2 - toast_w/2;
+
+            SDL_RenderCopy(renderer, sdl_ctx->toast_tex, 0, &dst_rect);
+
+            // Handle expiry
+            struct timeval now;
+            gettimeofday(&now, 0);
+            if (now.tv_sec*1000000+now.tv_usec >= sdl_ctx->toast_expiry.tv_sec*1000000+sdl_ctx->toast_expiry.tv_usec) {
+                SDL_DestroyTexture(sdl_ctx->toast_tex);
+                sdl_ctx->toast_tex = 0;
+            }
+        }
+
+        // Calculate our destination rectangle
+        int win_w, win_h;
+        SDL_GetWindowSize(sdl_ctx->window, &win_w, &win_h);
+        if (win_w == vui->screen_width && win_h == vui->screen_height) {
+            dst_rect->x = 0;
+            dst_rect->y = 0;
+            dst_rect->w = vui->screen_width;
+            dst_rect->h = vui->screen_height;
+        } else if (win_w * 100 / win_h > vui->screen_width * 100 / vui->screen_height) {
+            // Window is wider than texture, scale by height
+            dst_rect->h = win_h;
+            dst_rect->y = 0;
+            dst_rect->w = win_h * vui->screen_width / vui->screen_height;
+            dst_rect->x = win_w / 2 - dst_rect->w / 2;
+        } else {
+            // Window is taller than texture, scale by width
+            dst_rect->w = win_w;
+            dst_rect->x = 0;
+            dst_rect->h = win_w * vui->screen_height / vui->screen_width;
+            dst_rect->y = win_h / 2 - dst_rect->h / 2;
+        }
+
+        // Copy texture to window
+        SDL_SetRenderTarget(renderer, NULL);
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
         SDL_RenderClear(renderer);
+        SDL_RenderCopy(renderer, main_tex, NULL, dst_rect);
 
-        SDL_SetRenderDrawColor(renderer, 0xFF, 0xFF, 0xFF, 0xF0);
-        const int TOAST_BORDER_RADIUS = TOAST_PADDING;
-        for (int y = 0; y < toast_h; y++) {
-            const int x_inset = calculate_x_inset(y, toast_h, TOAST_BORDER_RADIUS);
-            SDL_RenderDrawLine(renderer, x_inset, y, toast_w - x_inset, y);
-        }
+        // Flip surfaces
+        SDL_RenderPresent(renderer);
 
-        SDL_Rect dst_rect;
-        dst_rect.x = dst_rect.y = TOAST_PADDING;
-        dst_rect.w = surface->w;
-        dst_rect.h = surface->h;
-        SDL_RenderCopy(renderer, texture, 0, &dst_rect);
-
-        SDL_DestroyTexture(texture);
-        SDL_FreeSurface(surface);
+        vpilog("final render to screen took: %i ms\n", (SDL_GetTicks() - tt));
     }
-    if (sdl_ctx->toast_tex) {
-        // Draw toast to screen
-        SDL_SetRenderTarget(renderer, main_tex);
-
-        // Get texture size
-        int toast_w, toast_h;
-        SDL_QueryTexture(sdl_ctx->toast_tex, 0, 0, &toast_w, &toast_h);
-
-        // Calculate dst rect
-        SDL_Rect dst_rect;
-        dst_rect.w = toast_w;
-        dst_rect.h = toast_h;
-        dst_rect.y = vui->screen_height - dst_rect.h - TOAST_PADDING - TOAST_PADDING;
-        dst_rect.x = vui->screen_width/2 - toast_w/2;
-
-        SDL_RenderCopy(renderer, sdl_ctx->toast_tex, 0, &dst_rect);
-
-        // Handle expiry
-        struct timeval now;
-        gettimeofday(&now, 0);
-        if (now.tv_sec*1000000+now.tv_usec >= sdl_ctx->toast_expiry.tv_sec*1000000+sdl_ctx->toast_expiry.tv_usec) {
-            SDL_DestroyTexture(sdl_ctx->toast_tex);
-            sdl_ctx->toast_tex = 0;
-        }
-    }
-
-    // Calculate our destination rectangle
-    int win_w, win_h;
-    SDL_GetWindowSize(sdl_ctx->window, &win_w, &win_h);
-    if (win_w == vui->screen_width && win_h == vui->screen_height) {
-        dst_rect->x = 0;
-        dst_rect->y = 0;
-        dst_rect->w = vui->screen_width;
-        dst_rect->h = vui->screen_height;
-    } else if (win_w * 100 / win_h > vui->screen_width * 100 / vui->screen_height) {
-        // Window is wider than texture, scale by height
-        dst_rect->h = win_h;
-        dst_rect->y = 0;
-        dst_rect->w = win_h * vui->screen_width / vui->screen_height;
-        dst_rect->x = win_w / 2 - dst_rect->w / 2;
-    } else {
-        // Window is taller than texture, scale by width
-        dst_rect->w = win_w;
-        dst_rect->x = 0;
-        dst_rect->h = win_w * vui->screen_height / vui->screen_width;
-        dst_rect->y = win_h / 2 - dst_rect->h / 2;
-    }
-
-    // Copy texture to window
-    SDL_SetRenderTarget(renderer, NULL);
-    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
-    SDL_RenderClear(renderer);
-    SDL_RenderCopy(renderer, main_tex, NULL, dst_rect);
-
-    // Flip surfaces
-    SDL_RenderPresent(renderer);
 
     vpilog("== complete update took: %i ms ==\n", (SDL_GetTicks() - t));
 
