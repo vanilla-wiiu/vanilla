@@ -348,7 +348,7 @@ int vui_init_sdl(vui_context_t *ctx, int fullscreen)
         return -1;
     }
 
-    sdl_ctx->renderer = SDL_CreateRenderer(sdl_ctx->window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+    sdl_ctx->renderer = SDL_CreateRenderer(sdl_ctx->window, -1, SDL_RENDERER_ACCELERATED/* | SDL_RENDERER_PRESENTVSYNC*/);
     if (!sdl_ctx->renderer) {
         vpilog("Failed to CreateRenderer\n");
         return -1;
@@ -1319,6 +1319,8 @@ int vui_update_sdl(vui_context_t *vui)
 {
     vui_sdl_context_t *sdl_ctx = (vui_sdl_context_t *) vui->platform_data;
 
+    Uint32 t = SDL_GetTicks();
+
     SDL_Rect *dst_rect = &sdl_ctx->dst_rect;
 
     SDL_Renderer *renderer = sdl_ctx->renderer;
@@ -1683,6 +1685,8 @@ int vui_update_sdl(vui_context_t *vui)
 
     // Flip surfaces
     SDL_RenderPresent(renderer);
+
+    vpilog("vui_update took: %i ms\n", (SDL_GetTicks() - t));
 
     return !vui->quit;
 }
