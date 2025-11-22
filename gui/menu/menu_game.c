@@ -253,20 +253,23 @@ int vpi_decode_init(vpi_decode_state_t *s)
 		s->codec_ctx->get_format = get_format;
 	}
 
-	uint8_t sps[100], pps[100];
-	uint16_t sps_size = vanilla_generate_sps_params(sps, sizeof(sps));
-	uint16_t pps_size = vanilla_generate_pps_params(pps, sizeof(pps));
+    const int BUILD_AVCC = 0;
+    if (BUILD_AVCC) {
+        uint8_t sps[100], pps[100];
+        uint16_t sps_size = vanilla_generate_sps_params(sps, sizeof(sps));
+        uint16_t pps_size = vanilla_generate_pps_params(pps, sizeof(pps));
 
-	const uint8_t *p_sps = sps;
-	const uint8_t *p_pps = pps;
+        const uint8_t *p_sps = sps;
+        const uint8_t *p_pps = pps;
 
-	s->codec_ctx->extradata = av_malloc(1024);
-	s->codec_ctx->extradata_size = build_avcc(
-		s->codec_ctx->extradata, 1024,
-		&p_sps, &sps_size, 1,
-		&p_pps, &pps_size, 1,
-		4
-	);
+        s->codec_ctx->extradata = av_malloc(1024);
+        s->codec_ctx->extradata_size = build_avcc(
+            s->codec_ctx->extradata, 1024,
+            &p_sps, &sps_size, 1,
+            &p_pps, &pps_size, 1,
+            4
+        );
+    }
 
 	ffmpeg_err = avcodec_open2(s->codec_ctx, codec, NULL);
     if (ffmpeg_err < 0) {
