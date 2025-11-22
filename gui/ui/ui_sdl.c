@@ -16,6 +16,7 @@
 #include <SDL2/SDL_egl.h>
 #include <SDL2/SDL_opengl.h>
 #include <SDL2/SDL_opengles2.h>
+#include <drm_fourcc.h>
 #endif
 
 #include "menu/menu.h"
@@ -1224,20 +1225,6 @@ int check_has_EGL_EXT_image_dma_buf_import()
 int get_texture_from_drm_prime_frame(vui_sdl_context_t *sdl_ctx, AVFrame *f)
 {
 #ifdef VANILLA_HAS_EGL
-	if (!sdl_ctx->game_tex) {
-		sdl_ctx->game_tex = SDL_CreateTexture(
-			sdl_ctx->renderer,
-			SDL_PIXELFORMAT_NV12,
-			SDL_TEXTUREACCESS_STATIC,
-			f->width,
-			f->height
-		);
-
-		if (!sdl_ctx->game_tex) {
-			vpilog("Failed to create texture for DRM PRIME frame\n");
-			return 0;
-		}
-	}
 
 	const AVDRMFrameDescriptor *desc = (const AVDRMFrameDescriptor *)f->data[0];
 
@@ -1266,14 +1253,31 @@ int get_texture_from_drm_prime_frame(vui_sdl_context_t *sdl_ctx, AVFrame *f)
                 has_EGL_EXT_image_dma_buf_import = check_has_EGL_EXT_image_dma_buf_import();
             }
 
-            const EGLAttrib EGL_DMA_BUF_PLANE0_MODIFIER_LO_EXT_OR_NONE = has_EGL_EXT_image_dma_buf_import ? EGL_DMA_BUF_PLANE0_MODIFIER_LO_EXT : EGL_NONE;
+            const EGLAttrib EGL_DMA_BUF_PLANE0_MODIFIER_LO_EXT_OR_NONE =
+                has_EGL_EXT_image_dma_buf_import && object->format_modifier != DRM_FORMAT_MOD_INVALID ?
+                    EGL_DMA_BUF_PLANE0_MODIFIER_LO_EXT : EGL_NONE;
+
+            if (!sdl_ctx->game_tex) {
+                sdl_ctx->game_tex = SDL_CreateTexture(
+                    sdl_ctx->renderer,
+                    layer->format == DRM_FORMAT_NV12 ? SDL_PIXELFORMAT_NV12 : SDL_PIXELFORMAT_IYUV,
+                    SDL_TEXTUREACCESS_STATIC,
+                    f->width,
+                    f->height
+                );
+
+                if (!sdl_ctx->game_tex) {
+                    vpilog("Failed to create texture for DRM PRIME frame\n");
+                    return 0;
+                }
+            }
 
             int w = f->width;
             int h = f->height;
-            if (image_index > 0) {
-                w /= 2;
-                h /= 2;
-            }
+            // if (image_index > 0) {
+            //     w /= 2;
+            //     h /= 2;
+            // }
 
             EGLAttrib attr[] = {
                 EGL_LINUX_DRM_FOURCC_EXT, 					layer->format,
