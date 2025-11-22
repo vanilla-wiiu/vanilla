@@ -1255,6 +1255,8 @@ int get_texture_from_drm_prime_frame(vui_sdl_context_t *sdl_ctx, AVFrame *f)
 
 	for (int i = 0; i < desc->nb_layers; i++) {
 		const AVDRMLayerDescriptor *layer = &desc->layers[i];
+        vpilog("Layer format: %x\n", layer->format);
+
 		for (int j = 0; j < layer->nb_planes; j++) {
 			const AVDRMPlaneDescriptor *plane = &layer->planes[j];
 			const AVDRMObjectDescriptor *object = &desc->objects[plane->object_index];
@@ -1266,15 +1268,22 @@ int get_texture_from_drm_prime_frame(vui_sdl_context_t *sdl_ctx, AVFrame *f)
 
             const EGLAttrib EGL_DMA_BUF_PLANE0_MODIFIER_LO_EXT_OR_NONE = has_EGL_EXT_image_dma_buf_import ? EGL_DMA_BUF_PLANE0_MODIFIER_LO_EXT : EGL_NONE;
 
+            int w = f->width;
+            int h = f->height;
+            if (image_index > 0) {
+                w /= 2;
+                h /= 2;
+            }
+
             EGLAttrib attr[] = {
                 EGL_LINUX_DRM_FOURCC_EXT, 					layer->format,
-                EGL_WIDTH,									f->width / (image_index + 1),
-                EGL_HEIGHT,									f->height / (image_index + 1),
+                EGL_WIDTH,									w,
+                EGL_HEIGHT,									h,
                 EGL_DMA_BUF_PLANE0_FD_EXT,					object->fd,
                 EGL_DMA_BUF_PLANE0_OFFSET_EXT,				plane->offset,
                 EGL_DMA_BUF_PLANE0_PITCH_EXT,				plane->pitch,
-                // EGL_DMA_BUF_PLANE0_MODIFIER_LO_EXT_OR_NONE,	(object->format_modifier >> 0) & 0xFFFFFFFF,
-                // EGL_DMA_BUF_PLANE0_MODIFIER_HI_EXT,			(object->format_modifier >> 32) & 0xFFFFFFFF,
+                EGL_DMA_BUF_PLANE0_MODIFIER_LO_EXT_OR_NONE,	(object->format_modifier >> 0) & 0xFFFFFFFF,
+                EGL_DMA_BUF_PLANE0_MODIFIER_HI_EXT,			(object->format_modifier >> 32) & 0xFFFFFFFF,
                 EGL_NONE
             };
 
