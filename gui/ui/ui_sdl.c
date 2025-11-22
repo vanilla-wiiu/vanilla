@@ -1200,13 +1200,13 @@ int check_has_EGL_EXT_image_dma_buf_import()
 	do {
 		if (SDL_strcmp(token, "EGL_EXT_image_dma_buf_import") == 0
 			|| SDL_strcmp(token, "EGL_EXT_image_dma_buf_import_modifiers") == 0) {
-			ret = 1;
+			ret++;
 		}
 	} while ((token = SDL_strtokr(NULL, " ", &saveptr)) != NULL);
 
 	SDL_free(extensions);
 
-	return ret;
+	return ret == 2;
 
 	// if (SDL_GL_ExtensionSupported("GL_OES_EGL_image")) {
 	// 	glEGLImageTargetTexture2DOESFunc = (PFNGLEGLIMAGETARGETTEXTURE2DOESPROC)eglGetProcAddress("glEGLImageTargetTexture2DOES");
@@ -1225,7 +1225,6 @@ int check_has_EGL_EXT_image_dma_buf_import()
 int get_texture_from_drm_prime_frame(vui_sdl_context_t *sdl_ctx, AVFrame *f)
 {
 #ifdef VANILLA_HAS_EGL
-
 	const AVDRMFrameDescriptor *desc = (const AVDRMFrameDescriptor *)f->data[0];
 
 	static PFNGLACTIVETEXTUREARBPROC glActiveTextureARB = NULL;
@@ -1271,15 +1270,17 @@ int get_texture_from_drm_prime_frame(vui_sdl_context_t *sdl_ctx, AVFrame *f)
                 }
             }
 
+            EGLAttrib use_fmt = layer->format == DRM_FORMAT_NV12 ? DRM_FORMAT_NV12 : DRM_FORMAT_R8;
+
             int w = f->width;
             int h = f->height;
-            // if (image_index > 0) {
-            //     w /= 2;
-            //     h /= 2;
-            // }
+            if (image_index > 0) {
+                w /= 2;
+                h /= 2;
+            }
 
             EGLAttrib attr[] = {
-                EGL_LINUX_DRM_FOURCC_EXT, 					layer->format,
+                EGL_LINUX_DRM_FOURCC_EXT, 					use_fmt,
                 EGL_WIDTH,									w,
                 EGL_HEIGHT,									h,
                 EGL_DMA_BUF_PLANE0_FD_EXT,					object->fd,
