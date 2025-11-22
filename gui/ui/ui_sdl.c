@@ -1516,7 +1516,11 @@ int vui_update_sdl(vui_context_t *vui)
         }
     }
 
-    vui_update(vui);
+    {
+        Uint32 ttt = SDL_GetTicks();
+        vui_update(vui);
+        vpilog("vui_update took %i ms\n", (SDL_GetTicks() - ttt));
+    }
 
     SDL_Texture *main_tex;
 
@@ -1553,8 +1557,12 @@ int vui_update_sdl(vui_context_t *vui)
 		if (sdl_ctx->frame->format != -1) {
             switch (sdl_ctx->frame->format) {
             case AV_PIX_FMT_DRM_PRIME:
-				get_texture_from_drm_prime_frame(sdl_ctx, sdl_ctx->frame);
+            {
+                Uint32 tt = SDL_GetTicks();
+                get_texture_from_drm_prime_frame(sdl_ctx, sdl_ctx->frame);
+                vpilog("conversion from DRM PRIME frame to EGL texture took %i ms\n", (SDL_GetTicks() - tt));
                 break;
+            }
             case AV_PIX_FMT_VAAPI:
 			{
 				AVFrame *drm = av_frame_alloc();
@@ -1686,7 +1694,7 @@ int vui_update_sdl(vui_context_t *vui)
     // Flip surfaces
     SDL_RenderPresent(renderer);
 
-    vpilog("vui_update took: %i ms\n", (SDL_GetTicks() - t));
+    vpilog("== complete update took: %i ms ==\n", (SDL_GetTicks() - t));
 
     return !vui->quit;
 }
