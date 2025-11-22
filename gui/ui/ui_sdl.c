@@ -1594,6 +1594,8 @@ int vui_update_sdl(vui_context_t *vui)
 			// SDL_SetRenderTarget(renderer, main_tex);
 			SDL_SetRenderTarget(renderer, 0);
 			SDL_RenderCopy(renderer, sdl_ctx->game_tex, 0, 0);
+
+            SDL_RenderPresent(renderer);
 		}
     }
     vpilog("principle drawing took: %i ms\n", (SDL_GetTicks() - tttu));
