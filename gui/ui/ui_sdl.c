@@ -1261,7 +1261,7 @@ EGLImage create_egl_image(const AVDRMLayerDescriptor *layer, const AVDRMPlaneDes
 
 EGLImage get_drm_cached_image(const AVDRMLayerDescriptor *layer, const AVDRMPlaneDescriptor *plane, const AVDRMObjectDescriptor *object, int width, int height)
 {
-    const int ENABLED_DRM_CACHE = 1;
+    const int ENABLED_DRM_CACHE = 0;
 
     // Find cached image
     for (int i = 0; i < egl_image_count; i++) {
