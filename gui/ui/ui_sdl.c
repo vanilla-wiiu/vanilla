@@ -1242,7 +1242,6 @@ int get_texture_from_drm_prime_frame(vui_sdl_context_t *sdl_ctx, AVFrame *f)
 
 	for (int i = 0; i < desc->nb_layers; i++) {
 		const AVDRMLayerDescriptor *layer = &desc->layers[i];
-        vpilog("Layer format: %x\n", layer->format);
 
 		for (int j = 0; j < layer->nb_planes; j++) {
 			const AVDRMPlaneDescriptor *plane = &layer->planes[j];
@@ -1294,7 +1293,7 @@ int get_texture_from_drm_prime_frame(vui_sdl_context_t *sdl_ctx, AVFrame *f)
             EGLDisplay display = eglGetCurrentDisplay();
             EGLImage image = eglCreateImage(display, EGL_NO_CONTEXT, EGL_LINUX_DMA_BUF_EXT, 0, attr);
             if (image == EGL_NO_IMAGE) {
-                vpilog("Failed to create EGLImage: 0x%x (display: %p)\n", eglGetError(), display);
+                vpilog("Failed to create EGLImage: 0x%x (display: %p, layer %i, plane %i)\n", eglGetError(), display, i, j);
                 return 0;
             }
 
