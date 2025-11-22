@@ -1591,13 +1591,14 @@ int vui_update_sdl(vui_context_t *vui)
 
 		if (sdl_ctx->game_tex) {
 			main_tex = sdl_ctx->layer_data[0];
-			SDL_SetRenderTarget(renderer, main_tex);
+			// SDL_SetRenderTarget(renderer, main_tex);
+			SDL_SetRenderTarget(renderer, 0);
 			SDL_RenderCopy(renderer, sdl_ctx->game_tex, 0, 0);
 		}
     }
     vpilog("principle drawing took: %i ms\n", (SDL_GetTicks() - tttu));
 
-    {
+    if (0) {
         Uint32 tt = SDL_GetTicks();
 
         // Draw toast on screen if necessary
