@@ -1598,7 +1598,7 @@ int vui_update_sdl(vui_context_t *vui)
     }
     vpilog("principle drawing took: %i ms\n", (SDL_GetTicks() - tttu));
 
-    if (0) {
+    if (!vui->game_mode) { // TEMP
         Uint32 tt = SDL_GetTicks();
 
         // Draw toast on screen if necessary
