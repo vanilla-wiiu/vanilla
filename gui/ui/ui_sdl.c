@@ -1563,7 +1563,7 @@ int vui_update_sdl(vui_context_t *vui)
             {
                 Uint32 tt = SDL_GetTicks();
                 get_texture_from_drm_prime_frame(sdl_ctx, sdl_ctx->frame);
-                vpilog("conversion from DRM PRIME frame to EGL texture took %i ms\n", (SDL_GetTicks() - tt));
+                vpilog("  conversion from DRM PRIME frame to EGL texture took %i ms\n", (SDL_GetTicks() - tt));
                 break;
             }
             case AV_PIX_FMT_VAAPI:
@@ -1589,6 +1589,7 @@ int vui_update_sdl(vui_context_t *vui)
 			av_frame_unref(sdl_ctx->frame);
 		}
 
+        Uint32 Att = SDL_GetTicks();
 		if (sdl_ctx->game_tex) {
 			main_tex = sdl_ctx->layer_data[0];
 			// SDL_SetRenderTarget(renderer, main_tex);
@@ -1597,6 +1598,7 @@ int vui_update_sdl(vui_context_t *vui)
 
             SDL_RenderPresent(renderer);
 		}
+        vpilog("  rendertarget+renderpresent %i ms\n", (SDL_GetTicks() - Att));
     }
     vpilog("principle drawing took: %i ms\n", (SDL_GetTicks() - tttu));
 
