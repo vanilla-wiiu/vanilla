@@ -323,7 +323,7 @@ int vui_sdl_event_thread(void *data)
 
     SDL_Event ev;
     while (!vui->quit) {
-        while (SDL_PollEvent(&ev)) {
+        while (SDL_WaitEventTimeout(&ev, 100)) {
             SDL_LockMutex(sdl_ctx->display_mutex);
 
             switch (ev.type) {
