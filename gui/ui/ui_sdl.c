@@ -3,6 +3,7 @@
 #include <math.h>
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_hints.h>
+#include <SDL2/SDL_syswm.h>
 #include <SDL_image.h>
 #include <SDL_power.h>
 #include <SDL_ttf.h>
@@ -458,6 +459,10 @@ int vui_init_sdl(vui_context_t *ctx, int fullscreen)
 
 	// Initialize gamepad lookup tables
 	init_gamepad();
+
+    vpilog("Renderer: %s\n", glGetString(GL_RENDERER));
+    vpilog("Vendor:   %s\n", glGetString(GL_VENDOR));
+    SDL_GL_SetSwapInterval(0);
 
     return 0;
 }
@@ -1222,6 +1227,17 @@ int check_has_EGL_EXT_image_dma_buf_import()
 }
 #endif // VANILLA_HAS_EGL
 
+int get_texture_from_drm_prime_frame2(vui_sdl_context_t *sdl_ctx, AVFrame *f)
+{
+    SDL_SysWMinfo wmi;
+    SDL_VERSION(&wmi.version);
+    if (!SDL_GetWindowWMInfo(sdl_ctx->window, &wmi)) return 0;
+    if (wmi.subsystem != SDL_SYSWM_KMSDRM) return 0;
+
+    int drm_fd = wmi.info.kmsdrm.drm_fd;
+    int crtc_id = wmi.info.kmsdrm.crtc_id;
+}
+
 int get_texture_from_drm_prime_frame(vui_sdl_context_t *sdl_ctx, AVFrame *f)
 {
 #ifdef VANILLA_HAS_EGL
@@ -1238,6 +1254,7 @@ int get_texture_from_drm_prime_frame(vui_sdl_context_t *sdl_ctx, AVFrame *f)
 	}
 
 	int image_index = 0;
+    EGLDisplay display = eglGetCurrentDisplay();
 
 	for (int i = 0; i < desc->nb_layers; i++) {
 		const AVDRMLayerDescriptor *layer = &desc->layers[i];
@@ -1258,7 +1275,7 @@ int get_texture_from_drm_prime_frame(vui_sdl_context_t *sdl_ctx, AVFrame *f)
             if (!sdl_ctx->game_tex) {
                 sdl_ctx->game_tex = SDL_CreateTexture(
                     sdl_ctx->renderer,
-                    layer->format == DRM_FORMAT_NV12 ? SDL_PIXELFORMAT_NV12 : SDL_PIXELFORMAT_IYUV,
+                    layer->format == DRM_FORMAT_YUV420 ? SDL_PIXELFORMAT_IYUV : SDL_PIXELFORMAT_NV12,
                     SDL_TEXTUREACCESS_STATIC,
                     f->width,
                     f->height
@@ -1270,7 +1287,7 @@ int get_texture_from_drm_prime_frame(vui_sdl_context_t *sdl_ctx, AVFrame *f)
                 }
             }
 
-            EGLAttrib use_fmt = layer->format == DRM_FORMAT_NV12 ? DRM_FORMAT_NV12 : DRM_FORMAT_R8;
+            EGLAttrib use_fmt = layer->format == DRM_FORMAT_YUV420 ? DRM_FORMAT_R8 : layer->format;
 
             int w = f->width;
             int h = f->height;
@@ -1291,7 +1308,6 @@ int get_texture_from_drm_prime_frame(vui_sdl_context_t *sdl_ctx, AVFrame *f)
                 EGL_NONE
             };
 
-            EGLDisplay display = eglGetCurrentDisplay();
             EGLImage image = eglCreateImage(display, EGL_NO_CONTEXT, EGL_LINUX_DMA_BUF_EXT, 0, attr);
             if (image == EGL_NO_IMAGE) {
                 vpilog("Failed to create EGLImage: 0x%x (display: %p, layer %i, plane %i)\n", eglGetError(), display, i, j);
@@ -1304,7 +1320,7 @@ int get_texture_from_drm_prime_frame(vui_sdl_context_t *sdl_ctx, AVFrame *f)
 			image_index++;
 			SDL_GL_UnbindTexture(sdl_ctx->game_tex);
 
-            eglDestroyImage(eglGetCurrentDisplay(), image);
+            eglDestroyImage(display, image);
 		}
 	}
 
@@ -1319,13 +1335,10 @@ int vui_update_sdl(vui_context_t *vui)
 {
     vui_sdl_context_t *sdl_ctx = (vui_sdl_context_t *) vui->platform_data;
 
-    Uint32 t = SDL_GetTicks();
-
     SDL_Rect *dst_rect = &sdl_ctx->dst_rect;
 
     SDL_Renderer *renderer = sdl_ctx->renderer;
 
-    Uint32 ttts = SDL_GetTicks();
     SDL_Event ev;
     while (SDL_PollEvent(&ev)) {
         switch (ev.type) {
@@ -1516,15 +1529,9 @@ int vui_update_sdl(vui_context_t *vui)
             break;
         }
     }
-    vpilog("SDL event poll took %i ms\n", (SDL_GetTicks() - ttts));
 
-    {
-        Uint32 ttt = SDL_GetTicks();
-        vui_update(vui);
-        vpilog("vui_update took %i ms\n", (SDL_GetTicks() - ttt));
-    }
+    vui_update(vui);
 
-    Uint32 tttu = SDL_GetTicks();
     SDL_Texture *main_tex;
 
     if (!vui->game_mode) {
@@ -1561,9 +1568,7 @@ int vui_update_sdl(vui_context_t *vui)
             switch (sdl_ctx->frame->format) {
             case AV_PIX_FMT_DRM_PRIME:
             {
-                Uint32 tt = SDL_GetTicks();
                 get_texture_from_drm_prime_frame(sdl_ctx, sdl_ctx->frame);
-                vpilog("  conversion from DRM PRIME frame to EGL texture took %i ms\n", (SDL_GetTicks() - tt));
                 break;
             }
             case AV_PIX_FMT_VAAPI:
@@ -1589,7 +1594,6 @@ int vui_update_sdl(vui_context_t *vui)
 			av_frame_unref(sdl_ctx->frame);
 		}
 
-        Uint32 Att = SDL_GetTicks();
 		if (sdl_ctx->game_tex) {
 			main_tex = sdl_ctx->layer_data[0];
 			// SDL_SetRenderTarget(renderer, main_tex);
@@ -1598,13 +1602,9 @@ int vui_update_sdl(vui_context_t *vui)
 
             SDL_RenderPresent(renderer);
 		}
-        vpilog("  rendertarget+renderpresent %i ms\n", (SDL_GetTicks() - Att));
     }
-    vpilog("principle drawing took: %i ms\n", (SDL_GetTicks() - tttu));
 
     if (!vui->game_mode) { // TEMP
-        Uint32 tt = SDL_GetTicks();
-
         // Draw toast on screen if necessary
         const int TOAST_PADDING = 12;
         int cur_toast;
@@ -1705,11 +1705,7 @@ int vui_update_sdl(vui_context_t *vui)
 
         // Flip surfaces
         SDL_RenderPresent(renderer);
-
-        vpilog("final render to screen took: %i ms\n", (SDL_GetTicks() - tt));
     }
-
-    vpilog("== complete update took: %i ms ==\n", (SDL_GetTicks() - t));
 
     return !vui->quit;
 }
