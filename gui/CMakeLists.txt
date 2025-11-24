@@ -373,7 +373,7 @@ if (LINUX)
     pkg_check_modules(EGL REQUIRED egl)
     target_include_directories(vanilla PRIVATE ${EGL_INCLUDE_DIRS})
     target_link_directories(vanilla PRIVATE ${EGL_LIBRARY_DIRS})
-    target_link_libraries(vanilla PRIVATE ${EGL_LIBRARIES} GL)
+    target_link_libraries(vanilla PRIVATE ${EGL_LIBRARIES})
     target_compile_definitions(vanilla PRIVATE VANILLA_HAS_EGL)
 endif()
 
