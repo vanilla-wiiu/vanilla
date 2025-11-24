@@ -1227,16 +1227,16 @@ int check_has_EGL_EXT_image_dma_buf_import()
 }
 #endif // VANILLA_HAS_EGL
 
-int get_texture_from_drm_prime_frame2(vui_sdl_context_t *sdl_ctx, AVFrame *f)
-{
-    SDL_SysWMinfo wmi;
-    SDL_VERSION(&wmi.version);
-    if (!SDL_GetWindowWMInfo(sdl_ctx->window, &wmi)) return 0;
-    if (wmi.subsystem != SDL_SYSWM_KMSDRM) return 0;
+// int get_texture_from_drm_prime_frame2(vui_sdl_context_t *sdl_ctx, AVFrame *f)
+// {
+//     SDL_SysWMinfo wmi;
+//     SDL_VERSION(&wmi.version);
+//     if (!SDL_GetWindowWMInfo(sdl_ctx->window, &wmi)) return 0;
+//     if (wmi.subsystem != SDL_SYSWM_KMSDRM) return 0;
 
-    int drm_fd = wmi.info.kmsdrm.drm_fd;
-    int crtc_id = wmi.info.kmsdrm.crtc_id;
-}
+//     int drm_fd = wmi.info.kmsdrm.drm_fd;
+//     int crtc_id = wmi.info.kmsdrm.crtc_id;
+// }
 
 int get_texture_from_drm_prime_frame(vui_sdl_context_t *sdl_ctx, AVFrame *f)
 {
