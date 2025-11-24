@@ -359,8 +359,6 @@ if (LINUX)
     if (DRM_FOUND)
         target_link_libraries(vanilla PRIVATE ${DRM_LIBRARIES})
         target_include_directories(vanilla PRIVATE ${DRM_INCLUDE_DIRS})
-
-		find_package(OpenGL COMPONENTS EGL)
 	endif()
 
 	# TODO: A more comprehensive "Find" for libva
@@ -369,11 +367,12 @@ if (LINUX)
 		target_link_libraries(vanilla PRIVATE va va-drm va-x11 X11)
 	endif()
 
+    # TODO: EGL isn't actually required for Linux, it's only necessary for hardware decoding
     find_package(PkgConfig REQUIRED)
     pkg_check_modules(EGL REQUIRED egl)
     target_include_directories(vanilla PRIVATE ${EGL_INCLUDE_DIRS})
     target_link_directories(vanilla PRIVATE ${EGL_LIBRARY_DIRS})
-    target_link_libraries(vanilla PRIVATE ${EGL_LIBRARIES})
+    target_link_libraries(vanilla PRIVATE ${EGL_LIBRARIES} GL)
     target_compile_definitions(vanilla PRIVATE VANILLA_HAS_EGL)
 endif()
 
