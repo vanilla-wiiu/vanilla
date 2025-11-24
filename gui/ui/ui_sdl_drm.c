@@ -1,78 +1,30 @@
-#include "drm.h"
+#include "ui_sdl_drm.h"
 
-#include <drm_fourcc.h>
-#include <fcntl.h>
-#include <unistd.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <sys/ioctl.h>
+#include <libavutil/hwcontext_drm.h>
+#include <stdint.h>
+#include <SDL2/SDL_syswm.h>
 #include <xf86drm.h>
 #include <xf86drmMode.h>
+#include <drm/drm_mode.h>
+#include <drm/drm_fourcc.h>
+#include <errno.h>
+#include <string.h>
 
-#define ALIGN(x, a)		((x) + (a - 1)) & (~(a - 1))
+#include "platform.h"
 
-int initialize_drm(vanilla_drm_ctx_t *ctx)
-{
-	// Open DRM
-	ctx->fd = drmOpen("vc4", 0);
-	if (ctx->fd == -1) {
-		return 0;
-	}
+typedef struct vanilla_drm_ctx_t {
+	int fd;
+	uint32_t crtc;
+	int crtc_index;
+	uint32_t plane_id;
+	int got_plane;
+	uint32_t fb_id;
+	int got_fb;
+	uint32_t handles[AV_DRM_MAX_PLANES];
+	int got_handles;
+} vanilla_drm_ctx_t;
 
-	int ret = 0;
-
-	// Find DRM output
-	drmModeResPtr res = drmModeGetResources(ctx->fd);
-
-	for (int i = 0; i < res->count_connectors; i++) {
-		drmModeConnectorPtr c = drmModeGetConnector(ctx->fd, res->connectors[i]);
-		if (c->encoder_id) {
-			drmModeEncoderPtr enc = drmModeGetEncoder(ctx->fd, c->encoder_id);
-			if (enc->crtc_id) {
-				drmModeCrtcPtr crtc = drmModeGetCrtc(ctx->fd, enc->crtc_id);
-
-				// Good! We can use this connector :)
-				ctx->crtc = crtc->crtc_id;
-
-                for (int j = 0; j < res->count_crtcs; j++) {
-                    if (res->crtcs[j] == crtc->crtc_id) {
-                        ctx->crtc_index = j;
-                        break;
-                    }
-                }
-
-                ret = 1;
-
-				drmModeFreeCrtc(crtc);
-			}
-			drmModeFreeEncoder(enc);
-		}
-		drmModeFreeConnector(c);
-	}
-	
-	// Free DRM resources
-	drmModeFreeResources(res);
-
-    ctx->got_plane = 0;
-    ctx->got_fb = 0;
-    ctx->got_handles = 0;
-    memset(ctx->handles, 0, sizeof(ctx->handles));
-
-	return ret;
-}
-
-int free_drm(vanilla_drm_ctx_t *ctx)
-{
-    if (ctx->got_fb) {
-        drmModeRmFB(ctx->fd, ctx->fb_id);
-    }
-
-	// Close DRM
-	drmClose(ctx->fd);
-}
-
-static int find_plane(const int drmfd, const int crtcidx, const uint32_t format,
-                      uint32_t *const pplane_id)
+static int find_plane(const int drmfd, const int crtcidx, const uint32_t format, uint32_t *const pplane_id)
 {
     drmModePlaneResPtr planes;
     drmModePlanePtr plane;
@@ -82,14 +34,14 @@ static int find_plane(const int drmfd, const int crtcidx, const uint32_t format,
 
     planes = drmModeGetPlaneResources(drmfd);
     if (!planes) {
-        fprintf(stderr, "drmModeGetPlaneResources failed: %s\n", strerror(errno));
+        vpilog("drmModeGetPlaneResources failed: %s\n", strerror(errno));
         return -1;
     }
 
     for (i = 0; i < planes->count_planes; ++i) {
         plane = drmModeGetPlane(drmfd, planes->planes[i]);
         if (!plane) {
-            fprintf(stderr, "drmModeGetPlane failed: %s\n", strerror(errno));
+            vpilog("drmModeGetPlane failed: %s\n", strerror(errno));
             break;
         }
 
@@ -118,8 +70,7 @@ static int find_plane(const int drmfd, const int crtcidx, const uint32_t format,
     return ret;
 }
 
-extern int running;
-int display_drm(vanilla_drm_ctx_t *ctx, AVFrame *frame)
+int vui_sdl_drm_present(vanilla_drm_ctx_t *ctx, AVFrame *frame)
 {
     const AVDRMFrameDescriptor *desc = (AVDRMFrameDescriptor *) frame->data[0];
     const uint32_t format = desc->layers[0].format;
@@ -132,22 +83,6 @@ int display_drm(vanilla_drm_ctx_t *ctx, AVFrame *frame)
             ctx->got_plane = 1;
         }
     }
-
-    /*{
-        drmVBlank vbl;
-        vbl.request.type = DRM_VBLANK_RELATIVE;
-        vbl.request.sequence = 0;
-        while (running && drmWaitVBlank(ctx->fd, &vbl)) {
-            // Not sure what this does, stole it from hello_drmprime
-            if (errno != EINTR) {
-                break;
-            }
-        }
-    }
-
-    if (!running) {
-        return 1;
-    }*/
 
     uint32_t pitches[AV_DRM_MAX_PLANES] = {0};
     uint32_t offsets[AV_DRM_MAX_PLANES] = {0};
@@ -239,4 +174,77 @@ int display_drm(vanilla_drm_ctx_t *ctx, AVFrame *frame)
     ctx->got_handles = 1;
 
     return 1;
+}
+
+int vui_sdl_drm_initialize(vanilla_drm_ctx_t **c, SDL_Window *window)
+{
+    vanilla_drm_ctx_t *ctx = (vanilla_drm_ctx_t *) malloc(sizeof(vanilla_drm_ctx_t));
+    *c = ctx;
+
+    memset(ctx, 0, sizeof(vanilla_drm_ctx_t));
+
+    SDL_SysWMinfo wmi;
+    SDL_VERSION(&wmi.version);
+    if (!SDL_GetWindowWMInfo(window, &wmi)) return 0;
+    if (wmi.subsystem != SDL_SYSWM_KMSDRM) return 0;
+
+    ctx->fd = wmi.info.kmsdrm.drm_fd;
+
+	int ret = 0;
+
+	// Find DRM output
+	drmModeResPtr res = drmModeGetResources(ctx->fd);
+
+	for (int i = 0; i < res->count_connectors; i++) {
+		drmModeConnectorPtr c = drmModeGetConnector(ctx->fd, res->connectors[i]);
+		if (c->encoder_id) {
+			drmModeEncoderPtr enc = drmModeGetEncoder(ctx->fd, c->encoder_id);
+			if (enc->crtc_id) {
+				drmModeCrtcPtr crtc = drmModeGetCrtc(ctx->fd, enc->crtc_id);
+
+				// Good! We can use this connector :)
+				ctx->crtc = crtc->crtc_id;
+
+                for (int j = 0; j < res->count_crtcs; j++) {
+                    if (res->crtcs[j] == crtc->crtc_id) {
+                        ctx->crtc_index = j;
+                        break;
+                    }
+                }
+
+                ret = 1;
+
+				drmModeFreeCrtc(crtc);
+			}
+			drmModeFreeEncoder(enc);
+		}
+		drmModeFreeConnector(c);
+	}
+
+	// Free DRM resources
+	drmModeFreeResources(res);
+
+    ctx->got_plane = 0;
+    ctx->got_fb = 0;
+    ctx->got_handles = 0;
+    memset(ctx->handles, 0, sizeof(ctx->handles));
+
+	return ret;
+}
+
+int vui_sdl_drm_free(vanilla_drm_ctx_t **c)
+{
+    vanilla_drm_ctx_t *ctx = *c;
+    *c = NULL;
+
+    if (ctx->got_fb) {
+        drmModeRmFB(ctx->fd, ctx->fb_id);
+    }
+
+	// Close DRM
+	drmClose(ctx->fd);
+
+    free(ctx);
+
+    return 0;
 }

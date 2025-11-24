@@ -69,7 +69,6 @@ static uint8_t *write_slice_nal(int is_idr, int frame_decode_num, uint8_t *out)
     *((uint32_t *)out) = htobe32(slice_header);
     return out + sizeof(uint32_t);
 
-
     static uint8_t idr_num = 0;
 
     uint8_t slice_nal[200];

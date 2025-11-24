@@ -18,6 +18,7 @@
 #include <SDL2/SDL_opengl.h>
 #include <SDL2/SDL_opengles2.h>
 #include <drm_fourcc.h>
+#include "ui_sdl_drm.h"
 #endif
 
 #include "menu/menu.h"
@@ -349,7 +350,7 @@ int vui_init_sdl(vui_context_t *ctx, int fullscreen)
         return -1;
     }
 
-    sdl_ctx->renderer = SDL_CreateRenderer(sdl_ctx->window, -1, SDL_RENDERER_ACCELERATED/* | SDL_RENDERER_PRESENTVSYNC*/);
+    sdl_ctx->renderer = SDL_CreateRenderer(sdl_ctx->window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
     if (!sdl_ctx->renderer) {
         vpilog("Failed to CreateRenderer\n");
         return -1;
@@ -459,10 +460,6 @@ int vui_init_sdl(vui_context_t *ctx, int fullscreen)
 
 	// Initialize gamepad lookup tables
 	init_gamepad();
-
-    vpilog("Renderer: %s\n", glGetString(GL_RENDERER));
-    vpilog("Vendor:   %s\n", glGetString(GL_VENDOR));
-    SDL_GL_SetSwapInterval(0);
 
     return 0;
 }
@@ -1227,17 +1224,6 @@ int check_has_EGL_EXT_image_dma_buf_import()
 }
 #endif // VANILLA_HAS_EGL
 
-// int get_texture_from_drm_prime_frame2(vui_sdl_context_t *sdl_ctx, AVFrame *f)
-// {
-//     SDL_SysWMinfo wmi;
-//     SDL_VERSION(&wmi.version);
-//     if (!SDL_GetWindowWMInfo(sdl_ctx->window, &wmi)) return 0;
-//     if (wmi.subsystem != SDL_SYSWM_KMSDRM) return 0;
-
-//     int drm_fd = wmi.info.kmsdrm.drm_fd;
-//     int crtc_id = wmi.info.kmsdrm.crtc_id;
-// }
-
 int get_texture_from_drm_prime_frame(vui_sdl_context_t *sdl_ctx, AVFrame *f)
 {
 #ifdef VANILLA_HAS_EGL
@@ -1568,7 +1554,12 @@ int vui_update_sdl(vui_context_t *vui)
             switch (sdl_ctx->frame->format) {
             case AV_PIX_FMT_DRM_PRIME:
             {
-                get_texture_from_drm_prime_frame(sdl_ctx, sdl_ctx->frame);
+                // get_texture_from_drm_prime_frame(sdl_ctx, sdl_ctx->frame);
+                static vanilla_drm_ctx_t *drm_ctx = NULL;
+                if (!drm_ctx) {
+                    vui_sdl_drm_initialize(&drm_ctx, sdl_ctx->window);
+                }
+                vui_sdl_drm_present(drm_ctx, sdl_ctx->frame);
                 break;
             }
             case AV_PIX_FMT_VAAPI:
