@@ -73,6 +73,9 @@ typedef struct {
 	vui_power_state_t last_power_state;
 
 	uint16_t last_vibration_state;
+
+    SDL_Thread *event_thread;
+    SDL_mutex *display_mutex;
 } vui_sdl_context_t;
 
 static int button_map[SDL_CONTROLLER_BUTTON_MAX];
@@ -306,6 +309,220 @@ void mic_callback(void *userdata, Uint8 *stream, int len)
     	ctx->mic_callback(ctx->mic_callback_data, stream, len);
 }
 
+int32_t pack_float(float f)
+{
+    int32_t x;
+    memcpy(&x, &f, sizeof(int32_t));
+    return x;
+}
+
+int vui_sdl_event_thread(void *data)
+{
+    vui_context_t *vui = (vui_context_t *) data;
+    vui_sdl_context_t *sdl_ctx = (vui_sdl_context_t *) vui->platform_data;
+
+    SDL_Event ev;
+    while (!vui->quit) {
+        while (SDL_PollEvent(&ev)) {
+            SDL_LockMutex(sdl_ctx->display_mutex);
+
+            switch (ev.type) {
+            case SDL_QUIT:
+                vanilla_stop();
+                vui_quit(vui);
+                SDL_UnlockMutex(sdl_ctx->display_mutex);
+                return 0;
+            case SDL_MOUSEMOTION:
+            case SDL_MOUSEBUTTONDOWN:
+            case SDL_MOUSEBUTTONUP:
+            {
+                // Ensure dst_rect is initialized
+                SDL_Rect *dst_rect = &sdl_ctx->dst_rect;
+                if (dst_rect->w > 0 && dst_rect->h > 0) {
+                    // Translate screen coords to logical coords
+                    int tr_x, tr_y;
+                    tr_x = (ev.button.x - dst_rect->x) * vui->screen_width / dst_rect->w;
+                    tr_y = (ev.button.y - dst_rect->y) * vui->screen_height / dst_rect->h;
+
+                    if (vui->game_mode) {
+                        // In game mode, pass clicks directly to Vanilla
+                        int x, y;
+                        if (ev.button.button == SDL_BUTTON_LEFT && (ev.type == SDL_MOUSEBUTTONDOWN || ev.type == SDL_MOUSEMOTION)) {
+                            x = tr_x;
+                            y = tr_y;
+                        } else {
+                            x = -1;
+                            y = -1;
+                        }
+                        vanilla_set_touch(x, y);
+                    } else {
+                        // Otherwise, handle ourselves
+                        if (ev.type == SDL_MOUSEBUTTONDOWN)
+                            vui_process_mousedown(vui, tr_x, tr_y);
+                        else if (ev.type == SDL_MOUSEBUTTONUP)
+                            vui_process_mouseup(vui, tr_x, tr_y);
+
+                        if (vui->active_textedit != -1 && (ev.type == SDL_MOUSEBUTTONDOWN || ev.type == SDL_MOUSEMOTION) && ev.button.button == SDL_BUTTON_LEFT) {
+                            // Put cursor in correct position
+                            vui_textedit_t *edit = &vui->textedits[vui->active_textedit];
+                            TTF_Font *font = get_font(sdl_ctx, edit->size);
+
+                            // Determine best location for new cursor
+                            int rel_x = tr_x - edit->x;
+                            char tmp[MAX_BUTTON_TEXT];
+                            int new_cursor = 0;
+                            int diff = rel_x;
+                            size_t len = 0;
+                            char *src = edit->text;
+                            while (*src != 0) {
+                                src = vui_utf8_advance(src);
+
+                                size_t len = src - edit->text;
+                                strncpy(tmp, edit->text, len);
+                                tmp[len] = 0;
+
+                                int tw;
+                                TTF_SizeUTF8(font, tmp, &tw, 0);
+
+                                int this_diff = abs(tw - rel_x);
+                                if (this_diff < diff) {
+                                    diff = this_diff;
+                                    new_cursor++;
+                                } else {
+                                    break;
+                                }
+                            }
+
+                            vui_textedit_set_cursor(vui, vui->active_textedit, new_cursor);
+                        }
+                    }
+                }
+                break;
+            }
+            case SDL_CONTROLLERDEVICEADDED:
+                // Attempt to find controller if one doesn't exist already
+                if (!sdl_ctx->controller) {
+                    sdl_ctx->controller = find_valid_controller();
+                }
+                break;
+            case SDL_CONTROLLERDEVICEREMOVED:
+                // Handle current controller being removed
+                if (sdl_ctx->controller && ev.cdevice.which == SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(sdl_ctx->controller))) {
+                    SDL_GameControllerClose(sdl_ctx->controller);
+                    sdl_ctx->controller = find_valid_controller();
+                }
+                break;
+            case SDL_CONTROLLERBUTTONDOWN:
+            case SDL_CONTROLLERBUTTONUP:
+                if (sdl_ctx->controller && ev.cdevice.which == SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(sdl_ctx->controller))) {
+                    int vanilla_btn = button_map[ev.cbutton.button];
+                    if (vanilla_btn > VPI_ACTION_START_INDEX) {
+                        if (ev.type == SDL_CONTROLLERBUTTONDOWN)
+                            vpi_menu_action(vui, (vpi_extra_action_t) vanilla_btn);
+                    } else if (vanilla_btn != -1) {
+                        if (vui->game_mode) {
+                            vanilla_set_button(vanilla_btn, ev.type == SDL_CONTROLLERBUTTONDOWN ? INT16_MAX : 0);
+                        } else if (ev.type == SDL_CONTROLLERBUTTONDOWN) {
+                            vui_process_keydown(vui, vanilla_btn);
+                        } else {
+                            vui_process_keyup(vui, vanilla_btn);
+                        }
+                    }
+                }
+                break;
+            case SDL_CONTROLLERAXISMOTION:
+                if (sdl_ctx->controller && ev.cdevice.which == SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(sdl_ctx->controller))) {
+                    int vanilla_axis = axis_map[ev.caxis.axis];
+                    Sint16 axis_value = ev.caxis.value;
+                    if (vanilla_axis != -1) {
+                        if (vui->game_mode) {
+                            vanilla_set_button(vanilla_axis, axis_value);
+                        } else if (vanilla_axis == SDL_CONTROLLER_AXIS_LEFTX) {
+                            if (axis_value < 0)
+                                vui_process_keydown(vui, VANILLA_AXIS_L_LEFT);
+                            else if (axis_value > 0)
+                                vui_process_keydown(vui, VANILLA_AXIS_L_RIGHT);
+                            else {
+                                vui_process_keyup(vui, VANILLA_AXIS_L_LEFT);
+                                vui_process_keyup(vui, VANILLA_AXIS_L_RIGHT);
+                            }
+                        } else if (vanilla_axis == SDL_CONTROLLER_AXIS_LEFTY) {
+                            if (axis_value < 0)
+                                vui_process_keydown(vui, VANILLA_AXIS_L_UP);
+                            else if (axis_value > 0)
+                                vui_process_keydown(vui, VANILLA_AXIS_L_DOWN);
+                            else {
+                                vui_process_keyup(vui, VANILLA_AXIS_L_UP);
+                                vui_process_keyup(vui, VANILLA_AXIS_L_DOWN);
+                            }
+                        }
+                    }
+                }
+                break;
+            case SDL_CONTROLLERSENSORUPDATE:
+                if (ev.csensor.sensor == SDL_SENSOR_ACCEL) {
+                    vanilla_set_button(VANILLA_SENSOR_ACCEL_X, pack_float(ev.csensor.data[0]));
+                    vanilla_set_button(VANILLA_SENSOR_ACCEL_Y, pack_float(ev.csensor.data[1]));
+                    vanilla_set_button(VANILLA_SENSOR_ACCEL_Z, pack_float(ev.csensor.data[2]));
+                } else if (ev.csensor.sensor == SDL_SENSOR_GYRO) {
+                    vanilla_set_button(VANILLA_SENSOR_GYRO_PITCH, pack_float(ev.csensor.data[0]));
+                    vanilla_set_button(VANILLA_SENSOR_GYRO_YAW, pack_float(ev.csensor.data[1]));
+                    vanilla_set_button(VANILLA_SENSOR_GYRO_ROLL, pack_float(ev.csensor.data[2]));
+                }
+                break;
+            case SDL_KEYDOWN:
+            case SDL_KEYUP:
+            {
+                if (vui->active_textedit == -1) {
+                    int vanilla_btn = key_map[ev.key.keysym.scancode];
+                    if (vanilla_btn > VPI_ACTION_START_INDEX) {
+                        if (ev.type == SDL_KEYDOWN)
+                            vpi_menu_action(vui, (vpi_extra_action_t) vanilla_btn);
+                    } else if (vanilla_btn != -1) {
+                        if (vui->game_mode) {
+                            vanilla_set_button(vanilla_btn, ev.type == SDL_KEYDOWN ? INT16_MAX : 0);
+                        } else if (ev.type == SDL_KEYDOWN) {
+                            vui_process_keydown(vui, vanilla_btn);
+                        } else {
+                            vui_process_keyup(vui, vanilla_btn);
+                        }
+                    }
+                } else if (ev.type == SDL_KEYDOWN) {
+                    switch (ev.key.keysym.scancode) {
+                    case SDL_SCANCODE_BACKSPACE:
+                        vui_textedit_backspace(vui, vui->active_textedit);
+                        break;
+                    case SDL_SCANCODE_LEFT:
+                        vui_textedit_move_cursor(vui, vui->active_textedit, -1);
+                        break;
+                    case SDL_SCANCODE_RIGHT:
+                        vui_textedit_move_cursor(vui, vui->active_textedit, 1);
+                        break;
+                    case SDL_SCANCODE_HOME:
+                        vui_textedit_move_cursor(vui, vui->active_textedit, -MAX_BUTTON_TEXT);
+                        break;
+                    case SDL_SCANCODE_END:
+                        vui_textedit_move_cursor(vui, vui->active_textedit, MAX_BUTTON_TEXT);
+                        break;
+                    case SDL_SCANCODE_DELETE:
+                        vui_textedit_del(vui, vui->active_textedit);
+                        break;
+                    }
+                }
+                break;
+            }
+            case SDL_TEXTINPUT:
+                vui_textedit_input(vui, vui->active_textedit, ev.text.text);
+                break;
+            case SDL_TEXTEDITING:
+                vpilog("text editing!\n");
+                break;
+            }
+            SDL_UnlockMutex(sdl_ctx->display_mutex);
+        }
+    }
+}
+
 int vui_init_sdl(vui_context_t *ctx, int fullscreen)
 {
 	// Enable Steam Deck gyroscopes even while Steam is open and in gaming mode
@@ -330,9 +547,8 @@ int vui_init_sdl(vui_context_t *ctx, int fullscreen)
     }
 
     vui_sdl_context_t *sdl_ctx = malloc(sizeof(vui_sdl_context_t));
+    memset(sdl_ctx, 0, sizeof(vui_sdl_context_t));
     ctx->platform_data = sdl_ctx;
-
-    memset(&sdl_ctx->dst_rect, 0, sizeof(SDL_Rect));
 
     SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "2");
 
@@ -458,6 +674,9 @@ int vui_init_sdl(vui_context_t *ctx, int fullscreen)
 
     sdl_ctx->frame = av_frame_alloc();
 
+    sdl_ctx->event_thread = SDL_CreateThread(vui_sdl_event_thread, "vanilla-event", ctx);
+    sdl_ctx->display_mutex = SDL_CreateMutex();
+
 	// Initialize gamepad lookup tables
 	init_gamepad();
 
@@ -469,6 +688,14 @@ void vui_close_sdl(vui_context_t *ctx)
     vui_sdl_context_t *sdl_ctx = (vui_sdl_context_t *) ctx->platform_data;
     if (!sdl_ctx) {
         return;
+    }
+
+    if (sdl_ctx->event_thread) {
+        SDL_WaitThread(sdl_ctx->event_thread, 0);
+    }
+
+    if (sdl_ctx->display_mutex) {
+        SDL_DestroyMutex(sdl_ctx->display_mutex);
     }
 
     av_frame_free(&sdl_ctx->frame);
@@ -1141,13 +1368,6 @@ void vui_draw_sdl(vui_context_t *ctx, SDL_Renderer *renderer)
     }
 }
 
-int32_t pack_float(float f)
-{
-    int32_t x;
-    memcpy(&x, &f, sizeof(int32_t));
-    return x;
-}
-
 int get_texture_from_cpu_frame(vui_sdl_context_t *sdl_ctx, AVFrame *f)
 {
 	if (!sdl_ctx->game_tex) {
@@ -1317,210 +1537,23 @@ int get_texture_from_drm_prime_frame(vui_sdl_context_t *sdl_ctx, AVFrame *f)
 #endif
 }
 
+// Rendering/main thread
 int vui_update_sdl(vui_context_t *vui)
 {
     vui_sdl_context_t *sdl_ctx = (vui_sdl_context_t *) vui->platform_data;
 
+    SDL_LockMutex(sdl_ctx->display_mutex);
+
     SDL_Rect *dst_rect = &sdl_ctx->dst_rect;
 
     SDL_Renderer *renderer = sdl_ctx->renderer;
-
-    SDL_Event ev;
-    while (SDL_PollEvent(&ev)) {
-        switch (ev.type) {
-        case SDL_QUIT:
-            vanilla_stop();
-            return 0;
-        case SDL_MOUSEMOTION:
-        case SDL_MOUSEBUTTONDOWN:
-        case SDL_MOUSEBUTTONUP:
-            // Ensure dst_rect is initialized
-            if (dst_rect->w > 0 && dst_rect->h > 0) {
-                // Translate screen coords to logical coords
-                int tr_x, tr_y;
-                tr_x = (ev.button.x - dst_rect->x) * vui->screen_width / dst_rect->w;
-                tr_y = (ev.button.y - dst_rect->y) * vui->screen_height / dst_rect->h;
-
-                if (vui->game_mode) {
-                    // In game mode, pass clicks directly to Vanilla
-                    int x, y;
-                    if (ev.button.button == SDL_BUTTON_LEFT && (ev.type == SDL_MOUSEBUTTONDOWN || ev.type == SDL_MOUSEMOTION)) {
-                        x = tr_x;
-                        y = tr_y;
-                    } else {
-                        x = -1;
-                        y = -1;
-                    }
-                    vanilla_set_touch(x, y);
-                } else {
-                    // Otherwise, handle ourselves
-                    if (ev.type == SDL_MOUSEBUTTONDOWN)
-                        vui_process_mousedown(vui, tr_x, tr_y);
-                    else if (ev.type == SDL_MOUSEBUTTONUP)
-                        vui_process_mouseup(vui, tr_x, tr_y);
-
-                    if (vui->active_textedit != -1 && (ev.type == SDL_MOUSEBUTTONDOWN || ev.type == SDL_MOUSEMOTION) && ev.button.button == SDL_BUTTON_LEFT) {
-                        // Put cursor in correct position
-                        vui_textedit_t *edit = &vui->textedits[vui->active_textedit];
-                        TTF_Font *font = get_font(sdl_ctx, edit->size);
-
-                        // Determine best location for new cursor
-                        int rel_x = tr_x - edit->x;
-                        char tmp[MAX_BUTTON_TEXT];
-                        int new_cursor = 0;
-                        int diff = rel_x;
-                        size_t len = 0;
-                        char *src = edit->text;
-                        while (*src != 0) {
-                            src = vui_utf8_advance(src);
-
-                            size_t len = src - edit->text;
-                            strncpy(tmp, edit->text, len);
-                            tmp[len] = 0;
-
-                            int tw;
-                            TTF_SizeUTF8(font, tmp, &tw, 0);
-
-                            int this_diff = abs(tw - rel_x);
-                            if (this_diff < diff) {
-                                diff = this_diff;
-                                new_cursor++;
-                            } else {
-                                break;
-                            }
-                        }
-
-                        vui_textedit_set_cursor(vui, vui->active_textedit, new_cursor);
-                    }
-                }
-            }
-            break;
-        case SDL_CONTROLLERDEVICEADDED:
-            // Attempt to find controller if one doesn't exist already
-            if (!sdl_ctx->controller) {
-                sdl_ctx->controller = find_valid_controller();
-            }
-            break;
-        case SDL_CONTROLLERDEVICEREMOVED:
-            // Handle current controller being removed
-            if (sdl_ctx->controller && ev.cdevice.which == SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(sdl_ctx->controller))) {
-                SDL_GameControllerClose(sdl_ctx->controller);
-                sdl_ctx->controller = find_valid_controller();
-            }
-            break;
-        case SDL_CONTROLLERBUTTONDOWN:
-        case SDL_CONTROLLERBUTTONUP:
-            if (sdl_ctx->controller && ev.cdevice.which == SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(sdl_ctx->controller))) {
-                int vanilla_btn = button_map[ev.cbutton.button];
-                if (vanilla_btn > VPI_ACTION_START_INDEX) {
-                    if (ev.type == SDL_CONTROLLERBUTTONDOWN)
-                        vpi_menu_action(vui, (vpi_extra_action_t) vanilla_btn);
-                } else if (vanilla_btn != -1) {
-                    if (vui->game_mode) {
-                        vanilla_set_button(vanilla_btn, ev.type == SDL_CONTROLLERBUTTONDOWN ? INT16_MAX : 0);
-                    } else if (ev.type == SDL_CONTROLLERBUTTONDOWN) {
-                        vui_process_keydown(vui, vanilla_btn);
-                    } else {
-                        vui_process_keyup(vui, vanilla_btn);
-                    }
-                }
-            }
-            break;
-        case SDL_CONTROLLERAXISMOTION:
-            if (sdl_ctx->controller && ev.cdevice.which == SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(sdl_ctx->controller))) {
-                int vanilla_axis = axis_map[ev.caxis.axis];
-                Sint16 axis_value = ev.caxis.value;
-                if (vanilla_axis != -1) {
-                    if (vui->game_mode) {
-                        vanilla_set_button(vanilla_axis, axis_value);
-                    } else if (vanilla_axis == SDL_CONTROLLER_AXIS_LEFTX) {
-                        if (axis_value < 0)
-                            vui_process_keydown(vui, VANILLA_AXIS_L_LEFT);
-                        else if (axis_value > 0)
-                            vui_process_keydown(vui, VANILLA_AXIS_L_RIGHT);
-                        else {
-                            vui_process_keyup(vui, VANILLA_AXIS_L_LEFT);
-                            vui_process_keyup(vui, VANILLA_AXIS_L_RIGHT);
-                        }
-                    } else if (vanilla_axis == SDL_CONTROLLER_AXIS_LEFTY) {
-                        if (axis_value < 0)
-                            vui_process_keydown(vui, VANILLA_AXIS_L_UP);
-                        else if (axis_value > 0)
-                            vui_process_keydown(vui, VANILLA_AXIS_L_DOWN);
-                        else {
-                            vui_process_keyup(vui, VANILLA_AXIS_L_UP);
-                            vui_process_keyup(vui, VANILLA_AXIS_L_DOWN);
-                        }
-                    }
-                }
-            }
-            break;
-        case SDL_CONTROLLERSENSORUPDATE:
-            if (ev.csensor.sensor == SDL_SENSOR_ACCEL) {
-                vanilla_set_button(VANILLA_SENSOR_ACCEL_X, pack_float(ev.csensor.data[0]));
-                vanilla_set_button(VANILLA_SENSOR_ACCEL_Y, pack_float(ev.csensor.data[1]));
-                vanilla_set_button(VANILLA_SENSOR_ACCEL_Z, pack_float(ev.csensor.data[2]));
-            } else if (ev.csensor.sensor == SDL_SENSOR_GYRO) {
-                vanilla_set_button(VANILLA_SENSOR_GYRO_PITCH, pack_float(ev.csensor.data[0]));
-                vanilla_set_button(VANILLA_SENSOR_GYRO_YAW, pack_float(ev.csensor.data[1]));
-                vanilla_set_button(VANILLA_SENSOR_GYRO_ROLL, pack_float(ev.csensor.data[2]));
-            }
-            break;
-        case SDL_KEYDOWN:
-        case SDL_KEYUP:
-        {
-            if (vui->active_textedit == -1) {
-                int vanilla_btn = key_map[ev.key.keysym.scancode];
-                if (vanilla_btn > VPI_ACTION_START_INDEX) {
-                    if (ev.type == SDL_KEYDOWN)
-                        vpi_menu_action(vui, (vpi_extra_action_t) vanilla_btn);
-                } else if (vanilla_btn != -1) {
-                    if (vui->game_mode) {
-                        vanilla_set_button(vanilla_btn, ev.type == SDL_KEYDOWN ? INT16_MAX : 0);
-                    } else if (ev.type == SDL_KEYDOWN) {
-                        vui_process_keydown(vui, vanilla_btn);
-                    } else {
-                        vui_process_keyup(vui, vanilla_btn);
-                    }
-                }
-            } else if (ev.type == SDL_KEYDOWN) {
-                switch (ev.key.keysym.scancode) {
-                case SDL_SCANCODE_BACKSPACE:
-                    vui_textedit_backspace(vui, vui->active_textedit);
-                    break;
-                case SDL_SCANCODE_LEFT:
-                    vui_textedit_move_cursor(vui, vui->active_textedit, -1);
-                    break;
-                case SDL_SCANCODE_RIGHT:
-                    vui_textedit_move_cursor(vui, vui->active_textedit, 1);
-                    break;
-                case SDL_SCANCODE_HOME:
-                    vui_textedit_move_cursor(vui, vui->active_textedit, -MAX_BUTTON_TEXT);
-                    break;
-                case SDL_SCANCODE_END:
-                    vui_textedit_move_cursor(vui, vui->active_textedit, MAX_BUTTON_TEXT);
-                    break;
-                case SDL_SCANCODE_DELETE:
-                    vui_textedit_del(vui, vui->active_textedit);
-                    break;
-                }
-            }
-            break;
-        }
-        case SDL_TEXTINPUT:
-            vui_textedit_input(vui, vui->active_textedit, ev.text.text);
-            break;
-        case SDL_TEXTEDITING:
-            vpilog("text editing!\n");
-            break;
-        }
-    }
 
     vui_update(vui);
 
     SDL_Texture *main_tex;
 
     static vanilla_drm_ctx_t *drm_ctx = NULL;
+    int handle_final_blit = 1;
     if (!vui->game_mode) {
         if (drm_ctx) {
             vui_sdl_drm_free(&drm_ctx); // will set to null
@@ -1564,6 +1597,7 @@ int vui_update_sdl(vui_context_t *vui)
                     vui_sdl_drm_initialize(&drm_ctx, sdl_ctx->window);
                 }
                 vui_sdl_drm_present(drm_ctx, sdl_ctx->frame);
+                handle_final_blit = 0;
                 break;
             }
             case AV_PIX_FMT_VAAPI:
@@ -1589,17 +1623,15 @@ int vui_update_sdl(vui_context_t *vui)
 			av_frame_unref(sdl_ctx->frame);
 		}
 
-		if (sdl_ctx->game_tex) {
-			main_tex = sdl_ctx->layer_data[0];
+        if (sdl_ctx->game_tex) {
+			// main_tex = sdl_ctx->layer_data[0];
 			// SDL_SetRenderTarget(renderer, main_tex);
-			SDL_SetRenderTarget(renderer, 0);
-			SDL_RenderCopy(renderer, sdl_ctx->game_tex, 0, 0);
-
-            SDL_RenderPresent(renderer);
+			// SDL_RenderCopy(renderer, sdl_ctx->game_tex, 0, 0);
+            main_tex = sdl_ctx->game_tex;
 		}
     }
 
-    if (!vui->game_mode) { // TEMP
+    if (handle_final_blit) {
         // Draw toast on screen if necessary
         const int TOAST_PADDING = 12;
         int cur_toast;
@@ -1691,7 +1723,12 @@ int vui_update_sdl(vui_context_t *vui)
             dst_rect->h = win_w * vui->screen_height / vui->screen_width;
             dst_rect->y = win_h / 2 - dst_rect->h / 2;
         }
+    }
 
+    // We don't touch the struct anymore after this
+    SDL_UnlockMutex(sdl_ctx->display_mutex);
+
+    if (handle_final_blit) {
         // Copy texture to window
         SDL_SetRenderTarget(renderer, NULL);
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);

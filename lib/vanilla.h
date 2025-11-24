@@ -134,8 +134,6 @@ int vanilla_free_event(vanilla_event_t *event);
 
 /**
  * Attempt to stop the current action
- *
- * This can be called from another thread to safely exit a blocking call to vanilla_start().
  */
 void vanilla_stop();
 
