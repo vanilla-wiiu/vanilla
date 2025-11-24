@@ -237,7 +237,7 @@ void handle_video_packet(gamepad_context_t *ctx, VideoPacket *vp, size_t size, i
 
 			uint8_t *video_packet = event->data;
 
-			const int OLD_CODE = 0;
+			const int OLD_CODE = 1;
 			if (OLD_CODE) {
 				uint8_t *nals_current = video_packet;
                 static const char *frame_start_word = "\x00\x00\x00\x01";

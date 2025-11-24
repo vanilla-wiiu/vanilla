@@ -1520,7 +1520,12 @@ int vui_update_sdl(vui_context_t *vui)
 
     SDL_Texture *main_tex;
 
+    static vanilla_drm_ctx_t *drm_ctx = NULL;
     if (!vui->game_mode) {
+        if (drm_ctx) {
+            vui_sdl_drm_free(&drm_ctx); // will set to null
+        }
+
         // Draw vui to a custom texture
         vui_draw_sdl(vui, renderer);
 
@@ -1555,7 +1560,6 @@ int vui_update_sdl(vui_context_t *vui)
             case AV_PIX_FMT_DRM_PRIME:
             {
                 // get_texture_from_drm_prime_frame(sdl_ctx, sdl_ctx->frame);
-                static vanilla_drm_ctx_t *drm_ctx = NULL;
                 if (!drm_ctx) {
                     vui_sdl_drm_initialize(&drm_ctx, sdl_ctx->window);
                 }
