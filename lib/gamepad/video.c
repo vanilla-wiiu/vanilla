@@ -36,13 +36,15 @@ typedef struct
     uint8_t payload[2048];
 } VideoPacket;
 
-static pthread_mutex_t video_mutex;
+static pthread_mutex_t idr_mutex;
 static int idr_is_queued = 0;
 
-#define VIDEO_PACKET_CACHE_MAX 1024
-static VideoPacket video_packet_cache[VIDEO_PACKET_CACHE_MAX];
-VideoPacket *video_packet_pool[VIDEO_PACKET_CACHE_MAX];
-static size_t video_packet_pool_index = 0;
+#define VIDEO_PACKET_QUEUE_MAX 1024
+static VideoPacket video_packet_queue[VIDEO_PACKET_QUEUE_MAX];
+static size_t video_packet_min = 0;
+static size_t video_packet_max = 0;
+static pthread_mutex_t video_packet_mutex;
+static pthread_cond_t video_packet_cond;
 
 static const uint8_t VANILLA_PPS_PARAMS[] = {
     0x00, 0x00, 0x00, 0x01, 0x68, 0xee, 0x06, 0x0c, 0xe8
@@ -50,9 +52,9 @@ static const uint8_t VANILLA_PPS_PARAMS[] = {
 
 void request_idr()
 {
-    pthread_mutex_lock(&video_mutex);
+    pthread_mutex_lock(&idr_mutex);
     idr_is_queued = 1;
-    pthread_mutex_unlock(&video_mutex);
+    pthread_mutex_unlock(&idr_mutex);
 }
 
 void send_idr_request_to_console(int socket_msg)
@@ -136,7 +138,7 @@ static uint8_t *write_slice_nal(int is_idr, int frame_decode_num, uint8_t *out)
     return out;
 }
 
-void handle_video_packet(gamepad_context_t *ctx, VideoPacket *vp, size_t size, int socket_msg)
+void handle_video_packet(gamepad_context_t *ctx, VideoPacket *vp)
 {
     //
     // === IMPORTANT NOTE! ===
@@ -165,7 +167,7 @@ void handle_video_packet(gamepad_context_t *ctx, VideoPacket *vp, size_t size, i
     }
 
     // Check if this is the beginning of the packet
-    static VideoPacket *video_segments[VIDEO_PACKET_CACHE_MAX];
+    static VideoPacket *video_segments[VIDEO_PACKET_QUEUE_MAX];
     static int video_packet_seq = -1;
     static int video_packet_seq_end = -1;
     static int video_complete_frame = 0;
@@ -176,30 +178,24 @@ void handle_video_packet(gamepad_context_t *ctx, VideoPacket *vp, size_t size, i
         video_packet_seq = vp->seq_id;
         video_packet_seq_end = -1;
 
-        for (size_t i = 0; i < VIDEO_PACKET_CACHE_MAX; i++) {
-            if (video_segments[i]) {
-                video_packet_pool_index--;
-                video_packet_pool[video_packet_pool_index] = video_segments[i];
-                video_segments[i] = NULL;
-            }
-        }
+        memset(video_segments, 0, sizeof(video_segments));
 
 		frame_decode_num++;
 
         if (!video_complete_frame && !is_idr) {
-            send_idr_request_to_console(socket_msg);
+            send_idr_request_to_console(ctx->socket_msg);
             return;
         }
 
         video_complete_frame = 0;
     }
 
-    pthread_mutex_lock(&video_mutex);
+    pthread_mutex_lock(&idr_mutex);
     if (idr_is_queued) {
-        send_idr_request_to_console(socket_msg);
+        send_idr_request_to_console(ctx->socket_msg);
         idr_is_queued = 0;
     }
-    pthread_mutex_unlock(&video_mutex);
+    pthread_mutex_unlock(&idr_mutex);
 
     // vanilla_log("set seq_id %i = %p", vp->seq_id, vp);
     video_segments[vp->seq_id] = vp;
@@ -222,7 +218,7 @@ void handle_video_packet(gamepad_context_t *ctx, VideoPacket *vp, size_t size, i
                     break;
                 }
 
-                current_index = (current_index + 1) % VIDEO_PACKET_CACHE_MAX;
+                current_index = (current_index + 1) % VIDEO_PACKET_QUEUE_MAX;
             }
         }
 
@@ -289,7 +285,7 @@ void handle_video_packet(gamepad_context_t *ctx, VideoPacket *vp, size_t size, i
 					}
 
 					byte = 0;
-					current_index = (current_index + 1) % VIDEO_PACKET_CACHE_MAX;
+					current_index = (current_index + 1) % VIDEO_PACKET_QUEUE_MAX;
 				}
 
 				event->size = (nals_current - video_packet);
@@ -325,7 +321,7 @@ void handle_video_packet(gamepad_context_t *ctx, VideoPacket *vp, size_t size, i
 						break;
 					}
 
-					i = (i + 1) % VIDEO_PACKET_CACHE_MAX;
+					i = (i + 1) % VIDEO_PACKET_QUEUE_MAX;
 				}
 
 				// Go back and write size
@@ -346,6 +342,28 @@ void handle_video_packet(gamepad_context_t *ctx, VideoPacket *vp, size_t size, i
             // We didn't receive the complete frame so we'll skip it here
         }
     }
+}
+
+void *consume_video_packets(void *data)
+{
+    gamepad_context_t *ctx = (gamepad_context_t *) data;
+
+    pthread_mutex_lock(&video_packet_mutex);
+
+    while (!is_interrupted()) {
+        while (video_packet_min < video_packet_max) {
+            VideoPacket *vp = &video_packet_queue[video_packet_min % VIDEO_PACKET_QUEUE_MAX];
+
+            pthread_mutex_unlock(&video_packet_mutex);
+            handle_video_packet(ctx, vp);
+            pthread_mutex_lock(&video_packet_mutex);
+
+            video_packet_min++;
+        }
+        pthread_cond_wait(&video_packet_cond, &video_packet_mutex);
+    }
+
+    pthread_mutex_unlock(&video_packet_mutex);
 }
 
 size_t generate_h264_header(void *data, size_t size)
@@ -371,35 +389,33 @@ void *listen_video(void *x)
     gamepad_context_t *info = (gamepad_context_t *) x;
     ssize_t size;
 
-    pthread_mutex_init(&video_mutex, NULL);
+    pthread_mutex_init(&idr_mutex, NULL);
+    pthread_mutex_init(&video_packet_mutex, NULL);
+    pthread_cond_init(&video_packet_cond, NULL);
 
-    // Initialize video packet pool
-    for (size_t i = 0; i < VIDEO_PACKET_CACHE_MAX; i++) {
-        video_packet_pool[i] = &video_packet_cache[i];
-    }
+    pthread_t video_consumer_thread;
+    pthread_create(&video_consumer_thread, 0, consume_video_packets, info);
 
     do {
-        if (video_packet_pool_index == VIDEO_PACKET_CACHE_MAX) {
-            // We should never get here. If we do, something has gone seriously wrong.
-            vanilla_log("FATAL: EXHAUSTED VIDEO PACKET CACHE");
-            break;
-        }
-
-        VideoPacket *vp = video_packet_pool[video_packet_pool_index];
-        video_packet_pool[video_packet_pool_index] = NULL;
-        video_packet_pool_index++;
-        void *data = vp;
-
-        size = recv(info->socket_vid, data, sizeof(VideoPacket), 0);
+        VideoPacket *vp = &video_packet_queue[video_packet_max % VIDEO_PACKET_QUEUE_MAX];
+        size = recv(info->socket_vid, (void *) vp, sizeof(VideoPacket), 0);
         if (size > 0) {
-            handle_video_packet(info, vp, size, info->socket_msg);
-        } else {
-            video_packet_pool_index--;
-            video_packet_pool[video_packet_pool_index] = vp;
+            pthread_mutex_lock(&video_packet_mutex);
+            video_packet_max++;
+            if (video_packet_max == video_packet_min + VIDEO_PACKET_QUEUE_MAX) {
+                vanilla_log("WARNING: ROLLED OVER VIDEO PACKET QUEUE");
+            }
+            pthread_cond_broadcast(&video_packet_cond);
+            pthread_mutex_unlock(&video_packet_mutex);
+            // (info, vp, size, info->socket_msg);
         }
     } while (!is_interrupted());
 
-    pthread_mutex_destroy(&video_mutex);
+    pthread_join(video_consumer_thread, 0);
+
+    pthread_cond_destroy(&video_packet_cond);
+    pthread_mutex_destroy(&video_packet_mutex);
+    pthread_mutex_destroy(&idr_mutex);
 
     pthread_exit(NULL);
 
