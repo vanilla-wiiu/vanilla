@@ -241,8 +241,8 @@ int vui_sdl_drm_free(vanilla_drm_ctx_t **c)
         drmModeRmFB(ctx->fd, ctx->fb_id);
     }
 
-	// Close DRM
-	drmClose(ctx->fd);
+	// Close DRM (now owned by SDL so don't do this)
+	// drmClose(ctx->fd);
 
     free(ctx);
 
