@@ -20,8 +20,8 @@ typedef struct vanilla_drm_ctx_t {
 	int got_plane;
 	uint32_t fb_id;
 	int got_fb;
-	uint32_t handles[AV_DRM_MAX_PLANES];
-	int got_handles;
+	uint32_t obj_handles[AV_DRM_MAX_PLANES];
+    int obj_fds[AV_DRM_MAX_PLANES];
 } vanilla_drm_ctx_t;
 
 static int find_plane(const int drmfd, const int crtcidx, const uint32_t format, uint32_t *const pplane_id)
@@ -89,12 +89,22 @@ int vui_sdl_drm_present(vanilla_drm_ctx_t *ctx, AVFrame *frame)
     uint32_t bo_handles[AV_DRM_MAX_PLANES] = {0};
     uint64_t modifiers[AV_DRM_MAX_PLANES] = {0};
 
-    uint32_t new_handles[AV_DRM_MAX_PLANES] = {0};
-
     for (int i = 0; i < desc->nb_objects; i++) {
-        if (drmPrimeFDToHandle(ctx->fd, desc->objects[i].fd, &new_handles[i]) != 0) {
-            fprintf(stderr, "Failed to get handle from file descriptor: %s\n", strerror(errno));
-            return 0;
+        int fd = desc->objects[i].fd;
+        if (!ctx->obj_handles[i] || ctx->obj_fds[i] != fd) {
+            vpilog("(re)opening DRM handle\n");
+            if (ctx->obj_handles[i]) {
+                struct drm_gem_close gem_close = {
+                    .handle = ctx->obj_handles[i]
+                };
+                drmIoctl(ctx->fd, DRM_IOCTL_GEM_CLOSE, &gem_close);
+                ctx->obj_handles[i] = 0;
+            }
+            if (drmPrimeFDToHandle(ctx->fd, fd, &ctx->obj_handles[i]) != 0) {
+                fprintf(stderr, "Failed to get handle from file descriptor: %s\n", strerror(errno));
+                return 0;
+            }
+            ctx->obj_fds[i] = fd;
         }
     }
 
@@ -108,7 +118,7 @@ int vui_sdl_drm_present(vanilla_drm_ctx_t *ctx, AVFrame *frame)
             pitches[n] = plane->pitch;
             offsets[n] = plane->offset;
             modifiers[n] = obj->format_modifier;
-            bo_handles[n] = new_handles[plane->object_index];
+            bo_handles[n] = ctx->obj_handles[plane->object_index];
 
             n++;
         }
@@ -159,19 +169,6 @@ int vui_sdl_drm_present(vanilla_drm_ctx_t *ctx, AVFrame *frame)
     }
     ctx->fb_id = new_fb;
     ctx->got_fb = 1;
-
-    if (ctx->got_handles) {
-        struct drm_gem_close gem_close = {0};
-        for (int i = 0; i < desc->nb_objects; i++) {
-            if (ctx->handles[i]) {
-                gem_close.handle = ctx->handles[i];
-                drmIoctl(ctx->fd, DRM_IOCTL_GEM_CLOSE, &gem_close);
-                ctx->handles[i] = 0;
-            }
-        }
-    }
-    memcpy(ctx->handles, new_handles, sizeof(ctx->handles));
-    ctx->got_handles = 1;
 
     return 1;
 }
@@ -226,8 +223,10 @@ int vui_sdl_drm_initialize(vanilla_drm_ctx_t **c, SDL_Window *window)
 
     ctx->got_plane = 0;
     ctx->got_fb = 0;
-    ctx->got_handles = 0;
-    memset(ctx->handles, 0, sizeof(ctx->handles));
+    memset(ctx->obj_handles, 0, sizeof(ctx->obj_handles));
+    for (size_t i = 0; i < AV_DRM_MAX_PLANES; i++) {
+        ctx->obj_fds[i] = -1;
+    }
 
 	return ret;
 }
@@ -237,9 +236,21 @@ int vui_sdl_drm_free(vanilla_drm_ctx_t **c)
     vanilla_drm_ctx_t *ctx = *c;
     *c = NULL;
 
+    struct drm_gem_close gem_close = {0};
+    for (int i = 0; i < AV_DRM_MAX_PLANES; i++) {
+        if (ctx->obj_handles[i]) {
+            gem_close.handle = ctx->obj_handles[i];
+            drmIoctl(ctx->fd, DRM_IOCTL_GEM_CLOSE, &gem_close);
+            ctx->obj_handles[i] = 0;
+        }
+    }
+
     if (ctx->got_fb) {
         drmModeRmFB(ctx->fd, ctx->fb_id);
+        ctx->got_fb = 0;
     }
+
+    ctx->got_plane = 0;
 
 	// Close DRM (now owned by SDL so don't do this)
 	// drmClose(ctx->fd);
