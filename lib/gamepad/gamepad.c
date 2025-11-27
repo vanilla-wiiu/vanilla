@@ -141,12 +141,14 @@ int create_socket(int *socket_out, in_port_t port)
 
     set_socket_rcvtimeo(skt, 250000);
 
-    int sock = socket(AF_INET, SOCK_DGRAM, 0);
-    int rcvbuf = 4 * 1024 * 1024;  // 4 MiB
-    int sndbuf = 4 * 1024 * 1024;
+    int buf_sz = 16777216;
+    setsockopt(skt, SOL_SOCKET, SO_RCVBUF, &buf_sz, sizeof(buf_sz));
+    setsockopt(skt, SOL_SOCKET, SO_SNDBUF, &buf_sz, sizeof(buf_sz));
 
-    setsockopt(sock, SOL_SOCKET, SO_RCVBUF, &rcvbuf, sizeof(rcvbuf));
-    setsockopt(sock, SOL_SOCKET, SO_SNDBUF, &sndbuf, sizeof(sndbuf));
+    // int val = 1000; // microseconds to busy-poll per recv() before sleeping
+    // if (setsockopt(skt, SOL_SOCKET, SO_BUSY_POLL, &val, sizeof(val)) < 0) {
+    //     perror("setsockopt SO_BUSY_POLL");
+    // }
 
     return VANILLA_SUCCESS;
 }
