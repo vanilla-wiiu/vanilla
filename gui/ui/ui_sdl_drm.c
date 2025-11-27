@@ -12,6 +12,12 @@
 
 #include "platform.h"
 
+#define MAX_HANDLE_CACHE 32
+typedef struct {
+    int fd;
+    uint32_t handle;
+} vanilla_drm_handle_t;
+
 typedef struct vanilla_drm_ctx_t {
 	int fd;
 	uint32_t crtc;
@@ -20,8 +26,8 @@ typedef struct vanilla_drm_ctx_t {
 	int got_plane;
 	uint32_t fb_id;
 	int got_fb;
-	uint32_t obj_handles[AV_DRM_MAX_PLANES];
-    int obj_fds[AV_DRM_MAX_PLANES];
+    vanilla_drm_handle_t handle_cache[MAX_HANDLE_CACHE];
+    size_t handle_cache_count;
 } vanilla_drm_ctx_t;
 
 static int find_plane(const int drmfd, const int crtcidx, const uint32_t format, uint32_t *const pplane_id)
@@ -77,7 +83,7 @@ int vui_sdl_drm_present(vanilla_drm_ctx_t *ctx, AVFrame *frame)
 
     if (!ctx->got_plane) {
         if (find_plane(ctx->fd, ctx->crtc_index, format, &ctx->plane_id) < 0) {
-            fprintf(stderr, "Failed to find plane for format: %x\n", format, DRM_FORMAT_YUV420, frame->format);
+            vpilog("Failed to find plane for format: %x\n", format);
             return 0;
         } else {
             ctx->got_plane = 1;
@@ -88,24 +94,34 @@ int vui_sdl_drm_present(vanilla_drm_ctx_t *ctx, AVFrame *frame)
     uint32_t offsets[AV_DRM_MAX_PLANES] = {0};
     uint32_t bo_handles[AV_DRM_MAX_PLANES] = {0};
     uint64_t modifiers[AV_DRM_MAX_PLANES] = {0};
+	uint32_t handles[AV_DRM_MAX_PLANES];
 
     for (int i = 0; i < desc->nb_objects; i++) {
         int fd = desc->objects[i].fd;
-        if (!ctx->obj_handles[i] || ctx->obj_fds[i] != fd) {
-            vpilog("(re)opening DRM handle\n");
-            if (ctx->obj_handles[i]) {
-                struct drm_gem_close gem_close = {
-                    .handle = ctx->obj_handles[i]
-                };
-                drmIoctl(ctx->fd, DRM_IOCTL_GEM_CLOSE, &gem_close);
-                ctx->obj_handles[i] = 0;
+
+        uint32_t handle = 0;
+        for (size_t i = 0; i < ctx->handle_cache_count; i++) {
+            vanilla_drm_handle_t *h = &ctx->handle_cache[i];
+            if (h->fd == fd) {
+                handle = h->handle;
+                break;
             }
-            if (drmPrimeFDToHandle(ctx->fd, fd, &ctx->obj_handles[i]) != 0) {
-                fprintf(stderr, "Failed to get handle from file descriptor: %s\n", strerror(errno));
+        }
+
+        if (!handle) {
+            vpilog("(re)opening DRM handle because fd 0x%x was not found\n", fd);
+
+            vanilla_drm_handle_t *h = &ctx->handle_cache[ctx->handle_cache_count];
+            if (drmPrimeFDToHandle(ctx->fd, fd, &handle) != 0) {
+                vpilog("Failed to get handle from file descriptor: %s\n", strerror(errno));
                 return 0;
             }
-            ctx->obj_fds[i] = fd;
+            h->handle = handle;
+            h->fd = fd;
+            ctx->handle_cache_count++;
         }
+
+        handles[i] = handle;
     }
 
     int n = 0;
@@ -118,48 +134,25 @@ int vui_sdl_drm_present(vanilla_drm_ctx_t *ctx, AVFrame *frame)
             pitches[n] = plane->pitch;
             offsets[n] = plane->offset;
             modifiers[n] = obj->format_modifier;
-            bo_handles[n] = ctx->obj_handles[plane->object_index];
+            bo_handles[n] = handles[plane->object_index];
 
             n++;
         }
     }
-
-    /*fprintf(stderr, "%dx%d, fmt: %x, boh=%d,%d,%d,%d, pitch=%d,%d,%d,%d,"
-               " offset=%d,%d,%d,%d, mod=%llx,%llx,%llx,%llx\n",
-               frame->width,
-               frame->height,
-               desc->layers[0].format,
-               bo_handles[0],
-               bo_handles[1],
-               bo_handles[2],
-               bo_handles[3],
-               pitches[0],
-               pitches[1],
-               pitches[2],
-               pitches[3],
-               offsets[0],
-               offsets[1],
-               offsets[2],
-               offsets[3],
-               (long long)modifiers[0],
-               (long long)modifiers[1],
-               (long long)modifiers[2],
-               (long long)modifiers[3]
-              );*/
 
     uint32_t new_fb;
     if (drmModeAddFB2WithModifiers(ctx->fd,
                                    frame->width, frame->height, desc->layers[0].format,
                                    bo_handles, pitches, offsets, modifiers,
                                    &new_fb, DRM_MODE_FB_MODIFIERS) != 0) {
-        fprintf(stderr, "Failed to create framebuffer: %s\n", strerror(errno));
+        vpilog("Failed to create framebuffer: %s\n", strerror(errno));
         return 0;
     }
 
     if (drmModeSetPlane(ctx->fd, ctx->plane_id, ctx->crtc, new_fb, 0,
                     0, 0, frame->width, frame->height,
                     0, 0, frame->width << 16, frame->height << 16) != 0) {
-        fprintf(stderr, "Failed to set plane: %s\n", strerror(errno));
+        vpilog("Failed to set plane: %s\n", strerror(errno));
         return 0;
     }
 
@@ -223,12 +216,13 @@ int vui_sdl_drm_initialize(vanilla_drm_ctx_t **c, SDL_Window *window)
 
     ctx->got_plane = 0;
     ctx->got_fb = 0;
-    memset(ctx->obj_handles, 0, sizeof(ctx->obj_handles));
-    for (size_t i = 0; i < AV_DRM_MAX_PLANES; i++) {
-        ctx->obj_fds[i] = -1;
+    for (size_t i = 0; i < MAX_HANDLE_CACHE; i++) {
+        vanilla_drm_handle_t *h = &ctx->handle_cache[i];
+        h->fd = -1;
+        h->handle = 0;
     }
 
-	return ret;
+    return ret;
 }
 
 int vui_sdl_drm_free(vanilla_drm_ctx_t **c)
@@ -237,12 +231,12 @@ int vui_sdl_drm_free(vanilla_drm_ctx_t **c)
     *c = NULL;
 
     struct drm_gem_close gem_close = {0};
-    for (int i = 0; i < AV_DRM_MAX_PLANES; i++) {
-        if (ctx->obj_handles[i]) {
-            gem_close.handle = ctx->obj_handles[i];
-            drmIoctl(ctx->fd, DRM_IOCTL_GEM_CLOSE, &gem_close);
-            ctx->obj_handles[i] = 0;
-        }
+    for (size_t i = 0; i < ctx->handle_cache_count; i++) {
+        vanilla_drm_handle_t *h = &ctx->handle_cache[i];
+        gem_close.handle = h->handle;
+        drmIoctl(ctx->fd, DRM_IOCTL_GEM_CLOSE, &gem_close);
+        h->handle = 0;
+        h->fd = -1;
     }
 
     if (ctx->got_fb) {
