@@ -535,6 +535,9 @@ int vui_init_sdl(vui_context_t *ctx, int fullscreen)
 	// Force EGL when using X11 so that VAAPI works
 	SDL_SetHint(SDL_HINT_VIDEO_X11_FORCE_EGL, "1");
 
+    // Enable linear filtering
+    SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "linear");
+
 	// By default, SDL2 uses X11, even on Wayland systems. This probably isn't
 	// a big deal, but just in case we want it to prefer Wayland, this is how
 	// we can do it.
@@ -817,7 +820,7 @@ void determine_color_for_gradient(int y, int h, uint8_t *r, uint8_t *g, uint8_t 
     }
 }
 
-void vui_sdl_draw_button(vui_context_t *vui, vui_sdl_context_t *sdl_ctx, vui_button_t *btn)
+void vui_sdl_draw_button(vui_context_t *vui, vui_sdl_context_t *sdl_ctx, vui_button_t *btn, int msaa)
 {
     SDL_SetRenderDrawColor(sdl_ctx->renderer, 0, 0, 0, 0);
     SDL_RenderClear(sdl_ctx->renderer);
@@ -827,8 +830,8 @@ void vui_sdl_draw_button(vui_context_t *vui, vui_sdl_context_t *sdl_ctx, vui_but
     SDL_Rect rect;
     rect.x = 0;
     rect.y = 0;
-    rect.w = btn->w;
-    rect.h = btn->h;
+    rect.w = btn->w * msaa;
+    rect.h = btn->h * msaa;
 
     // static const float button_x_gradient_positions[] = {
     //     0.0f,
@@ -962,8 +965,8 @@ void vui_sdl_draw_button(vui_context_t *vui, vui_sdl_context_t *sdl_ctx, vui_but
         text_rect.h = surface->h;
 
         const int btn_padding = 8;
-        text_rect.x = rect.x + rect.w / 2 - text_rect.w / 2;
-        text_rect.y = rect.y + rect.h / 2 - text_rect.h / 2;
+        text_rect.x = rect.x + rect.w / 2 - (text_rect.w * msaa) / 2;
+        text_rect.y = rect.y + rect.h / 2 - (text_rect.h * msaa) / 2;
 
         // Adjust text rect if icon exists
         if (icon) {
@@ -993,6 +996,8 @@ void vui_sdl_draw_button(vui_context_t *vui, vui_sdl_context_t *sdl_ctx, vui_but
             }
         }
 
+        text_rect.w *= msaa;
+        text_rect.h *= msaa;
 
         SDL_RenderCopy(sdl_ctx->renderer, texture, NULL, &text_rect);
         SDL_DestroyTexture(texture);
@@ -1257,13 +1262,15 @@ void vui_draw_sdl(vui_context_t *ctx, SDL_Renderer *renderer)
                 btn_tex->texture = 0;
             }
 
+            const int MSAA = 2;
+
             if (!btn_tex->texture) {
-                btn_tex->texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_TARGET, btn->w, btn->h);
+                btn_tex->texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_TARGET, btn->w * MSAA, btn->h * MSAA);
             }
 
             SDL_Texture *old_target = SDL_GetRenderTarget(renderer);
             SDL_SetRenderTarget(renderer, btn_tex->texture);
-            vui_sdl_draw_button(ctx, sdl_ctx, btn);
+            vui_sdl_draw_button(ctx, sdl_ctx, btn, MSAA);
             SDL_SetRenderTarget(renderer, old_target);
 
             btn_tex->w = btn->w;
