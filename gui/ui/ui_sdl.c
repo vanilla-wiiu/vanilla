@@ -17,6 +17,9 @@
 #include <SDL2/SDL_egl.h>
 #include <SDL2/SDL_opengl.h>
 #include <SDL2/SDL_opengles2.h>
+#endif
+
+#ifdef VANILLA_DRM_AVAILABLE
 #include <drm_fourcc.h>
 #include "ui_sdl_drm.h"
 #endif
@@ -521,6 +524,8 @@ int vui_sdl_event_thread(void *data)
             SDL_UnlockMutex(sdl_ctx->display_mutex);
         }
     }
+
+    return 0;
 }
 
 int vui_init_sdl(vui_context_t *ctx, int fullscreen)
@@ -1559,12 +1564,18 @@ int vui_update_sdl(vui_context_t *vui)
 
     SDL_Texture *main_tex;
 
+#ifdef VANILLA_DRM_AVAILABLE
     static vanilla_drm_ctx_t *drm_ctx = NULL;
+#endif // VANILLA_DRM_AVAILABLE
+
     int handle_final_blit = 1;
     if (!vui->game_mode) {
+
+#ifdef VANILLA_DRM_AVAILABLE
         if (drm_ctx) {
             vui_sdl_drm_free(&drm_ctx); // will set to null
         }
+#endif // VANILLA_DRM_AVAILABLE
 
         // Draw vui to a custom texture
         vui_draw_sdl(vui, renderer);
@@ -1603,11 +1614,14 @@ int vui_update_sdl(vui_context_t *vui)
             case AV_PIX_FMT_DRM_PRIME:
             {
                 // get_texture_from_drm_prime_frame(sdl_ctx, sdl_ctx->frame);
+
+#ifdef VANILLA_DRM_AVAILABLE
                 if (!drm_ctx) {
                     vui_sdl_drm_initialize(&drm_ctx, sdl_ctx->window);
                 }
                 vui_sdl_drm_present(drm_ctx, sdl_ctx->frame);
                 handle_final_blit = 0;
+#endif // VANILLA_DRM_AVAILABLE
                 break;
             }
             case AV_PIX_FMT_VAAPI:

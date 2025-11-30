@@ -267,10 +267,21 @@ list(APPEND VANILLA_GUI_SRC
     ui/ui.c
     ui/ui_anim.c
     ui/ui_sdl.c
-    ui/ui_sdl_drm.c
     ui/ui_util.c
     ui/ui_util.h
 )
+
+if (LINUX)
+    # Link with DRM if available
+    find_package(DRM)
+    if (DRM_FOUND)
+        list(APPEND VANILLA_GUI_SRC
+            ui/ui_sdl_drm.c
+        )
+	endif()
+
+    find_package(VAAPI)
+endif()
 
 if (VANILLA_BUILD_PIPE)
 	OPTION(VANILLA_BUILD_USE_POLKIT "Enable Polkit-based authentication" ON)
@@ -354,21 +365,17 @@ if (VANILLA_BUILD_USE_POLKIT)
 	target_compile_definitions(vanilla PRIVATE VANILLA_POLKIT_AVAILABLE)
 endif()
 
-if (LINUX)
-    # Link with DRM if available
-    find_package(DRM)
-    if (DRM_FOUND)
-        target_link_libraries(vanilla PRIVATE ${DRM_LIBRARIES})
-        target_include_directories(vanilla PRIVATE ${DRM_INCLUDE_DIRS})
-	endif()
+if (VAAPI_FOUND)
+    target_link_libraries(vanilla PRIVATE VAAPI::VAAPI VAAPI::VA VAAPI::DRM)# va-x11 X11)
+endif()
 
-	# TODO: A more comprehensive "Find" for libva
-	OPTION(VANILLA_BUILD_USE_VAAPI "Enable VAAPI hardware decoding" ON)
-	if (VANILLA_BUILD_USE_VAAPI)
-		target_link_libraries(vanilla PRIVATE va va-drm va-x11 X11)
-	endif()
+if (DRM_FOUND)
+    target_link_libraries(vanilla PRIVATE ${DRM_LIBRARIES})
+    target_compile_definitions(vanilla PRIVATE VANILLA_DRM_AVAILABLE)
+    target_include_directories(vanilla PRIVATE ${DRM_INCLUDE_DIRS})
+endif()
 
-    # TODO: EGL isn't actually required for Linux, it's only necessary for hardware decoding
+if (VAAPI_FOUND OR DRM_FOUND)
     find_package(PkgConfig REQUIRED)
     pkg_check_modules(EGL REQUIRED egl)
     target_include_directories(vanilla PRIVATE ${EGL_INCLUDE_DIRS})
