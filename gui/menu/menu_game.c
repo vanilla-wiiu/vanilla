@@ -660,15 +660,15 @@ void *vpi_event_loop(void *arg)
         vpi_decode_exit(&s);
         vpi_decode_alloc = 0;
     }
+
+    return NULL;
 }
 
 void vpi_display_update(vui_context_t *vui, int64_t time, void *v)
 {
-    int queued_error = VANILLA_SUCCESS;
-
     update_battery_information(vui, time);
 
-    switch (vpi_game_queued_error) {
+    switch ((int)vpi_game_queued_error) {
     case VANILLA_SUCCESS:
         // All good, do nothing
         break;
