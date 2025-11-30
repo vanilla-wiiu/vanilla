@@ -132,14 +132,16 @@ int create_socket(int *socket_out, in_port_t port, int pipe)
 
     set_socket_rcvtimeo(skt, 250000);
 
-    int buf_sz = 16777216;
-    setsockopt(skt, SOL_SOCKET, SO_RCVBUF, &buf_sz, sizeof(buf_sz));
-    setsockopt(skt, SOL_SOCKET, SO_SNDBUF, &buf_sz, sizeof(buf_sz));
+    // int buf_sz = 16777216;
+    // setsockopt(skt, SOL_SOCKET, SO_RCVBUF, &buf_sz, sizeof(buf_sz));
+    // setsockopt(skt, SOL_SOCKET, SO_SNDBUF, &buf_sz, sizeof(buf_sz));
 
+#ifndef _WIN32
     if (!pipe && SERVER_ADDRESS == VANILLA_ADDRESS_LOCAL) {
         // Bind to wireless device
         setsockopt(skt, SOL_SOCKET, SO_BINDTODEVICE, wireless_interface, strlen(wireless_interface));
     }
+#endif
 
     // int val = 1000; // microseconds to busy-poll per recv() before sleeping
     // if (setsockopt(skt, SOL_SOCKET, SO_BUSY_POLL, &val, sizeof(val)) < 0) {

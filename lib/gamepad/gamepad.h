@@ -1,6 +1,9 @@
 #ifndef VANILLA_GAMEPAD_H
 #define VANILLA_GAMEPAD_H
 
+#include <pthread.h>
+#include <stdint.h>
+
 #ifdef _WIN32
 #include <winsock2.h>
 typedef uint32_t in_addr_t;
@@ -12,9 +15,6 @@ typedef uint16_t in_port_t;
 #endif
 
 #include "vanilla.h"
-
-#include <pthread.h>
-#include <stdint.h>
 
 #include "../pipe/ports.h"
 
