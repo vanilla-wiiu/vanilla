@@ -20,6 +20,8 @@ typedef uint16_t in_port_t;
 
 struct wpa_ctrl;
 
+extern char wireless_interface[];
+
 #define VANILLA_MAX_EVENT_COUNT 100
 typedef struct
 {
@@ -63,7 +65,6 @@ typedef union {
 void sync_internal(thread_data_t *data);
 void connect_as_gamepad_internal(thread_data_t *data);
 int install_polkit_internal(thread_data_t *data, int install);
-void create_sockaddr(sockaddr_u *addr, size_t *size, in_addr_t inaddr, uint16_t port, int delete);
 void create_server_sockaddr(sockaddr_u *addr, size_t *size, uint16_t port, int delete);
 void send_to_sockaddr(int fd, const void *data, size_t data_size, const sockaddr_u *sockaddr, size_t sockaddr_size);
 void send_to_console(int fd, const void *data, size_t data_size, uint16_t port);

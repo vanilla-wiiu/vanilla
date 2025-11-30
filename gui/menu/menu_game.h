@@ -2,6 +2,7 @@
 #define VANILLA_PI_MENU_GAME_H
 
 #include <libavutil/frame.h>
+#include <pthread.h>
 #include <sys/time.h>
 
 #include "ui/ui.h"
@@ -9,6 +10,7 @@
 #define VPI_TOAST_MAX_LEN 1024
 
 extern AVFrame *vpi_present_frame;
+extern pthread_mutex_t vpi_present_frame_mutex;
 
 void vpi_menu_game(vui_context_t *vui, void *v);
 

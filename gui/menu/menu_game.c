@@ -6,6 +6,7 @@
 #include <libavutil/channel_layout.h>
 #include <libavutil/opt.h>
 #include <libswscale/swscale.h>
+#include <stdatomic.h>
 #include <stdio.h>
 #include <sys/time.h>
 #include <vanilla.h>
@@ -22,6 +23,7 @@ static struct timeval vpi_toast_expiry;
 static int vpi_toast_number = 0;
 
 AVFrame *vpi_present_frame = 0;
+pthread_mutex_t vpi_present_frame_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 static AVFormatContext *recording_fmt_ctx = 0;
 static AVStream *recording_vstr;
@@ -37,7 +39,7 @@ static struct {
     int64_t last_power_time;
 } menu_game_ctx;
 
-static int vpi_game_shutdown_queued = 0;
+static _Atomic int vpi_game_queued_error = VANILLA_SUCCESS;
 
 void back_to_main_menu(vui_context_t *vui, int button, void *v)
 {
@@ -521,18 +523,19 @@ exit:
 
 void vpi_game_shutdown()
 {
-    vpi_game_shutdown_queued = 1;
+    vpi_game_queued_error = VANILLA_ERR_SHUTDOWN;
 }
 
-void vpi_display_update(vui_context_t *vui, int64_t time, void *v)
+static pthread_t vpi_event_thread;
+
+void *vpi_event_loop(void *arg)
 {
-    static vpi_decode_state_t s;
+    vui_context_t *vui = (vui_context_t *) arg;
     static int vpi_decode_alloc = 0;
 
-    int queued_error = VANILLA_SUCCESS;
-
+    static vpi_decode_state_t s;
     vanilla_event_t event;
-    while (vanilla_poll_event(&event)) {
+    while (vpi_game_queued_error == VANILLA_SUCCESS && vanilla_wait_event(&event)) {
         int stop = 0;
 
         switch (event.type) {
@@ -590,19 +593,25 @@ void vpi_display_update(vui_context_t *vui, int64_t time, void *v)
                             ret = 0;
                             break;
                         } else {
+                            pthread_mutex_lock(&vpi_present_frame_mutex);
+
                             // Swap refs from decoding_frame to present_frame
                             av_frame_unref(vpi_present_frame);
                             av_frame_move_ref(vpi_present_frame, s.frame);
-
-                            if (!vui_game_mode_get(vui)) {
-                                vui_game_mode_set(vui, 1);
-                                vui_audio_set_enabled(vui, 1);
-                            }
+                            vpi_present_frame->pts = s.frame->pts;
 
                             if (screenshot_buf[0] != 0) {
                                 // Dump this frame into file
                                 dump_frame_to_file(vpi_present_frame, screenshot_buf);
                                 screenshot_buf[0] = 0;
+                            }
+
+                            pthread_mutex_unlock(&vpi_present_frame_mutex);
+
+                            // Not thread safe?
+                            if (!vui_game_mode_get(vui)) {
+                                vui_game_mode_set(vui, 1);
+                                vui_audio_set_enabled(vui, 1);
                             }
                         }
                     }
@@ -631,16 +640,11 @@ void vpi_display_update(vui_context_t *vui, int64_t time, void *v)
                 // Do nothing
                 break;
             case VANILLA_ERR_DISCONNECTED:
-                vui_label_update_text(vui, status_lbl, lang(VPI_LANG_DISCONNECTED));
-                vui_audio_set_enabled(vui, 0);
-                vui_game_mode_set(vui, 0);
-                break;
             case VANILLA_ERR_SHUTDOWN:
-                vpi_game_shutdown_queued = 1;
+                vpi_game_queued_error = VANILLA_ERR_SHUTDOWN;
                 break;
             default:
-                vpi_game_shutdown_queued = 1;
-                queued_error = backend_err;
+                vpi_game_queued_error = backend_err;
             };
             break;
         }
@@ -652,20 +656,38 @@ void vpi_display_update(vui_context_t *vui, int64_t time, void *v)
 		vanilla_free_event(&event);
 	}
 
+    if (vpi_decode_alloc) {
+        vpi_decode_exit(&s);
+        vpi_decode_alloc = 0;
+    }
+}
+
+void vpi_display_update(vui_context_t *vui, int64_t time, void *v)
+{
+    int queued_error = VANILLA_SUCCESS;
+
     update_battery_information(vui, time);
 
-    if (vpi_game_shutdown_queued) {
-        if (vpi_decode_alloc) {
-            vpi_decode_exit(&s);
-            vpi_decode_alloc = 0;
-        }
+    switch (vpi_game_queued_error) {
+    case VANILLA_SUCCESS:
+        // All good, do nothing
+        break;
+    case VANILLA_ERR_DISCONNECTED:
+        // Tell user connection has terminated and try to re-establish
+        vui_label_update_text(vui, status_lbl, lang(VPI_LANG_DISCONNECTED));
+        vui_audio_set_enabled(vui, 0);
+        vui_game_mode_set(vui, 0);
+        break;
+    default:
+        // Something went wrong, assume we must fail and report to user
+        pthread_join(vpi_event_thread, 0);
         vanilla_stop();
-        if (queued_error) {
-            show_error(vui, (void*)(intptr_t) queued_error);
+        if (vpi_game_queued_error != VANILLA_ERR_SHUTDOWN) {
+            show_error(vui, (void*)(intptr_t) vpi_game_queued_error);
         } else {
             vpi_menu_main(vui, 0);
         }
-        vpi_game_shutdown_queued = 0;
+        vpi_game_queued_error = VANILLA_SUCCESS;
     }
 }
 
@@ -702,7 +724,8 @@ void vpi_menu_game_start(vui_context_t *vui, void *v)
 
         vui_transition_fade_layer_in(vui, fglayer, 0, 0);
 
-        vpi_game_shutdown_queued = 0;
+        vpi_game_queued_error = VANILLA_SUCCESS;
+        pthread_create(&vpi_event_thread, 0, vpi_event_loop, vui);
 
         vui_start_passive_animation(vui, vpi_display_update, 0);
     }

@@ -23,7 +23,6 @@ extern "C" {
 #define VANILLA_ERR_DISCONNECTED        -11
 
 static const uint32_t VANILLA_ADDRESS_LOCAL = 0xFFFFFFFF;
-static const uint32_t VANILLA_ADDRESS_DIRECT = 0x0;
 
 enum VanillaGamepadButtons
 {
@@ -124,6 +123,8 @@ typedef struct {
  */
 int vanilla_start(uint32_t server_address, vanilla_bssid_t bssid, vanilla_psk_t psk);
 int vanilla_sync(uint16_t code, uint32_t server_address);
+
+void vanilla_set_wireless_interface(const char *intf);
 
 int vanilla_install_polkit(uint32_t server_address);
 int vanilla_uninstall_polkit(uint32_t server_address);

@@ -468,6 +468,9 @@ int vpi_start_pipe()
 		}
 #endif
 
+        // Tell lib our wireless interface
+        vanilla_set_wireless_interface(vpi_config.wireless_interface);
+
         return ret;
     }
 }

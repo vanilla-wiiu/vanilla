@@ -1584,9 +1584,12 @@ int vui_update_sdl(vui_context_t *vui)
 
         main_tex = sdl_ctx->layer_data[0];
     } else {
+        pthread_mutex_lock(&vpi_present_frame_mutex);
 		if (vpi_present_frame && vpi_present_frame->format != -1) {
 			av_frame_move_ref(sdl_ctx->frame, vpi_present_frame);
+            sdl_ctx->frame->pts = vpi_present_frame->pts;
 		}
+        pthread_mutex_unlock(&vpi_present_frame_mutex);
 
 		if (sdl_ctx->frame->format != -1) {
             switch (sdl_ctx->frame->format) {

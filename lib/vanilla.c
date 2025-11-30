@@ -255,3 +255,8 @@ void vanilla_send_audio(const void *data, size_t size)
 {
     send_audio_packet(data, size);
 }
+
+void vanilla_set_wireless_interface(const char *intf)
+{
+    strcpy(wireless_interface, intf);
+}
