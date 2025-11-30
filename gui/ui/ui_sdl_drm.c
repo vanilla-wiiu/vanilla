@@ -5,8 +5,8 @@
 #include <SDL2/SDL_syswm.h>
 #include <xf86drm.h>
 #include <xf86drmMode.h>
-#include <drm/drm_mode.h>
-#include <drm/drm_fourcc.h>
+#include <drm_mode.h>
+#include <drm_fourcc.h>
 #include <errno.h>
 #include <string.h>
 
