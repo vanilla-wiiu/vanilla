@@ -6,7 +6,8 @@ ENV ARCH=${ARCH}
 ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ=Etc/UTC
 
-RUN apt -y update \
+RUN apt -y update
+
 RUN apt -y install which \
     sed \
     make \
