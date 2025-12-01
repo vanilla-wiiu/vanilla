@@ -247,8 +247,8 @@ list(APPEND VANILLA_GUI_SRC
     # drm.c
     lang.c
     #game/game_decode_ffmpeg.c
-    game/game_decode.c
-    game/game_main.c
+    # game/game_decode.c
+    # game/game_main.c
     main.c
     menu/menu.c
     menu/menu_common.c
@@ -270,6 +270,18 @@ list(APPEND VANILLA_GUI_SRC
     ui/ui_util.c
     ui/ui_util.h
 )
+
+if (LINUX)
+    # Link with DRM if available
+    find_package(DRM)
+    if (DRM_FOUND)
+        list(APPEND VANILLA_GUI_SRC
+            ui/ui_sdl_drm.c
+        )
+	endif()
+
+    find_package(VAAPI)
+endif()
 
 if (VANILLA_BUILD_PIPE)
 	OPTION(VANILLA_BUILD_USE_POLKIT "Enable Polkit-based authentication" ON)
@@ -346,30 +358,30 @@ endif()
 
 if (VANILLA_BUILD_USE_POLKIT)
 	# Find Polkit and GLIB libraries
-	find_package(PkgConfig)
+	find_package(PkgConfig REQUIRED)
 	pkg_check_modules(PC_POLKIT polkit-agent-1 REQUIRED IMPORTED_TARGET)
 	target_include_directories(vanilla PRIVATE ${PC_POLKIT_INCLUDE_DIRS})
 	target_link_libraries(vanilla PRIVATE ${PC_POLKIT_LIBRARIES})
 	target_compile_definitions(vanilla PRIVATE VANILLA_POLKIT_AVAILABLE)
 endif()
 
-if (LINUX)
-    # Link with DRM if available
-    find_package(DRM)
-    if (DRM_FOUND)
-        target_link_libraries(vanilla PRIVATE ${DRM_LIBRARIES})
-        target_include_directories(vanilla PRIVATE ${DRM_INCLUDE_DIRS})
-	endif()
+if (VAAPI_FOUND)
+    target_link_libraries(vanilla PRIVATE VAAPI::VAAPI VAAPI::VA VAAPI::DRM va-x11 X11)
+endif()
 
-	# TODO: A more comprehensive "Find" for libva
-	OPTION(VANILLA_BUILD_USE_VAAPI "Enable VAAPI hardware decoding" ON)
-	if (VANILLA_BUILD_USE_VAAPI)
-		find_package(OpenGL COMPONENTS EGL)
-		if (OpenGL_EGL_FOUND)
-			target_link_libraries(vanilla PRIVATE OpenGL::EGL va va-drm va-x11 X11)
-			target_compile_definitions(vanilla PRIVATE VANILLA_HAS_EGL)
-		endif()
-	endif()
+if (DRM_FOUND)
+    target_link_libraries(vanilla PRIVATE ${DRM_LIBRARIES})
+    target_compile_definitions(vanilla PRIVATE VANILLA_DRM_AVAILABLE)
+    target_include_directories(vanilla PRIVATE ${DRM_INCLUDE_DIRS})
+endif()
+
+if (VAAPI_FOUND OR DRM_FOUND)
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(EGL REQUIRED egl)
+    target_include_directories(vanilla PRIVATE ${EGL_INCLUDE_DIRS})
+    target_link_directories(vanilla PRIVATE ${EGL_LIBRARY_DIRS})
+    target_link_libraries(vanilla PRIVATE ${EGL_LIBRARIES})
+    target_compile_definitions(vanilla PRIVATE VANILLA_HAS_EGL)
 endif()
 
 # Find libxml2 (used for storing/parsing user config)

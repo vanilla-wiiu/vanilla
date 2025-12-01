@@ -2,16 +2,6 @@
 
 #include "gamepad.h"
 
-#ifdef _WIN32
-#include <winsock2.h>
-typedef uint32_t in_addr_t;
-typedef uint16_t in_port_t;
-#else
-#include <arpa/inet.h>
-#include <errno.h>
-#include <sys/un.h>
-#endif
-
 #include <assert.h>
 #include <pthread.h>
 #include <signal.h>
@@ -31,17 +21,12 @@ typedef uint16_t in_port_t;
 static uint32_t SERVER_ADDRESS = 0;
 static const int MAX_PIPE_RETRY = 5;
 
+char wireless_interface[128];
+
 #define EVENT_BUFFER_SIZE 65536
 #define EVENT_BUFFER_ARENA_SIZE VANILLA_MAX_EVENT_COUNT * 2
 uint8_t *EVENT_BUFFER_ARENA[EVENT_BUFFER_ARENA_SIZE] = {0};
 pthread_mutex_t event_buffer_mutex = PTHREAD_MUTEX_INITIALIZER;
-
-typedef union {
-    struct sockaddr_in in;
-#ifndef _WIN32
-    struct sockaddr_un un;
-#endif
-} sockaddr_u;
 
 static inline int skterr()
 {
@@ -52,24 +37,10 @@ static inline int skterr()
 #endif
 }
 
-in_addr_t get_real_server_address()
-{
-    if (SERVER_ADDRESS == VANILLA_ADDRESS_DIRECT) {
-        // The Wii U always places itself at this address
-        return inet_addr("192.168.1.10");
-    } else if (SERVER_ADDRESS != VANILLA_ADDRESS_LOCAL) {
-        // If there's a remote pipe, we send to that
-        return SERVER_ADDRESS;
-    }
-
-    // Must be local, in which case we don't care
-    return INADDR_ANY;
-}
-
-void create_sockaddr(sockaddr_u *addr, size_t *size, in_addr_t inaddr, uint16_t port, int delete)
+void create_sockaddr(sockaddr_u *addr, size_t *size, in_addr_t inaddr, uint16_t port, int local, int delete)
 {
 #ifndef _WIN32
-    if (SERVER_ADDRESS == VANILLA_ADDRESS_LOCAL) {
+    if (local) {
         memset(&addr->un, 0, sizeof(addr->un));
         addr->un.sun_family = AF_UNIX;
         snprintf(addr->un.sun_path, sizeof(addr->un.sun_path) - 1, VANILLA_PIPE_LOCAL_SOCKET, port);
@@ -90,6 +61,24 @@ void create_sockaddr(sockaddr_u *addr, size_t *size, in_addr_t inaddr, uint16_t 
 #endif
 }
 
+void create_server_sockaddr(sockaddr_u *addr, size_t *size, uint16_t port, int delete)
+{
+    // The Wii U always places itself at this address
+    in_addr_t ip = (SERVER_ADDRESS == VANILLA_ADDRESS_LOCAL) ? inet_addr("192.168.1.10") : SERVER_ADDRESS;
+    return create_sockaddr(addr, size, ip, port, 0, delete);
+}
+
+void send_to_sockaddr(int fd, const void *data, size_t data_size, const sockaddr_u *sockaddr, size_t sockaddr_size)
+{
+    ssize_t sent = sendto(fd, data, data_size, 0, (const struct sockaddr *) sockaddr, sockaddr_size);
+    if (sent == -1) {
+		int err = skterr();
+		if (err != 111) { // 111 is connection refused, occurs if we lose connection, but we'll already know that for other reasons so we don't need to spam the console with this error
+			vanilla_log("Failed to send to Wii U socket: fd: %d, errno: %i", fd, skterr());
+		}
+    }
+}
+
 void send_to_console(int fd, const void *data, size_t data_size, uint16_t port)
 {
     sockaddr_u addr;
@@ -97,15 +86,9 @@ void send_to_console(int fd, const void *data, size_t data_size, uint16_t port)
 
     in_port_t console_port = port - 100;
 
-    create_sockaddr(&addr, &addr_size, get_real_server_address(), console_port, 0);
+    create_server_sockaddr(&addr, &addr_size, console_port, 0);
 
-    ssize_t sent = sendto(fd, data, data_size, 0, (const struct sockaddr *) &addr, addr_size);
-    if (sent == -1) {
-		int err = skterr();
-		if (err != 111) { // 111 is connection refused, occurs if we lose connection, but we'll already know that for other reasons so we don't need to spam the console with this error
-			vanilla_log("Failed to send to Wii U socket: fd: %d, port: %d, errno: %i", fd, console_port, skterr());
-		}
-    }
+    send_to_sockaddr(fd, data, data_size, &addr, addr_size);
 }
 
 void set_socket_rcvtimeo(int skt, uint64_t microseconds)
@@ -121,14 +104,15 @@ void set_socket_rcvtimeo(int skt, uint64_t microseconds)
 #endif // _WIN32
 }
 
-int create_socket(int *socket_out, in_port_t port)
+int create_socket(int *socket_out, in_port_t port, int pipe)
 {
     sockaddr_u addr;
     size_t addr_size;
 
-    create_sockaddr(&addr, &addr_size, INADDR_ANY, port, 1);
+    int is_pipe_and_local = (pipe && SERVER_ADDRESS == VANILLA_ADDRESS_LOCAL);
+    int domain = is_pipe_and_local ? AF_UNIX : AF_INET;
 
-    int domain = (SERVER_ADDRESS == VANILLA_ADDRESS_LOCAL) ? AF_UNIX : AF_INET;
+    create_sockaddr(&addr, &addr_size, INADDR_ANY, port, is_pipe_and_local, 1);
 
     int skt = socket(domain, SOCK_DGRAM, 0);
     if (skt == -1) {
@@ -148,6 +132,22 @@ int create_socket(int *socket_out, in_port_t port)
 
     set_socket_rcvtimeo(skt, 250000);
 
+    // int buf_sz = 16777216;
+    // setsockopt(skt, SOL_SOCKET, SO_RCVBUF, &buf_sz, sizeof(buf_sz));
+    // setsockopt(skt, SOL_SOCKET, SO_SNDBUF, &buf_sz, sizeof(buf_sz));
+
+#if !defined(_WIN32) && !defined(__APPLE__)
+    if (!pipe && SERVER_ADDRESS == VANILLA_ADDRESS_LOCAL) {
+        // Bind to wireless device
+        setsockopt(skt, SOL_SOCKET, SO_BINDTODEVICE, wireless_interface, strlen(wireless_interface));
+    }
+#endif
+
+    // int val = 1000; // microseconds to busy-poll per recv() before sleeping
+    // if (setsockopt(skt, SOL_SOCKET, SO_BUSY_POLL, &val, sizeof(val)) < 0) {
+    //     perror("setsockopt SO_BUSY_POLL");
+    // }
+
     return VANILLA_SUCCESS;
 }
 
@@ -156,7 +156,10 @@ int send_pipe_cc(int skt, vanilla_pipe_command_t *cmd, size_t cmd_size, int wait
     sockaddr_u addr;
     size_t addr_size;
 
-    create_sockaddr(&addr, &addr_size, get_real_server_address(), VANILLA_PIPE_CMD_SERVER_PORT, 0);
+    int pipe_is_local = (SERVER_ADDRESS == VANILLA_ADDRESS_LOCAL);
+    in_addr_t pipe_addr = pipe_is_local ? INADDR_ANY : SERVER_ADDRESS;
+
+    create_sockaddr(&addr, &addr_size, pipe_addr, VANILLA_PIPE_CMD_SERVER_PORT, pipe_is_local, 0);
 
     ssize_t read_size;
     uint8_t recv_cc;
@@ -195,7 +198,7 @@ int connect_to_backend(int *socket, vanilla_pipe_command_t *cmd, size_t cmd_size
 {
     // Try to bind with backend
     int pipe_cc_skt = -1;
-    int ret = create_socket(&pipe_cc_skt, VANILLA_PIPE_CMD_CLIENT_PORT);
+    int ret = create_socket(&pipe_cc_skt, VANILLA_PIPE_CMD_CLIENT_PORT, 1);
     if (ret != VANILLA_SUCCESS) {
         return ret;
     }
@@ -288,16 +291,14 @@ int install_polkit_internal(thread_data_t *data, int install)
     int ret = VANILLA_ERR_GENERIC;
 
     int pipe_cc_skt = -1;
-    if (SERVER_ADDRESS != VANILLA_ADDRESS_DIRECT) {
-        vanilla_pipe_command_t cmd;
-        cmd.control_code = install ? VANILLA_PIPE_CC_INSTALL_POLKIT : VANILLA_PIPE_CC_UNINSTALL_POLKIT;
+    vanilla_pipe_command_t cmd;
+    cmd.control_code = install ? VANILLA_PIPE_CC_INSTALL_POLKIT : VANILLA_PIPE_CC_UNINSTALL_POLKIT;
 
-        // Connect to backend pipe
-        ret = connect_to_backend(&pipe_cc_skt, &cmd, sizeof(cmd.control_code) + sizeof(cmd.connection));
+    // Connect to backend pipe
+    ret = connect_to_backend(&pipe_cc_skt, &cmd, sizeof(cmd.control_code) + sizeof(cmd.connection));
 
-		// No interrupt is required here because VANILLA_PIPE_CC_INSTALL_POLKIT
-		// does not start a thread in the pipe
-    }
+    // No interrupt is required here because VANILLA_PIPE_CC_INSTALL_POLKIT
+    // does not start a thread in the pipe
 
     if (pipe_cc_skt != -1) {
         // Disconnect from pipe if necessary
@@ -320,47 +321,45 @@ void connect_as_gamepad_internal(thread_data_t *data)
     int ret = VANILLA_SUCCESS;
 
     // Open all required sockets
-    if (create_socket(&info.socket_vid, PORT_VID) != VANILLA_SUCCESS) goto exit_pipe;
-    if (create_socket(&info.socket_msg, PORT_MSG) != VANILLA_SUCCESS) goto exit_vid;
-    if (create_socket(&info.socket_hid, PORT_HID) != VANILLA_SUCCESS) goto exit_msg;
-    if (create_socket(&info.socket_aud, PORT_AUD) != VANILLA_SUCCESS) goto exit_hid;
-    if (create_socket(&info.socket_cmd, PORT_CMD) != VANILLA_SUCCESS) goto exit_aud;
+    if (create_socket(&info.socket_vid, PORT_VID, 0) != VANILLA_SUCCESS) goto exit_pipe;
+    if (create_socket(&info.socket_msg, PORT_MSG, 0) != VANILLA_SUCCESS) goto exit_vid;
+    if (create_socket(&info.socket_hid, PORT_HID, 0) != VANILLA_SUCCESS) goto exit_msg;
+    if (create_socket(&info.socket_aud, PORT_AUD, 0) != VANILLA_SUCCESS) goto exit_hid;
+    if (create_socket(&info.socket_cmd, PORT_CMD, 0) != VANILLA_SUCCESS) goto exit_aud;
 
     int pipe_cc_skt = -1;
-    if (SERVER_ADDRESS != VANILLA_ADDRESS_DIRECT) {
-        vanilla_pipe_command_t cmd;
-        cmd.control_code = VANILLA_PIPE_CC_CONNECT;
+    vanilla_pipe_command_t cmd;
+    cmd.control_code = VANILLA_PIPE_CC_CONNECT;
 
-        cmd.connection.bssid = data->bssid;
-        cmd.connection.psk = data->psk;
+    cmd.connection.bssid = data->bssid;
+    cmd.connection.psk = data->psk;
 
-        // Connect to backend pipe
-        ret = connect_to_backend(&pipe_cc_skt, &cmd, sizeof(cmd.control_code) + sizeof(cmd.connection));
-        if (ret == VANILLA_SUCCESS) {
-            // Wait for backend to be available
-            vanilla_pipe_command_t connected_state;
-            ret = VANILLA_ERR_NO_CONNECTION;
-            while (!is_interrupted()) {
-                ssize_t read_size = recv(pipe_cc_skt, (char *) &connected_state, sizeof(connected_state), 0);
-                if (read_size < 0) {
-                    int r = skterr();
+    // Connect to backend pipe
+    ret = connect_to_backend(&pipe_cc_skt, &cmd, sizeof(cmd.control_code) + sizeof(cmd.connection));
+    if (ret == VANILLA_SUCCESS) {
+        // Wait for backend to be available
+        vanilla_pipe_command_t connected_state;
+        ret = VANILLA_ERR_NO_CONNECTION;
+        while (!is_interrupted()) {
+            ssize_t read_size = recv(pipe_cc_skt, (char *) &connected_state, sizeof(connected_state), 0);
+            if (read_size < 0) {
+                int r = skterr();
 #ifdef _WIN32
-                    if (r != WSAETIMEDOUT) {
+                if (r != WSAETIMEDOUT) {
 #else
-                    if (r != EAGAIN) {
+                if (r != EAGAIN) {
 #endif
-                        vanilla_log("FAILED TO GET CONNECTED STATE: %i", r);
-                        ret = VANILLA_ERR_PIPE_UNRESPONSIVE;
-                        break;
-                    }
-                } else if (connected_state.control_code == VANILLA_PIPE_CC_CONNECTED) {
-                    ret = VANILLA_SUCCESS;
-                    sleep(1);
+                    vanilla_log("FAILED TO GET CONNECTED STATE: %i", r);
+                    ret = VANILLA_ERR_PIPE_UNRESPONSIVE;
                     break;
                 }
-
-                vanilla_log("STILL WAITING FOR CONNECTED STATE");
+            } else if (connected_state.control_code == VANILLA_PIPE_CC_CONNECTED) {
+                ret = VANILLA_SUCCESS;
+                sleep(1);
+                break;
             }
+
+            vanilla_log("STILL WAITING FOR CONNECTED STATE");
         }
     }
 
@@ -439,47 +438,67 @@ exit:
     wait_for_interrupt();
 }
 
-int push_event(event_loop_t *loop, int type, const void *data, size_t size)
+int acquire_event(event_loop_t *loop, vanilla_event_t **event)
 {
-    int ret = VANILLA_SUCCESS;
+	int ret = VANILLA_SUCCESS;
 
     pthread_mutex_lock(&loop->mutex);
 
-    if (size <= EVENT_BUFFER_SIZE) {
-        // Prevent rollover by skipping oldest event if necessary
-        if (loop->new_index == loop->used_index + VANILLA_MAX_EVENT_COUNT) {
-            vanilla_free_event(&loop->events[loop->used_index % VANILLA_MAX_EVENT_COUNT]);
-            vanilla_log("SKIPPED EVENT TO PREVENT ROLLOVER (%lu > %lu + %lu)", loop->new_index, loop->used_index, VANILLA_MAX_EVENT_COUNT);
-            loop->used_index++;
-        }
+	// Prevent rollover by skipping oldest event if necessary
+	if (loop->new_index == loop->used_index + VANILLA_MAX_EVENT_COUNT) {
+		vanilla_free_event(&loop->events[loop->used_index % VANILLA_MAX_EVENT_COUNT]);
+		vanilla_log("SKIPPED EVENT TO PREVENT ROLLOVER (%lu > %lu + %lu)", loop->new_index, loop->used_index, VANILLA_MAX_EVENT_COUNT);
+		loop->used_index++;
+	}
 
-        vanilla_event_t *ev = &loop->events[loop->new_index % VANILLA_MAX_EVENT_COUNT];
+	vanilla_event_t *ev = &loop->events[loop->new_index % VANILLA_MAX_EVENT_COUNT];
 
-        assert(!ev->data);
+	assert(!ev->data);
 
-        ev->data = get_event_buffer();
-        if (!ev->data) {
-            vanilla_log("OUT OF MEMORY FOR NEW EVENTS");
-            ret = VANILLA_ERR_OUT_OF_MEMORY;
-            goto exit;
-        }
+	ev->data = get_event_buffer();
+	// if (!ev->data) {
+	// 	vanilla_log("OUT OF MEMORY FOR NEW EVENTS");
+	// 	ret = VANILLA_ERR_OUT_OF_MEMORY;
+	// }
 
-        ev->type = type;
-        memcpy(ev->data, data, size);
-        ev->size = size;
+	*event = ev;
 
-        loop->new_index++;
+	return ret;
+}
 
-        pthread_cond_broadcast(&loop->waitcond);
-    } else {
-        vanilla_log("FAILED TO PUSH EVENT: wanted %lu, only had %lu. This is a bug, please report to developers.", size, EVENT_BUFFER_SIZE);
-        ret = VANILLA_ERR_INVALID_ARGUMENT;
-    }
+int release_event(event_loop_t *loop)
+{
+	loop->new_index++;
+
+    pthread_cond_broadcast(&loop->waitcond);
+
+    // } else {
+    //     vanilla_log("FAILED TO PUSH EVENT: wanted %lu, only had %lu. This is a bug, please report to developers.", size, EVENT_BUFFER_SIZE);
+    //     ret = VANILLA_ERR_INVALID_ARGUMENT;
+    // }
 
 exit:
     pthread_mutex_unlock(&loop->mutex);
 
-    return ret;
+    return VANILLA_SUCCESS;
+}
+
+int push_event(event_loop_t *loop, int type, const void *data, size_t size)
+{
+	vanilla_event_t *ev;
+
+    int ret = acquire_event(loop, &ev);
+	if (ret != VANILLA_SUCCESS) {
+		return ret;
+	}
+
+	ev->type = type;
+	memcpy(ev->data, data, size);
+	ev->size = size;
+
+	ret = release_event(loop);
+
+	return ret;
 }
 
 int get_event(event_loop_t *loop, vanilla_event_t *event, int wait)

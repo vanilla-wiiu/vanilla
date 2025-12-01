@@ -1,16 +1,28 @@
 #ifndef VANILLA_GAMEPAD_H
 #define VANILLA_GAMEPAD_H
 
-#include "vanilla.h"
-
 #include <pthread.h>
 #include <stdint.h>
+
+#ifdef _WIN32
+#include <winsock2.h>
+typedef uint32_t in_addr_t;
+typedef uint16_t in_port_t;
+#else
+#include <arpa/inet.h>
+#include <errno.h>
+#include <sys/un.h>
+#endif
+
+#include "vanilla.h"
 
 #include "../pipe/ports.h"
 
 struct wpa_ctrl;
 
-#define VANILLA_MAX_EVENT_COUNT 20
+extern char wireless_interface[];
+
+#define VANILLA_MAX_EVENT_COUNT 100
 typedef struct
 {
     vanilla_event_t events[VANILLA_MAX_EVENT_COUNT];
@@ -43,12 +55,23 @@ typedef struct thread_data_t
     vanilla_psk_t psk;
 } thread_data_t;
 
+typedef union {
+    struct sockaddr_in in;
+#ifndef _WIN32
+    struct sockaddr_un un;
+#endif
+} sockaddr_u;
+
 void sync_internal(thread_data_t *data);
 void connect_as_gamepad_internal(thread_data_t *data);
 int install_polkit_internal(thread_data_t *data, int install);
+void create_server_sockaddr(sockaddr_u *addr, size_t *size, uint16_t port, int delete);
+void send_to_sockaddr(int fd, const void *data, size_t data_size, const sockaddr_u *sockaddr, size_t sockaddr_size);
 void send_to_console(int fd, const void *data, size_t data_size, uint16_t port);
 int push_event(event_loop_t *loop, int type, const void *data, size_t size);
 int get_event(event_loop_t *loop, vanilla_event_t *event, int wait);
+int acquire_event(event_loop_t *loop, vanilla_event_t **event);
+int release_event(event_loop_t *loop);
 
 void init_event_buffer_arena();
 void free_event_buffer_arena();

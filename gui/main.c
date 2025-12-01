@@ -15,7 +15,6 @@
 #define SDL_main main
 #endif
 
-#include "game/game_main.h"
 #include "pipemgmt.h"
 
 void display_cli_help(const char **argv);

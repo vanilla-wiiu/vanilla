@@ -666,28 +666,31 @@ close:
 void create_all_relays(struct sync_args *args)
 {
     pthread_t vid_thread, aud_thread, msg_thread, cmd_thread, hid_thread;
-    struct relay_info vid_info, aud_info, msg_info, cmd_info, hid_info;
 
-    // Set common info for all
-    vid_info.wireless_interface = aud_info.wireless_interface = msg_info.wireless_interface = cmd_info.wireless_interface = hid_info.wireless_interface = args->wireless_interface;
-    vid_info.local = aud_info.local = msg_info.local = cmd_info.local = hid_info.local = args->local;
-    vid_info.client = aud_info.client = msg_info.client = cmd_info.client = hid_info.client = args->client;
-    vid_info.client_size = aud_info.client_size = msg_info.client_size = cmd_info.client_size = hid_info.client_size = args->client_size;
+    if (!args->local) {
+        struct relay_info vid_info, aud_info, msg_info, cmd_info, hid_info;
 
-    vid_info.port = PORT_VID;
-    aud_info.port = PORT_AUD;
-    msg_info.port = PORT_MSG;
-    cmd_info.port = PORT_CMD;
-    hid_info.port = PORT_HID;
+        // Set common info for all
+        vid_info.wireless_interface = aud_info.wireless_interface = msg_info.wireless_interface = cmd_info.wireless_interface = hid_info.wireless_interface = args->wireless_interface;
+        vid_info.local = aud_info.local = msg_info.local = cmd_info.local = hid_info.local = args->local;
+        vid_info.client = aud_info.client = msg_info.client = cmd_info.client = hid_info.client = args->client;
+        vid_info.client_size = aud_info.client_size = msg_info.client_size = cmd_info.client_size = hid_info.client_size = args->client_size;
 
-    // Enable relays
-    relay_running = 1;
+        vid_info.port = PORT_VID;
+        aud_info.port = PORT_AUD;
+        msg_info.port = PORT_MSG;
+        cmd_info.port = PORT_CMD;
+        hid_info.port = PORT_HID;
 
-    pthread_create(&vid_thread, NULL, open_relay, &vid_info);
-    pthread_create(&aud_thread, NULL, open_relay, &aud_info);
-    pthread_create(&msg_thread, NULL, open_relay, &msg_info);
-    pthread_create(&cmd_thread, NULL, open_relay, &cmd_info);
-    pthread_create(&hid_thread, NULL, open_relay, &hid_info);
+        // Enable relays
+        relay_running = 1;
+
+        pthread_create(&vid_thread, NULL, open_relay, &vid_info);
+        pthread_create(&aud_thread, NULL, open_relay, &aud_info);
+        pthread_create(&msg_thread, NULL, open_relay, &msg_info);
+        pthread_create(&cmd_thread, NULL, open_relay, &cmd_info);
+        pthread_create(&hid_thread, NULL, open_relay, &hid_info);
+    }
 
     // Notify client that we are connected
     vanilla_pipe_command_t cmd;
@@ -708,16 +711,21 @@ void create_all_relays(struct sync_args *args)
                 break;
             }
         }
+
+        // wpa_ctrl_recv is non-blocking, so reduce thrashing by sleeping here
+        sleep(1);
     }
 
-    // Stop all relays
-    interrupt_relays();
+    if (!args->local) {
+        // Stop all relays
+        interrupt_relays();
 
-    pthread_join(vid_thread, NULL);
-    pthread_join(aud_thread, NULL);
-    pthread_join(msg_thread, NULL);
-    pthread_join(cmd_thread, NULL);
-    pthread_join(hid_thread, NULL);
+        pthread_join(vid_thread, NULL);
+        pthread_join(aud_thread, NULL);
+        pthread_join(msg_thread, NULL);
+        pthread_join(cmd_thread, NULL);
+        pthread_join(hid_thread, NULL);
+    }
 }
 
 void *thread_handler(void *data)
