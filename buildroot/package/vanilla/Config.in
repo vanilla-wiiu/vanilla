@@ -4,3 +4,13 @@ config BR2_PACKAGE_VANILLA
 		Install Vanilla, the Wii U gamepad reimplementation
 
 		https://github.com/vanilla-wiiu/vanilla
+
+if BR2_PACKAGE_VANILLA
+
+config BR2_PACKAGE_VANILLA_LOCAL_PATH
+    string "Local repository"
+    help
+        Local directory to build Vanilla from instead of retrieving from GitHub.
+        Useful for Docker builds or development.
+
+endif
