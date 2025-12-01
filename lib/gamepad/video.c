@@ -20,6 +20,11 @@
 #include "vanilla.h"
 #include "util.h"
 
+#ifdef __APPLE__
+// macOS has no htobe32
+#define htobe32(x) OSSwapHostToBigInt32(x)
+#endif // __APPLE__
+
 typedef struct
 {
     unsigned magic : 4;
