@@ -21,6 +21,8 @@ jobs:
             arch: universal
           - os: macos
             arch: universal
+          - os: raspberrypi0w
+            arch: armv6l
     runs-on: ubuntu-24.04
     steps:
     - uses: actions/checkout@v4
