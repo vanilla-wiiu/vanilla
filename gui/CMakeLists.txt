@@ -366,7 +366,7 @@ if (VANILLA_BUILD_USE_POLKIT)
 endif()
 
 if (VAAPI_FOUND)
-    target_link_libraries(vanilla PRIVATE VAAPI::VAAPI VAAPI::VA VAAPI::DRM)# va-x11 X11)
+    target_link_libraries(vanilla PRIVATE VAAPI::VAAPI VAAPI::VA VAAPI::DRM va-x11 X11)
 endif()
 
 if (DRM_FOUND)
