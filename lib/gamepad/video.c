@@ -22,6 +22,7 @@
 
 #ifdef __APPLE__
 // macOS has no htobe32
+#include <libkern/OSByteOrder.h>
 #define htobe32(x) OSSwapHostToBigInt32(x)
 #endif // __APPLE__
 
