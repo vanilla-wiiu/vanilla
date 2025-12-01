@@ -7,10 +7,16 @@ config BR2_PACKAGE_VANILLA
 
 if BR2_PACKAGE_VANILLA
 
-config BR2_PACKAGE_VANILLA_LOCAL_PATH
-    string "Local repository"
+config BR2_PACKAGE_VANILLA_USE_LOCAL
+    bool "Local build"
     help
-        Local directory to build Vanilla from instead of retrieving from GitHub.
+        Use a local build directory rather than pulling from GitHub.
         Useful for Docker builds or development.
+
+config BR2_PACKAGE_VANILLA_LOCAL_PATH
+    depends on BR2_PACKAGE_VANILLA_USE_LOCAL
+    string "Local repository path"
+    help
+        Local directory to build Vanilla.
 
 endif

@@ -1,13 +1,14 @@
-ifeq ($(strip $(BR2_PACKAGE_VANILLA_LOCAL_PATH)),)
-
-VANILLA_VERSION = master
-VANILLA_SITE = $(call github,vanilla-wiiu,vanilla,$(VANILLA_VERSION))
-
-else
+ifeq ($(BR2_PACKAGE_VANILLA_USE_LOCAL),y)
 
 VANILLA_VERSION = local
 VANILLA_SITE = $(BR2_PACKAGE_VANILLA_LOCAL_PATH)
 VANILLA_SITE_METHOD = local
+VANILLA_OVERRIDE_SRCDIR = $(VANILLA_SITE)
+
+else
+
+VANILLA_VERSION = master
+VANILLA_SITE = $(call github,vanilla-wiiu,vanilla,$(VANILLA_VERSION))
 
 endif
 
