@@ -13,16 +13,22 @@ jobs:
         platform:
           - os: linux
             arch: x86_64
+            artifact: vanilla-linux-x86_64.tar.gz
           - os: linux
             arch: aarch64
+            artifact: vanilla-linux-aarch64.tar.gz
           - os: windows
             arch: x86_64
+            artifact: vanilla-windows-x86_64.zip
           - os: android
             arch: universal
+            artifact: vanilla-android-universal.apk
           - os: macos
             arch: universal
+            artifact: vanilla-macos-universal.zip
           - os: raspberrypi0w
             arch: armv6l
+            artifact: vanilla-raspberrypi0w-image.zip
     runs-on: ubuntu-24.04
     steps:
     - uses: actions/checkout@v4
@@ -49,15 +55,27 @@ jobs:
       run: |
         docker run -v "${{ github.workspace }}:/vanilla" -v "${{ github.workspace }}/build:/install" -e ANDROID_SIGNING_KEY=${{ secrets.ANDROID_SIGNING_KEY }} vanilla-${{ matrix.platform.os }}-${{ matrix.platform.arch }}
 
-    - name: Archive
+    - name: Archive (Linux)
+      if: ${{ matrix.platform.os == 'linux' }}
       run: |
-        tar czf vanilla-${{ matrix.platform.os }}-${{ matrix.platform.arch }}.tar.gz -C "${{ github.workspace }}/build" .
+        tar czf ${{ matrix.platform.artifact }} -C "${{ github.workspace }}/build" .
+
+    - name: Archive (Windows/macOS/Raspberry Pi)
+      if: ${{ matrix.platform.os == 'windows' || matrix.platform.os == 'macos' || matrix.platform.os == 'raspberrypi0w' }}
+      run: |
+        cd build
+        zip -r ../${{ matrix.platform.artifact }} .
+
+    - name: Archive (Android)
+      if: ${{ matrix.platform.os == 'android' }}
+      run: |
+        mv build/app-release.apk ${{ matrix.platform.artifact }}
 
     - name: Upload a Build Artifact
       uses: actions/upload-artifact@v4
       with:
         name: ${{ matrix.platform.os }} ${{ matrix.platform.arch }}
-        path: vanilla-${{ matrix.platform.os }}-${{ matrix.platform.arch }}.tar.gz
+        path: ${{ matrix.platform.artifact }}
 
     - name: Upload Continuous Release
       if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' && github.repository == 'vanilla-wiiu/vanilla' }}
@@ -66,5 +84,5 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         curl -fLOSs --retry 2 --retry-delay 60 https://github.com/probonopd/uploadtool/raw/master/upload.sh
-        bash upload.sh vanilla-${{ matrix.platform.os }}-${{ matrix.platform.arch }}.tar.gz
+        bash upload.sh ${{ matrix.platform.artifact }}
 

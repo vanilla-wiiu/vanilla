@@ -1,4 +1,4 @@
-VANILLA_VERSION = optimizations
+VANILLA_VERSION = master
 VANILLA_SITE = $(call github,vanilla-wiiu,vanilla,$(VANILLA_VERSION))
 VANILLA_LICENSE = GPL-2.0
 VANILLA_LICENSE_FILES = LICENSE

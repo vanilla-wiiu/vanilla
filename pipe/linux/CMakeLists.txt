@@ -190,7 +190,14 @@ endif()
 ExternalProject_Add(hostap
     SOURCE_DIR ${HOSTAP_DIR}
     BINARY_DIR ${HOSTAP_DIR}
-    GIT_REPOSITORY https://github.com/rolandoislas/drc-hostap.git
+
+    # HACK: Kind of silly that we have to do this, but Buildroot insists on
+    #       setting GIT_DIR=. which fucks this up. So we have to write our own
+    #       DOWNLOAD_COMMAND which explicitly unsets GIT_DIR to solve that.
+    #GIT_REPOSITORY https://github.com/rolandoislas/drc-hostap.git
+    DOWNLOAD_COMMAND
+        ${CMAKE_COMMAND} -E env GIT_DIR=
+        ${GIT_EXECUTABLE} clone --branch master --depth 1 https://github.com/rolandoislas/drc-hostap.git "${HOSTAP_DIR}"
     CONFIGURE_COMMAND ${CMAKE_COMMAND} -E copy_if_different conf/wpa_supplicant.config wpa_supplicant/.config
     BUILD_COMMAND env ${HOSTAP_ENV} make -C wpa_supplicant -j${CMAKE_BUILD_PARALLEL_LEVEL} wpa_supplicant libwpa_client.a
     INSTALL_COMMAND ""
