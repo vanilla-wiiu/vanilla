@@ -187,6 +187,7 @@ if (VANILLA_BUILD_VENDORED)
 		LDFLAGS=${HOSTAP_LDFLAGS}
 	)
 endif()
+find_package(Git REQUIRED)
 ExternalProject_Add(hostap
     SOURCE_DIR ${HOSTAP_DIR}
     BINARY_DIR ${HOSTAP_DIR}
