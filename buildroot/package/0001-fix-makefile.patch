@@ -1,0 +1,20 @@
+diff --git a/package/Makefile.in b/package/Makefile.in
+index 829636900b..525316607d 100644
+--- a/package/Makefile.in
++++ b/package/Makefile.in
+@@ -276,7 +276,6 @@ export PERL=$(shell which perl)
+ export PERL5LIB=$(HOST_DIR)/lib/perl
+ 
+ TARGET_MAKE_ENV = \
+-	GIT_DIR=. \
+ 	PATH=$(BR_PATH)
+ 
+ TARGET_CONFIGURE_OPTS = \
+@@ -321,7 +320,6 @@ TARGET_CONFIGURE_OPTS = \
+ 
+ 
+ HOST_MAKE_ENV = \
+-	GIT_DIR=. \
+ 	PATH=$(BR_PATH) \
+ 	PKG_CONFIG="$(PKG_CONFIG_HOST_BINARY)" \
+ 	PKG_CONFIG_SYSROOT_DIR="/" \

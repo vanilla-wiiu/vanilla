@@ -1,0 +1,46 @@
+diff --git a/linux/linux.mk b/linux/linux.mk
+index 16762ac2e6..86875d050f 100644
+--- a/linux/linux.mk
++++ b/linux/linux.mk
+@@ -193,6 +193,8 @@ ifeq ($(BR2_BINFMT_FDPIC),y)
+ LINUX_CFLAGS += -mno-fdpic
+ endif
+ 
++LINUX_CFLAGS += -Wno-maybe-uninitialized -Wno-address-of-packed-member -Wno-stringop-truncation -Wno-address -Wno-array-bounds -Wno-stringop-overread
++
+ ifeq ($(BR2_LINUX_KERNEL_DTB_OVERLAY_SUPPORT),y)
+ LINUX_MAKE_ENV += DTC_FLAGS=-@
+ endif
+@@ -538,6 +540,23 @@ endif
+ # issues.
+ # The call to disable gcc-plugins is a stop-gap measure:
+ #   https://lore.kernel.org/buildroot/20200512095550.GW12536@scaer
++NX_VER = linux-dev
++NV_VER = linux-dev
++NG_VER = linux-3.4.0-r32.5
++DT_VER = l4t/l4t-r32.5
++KERNEL_DIR = output/build
++
++define LINUX_ACQUIRE_DEPS
++	git clone -b $(NV_VER) --single-branch https://github.com/CTCaer/switch-l4t-kernel-nvidia.git "$(KERNEL_DIR)/nvidia"
++	git clone -b $(NX_VER) --single-branch https://github.com/CTCaer/switch-l4t-platform-t210-nx.git "$(KERNEL_DIR)/hardware/nvidia/platform/t210/nx"
++	git clone -b $(NG_VER) --single-branch https://gitlab.com/switchroot/kernel/l4t-kernel-nvgpu "$(KERNEL_DIR)/nvgpu"
++	git clone -b $(DT_VER) --single-branch https://gitlab.com/switchroot/kernel/l4t-soc-t210 "$(KERNEL_DIR)/hardware/nvidia/soc/t210"
++	git clone -b $(DT_VER) --single-branch https://gitlab.com/switchroot/kernel/l4t-soc-tegra "$(KERNEL_DIR)/hardware/nvidia/soc/tegra/"
++	git clone -b $(DT_VER) --single-branch https://gitlab.com/switchroot/kernel/l4t-platform-tegra-common "$(KERNEL_DIR)/hardware/nvidia/platform/tegra/common/"
++	git clone -b $(DT_VER) --single-branch https://gitlab.com/switchroot/kernel/l4t-platform-t210-common "$(KERNEL_DIR)/hardware/nvidia/platform/t210/common/"
++endef
++LINUX_POST_EXTRACT_HOOKS += LINUX_ACQUIRE_DEPS
++
+ define LINUX_BUILD_CMDS
+ 	$(call KCONFIG_DISABLE_OPT,CONFIG_GCC_PLUGINS)
+ 	$(foreach dts,$(call qstrip,$(BR2_LINUX_KERNEL_CUSTOM_DTS_PATH)), \
+@@ -589,6 +608,8 @@ ifeq ($(BR2_STRIP_strip),y)
+ LINUX_MAKE_FLAGS += INSTALL_MOD_STRIP=1
+ endif
+ 
++LINUX_MAKE_FLAGS += tegra-dtstree=../hardware/nvidia
++
+ define LINUX_INSTALL_TARGET_CMDS
+ 	$(LINUX_INSTALL_KERNEL_IMAGE_TO_TARGET)
+ 	# Install modules and remove symbolic links pointing to build
