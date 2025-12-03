@@ -1,0 +1,4 @@
+#!/bin/sh
+
+# Run Vanilla and send all stdout and stderr to /vanilla.log
+/usr/bin/vanilla > /vanilla.log 2>&1
