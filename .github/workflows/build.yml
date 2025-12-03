@@ -32,10 +32,10 @@ jobs:
       run: sudo apt -y update && sudo apt -y install qemu-user-static binfmt-support
 
     - name: Restore Docker cache
-      uses: actions/cache/restore@v4
+      uses: actions/cache@v4
       id: cache
       with:
-        path: path/to/dependencies
+        path: /var/lib/docker/overlay2
         key: ${{ matrix.platform.os }}-${{ matrix.platform.arch }}
 
     - name: Build Docker image
