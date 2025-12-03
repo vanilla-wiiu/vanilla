@@ -16,9 +16,14 @@
 #define VANILLA_PIPE_CC_SYNC_SUCCESS 0x87
 #define VANILLA_PIPE_CC_CONNECTED 0x88
 #define VANILLA_PIPE_CC_DISCONNECTED 0x89
+#define VANILLA_PIPE_CC_INSTALL_POLKIT 0x8A
+#define VANILLA_PIPE_CC_UNINSTALL_POLKIT 0x8B
 #define VANILLA_PIPE_CC_QUIT 0x90
 
 #define VANILLA_PIPE_LOCAL_SOCKET "/tmp/vanilla-pipe_%i.sock"
+
+#define POLKIT_ACTION_DST "/usr/share/polkit-1/actions/com.mattkc.vanilla.policy"
+#define POLKIT_RULE_DST "/usr/share/polkit-1/rules.d/com.mattkc.vanilla.rules"
 
 #pragma pack(push, 1)
 typedef struct {

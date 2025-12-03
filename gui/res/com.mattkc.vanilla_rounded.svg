@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg:svg
+   width="120mm"
+   height="120mm"
+   viewBox="-60 -60 120 120"
+   sodipodi:docname="com.mattkc.vanilla_rounded.svg"
+   version="1.1"
+   id="svg3"
+   inkscape:version="1.4.2 (ebf0e94, 2025-05-08)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns:xlink="http://www.w3.org/1999/xlink"
+   xmlns:svg="http://www.w3.org/2000/svg"
+   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+   xmlns:cc="http://creativecommons.org/ns#"
+   xmlns:dc="http://purl.org/dc/elements/1.1/">
+  <svg:defs
+     id="defs3">
+    <svg:linearGradient
+       id="linearGradient2"
+       inkscape:collect="always">
+      <svg:stop
+         style="stop-color:#0097c9;stop-opacity:1;"
+         offset="0"
+         id="stop2" />
+      <svg:stop
+         style="stop-color:#23caff;stop-opacity:1;"
+         offset="0.84329319"
+         id="stop3" />
+    </svg:linearGradient>
+    <svg:radialGradient
+       inkscape:collect="always"
+       xlink:href="#linearGradient2"
+       id="radialGradient3"
+       cx="0"
+       cy="0"
+       fx="0"
+       fy="0"
+       r="60"
+       gradientUnits="userSpaceOnUse" />
+  </svg:defs>
+  <sodipodi:namedview
+     pagecolor="#ffffff"
+     bordercolor="#666666"
+     borderopacity="1.0"
+     inkscape:pageopacity="0.0"
+     inkscape:pageshadow="2"
+     inkscape:zoom="1.3244432"
+     inkscape:cx="181.96326"
+     inkscape:cy="195.93139"
+     inkscape:document-units="mm"
+     inkscape:current-layer="Template"
+     showgrid="true"
+     units="mm"
+     showguides="true"
+     inkscape:guide-bbox="true"
+     inkscape:snap-global="true"
+     inkscape:snap-bbox="true"
+     inkscape:snap-bbox-midpoints="true"
+     inkscape:window-width="1920"
+     inkscape:window-height="1008"
+     inkscape:window-x="0"
+     inkscape:window-y="0"
+     inkscape:window-maximized="1"
+     inkscape:bbox-paths="true"
+     inkscape:bbox-nodes="true"
+     inkscape:snap-bbox-edge-midpoints="true"
+     inkscape:snap-grids="true"
+     id="namedview1"
+     inkscape:showpageshadow="2"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1" />
+  <svg:metadata
+     id="metadata2822">
+    <rdf:RDF>
+      <cc:Work
+         rdf:about="">
+        <dc:format>image/svg+xml</dc:format>
+        <dc:type
+           rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
+      </cc:Work>
+    </rdf:RDF>
+  </svg:metadata>
+  <svg:g
+     inkscape:label="Layer 1"
+     inkscape:groupmode="layer"
+     id="Template">
+    <svg:rect
+       style="fill:url(#radialGradient3);fill-opacity:1;stroke-width:5.85001"
+       id="rect1"
+       width="120"
+       height="120"
+       x="-60"
+       y="-60"
+       rx="20"
+       ry="20" />
+    <svg:g
+       id="g1">
+      <svg:path
+         id="rect4"
+         d="m -30,-30 c -5.183453,0 -10,4.822056 -10,10 v 40 c 0,5.177938 4.816547,10 10,10 h 60 c 5.183453,0 10,-4.822062 10,-10 v -40 c 0,-5.177944 -4.816547,-10 -10,-10 H 24 L 7,15 H -7 l -17,-45 z"
+         sodipodi:nodetypes="ssssssssccccs"
+         style="fill:#ffffff;fill-opacity:1;stroke-width:1.02791" />
+      <svg:path
+         d="M -10,-30 -6e-6,0 10,-30 Z"
+         id="path1"
+         style="fill:#ffffff;fill-opacity:1;stroke-width:1.02791"
+         sodipodi:nodetypes="cccc" />
+    </svg:g>
+  </svg:g>
+  <script />
+</svg:svg>

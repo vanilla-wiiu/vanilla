@@ -1,0 +1,6 @@
+#ifndef VANILLA_PI_DEF_H
+#define VANILLA_PI_DEF_H
+
+#define VANILLA_PI_ERR_DECODER -1001
+
+#endif // VANILLA_PI_DEF_H

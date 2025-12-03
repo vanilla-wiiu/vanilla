@@ -23,7 +23,6 @@ extern "C" {
 #define VANILLA_ERR_DISCONNECTED        -11
 
 static const uint32_t VANILLA_ADDRESS_LOCAL = 0xFFFFFFFF;
-static const uint32_t VANILLA_ADDRESS_DIRECT = 0x0;
 
 enum VanillaGamepadButtons
 {
@@ -125,14 +124,17 @@ typedef struct {
 int vanilla_start(uint32_t server_address, vanilla_bssid_t bssid, vanilla_psk_t psk);
 int vanilla_sync(uint16_t code, uint32_t server_address);
 
+void vanilla_set_wireless_interface(const char *intf);
+
+int vanilla_install_polkit(uint32_t server_address);
+int vanilla_uninstall_polkit(uint32_t server_address);
+
 int vanilla_poll_event(vanilla_event_t *event);
 int vanilla_wait_event(vanilla_event_t *event);
 int vanilla_free_event(vanilla_event_t *event);
 
 /**
  * Attempt to stop the current action
- *
- * This can be called from another thread to safely exit a blocking call to vanilla_start().
  */
 void vanilla_stop();
 
@@ -192,6 +194,8 @@ void vanilla_set_battery_status(int battery_status);
 /**
  * Retrieve SPS/PPS parameters for H.264 packeting
  */
+size_t vanilla_generate_sps_params(void *data, size_t data_size);
+size_t vanilla_generate_pps_params(void *data, size_t data_size);
 size_t vanilla_generate_h264_header(void *data, size_t size);
 
 /**

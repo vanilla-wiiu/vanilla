@@ -36,15 +36,15 @@
 #include <utils/common.h>
 #include <wpa_supplicant_i.h>
 
-const char *wpa_ctrl_interface = "/var/run/wpa_supplicant_drc";
+static const char *wpa_ctrl_interface = "/var/run/wpa_supplicant_drc";
 
-pthread_mutex_t running_mutex;
-pthread_mutex_t main_loop_mutex;
-pthread_mutex_t action_mutex;
-pthread_mutex_t relay_mutex;
-int running = 0;
-int main_loop = 0;
-int relay_running = 0;
+static pthread_mutex_t running_mutex;
+static pthread_mutex_t main_loop_mutex;
+static pthread_mutex_t action_mutex;
+static pthread_mutex_t relay_mutex;
+static int running = 0;
+static int main_loop = 0;
+static int relay_running = 0;
 
 typedef union {
     struct sockaddr_in in;
@@ -166,27 +166,53 @@ void sigint_handler(int signum)
         nlprint("RECEIVED TERMINATE SIGNAL");
     }
     quit_loop();
-    signal(signum, SIG_DFL);
 }
 
 void *read_stdin(void *arg)
 {
-    char *line = NULL;
-    size_t size = 0;
+    char line[256];
     ssize_t read_size = 0;
+	fd_set fds;
+	struct timeval tv = {0, 10000}; // 10ms
 
-    while ((read_size = getline(&line, &size, stdin)) != -1) {
-        if (read_size == 0) {
-            continue;
-        }
+    pthread_mutex_lock(&main_loop_mutex);
+	while (main_loop) {
+		pthread_mutex_unlock(&main_loop_mutex);
 
-        line[read_size-1] = '\0';
-        if (!strcasecmp(line, "quit") || !strcasecmp(line, "exit") || !strcasecmp(line, "bye")) {
-            quit_loop();
-        }
-    }
+		FD_ZERO(&fds);
+		FD_SET(STDIN_FILENO, &fds);
 
-    free(line);
+		int sel = select(STDIN_FILENO + 1, &fds, NULL, NULL, &tv);
+		if (sel > 0) {
+			char c;
+			ssize_t s = read(STDIN_FILENO, &c, 1);
+			if (s > 0) {
+				if (c == '\n') {
+					// Add null terminator
+					line[read_size] = 0;
+
+					// Parse line
+					if (!strcasecmp(line, "quit") || !strcasecmp(line, "exit") || !strcasecmp(line, "bye")) {
+						quit_loop();
+					}
+
+					read_size = 0;
+				} else if (c == EOF) {
+					break;
+				} else {
+					line[read_size] = c;
+					read_size = (read_size + 1) % sizeof(line);
+				}
+			} else if (s < 0) {
+				perror("read()");
+			}
+		} else if (sel < 0) {
+			perror("select()");
+		}
+		pthread_mutex_lock(&main_loop_mutex);
+	}
+	pthread_mutex_unlock(&main_loop_mutex);
+
     return NULL;
 }
 
@@ -195,11 +221,96 @@ void *start_wpa(void *arg)
     return THREADRESULT(wpa_supplicant_run((struct wpa_global *) arg));
 }
 
+ssize_t run_process_and_read_stdout(const char **args, char *read_buffer, size_t read_buffer_len)
+{
+	// Create pipe so we can read from the forked child
+	int pipefd[2];
+	pipe(pipefd);
+
+	// Perform fork
+	pid_t pid = fork();
+
+	// Handle fork
+	switch (pid) {
+	case -1:
+		// Fork failed for some reason, report the errno
+		nlprint("Failed to fork to run process: %i", errno);
+		return -1;
+	case 0:
+		// We are the child process, go ahead and run exec
+		close(pipefd[0]); // Close reading pipe
+
+		dup2(pipefd[1], STDOUT_FILENO); // Set stdout to write
+		// dup2(pipefd[1], STDERR_FILENO); // Set stderr to write
+
+		close(pipefd[1]); // Done with this for now
+
+		execvp(args[0], (char * const *) args);
+
+		// Exit immediately if for some reason execvp failed
+		_exit(0);
+	default:
+		// We are the parent process. Read from stdout until EOF.
+
+		close(pipefd[1]); // Close write, don't need it
+
+		ssize_t read_len = 0;
+		char *read_buffer_now = read_buffer;
+		char * const read_buffer_end = read_buffer + read_buffer_len;
+		if (read_buffer && read_buffer_len) {
+			while (read_buffer_now != read_buffer_end) {
+				read_len = read(pipefd[0], read_buffer_now, read_buffer_end - read_buffer_now);
+				if (read_len <= 0) {
+					break;
+				}
+				read_buffer_now += read_len;
+			}
+		}
+
+		int status;
+		if (waitpid(pid, &status, 0) == -1) {
+			nlprint("Failed to waitpid: %i", errno);
+			return -1;
+		}
+
+		close(pipefd[0]); // Close read, we're done reading
+
+		if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
+			return read_buffer_now - read_buffer;
+		} else {
+			nlprint("Subprocess failed with status: 0x%x", status);
+			return -1;
+		}
+	}
+}
+
+void set_signals()
+{
+	struct sigaction sa;
+	sa.sa_handler = sigint_handler;
+	sigemptyset(&sa.sa_mask);
+	sa.sa_flags = 0;
+	sigaction(SIGINT, &sa, NULL);
+	sigaction(SIGTERM, &sa, NULL);
+}
+
 void *wpa_setup_environment(void *data)
 {
     void *ret = THREADRESULT(VANILLA_ERR_GENERIC);
 
     struct sync_args *args = (struct sync_args *) data;
+
+	// If this is the Steam Deck, we must switch the backend from `iwd` to `wpa_supplicant`
+	int sd_wifi_backend_changed = 0;
+	{
+		char sd_wifi_backend_buf[100] = {0};
+		ssize_t ret = run_process_and_read_stdout((const char *[]) {"steamos-wifi-set-backend", "--check", NULL}, sd_wifi_backend_buf, sizeof(sd_wifi_backend_buf));
+		if (ret > 0 && !strcmp("iwd\n", sd_wifi_backend_buf)) {
+			nlprint("STEAM DECK: SETTING WIFI BACKEND TO WPA_SUPPLICANT");
+			sd_wifi_backend_changed = 1;
+			run_process_and_read_stdout((const char *[]) {"steamos-wifi-set-backend", "wpa_supplicant", NULL}, 0, 0);
+		}
+	}
 
 #ifdef USE_LIBNM
     // Check status of interface with NetworkManager
@@ -239,6 +350,9 @@ void *wpa_setup_environment(void *data)
         goto die_and_reenable_managed;
     }
 
+	// wpa_supplicant may have replaced our signals, so lets re-set them
+	set_signals();
+
     struct wpa_supplicant *wpa_s = wpa_supplicant_add_iface(wpa, &interface, NULL);
     if (!wpa_s) {
         nlprint("FAILED TO ADD WPA IFACE");
@@ -273,7 +387,7 @@ die_and_close:
     wpa_ctrl_close(ctrl);
 
 die_and_kill:
-    pthread_kill(wpa_thread, SIGINT);
+    pthread_cancel(wpa_thread);
     pthread_join(wpa_thread, NULL);
     wpa_supplicant_deinit(wpa);
 
@@ -289,6 +403,12 @@ die_and_close_nmcli:
         g_object_unref(nmcli);
     }
 #endif
+
+	if (sd_wifi_backend_changed) {
+		// Restore iwd
+		nlprint("STEAM DECK: SETTING WIFI BACKEND TO IWD");
+		run_process_and_read_stdout((const char *[]) {"steamos-wifi-set-backend", "iwd", NULL}, 0, 0);
+	}
 
 die:
     return ret;
@@ -546,28 +666,31 @@ close:
 void create_all_relays(struct sync_args *args)
 {
     pthread_t vid_thread, aud_thread, msg_thread, cmd_thread, hid_thread;
-    struct relay_info vid_info, aud_info, msg_info, cmd_info, hid_info;
 
-    // Set common info for all
-    vid_info.wireless_interface = aud_info.wireless_interface = msg_info.wireless_interface = cmd_info.wireless_interface = hid_info.wireless_interface = args->wireless_interface;
-    vid_info.local = aud_info.local = msg_info.local = cmd_info.local = hid_info.local = args->local;
-    vid_info.client = aud_info.client = msg_info.client = cmd_info.client = hid_info.client = args->client;
-    vid_info.client_size = aud_info.client_size = msg_info.client_size = cmd_info.client_size = hid_info.client_size = args->client_size;
+    if (!args->local) {
+        struct relay_info vid_info, aud_info, msg_info, cmd_info, hid_info;
 
-    vid_info.port = PORT_VID;
-    aud_info.port = PORT_AUD;
-    msg_info.port = PORT_MSG;
-    cmd_info.port = PORT_CMD;
-    hid_info.port = PORT_HID;
+        // Set common info for all
+        vid_info.wireless_interface = aud_info.wireless_interface = msg_info.wireless_interface = cmd_info.wireless_interface = hid_info.wireless_interface = args->wireless_interface;
+        vid_info.local = aud_info.local = msg_info.local = cmd_info.local = hid_info.local = args->local;
+        vid_info.client = aud_info.client = msg_info.client = cmd_info.client = hid_info.client = args->client;
+        vid_info.client_size = aud_info.client_size = msg_info.client_size = cmd_info.client_size = hid_info.client_size = args->client_size;
 
-    // Enable relays
-    relay_running = 1;
+        vid_info.port = PORT_VID;
+        aud_info.port = PORT_AUD;
+        msg_info.port = PORT_MSG;
+        cmd_info.port = PORT_CMD;
+        hid_info.port = PORT_HID;
 
-    pthread_create(&vid_thread, NULL, open_relay, &vid_info);
-    pthread_create(&aud_thread, NULL, open_relay, &aud_info);
-    pthread_create(&msg_thread, NULL, open_relay, &msg_info);
-    pthread_create(&cmd_thread, NULL, open_relay, &cmd_info);
-    pthread_create(&hid_thread, NULL, open_relay, &hid_info);
+        // Enable relays
+        relay_running = 1;
+
+        pthread_create(&vid_thread, NULL, open_relay, &vid_info);
+        pthread_create(&aud_thread, NULL, open_relay, &aud_info);
+        pthread_create(&msg_thread, NULL, open_relay, &msg_info);
+        pthread_create(&cmd_thread, NULL, open_relay, &cmd_info);
+        pthread_create(&hid_thread, NULL, open_relay, &hid_info);
+    }
 
     // Notify client that we are connected
     vanilla_pipe_command_t cmd;
@@ -588,16 +711,21 @@ void create_all_relays(struct sync_args *args)
                 break;
             }
         }
+
+        // wpa_ctrl_recv is non-blocking, so reduce thrashing by sleeping here
+        sleep(1);
     }
 
-    // Stop all relays
-    interrupt_relays();
+    if (!args->local) {
+        // Stop all relays
+        interrupt_relays();
 
-    pthread_join(vid_thread, NULL);
-    pthread_join(aud_thread, NULL);
-    pthread_join(msg_thread, NULL);
-    pthread_join(cmd_thread, NULL);
-    pthread_join(hid_thread, NULL);
+        pthread_join(vid_thread, NULL);
+        pthread_join(aud_thread, NULL);
+        pthread_join(msg_thread, NULL);
+        pthread_join(cmd_thread, NULL);
+        pthread_join(hid_thread, NULL);
+    }
 }
 
 void *thread_handler(void *data)
@@ -967,6 +1095,71 @@ void *vanilla_connect_to_console(void *data)
     return wpa_setup_environment(args);
 }
 
+int uninstall_polkit()
+{
+	unlink(POLKIT_ACTION_DST);
+	unlink(POLKIT_RULE_DST);
+}
+
+int install_polkit()
+{
+	static const char *ACTION_TEMPLATE =
+		"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+		"<!DOCTYPE policyconfig PUBLIC \"-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN\" \"http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd\">\n"
+		"<policyconfig>\n"
+		"  <vendor>MattKC</vendor>\n"
+		"  <vendor_url>https://mattkc.com</vendor_url>\n"
+		"  <action id=\"com.mattkc.vanilla\">\n"
+		"    <description>Run Vanilla Pipe as root</description>\n"
+		"    <message>Authentication is required to run Vanilla Pipe as root</message>\n"
+		"    <defaults>\n"
+		"      <allow_any>auth_admin</allow_any>\n"
+		"      <allow_inactive>auth_admin</allow_inactive>\n"
+		"      <allow_active>auth_admin</allow_active>\n"
+		"    </defaults>\n"
+		"    <annotate key=\"org.freedesktop.policykit.exec.path\">%s</annotate>\n"
+		"    <annotate key=\"org.freedesktop.policykit.exec.allow_gui\">true</annotate>\n"
+		"  </action>\n"
+		"</policyconfig>\n";
+
+	static const char *RULE_TEMPLATE =
+		"/**\n"
+		" * Allow all users to run vanilla-pipe as root without having to enter a password\n"
+		" *\n"
+		" * This provides convenience, especially on platforms more suited for touch\n"
+		" * controls, however it could be dangerous to allow a program unrestricted\n"
+		" * administrator access, so it should be used with caution.\n"
+		" */\n"
+		"polkit.addRule(function(action, subject) {\n"
+		"    if (action.id == \"com.mattkc.vanilla\") {\n"
+		"        return polkit.Result.YES;\n"
+		"    }\n"
+		"});\n";
+
+	// Get current filename
+	char exe[4096];
+	ssize_t link_len = readlink("/proc/self/exe", exe, sizeof(exe));
+	exe[link_len] = 0;
+
+	// If on the Steam Deck, ensure the system partition is writeable
+	run_process_and_read_stdout((const char *[]) {"steamos-readonly", "disable", NULL}, 0, 0);
+
+	int ret = VANILLA_ERR_GENERIC;
+
+	FILE *action = fopen(POLKIT_ACTION_DST, "w");
+	FILE *rule = fopen(POLKIT_RULE_DST, "w");
+	if (action && rule) {
+		fprintf(action, ACTION_TEMPLATE, exe);
+		fprintf(rule, RULE_TEMPLATE);
+		ret = VANILLA_SUCCESS;
+	}
+
+	if (action)	fclose(action);
+	if (rule) fclose(rule);
+
+	return ret;
+}
+
 void pipe_listen(int local, const char *wireless_interface, const char *log_file)
 {
     // Store reference to log file
@@ -989,11 +1182,10 @@ void pipe_listen(int local, const char *wireless_interface, const char *log_file
     pthread_mutex_init(&action_mutex, NULL);
     pthread_mutex_init(&main_loop_mutex, NULL);
 
-    signal(SIGINT, sigint_handler);
-    signal(SIGTERM, sigint_handler);
+	pthread_t stdin_thread;
+	pthread_create(&stdin_thread, NULL, read_stdin, NULL);
 
-    pthread_t stdin_thread;
-    pthread_create(&stdin_thread, NULL, read_stdin, NULL);
+	set_signals();
 
     main_loop = 1;
 
@@ -1048,6 +1240,20 @@ void pipe_listen(int local, const char *wireless_interface, const char *log_file
                     nlprint("FAILED TO SEND BUSY: %i", errno);
                 }
             }
+		} else if (cmd.control_code == VANILLA_PIPE_CC_INSTALL_POLKIT || cmd.control_code == VANILLA_PIPE_CC_UNINSTALL_POLKIT) {
+			if (cmd.control_code == VANILLA_PIPE_CC_INSTALL_POLKIT) {
+				// Write Polkit rule and action
+				install_polkit();
+			} else {
+				// Delete Polkit rule and action
+				uninstall_polkit();
+			}
+
+			// Acknowledge
+			cmd.control_code = VANILLA_PIPE_CC_BIND_ACK;
+			if (sendto(skt, &cmd, sizeof(cmd.control_code), 0, (const struct sockaddr *) &addr, addr_size) == -1) {
+				nlprint("FAILED TO SEND ACK: %i", errno);
+			}
         } else if (cmd.control_code == VANILLA_PIPE_CC_UNBIND) {
             nlprint("RECEIVED UNBIND SIGNAL");
             interrupt();
@@ -1065,10 +1271,8 @@ repeat_loop:
     pthread_mutex_lock(&action_mutex);
     pthread_mutex_unlock(&action_mutex);
 
-    // Interrupt our stdin thread
-    signal(SIGINT, SIG_DFL);
-    signal(SIGTERM, SIG_DFL);
-    pthread_kill(stdin_thread, SIGINT);
+	// Wait for stdin thread
+	pthread_join(stdin_thread, NULL);
 
     pthread_mutex_destroy(&main_loop_mutex);
     pthread_mutex_destroy(&action_mutex);
