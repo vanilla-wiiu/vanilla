@@ -6,7 +6,6 @@ build/
 squashfs-root/
 
 buildpi/
-rpi-ffmpeg/
 
 .gradle/
 .cxx/
