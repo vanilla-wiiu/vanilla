@@ -989,15 +989,20 @@ void vui_sdl_draw_button(vui_context_t *vui, vui_sdl_context_t *sdl_ctx, vui_but
             if (btn->style == VUI_BUTTON_STYLE_CORNER) {
                 // we apply the formula of the circle quarter centroid
                 // https://www.efunda.com/math/areas/CircleQuarter.cfm
-                float off = (4.0f * rect.w) / (3.0f * M_PI);
                 int scrw, scrh;
                 vui_get_screen_size(vui, &scrw, &scrh);
+                float fract = 4.0f / (3.0f * M_PI);
+                float off_h = fract * rect.h;
+                float off_w = fract * rect.w;
+                // we treat the x and y offsets differently
+                // to account for non-circular button shapes
                 // we also verify which corner on the screen the button is placed
                 // in order to adjust the offset
-                float cx = rect.x + (btn->x < scrw / 2.0f ? off : (rect.w - off));
-                float cy = rect.y + (btn->y < scrh / 2.0f ? off : (rect.w - off));
-                text_rect.x = (int)(cx - text_rect.w / 2.0f);
-                text_rect.y = (int)(cy - text_rect.h / 2.0f);
+                float cx = rect.x + (btn->x < scrw / 2 ? off_w : (rect.w - off_w));
+                float cy = rect.y + (btn->y < scrh / 2 ? off_h : (rect.h - off_h));
+
+                text_rect.x = (int)(cx - text_rect.w * 0.5f);
+                text_rect.y = (int)(cy - text_rect.h * 0.5f);
             }
         }
 
