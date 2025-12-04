@@ -966,21 +966,25 @@ void vui_sdl_draw_button(vui_context_t *vui, vui_sdl_context_t *sdl_ctx, vui_but
 
         SDL_Rect text_rect;
 
-        text_rect.w = surface->w;
-        text_rect.h = surface->h;
+        const int msaa_scaled_text_w = surface->w * msaa;
+        const int msaa_scaled_text_h = surface->h * msaa;
+
+        text_rect.w = msaa_scaled_text_w;
+        text_rect.h = msaa_scaled_text_h;
 
         const int btn_padding = 8;
-        text_rect.x = rect.x + rect.w / 2 - (text_rect.w * msaa) / 2;
-        text_rect.y = rect.y + rect.h / 2 - (text_rect.h * msaa) / 2;
+        text_rect.x = rect.x + rect.w / 2 - msaa_scaled_text_w / 2;
+        text_rect.y = rect.y + rect.h / 2 - msaa_scaled_text_h / 2;
 
         // Adjust text rect if icon exists
         if (icon) {
             if (btn->style == VUI_BUTTON_STYLE_CORNER) {
-                text_rect.y = rect.y + rect.h/2 - (text_rect.h + icon_size + btn_padding)/2;
+                text_rect.y = rect.y + rect.h/2 - (msaa_scaled_text_h + icon_size + btn_padding)/2;
                 icon_x = rect.x + rect.w/2 - icon_size/2;
-                icon_y = text_rect.y + text_rect.h + btn_padding;
+                icon_y = text_rect.y + msaa_scaled_text_h + btn_padding;
             } else {
-                icon_x = rect.x + rect.w/2 - (text_rect.w + icon_size)/2;
+                const int total_width = icon_size + btn_padding + msaa_scaled_text_w;
+                icon_x = rect.x + rect.w/2 - total_width/2;
                 icon_y = rect.y + rect.h/2 - icon_size/2;
                 text_rect.x = icon_x + icon_size + btn_padding;
             }
@@ -1001,13 +1005,10 @@ void vui_sdl_draw_button(vui_context_t *vui, vui_sdl_context_t *sdl_ctx, vui_but
                 float cx = rect.x + (btn->x < scrw / 2 ? off_w : (rect.w - off_w));
                 float cy = rect.y + (btn->y < scrh / 2 ? off_h : (rect.h - off_h));
 
-                text_rect.x = (int)(cx - text_rect.w * 0.5f);
-                text_rect.y = (int)(cy - text_rect.h * 0.5f);
+                text_rect.x = (int)(cx - msaa_scaled_text_w * 0.5f);
+                text_rect.y = (int)(cy - msaa_scaled_text_h * 0.5f);
             }
         }
-
-        text_rect.w *= msaa;
-        text_rect.h *= msaa;
 
         SDL_RenderCopy(sdl_ctx->renderer, texture, NULL, &text_rect);
         SDL_DestroyTexture(texture);
@@ -1770,3 +1771,4 @@ int vui_update_sdl(vui_context_t *vui)
 
     return !vui->quit;
 }
+
