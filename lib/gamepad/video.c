@@ -20,7 +20,10 @@
 #include "vanilla.h"
 #include "util.h"
 
-#ifdef __APPLE__
+#if defined(_WIN32)
+// Windows has no htobe32, and is always virtually little-endiam
+#define htobe32(x) htonl(x)
+#elif defined(__APPLE__)
 // macOS has no htobe32
 #include <libkern/OSByteOrder.h>
 #define htobe32(x) OSSwapHostToBigInt32(x)
