@@ -682,7 +682,7 @@ int vui_init_sdl(vui_context_t *ctx, int fullscreen)
 
     sdl_ctx->frame = av_frame_alloc();
 
-    sdl_ctx->event_thread = SDL_CreateThread(vui_sdl_event_thread, "vanilla-event", ctx);
+    // sdl_ctx->event_thread = SDL_CreateThread(vui_sdl_event_thread, "vanilla-event", ctx);
     sdl_ctx->display_mutex = SDL_CreateMutex();
 
 	// Initialize gamepad lookup tables
@@ -1112,6 +1112,9 @@ void vui_draw_sdl(vui_context_t *ctx, SDL_Renderer *renderer)
     for (int i = 0; i < ctx->label_count; i++) {
         vui_label_t *lbl = &ctx->labels[i];
         if (lbl->text[0] && lbl->visible) {
+            if (!lbl->texture) {
+
+            }
             SDL_SetRenderTarget(renderer, sdl_ctx->layer_data[lbl->layer]);
 
             SDL_Color c;
@@ -1558,6 +1561,8 @@ int get_texture_from_drm_prime_frame(vui_sdl_context_t *sdl_ctx, AVFrame *f)
 // Rendering/main thread
 int vui_update_sdl(vui_context_t *vui)
 {
+    vui_sdl_event_thread(vui);
+
     vui_sdl_context_t *sdl_ctx = (vui_sdl_context_t *) vui->platform_data;
 
     SDL_LockMutex(sdl_ctx->display_mutex);
