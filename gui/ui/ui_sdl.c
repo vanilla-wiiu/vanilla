@@ -325,8 +325,9 @@ int vui_sdl_event_thread(void *data)
     vui_sdl_context_t *sdl_ctx = (vui_sdl_context_t *) vui->platform_data;
 
     SDL_Event ev;
-    while (!vui->quit) {
-        while (SDL_WaitEventTimeout(&ev, 100)) {
+    // while (!vui->quit) {
+        // while (SDL_WaitEventTimeout(&ev, 100)) {
+        while (SDL_PollEvent(&ev)) {
             SDL_LockMutex(sdl_ctx->display_mutex);
 
             switch (ev.type) {
@@ -523,7 +524,7 @@ int vui_sdl_event_thread(void *data)
             }
             SDL_UnlockMutex(sdl_ctx->display_mutex);
         }
-    }
+    // }
 
     return 0;
 }
