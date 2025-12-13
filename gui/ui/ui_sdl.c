@@ -1112,9 +1112,6 @@ void vui_draw_sdl(vui_context_t *ctx, SDL_Renderer *renderer)
     for (int i = 0; i < ctx->label_count; i++) {
         vui_label_t *lbl = &ctx->labels[i];
         if (lbl->text[0] && lbl->visible) {
-            if (!lbl->texture) {
-
-            }
             SDL_SetRenderTarget(renderer, sdl_ctx->layer_data[lbl->layer]);
 
             SDL_Color c;
@@ -1659,10 +1656,13 @@ int vui_update_sdl(vui_context_t *vui)
 		}
 
         if (sdl_ctx->game_tex) {
-			// main_tex = sdl_ctx->layer_data[0];
-			// SDL_SetRenderTarget(renderer, main_tex);
-			// SDL_RenderCopy(renderer, sdl_ctx->game_tex, 0, 0);
-            main_tex = sdl_ctx->game_tex;
+            if (handle_final_blit) {
+                main_tex = sdl_ctx->layer_data[0];
+                SDL_SetRenderTarget(renderer, main_tex);
+                SDL_RenderCopy(renderer, sdl_ctx->game_tex, 0, 0);
+            } else {
+                main_tex = sdl_ctx->game_tex;
+            }
 		}
     }
 
