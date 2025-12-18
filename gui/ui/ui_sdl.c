@@ -76,9 +76,6 @@ typedef struct {
 	vui_power_state_t last_power_state;
 
 	uint16_t last_vibration_state;
-
-    SDL_Thread *event_thread;
-    SDL_mutex *display_mutex;
 } vui_sdl_context_t;
 
 static int button_map[SDL_CONTROLLER_BUTTON_MAX];
@@ -328,13 +325,10 @@ int vui_sdl_event_thread(void *data)
     // while (!vui->quit) {
         // while (SDL_WaitEventTimeout(&ev, 100)) {
         while (SDL_PollEvent(&ev)) {
-            SDL_LockMutex(sdl_ctx->display_mutex);
-
             switch (ev.type) {
             case SDL_QUIT:
                 vanilla_stop();
                 vui_quit(vui);
-                SDL_UnlockMutex(sdl_ctx->display_mutex);
                 return 0;
             case SDL_MOUSEMOTION:
             case SDL_MOUSEBUTTONDOWN:
@@ -522,7 +516,6 @@ int vui_sdl_event_thread(void *data)
                 vpilog("text editing!\n");
                 break;
             }
-            SDL_UnlockMutex(sdl_ctx->display_mutex);
         }
     // }
 
@@ -575,7 +568,7 @@ int vui_init_sdl(vui_context_t *ctx, int fullscreen)
         return -1;
     }
 
-    sdl_ctx->renderer = SDL_CreateRenderer(sdl_ctx->window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+    sdl_ctx->renderer = SDL_CreateRenderer(sdl_ctx->window, -1, SDL_RENDERER_ACCELERATED);
     if (!sdl_ctx->renderer) {
         vpilog("Failed to CreateRenderer\n");
         return -1;
@@ -683,9 +676,6 @@ int vui_init_sdl(vui_context_t *ctx, int fullscreen)
 
     sdl_ctx->frame = av_frame_alloc();
 
-    // sdl_ctx->event_thread = SDL_CreateThread(vui_sdl_event_thread, "vanilla-event", ctx);
-    sdl_ctx->display_mutex = SDL_CreateMutex();
-
 	// Initialize gamepad lookup tables
 	init_gamepad();
 
@@ -697,14 +687,6 @@ void vui_close_sdl(vui_context_t *ctx)
     vui_sdl_context_t *sdl_ctx = (vui_sdl_context_t *) ctx->platform_data;
     if (!sdl_ctx) {
         return;
-    }
-
-    if (sdl_ctx->event_thread) {
-        SDL_WaitThread(sdl_ctx->event_thread, 0);
-    }
-
-    if (sdl_ctx->display_mutex) {
-        SDL_DestroyMutex(sdl_ctx->display_mutex);
     }
 
     av_frame_free(&sdl_ctx->frame);
@@ -1563,8 +1545,6 @@ int vui_update_sdl(vui_context_t *vui)
 
     vui_sdl_context_t *sdl_ctx = (vui_sdl_context_t *) vui->platform_data;
 
-    SDL_LockMutex(sdl_ctx->display_mutex);
-
     SDL_Rect *dst_rect = &sdl_ctx->dst_rect;
 
     SDL_Renderer *renderer = sdl_ctx->renderer;
@@ -1664,7 +1644,7 @@ int vui_update_sdl(vui_context_t *vui)
             } else {
                 main_tex = sdl_ctx->game_tex;
             }
-		}
+        }
     }
 
     if (handle_final_blit) {
@@ -1761,10 +1741,12 @@ int vui_update_sdl(vui_context_t *vui)
         }
     }
 
-    // We don't touch the struct anymore after this
-    SDL_UnlockMutex(sdl_ctx->display_mutex);
-
     if (handle_final_blit) {
+        static Uint32 last = 0;
+        Uint32 now = SDL_GetTicks();
+        vpilog("delta: %ums\n", now - last);
+        last = now;
+
         // Copy texture to window
         SDL_SetRenderTarget(renderer, NULL);
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
