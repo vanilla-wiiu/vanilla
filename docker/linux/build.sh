@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -e
+
 EXTRA_CMAKE_FLAGS=
 
 if [ "$ARCH" = "aarch64" ]

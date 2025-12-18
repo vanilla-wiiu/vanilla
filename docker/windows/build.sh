@@ -1,4 +1,7 @@
 #!/bin/sh
+
+set -e
+
 mkdir /build
 cmake -S /vanilla -B /build -DVANILLA_BUILD_VENDORED=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_TOOLCHAIN_FILE=/mingw-w64-x86_64.cmake
 cmake --build /build --parallel
