@@ -1541,6 +1541,8 @@ int get_texture_from_drm_prime_frame(vui_sdl_context_t *sdl_ctx, AVFrame *f)
 // Rendering/main thread
 int vui_update_sdl(vui_context_t *vui)
 {
+    static Uint32 last_update_time = 0;
+
     vui_sdl_event_thread(vui);
 
     vui_sdl_context_t *sdl_ctx = (vui_sdl_context_t *) vui->platform_data;
@@ -1634,16 +1636,19 @@ int vui_update_sdl(vui_context_t *vui)
                 break;
             }
 			av_frame_unref(sdl_ctx->frame);
-		}
 
-        if (sdl_ctx->game_tex) {
-            if (handle_final_blit) {
-                main_tex = sdl_ctx->layer_data[0];
-                SDL_SetRenderTarget(renderer, main_tex);
-                SDL_RenderCopy(renderer, sdl_ctx->game_tex, 0, 0);
-            } else {
-                main_tex = sdl_ctx->game_tex;
+            if (sdl_ctx->game_tex) {
+                if (handle_final_blit) {
+                    main_tex = sdl_ctx->layer_data[0];
+                    SDL_SetRenderTarget(renderer, main_tex);
+                    SDL_RenderCopy(renderer, sdl_ctx->game_tex, 0, 0);
+                } else {
+                    main_tex = sdl_ctx->game_tex;
+                }
             }
+		} else {
+            // Didn't get a frame, nothing to be done
+            handle_final_blit = 0;
         }
     }
 
@@ -1739,13 +1744,6 @@ int vui_update_sdl(vui_context_t *vui)
             dst_rect->h = win_w * vui->screen_height / vui->screen_width;
             dst_rect->y = win_h / 2 - dst_rect->h / 2;
         }
-    }
-
-    if (handle_final_blit) {
-        static Uint32 last = 0;
-        Uint32 now = SDL_GetTicks();
-        vpilog("delta: %ums\n", now - last);
-        last = now;
 
         // Copy texture to window
         SDL_SetRenderTarget(renderer, NULL);
@@ -1756,6 +1754,14 @@ int vui_update_sdl(vui_context_t *vui)
         // Flip surfaces
         SDL_RenderPresent(renderer);
     }
+
+    // Frame limiter to save CPU cycles
+    const Uint32 target = 5; // No need to update faster than 200Hz (gamepad polls at 180Hz, but this is easier to calculate)
+    Uint32 frame_delta = SDL_GetTicks() - last_update_time;
+    if (frame_delta < target) {
+        SDL_Delay(target - frame_delta);
+    }
+    last_update_time = SDL_GetTicks();
 
     return !vui->quit;
 }
