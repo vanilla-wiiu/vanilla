@@ -38,6 +38,51 @@ At a minimum, you will need an adapter that supports 802.11n 5GHz. Newer standar
 
 In practice, not all hardware/drivers appear to work at this time. Check the [Wireless Compatibility](https://github.com/vanilla-wiiu/vanilla/wiki/Wireless-Compatibility) page on the wiki to check if a card is confirmed working or not.
 
+## Keyboard Mapping
+
+### Special Functions
+
+Extra Vanilla functionality can be accessed through these keyboard shortcuts. On platforms like the [Steam Deck](https://github.com/vanilla-wiiu/vanilla/wiki/Steam-Deck), these can be mapped to the back grip buttons.
+
+| Function              | Key           |
+| --------------------- | ------------- |
+| Start/Stop Recording  | F5            |
+| Take Screenshot       | F12           |
+| Disconnect            | Esc           |
+
+### Gameplay
+
+While a controller/gamepad is strongly recommended for the best experience, it is possible to use the keyboard as a fallback. Currently the keys are not remappable, but this is what they are mapped to by default:
+
+| Gamepad Button    | Key           |
+| ----------------- | ------------- |
+| A                 | Z             |
+| B                 | X             |
+| X                 | C             |
+| Y                 | V             |
+| Plus (+)          | Enter/Return  |
+| Minus (-)         | Left Ctrl     |
+| Home              | H             |
+| TV                | Y             |
+| Left Stick Up     | W             |
+| Left Stick Left   | S             |
+| Left Stick Down   | A             |
+| Left Stick Right  | D             |
+| Left Stick Click  | E             |
+| D-Pad Up          | Up Arrow      |
+| D-Pad Left        | Left Arrow    |
+| D-Pad Down        | Down Arrow    |
+| D-Pad Right       | Right Arrow   |
+| Right Stick Up    | Keypad 8      |
+| Right Stick Left  | Keypad 4      |
+| Right Stick Down  | Keypad 2      |
+| Right Stick Right | Keypad 6      |
+| Right Stick Click | Keypad 5      |
+| L                 | T             |
+| ZL                | G             |
+| R                 | U             |
+| ZR                | J             |
+
 ## Compiling (Linux)
 Vanilla currently requires the following dependencies:
 
