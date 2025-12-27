@@ -564,13 +564,13 @@ int vui_init_sdl(vui_context_t *ctx, int fullscreen)
 
     sdl_ctx->window = SDL_CreateWindow("Vanilla", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, ctx->screen_width, ctx->screen_height, window_flags);
     if (!sdl_ctx->window) {
-        vpilog("Failed to CreateWindow\n");
+        vpilog("Failed to CreateWindow: %s\n", SDL_GetError());
         return -1;
     }
 
     sdl_ctx->renderer = SDL_CreateRenderer(sdl_ctx->window, -1, SDL_RENDERER_ACCELERATED);
     if (!sdl_ctx->renderer) {
-        vpilog("Failed to CreateRenderer\n");
+        vpilog("Failed to CreateRenderer: %s\n", SDL_GetError());
         return -1;
     }
 
