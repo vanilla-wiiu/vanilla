@@ -19,6 +19,7 @@ typedef struct {
     char wireless_interface[VPI_CONSOLE_MAX_NAME];
     int connection_setup;
     int region;
+    int swap_abxy;
 } vpi_config_t;
 
 extern vpi_config_t vpi_config;

@@ -24,6 +24,7 @@
 #include "ui_sdl_drm.h"
 #endif
 
+#include "config.h"
 #include "menu/menu.h"
 #include "menu/menu_game.h"
 #include "platform.h"
@@ -418,6 +419,16 @@ int vui_sdl_event_thread(void *data)
                         if (ev.type == SDL_CONTROLLERBUTTONDOWN)
                             vpi_menu_action(vui, (vpi_extra_action_t) vanilla_btn);
                     } else if (vanilla_btn != -1) {
+                        // Handle ABXY swap
+                        if (vpi_config.swap_abxy) {
+                            switch (vanilla_btn) {
+                            case VANILLA_BTN_A: vanilla_btn = VANILLA_BTN_B; break;
+                            case VANILLA_BTN_B: vanilla_btn = VANILLA_BTN_A; break;
+                            case VANILLA_BTN_X: vanilla_btn = VANILLA_BTN_Y; break;
+                            case VANILLA_BTN_Y: vanilla_btn = VANILLA_BTN_X; break;
+                            }
+                        }
+
                         if (vui->game_mode) {
                             vanilla_set_button(vanilla_btn, ev.type == SDL_CONTROLLERBUTTONDOWN ? INT16_MAX : 0);
                         } else if (ev.type == SDL_CONTROLLERBUTTONDOWN) {
