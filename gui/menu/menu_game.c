@@ -34,6 +34,8 @@ static char screenshot_buf[4096] = {0};
 static const int VIDEO_STREAM_INDEX = 0;
 static const int AUDIO_STREAM_INDEX = 1;
 
+int vpi_egl_available = 1;
+
 static int status_lbl;
 static struct {
     int64_t last_power_time;
@@ -215,7 +217,7 @@ int vpi_decode_init(vpi_decode_state_t *s)
 	enum AVPixelFormat (*get_format)(struct AVCodecContext *s, const enum AVPixelFormat * fmt);
 
 	// Test for VAAPI
-	if ((ffmpeg_err = av_hwdevice_ctx_create(&s->hw_device_ctx, AV_HWDEVICE_TYPE_VAAPI, 0, 0, 0)) >= 0) {
+	if (vpi_egl_available && ((ffmpeg_err = av_hwdevice_ctx_create(&s->hw_device_ctx, AV_HWDEVICE_TYPE_VAAPI, 0, 0, 0)) >= 0)) {
 		vpilog("Decoding: VAAPI\n");
 		codec = avcodec_find_decoder(AV_CODEC_ID_H264);
 		get_format = vaapi_get_format;

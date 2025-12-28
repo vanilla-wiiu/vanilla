@@ -11,6 +11,7 @@
 
 extern AVFrame *vpi_present_frame;
 extern pthread_mutex_t vpi_present_frame_mutex;
+extern int vpi_egl_available;
 
 void vpi_menu_game(vui_context_t *vui, void *v);
 

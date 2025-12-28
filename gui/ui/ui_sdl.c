@@ -552,8 +552,6 @@ int vui_init_sdl(vui_context_t *ctx, int fullscreen)
     memset(sdl_ctx, 0, sizeof(vui_sdl_context_t));
     ctx->platform_data = sdl_ctx;
 
-    SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "2");
-
     SDL_WindowFlags window_flags;
     if (fullscreen) {
         window_flags = SDL_WINDOW_FULLSCREEN;
@@ -570,8 +568,16 @@ int vui_init_sdl(vui_context_t *ctx, int fullscreen)
 
     sdl_ctx->renderer = SDL_CreateRenderer(sdl_ctx->window, -1, SDL_RENDERER_ACCELERATED);
     if (!sdl_ctx->renderer) {
-        vpilog("Failed to CreateRenderer: %s\n", SDL_GetError());
-        return -1;
+        // Re-attempt without EGL (X11/NVIDIA do not support this)
+	    SDL_SetHint(SDL_HINT_VIDEO_X11_FORCE_EGL, "0");
+        vpi_egl_available = 0;
+
+        sdl_ctx->renderer = SDL_CreateRenderer(sdl_ctx->window, -1, SDL_RENDERER_ACCELERATED);
+        if (!sdl_ctx->renderer) {
+            // It's not because we forced EGL, so it's something else we're not prepared for
+            vpilog("Failed to CreateRenderer: %s\n", SDL_GetError());
+            return -1;
+        }
     }
 
     // Open audio output device
