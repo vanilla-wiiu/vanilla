@@ -20,6 +20,7 @@ typedef uint32_t in_addr_t;
 #include "ui/ui_anim.h"
 #include "ui/ui_util.h"
 
+static int bglayer;
 static int fglayer;
 static int error_lbl;
 static int ip_textedit;
@@ -92,7 +93,7 @@ static void intf_pressed(vui_context_t *vui, int button, void *v)
             break;
         }
     }
-    return_to_connection(vui, button, v);
+    return_to_settings(vui, button, (void *) (intptr_t) bglayer);
 }
 
 static void update_wireless_buttons(vui_context_t *vui)
@@ -162,7 +163,7 @@ static void check_ip_address(vui_context_t *vui, int btn, void *v)
         vpi_stop_pipe();
         vpi_config_save();
 
-        return_to_connection(vui, btn, v);
+        return_to_settings(vui, btn, (void *) (intptr_t) bglayer);
     }
 }
 
@@ -215,7 +216,7 @@ void vpi_menu_connection_and_return_to(vui_context_t *vui, int fade_fglayer, vui
 {
     vui_reset(vui);
 
-    int bglayer = vui_layer_create(vui);
+    bglayer = vui_layer_create(vui);
     fglayer = vui_layer_create(vui);
 
     vui_rect_t bkg_rect;
