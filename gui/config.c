@@ -41,16 +41,16 @@ void vpi_config_save()
     }
 
     char buf[0x100];
-    
+
     xmlTextWriterStartDocument(writer, 0, 0, 0);
 
     xmlTextWriterSetIndent(writer, 1);
     xmlTextWriterSetIndentString(writer, BAD_CAST "\t");
-    
+
     xmlTextWriterStartElement(writer, BAD_CAST "vanilla");
 
     xmlTextWriterStartElement(writer, BAD_CAST "consoles");
-    
+
     for (uint8_t i = 0; i < vpi_config.connected_console_count; i++) {
         vpi_console_entry_t *entry = &vpi_config.connected_console_entries[i];
         xmlTextWriterStartElement(writer, BAD_CAST "console");
@@ -65,17 +65,20 @@ void vpi_config_save()
 
     sprintf(buf, "%X", vpi_config.server_address);
     xmlTextWriterWriteElement(writer, BAD_CAST "server", BAD_CAST buf);
-    
+
     xmlTextWriterWriteElement(writer, BAD_CAST "wireless", BAD_CAST vpi_config.wireless_interface);
 
     sprintf(buf, "%i", vpi_config.connection_setup);
     xmlTextWriterWriteElement(writer, BAD_CAST "connectionsetup", BAD_CAST buf);
-    
+
     sprintf(buf, "%i", vpi_config.region);
     xmlTextWriterWriteElement(writer, BAD_CAST "region", BAD_CAST buf);
 
+    sprintf(buf, "%i", vpi_config.swap_abxy);
+    xmlTextWriterWriteElement(writer, BAD_CAST "swapabxy", BAD_CAST buf);
+
     xmlTextWriterEndElement(writer); // vanilla
-    
+
     xmlTextWriterEndDocument(writer);
 
     xmlFreeTextWriter(writer);
@@ -87,7 +90,7 @@ void vpi_config_init()
 
     // Set defaults
     memset(&vpi_config, 0, sizeof(vpi_config));
-    
+
     vpi_config.server_address = VANILLA_ADDRESS_LOCAL;
     vpi_config.region = VANILLA_REGION_AMERICA;
 
@@ -144,12 +147,14 @@ void vpi_config_init()
                         vpi_config.connection_setup = atoi((const char *) child->children->content);
                     } else if (!strcmp((const char *) child->name, "region")) {
                         vpi_config.region = atoi((const char *) child->children->content);
+                    } else if (!strcmp((const char *) child->name, "swapabxy")) {
+                        vpi_config.swap_abxy = atoi((const char *) child->children->content);
                     }
                 }
                 child = child->next;
             }
         }
-        
+
         xmlFreeDoc(doc);
     }
 }
@@ -177,7 +182,7 @@ int vpi_config_add_console(vpi_console_entry_t *entry)
     vpi_config.connected_console_count++;
     if (old_entries)
         free(old_entries);
-    
+
     vpi_config_save();
 
     return index;
@@ -200,14 +205,14 @@ void vpi_config_remove_console(uint8_t index)
 
     if (vpi_config.connected_console_count != 1) {
         vpi_config.connected_console_entries = malloc((vpi_config.connected_console_count - 1) * sizeof(vpi_console_entry_t));
-    
+
         // Copy first half
         memcpy(vpi_config.connected_console_entries, old_entries, index * sizeof(vpi_console_entry_t));
 
         // Copy second half
         memcpy(vpi_config.connected_console_entries + index, old_entries + index + 1, (vpi_config.connected_console_count - index - 1) * sizeof(vpi_console_entry_t));
     }
-    
+
     vpi_config.connected_console_count--;
 
     free(old_entries);
