@@ -350,9 +350,6 @@ void *wpa_setup_environment(void *data)
         goto die_and_reenable_managed;
     }
 
-	// wpa_supplicant may have replaced our signals, so lets re-set them
-	set_signals();
-
     struct wpa_supplicant *wpa_s = wpa_supplicant_add_iface(wpa, &interface, NULL);
     if (!wpa_s) {
         nlprint("FAILED TO ADD WPA IFACE");
@@ -376,6 +373,11 @@ void *wpa_setup_environment(void *data)
         nlprint("FAILED TO ATTACH TO WPA");
         goto die_and_close;
     }
+
+	// wpa_supplicant_run may have replaced our signals, so lets re-set them
+    // Wait until after we get ctrl interface because wpa_supplicant_run
+    // runs in a separate thread
+	set_signals();
 
     args->ctrl = ctrl;
     ret = args->start_routine(args);

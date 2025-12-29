@@ -420,6 +420,10 @@ void *listen_video(void *x)
         }
     } while (!is_interrupted());
 
+    // Wake up consumer thread so it can check the is_interrupted signal
+    pthread_mutex_lock(&video_packet_mutex);
+    pthread_cond_broadcast(&video_packet_cond);
+    pthread_mutex_unlock(&video_packet_mutex);
     pthread_join(video_consumer_thread, 0);
 
     pthread_cond_destroy(&video_packet_cond);
