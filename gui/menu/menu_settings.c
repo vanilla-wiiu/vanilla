@@ -119,7 +119,7 @@ void vpi_menu_settings(vui_context_t *vui, void *v)
         VPI_LANG_CONNECTION,
         VPI_LANG_GAMEPAD,
         VPI_LANG_REGION,
-        VPI_LANG_FULLSCREEN,
+        -1,
         -1,
     };
 
@@ -128,11 +128,17 @@ void vpi_menu_settings(vui_context_t *vui, void *v)
         transition_to_connection,
         transition_to_gamepad,
         transition_to_region,
-        toggle_fullscreen,
+        0,
         0,
     };
 
-    int buttons[sizeof(SETTINGS_NAMES) / sizeof(int)];
+    static const int button_count = sizeof(SETTINGS_NAMES) / sizeof(int);
+    int buttons[button_count];
+
+#ifdef VANILLA_GUI_ENABLE_WINDOWED
+    SETTINGS_NAMES[FS_SETTING] = VPI_LANG_FULLSCREEN;
+	SETTINGS_ACTION[FS_SETTING] = toggle_fullscreen;
+#endif
 
 #ifdef VANILLA_POLKIT_AVAILABLE
 	int pw_skip_str;
@@ -149,15 +155,18 @@ void vpi_menu_settings(vui_context_t *vui, void *v)
 	int btnw = scrw*3/4;
 	int btnx = scrw/2 - btnw/2;
 	int btny = scrh/10;
-	for (int index = 0; index < sizeof(SETTINGS_NAMES)/sizeof(int); index++) {
+	for (int index = 0; index < button_count; index++) {
 		if (SETTINGS_ACTION[index]) {
-			buttons[index] = vui_button_create(vui, btnx, btny + BTN_SZ * index, btnw, BTN_SZ, lang(SETTINGS_NAMES[index]), 0, VUI_BUTTON_STYLE_BUTTON, fglayer, SETTINGS_ACTION[index], (void *) (intptr_t) fglayer);
+			buttons[index] = vui_button_create(vui, btnx, btny, btnw, BTN_SZ, lang(SETTINGS_NAMES[index]), 0, VUI_BUTTON_STYLE_BUTTON, fglayer, SETTINGS_ACTION[index], (void *) (intptr_t) fglayer);
+            btny += BTN_SZ;
 		}
 	}
 
+#ifdef VANILLA_GUI_ENABLE_WINDOWED
     // Make full screen button checkable
     vui_button_update_checkable(vui, buttons[FS_SETTING], 1);
     vui_button_update_checked(vui, buttons[FS_SETTING], vpi_config.fullscreen);
+#endif
 
     // Back button
     vpi_menu_create_back_button(vui, fglayer, return_to_main, (void *) (intptr_t) fglayer);

@@ -356,6 +356,11 @@ if (VANILLA_BUILD_PIPE)
     target_compile_definitions(vanilla PRIVATE VANILLA_PIPE_AVAILABLE)
 endif()
 
+OPTION(VANILLA_GUI_ENABLE_WINDOWED "Enable windowed mode in Vanilla GUI" ON)
+if (VANILLA_GUI_ENABLE_WINDOWED)
+    target_compile_definitions(vanilla PRIVATE VANILLA_GUI_ENABLE_WINDOWED)
+endif()
+
 if (VANILLA_BUILD_USE_POLKIT)
 	# Find Polkit and GLIB libraries
 	find_package(PkgConfig REQUIRED)

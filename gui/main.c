@@ -47,6 +47,11 @@ int SDL_main(int argc, const char **argv)
     // Load config
     vpi_config_init();
 
+#ifndef VANILLA_GUI_ENABLE_WINDOWED
+    // Window mode is disabled, so we'll just enable fullscreen
+    override_fs = 1;
+#endif
+
     // Check if override fullscreen, if so set it in the config, but don't save
     if (override_fs != -1) {
         vpi_config.fullscreen = override_fs;
@@ -85,7 +90,7 @@ exit:
 void display_cli_help(const char **argv) {
 	vpilog("Usage: %s [options]\n\n", argv[0]);
 	vpilog("Options:\n");
-	vpilog("	-w, --window	    Run Vanilla in a window (overrides config)\n");
-	vpilog("	-f, --fullscreen	Run Vanilla full screen (overrides config)\n");
-	vpilog("	-h, --help	        Show this help message\n");
+	vpilog("    -w, --window        Run Vanilla in a window (overrides config)\n");
+	vpilog("    -f, --fullscreen    Run Vanilla full screen (overrides config)\n");
+	vpilog("    -h, --help          Show this help message\n");
 }
