@@ -20,6 +20,7 @@ typedef struct {
     int connection_setup;
     int region;
     int swap_abxy;
+    int fullscreen;
 } vpi_config_t;
 
 extern vpi_config_t vpi_config;

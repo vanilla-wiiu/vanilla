@@ -22,14 +22,16 @@ void display_cli_help(const char **argv);
 int SDL_main(int argc, const char **argv)
 {
     // Default to full screen unless "-w" is specified
-    int fs = 1;
+    int override_fs = -1;
 	for (int i = 1, consumed; i < argc; i += consumed) {
 		consumed = -1;
 		 if (!strcmp(argv[i], "-w") || !strcmp(argv[i], "--window")) {
-			fs = 0;
+			override_fs = 0;
 			consumed = 1;
-		}
-		else if (!strcmp(argv[i], "-h") || !strcmp(argv[i], "--help")) {
+		} else if (!strcmp(argv[i], "-f") || !strcmp(argv[i], "--fullscreen")) {
+            override_fs = 1;
+            consumed = 1;
+		} else if (!strcmp(argv[i], "-h") || !strcmp(argv[i], "--help")) {
 			display_cli_help(argv);
 			return 0;
 		}
@@ -45,12 +47,17 @@ int SDL_main(int argc, const char **argv)
     // Load config
     vpi_config_init();
 
+    // Check if override fullscreen, if so set it in the config, but don't save
+    if (override_fs != -1) {
+        vpi_config.fullscreen = override_fs;
+    }
+
     // Initialize UI system
     vui_context_t *vui = vui_alloc(SCREEN_WIDTH, SCREEN_HEIGHT);
 
     // Initialize SDL2
     int ret = 1;
-    if (vui_init_sdl(vui, fs)) {
+    if (vui_init_sdl(vui, vpi_config.fullscreen)) {
         vpilog("Failed to initialize VUI\n");
         goto exit;
     }
@@ -78,6 +85,7 @@ exit:
 void display_cli_help(const char **argv) {
 	vpilog("Usage: %s [options]\n\n", argv[0]);
 	vpilog("Options:\n");
-	vpilog("	-w, --window	Run Vanilla in a window\n");
-	vpilog("	-h, --help	Show this help message\n");
+	vpilog("	-w, --window	    Run Vanilla in a window (overrides config)\n");
+	vpilog("	-f, --fullscreen	Run Vanilla full screen (overrides config)\n");
+	vpilog("	-h, --help	        Show this help message\n");
 }

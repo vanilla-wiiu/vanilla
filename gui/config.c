@@ -77,6 +77,9 @@ void vpi_config_save()
     sprintf(buf, "%i", vpi_config.swap_abxy);
     xmlTextWriterWriteElement(writer, BAD_CAST "swapabxy", BAD_CAST buf);
 
+    sprintf(buf, "%i", vpi_config.fullscreen);
+    xmlTextWriterWriteElement(writer, BAD_CAST "fullscreen", BAD_CAST buf);
+
     xmlTextWriterEndElement(writer); // vanilla
 
     xmlTextWriterEndDocument(writer);
@@ -149,6 +152,8 @@ void vpi_config_init()
                         vpi_config.region = atoi((const char *) child->children->content);
                     } else if (!strcmp((const char *) child->name, "swapabxy")) {
                         vpi_config.swap_abxy = atoi((const char *) child->children->content);
+                    } else if (!strcmp((const char *) child->name, "fullscreen")) {
+                        vpi_config.fullscreen = atoi((const char *) child->children->content);
                     }
                 }
                 child = child->next;

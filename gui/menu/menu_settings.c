@@ -95,6 +95,14 @@ static void transition_to_uninstall_polkit_rule(vui_context_t *vui, int button, 
 }
 #endif
 
+static void toggle_fullscreen(vui_context_t *vui, int button, void *v)
+{
+    vpi_config.fullscreen = !vpi_config.fullscreen;
+    vpi_config_save();
+    vui_set_fullscreen(vui, vpi_config.fullscreen);
+    vui_button_update_checked(vui, button, vpi_config.fullscreen);
+}
+
 void vpi_menu_settings(vui_context_t *vui, void *v)
 {
     vui_reset(vui);
@@ -104,12 +112,14 @@ void vpi_menu_settings(vui_context_t *vui, void *v)
     int scrw, scrh;
     vui_get_screen_size(vui, &scrw, &scrh);
 
-	const int PW_SKIP_SETTING = 3;
+    const int FS_SETTING = 3;
+	const int PW_SKIP_SETTING = 4;
 
     static int SETTINGS_NAMES[] = {
         VPI_LANG_CONNECTION,
         VPI_LANG_GAMEPAD,
         VPI_LANG_REGION,
+        VPI_LANG_FULLSCREEN,
         -1,
     };
 
@@ -118,8 +128,11 @@ void vpi_menu_settings(vui_context_t *vui, void *v)
         transition_to_connection,
         transition_to_gamepad,
         transition_to_region,
+        toggle_fullscreen,
         0,
     };
+
+    int buttons[sizeof(SETTINGS_NAMES) / sizeof(int)];
 
 #ifdef VANILLA_POLKIT_AVAILABLE
 	int pw_skip_str;
@@ -138,9 +151,13 @@ void vpi_menu_settings(vui_context_t *vui, void *v)
 	int btny = scrh/10;
 	for (int index = 0; index < sizeof(SETTINGS_NAMES)/sizeof(int); index++) {
 		if (SETTINGS_ACTION[index]) {
-			vui_button_create(vui, btnx, btny + BTN_SZ * index, btnw, BTN_SZ, lang(SETTINGS_NAMES[index]), 0, VUI_BUTTON_STYLE_BUTTON, fglayer, SETTINGS_ACTION[index], (void *) (intptr_t) fglayer);
+			buttons[index] = vui_button_create(vui, btnx, btny + BTN_SZ * index, btnw, BTN_SZ, lang(SETTINGS_NAMES[index]), 0, VUI_BUTTON_STYLE_BUTTON, fglayer, SETTINGS_ACTION[index], (void *) (intptr_t) fglayer);
 		}
 	}
+
+    // Make full screen button checkable
+    vui_button_update_checkable(vui, buttons[FS_SETTING], 1);
+    vui_button_update_checked(vui, buttons[FS_SETTING], vpi_config.fullscreen);
 
     // Back button
     vpi_menu_create_back_button(vui, fglayer, return_to_main, (void *) (intptr_t) fglayer);

@@ -267,6 +267,13 @@ vui_power_state_t vui_sdl_power_state_handler(vui_context_t *ctx, int *percent)
 	return sdl_ctx->last_power_state;
 }
 
+void vui_sdl_fullscreen_enabled_handler(vui_context_t *ctx, int enabled, void *userdata)
+{
+    vui_sdl_context_t *sdl_ctx = (vui_sdl_context_t *) ctx->platform_data;
+
+    SDL_SetWindowFullscreen(sdl_ctx->window, enabled ? SDL_WINDOW_FULLSCREEN : 0);
+}
+
 void vui_sdl_audio_set_enabled(vui_context_t *ctx, int enabled, void *userdata)
 {
     vui_sdl_context_t *sdl_ctx = (vui_sdl_context_t *) userdata;
@@ -647,6 +654,8 @@ int vui_init_sdl(vui_context_t *ctx, int fullscreen)
     ctx->power_state_handler = vui_sdl_power_state_handler;
 	sdl_ctx->last_power_state_check = 0;
 	sdl_ctx->last_power_state = VUI_POWERSTATE_UNKNOWN;
+
+    ctx->fullscreen_enabled_handler = vui_sdl_fullscreen_enabled_handler;
 
     if (TTF_Init()) {
         vpilog("Failed to TTF_Init\n");

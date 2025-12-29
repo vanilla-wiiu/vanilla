@@ -147,6 +147,8 @@ typedef struct vui_context_t {
 	void *mic_enabled_handler_data;
 	vui_audio_enabled_handler_t audio_enabled_handler;
 	void *audio_enabled_handler_data;
+	vui_bool_callback_t fullscreen_enabled_handler;
+	void *fullscreen_enabled_handler_data;
 } vui_context_t;
 
 #endif // VANILLA_PI_UI_PRIV_H

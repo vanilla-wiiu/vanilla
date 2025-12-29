@@ -46,6 +46,7 @@ typedef void (*vui_callback_t)(vui_context_t *ctx, void *userdata);
 typedef void (*vui_button_callback_t)(vui_context_t *ctx, int button, void *userdata);
 typedef void (*vui_anim_step_callback_t)(vui_context_t *ctx, int64_t time, void *userdata);
 typedef void (*vui_mic_callback_t)(void *userdata, const uint8_t *stream, size_t len);
+typedef void (*vui_bool_callback_t)(vui_context_t *ctx, int enabled, void *userdata);
 
 typedef enum {
     VUI_DIR_LEFT,
@@ -78,6 +79,7 @@ void vui_audio_set_enabled(vui_context_t *ctx, int enabled);
 void vui_get_screen_size(vui_context_t *ctx, int *width, int *height);
 void vui_enable_background(vui_context_t *ctx, int enabled);
 void vui_set_background(vui_context_t *ctx, const char *background_image);
+void vui_set_fullscreen(vui_context_t *ctx, int enabled);
 
 /**
  * Layer-related functions
