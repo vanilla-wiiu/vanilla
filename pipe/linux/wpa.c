@@ -1152,7 +1152,7 @@ int install_polkit()
 	FILE *rule = fopen(POLKIT_RULE_DST, "w");
 	if (action && rule) {
 		fprintf(action, ACTION_TEMPLATE, exe);
-		fprintf(rule, RULE_TEMPLATE);
+        fputs(RULE_TEMPLATE, rule);
 		ret = VANILLA_SUCCESS;
 	}
 
