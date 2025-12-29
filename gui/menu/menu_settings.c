@@ -117,7 +117,7 @@ void vpi_menu_settings(vui_context_t *vui, void *v)
 
     static int SETTINGS_NAMES[] = {
         VPI_LANG_CONNECTION,
-        VPI_LANG_GAMEPAD,
+        VPI_LANG_CONTROLS,
         VPI_LANG_REGION,
         -1,
         -1,

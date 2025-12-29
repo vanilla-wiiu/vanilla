@@ -22,7 +22,7 @@ static const char *lang_str[__VPI_LANG_T_COUNT] = {
     "Delete",
     "Back",
     "More",
-    "Gamepad",
+    "Controls",
     "Audio",
     "Connection",
     "Webcam",
