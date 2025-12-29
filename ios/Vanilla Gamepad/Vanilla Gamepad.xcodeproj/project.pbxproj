@@ -6,13 +6,25 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		2E3D0B6E2F02156B00496C82 /* SDL3_ttf.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2E3D0B6C2F02151D00496C82 /* SDL3_ttf.xcframework */; };
+		2E3D0B6F2F02156B00496C82 /* SDL3_ttf.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 2E3D0B6C2F02151D00496C82 /* SDL3_ttf.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		2E4C76DD2F0121B200945A6E /* Metal.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2E4C765C2F011C0300945A6E /* Metal.framework */; };
+		2E4C76DF2F0121B400945A6E /* GameController.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2E4C765E2F011C0D00945A6E /* GameController.framework */; };
+		2E4C76E12F0121B500945A6E /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2E4C76642F011C2000945A6E /* Foundation.framework */; };
+		2E4C76E32F0121B600945A6E /* AVFAudio.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2E4C76602F011C1200945A6E /* AVFAudio.framework */; };
+		2E4C76E52F0121D900945A6E /* UIKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2E4C76622F011C1800945A6E /* UIKit.framework */; };
+		2E4C774C2F012C1900945A6E /* ios_stubs.c in Sources */ = {isa = PBXBuildFile; fileRef = 2E4C774B2F012C1400945A6E /* ios_stubs.c */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXCopyFilesBuildPhase section */
-		2E3FC7312F01075000D32272 /* Embed Frameworks */ = {
+		2E4C76E82F01220700945A6E /* Embed Frameworks */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
 			dstPath = "";
 			dstSubfolderSpec = 10;
 			files = (
+				2E3D0B6F2F02156B00496C82 /* SDL3_ttf.xcframework in Embed Frameworks */,
 			);
 			name = "Embed Frameworks";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -20,37 +32,49 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		2EB9DD192F00FCDF008E89B1 /* Vanilla Gamepad.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Vanilla Gamepad.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		2E3D0B6C2F02151D00496C82 /* SDL3_ttf.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; path = SDL3_ttf.xcframework; sourceTree = "<group>"; };
+		2E4C765C2F011C0300945A6E /* Metal.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Metal.framework; path = System/Library/Frameworks/Metal.framework; sourceTree = SDKROOT; };
+		2E4C765E2F011C0D00945A6E /* GameController.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = GameController.framework; path = System/Library/Frameworks/GameController.framework; sourceTree = SDKROOT; };
+		2E4C76602F011C1200945A6E /* AVFAudio.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AVFAudio.framework; path = System/Library/Frameworks/AVFAudio.framework; sourceTree = SDKROOT; };
+		2E4C76622F011C1800945A6E /* UIKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UIKit.framework; path = System/Library/Frameworks/UIKit.framework; sourceTree = SDKROOT; };
+		2E4C76642F011C2000945A6E /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = System/Library/Frameworks/Foundation.framework; sourceTree = SDKROOT; };
+		2E4C774A2F012B7700945A6E /* platform.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = platform.h; sourceTree = "<group>"; };
+		2E4C774B2F012C1400945A6E /* ios_stubs.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ios_stubs.c; sourceTree = "<group>"; };
+		2EB9DD192F00FCDF008E89B1 /* VanillaGamepad.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = VanillaGamepad.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		2EB9DDA92F00FDF8008E89B1 /* Exceptions for "Vanilla Gamepad" folder in "Vanilla Gamepad" target */ = {
+		2E4C76D62F011C5300945A6E /* Exceptions for "Vanilla Gamepad" folder in "Vanilla Gamepad" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
-				app/build.gradle,
-				"app/src/main/res/mipmap-hdpi/ic_launcher_round.png",
-				"app/src/main/res/mipmap-hdpi/ic_launcher.png",
-				"app/src/main/res/mipmap-mdpi/ic_launcher_round.png",
-				"app/src/main/res/mipmap-mdpi/ic_launcher.png",
-				"app/src/main/res/mipmap-xhdpi/ic_launcher_round.png",
-				"app/src/main/res/mipmap-xhdpi/ic_launcher.png",
-				"app/src/main/res/mipmap-xxhdpi/ic_launcher_round.png",
-				"app/src/main/res/mipmap-xxhdpi/ic_launcher.png",
-				"app/src/main/res/mipmap-xxxhdpi/ic_launcher.png",
+				assets/VanillaLogo_Background.svg,
+				assets/VanillaLogo_Foreground.svg,
+				assets/VanillaLogo.svg,
+				Info.plist,
+				pipe/CMakeLists.txt,
+				pipe/linux/CMakeLists.txt,
+				pipe/linux/dhcp/CMakeLists.txt,
 			);
 			target = 2EB9DD182F00FCDF008E89B1 /* Vanilla Gamepad */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */
-		2E3FC7322F01075000D32272 /* Exceptions for "Vanilla Gamepad" folder in "Embed Frameworks" phase from "Vanilla Gamepad" target */ = {
+		2E4C76E92F01220700945A6E /* Exceptions for "Vanilla Gamepad" folder in "Embed Frameworks" phase from "Vanilla Gamepad" target */ = {
 			isa = PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet;
 			attributesByRelativePath = {
 				SDL3.xcframework = (CodeSignOnCopy, RemoveHeadersOnCopy, );
 			};
-			buildPhase = 2E3FC7312F01075000D32272 /* Embed Frameworks */;
+			buildPhase = 2E4C76E82F01220700945A6E /* Embed Frameworks */;
 			membershipExceptions = (
 				SDL3.xcframework,
+			);
+		};
+		2E4C77492F012AE900945A6E /* Exceptions for "Vanilla Gamepad" folder in "Copy Bundle Resources" phase from "Vanilla Gamepad" target */ = {
+			isa = PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet;
+			buildPhase = 2EB9DD172F00FCDF008E89B1 /* Resources */;
+			membershipExceptions = (
+				VideoStream.h,
 			);
 		};
 /* End PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */
@@ -59,8 +83,9 @@
 		2EB9DD1B2F00FCDF008E89B1 /* Vanilla Gamepad */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				2EB9DDA92F00FDF8008E89B1 /* Exceptions for "Vanilla Gamepad" folder in "Vanilla Gamepad" target */,
-				2E3FC7322F01075000D32272 /* Exceptions for "Vanilla Gamepad" folder in "Embed Frameworks" phase from "Vanilla Gamepad" target */,
+				2E4C76D62F011C5300945A6E /* Exceptions for "Vanilla Gamepad" folder in "Vanilla Gamepad" target */,
+				2E4C77492F012AE900945A6E /* Exceptions for "Vanilla Gamepad" folder in "Copy Bundle Resources" phase from "Vanilla Gamepad" target */,
+				2E4C76E92F01220700945A6E /* Exceptions for "Vanilla Gamepad" folder in "Embed Frameworks" phase from "Vanilla Gamepad" target */,
 			);
 			path = "Vanilla Gamepad";
 			sourceTree = "<group>";
@@ -72,24 +97,46 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				2E4C76E12F0121B500945A6E /* Foundation.framework in Frameworks */,
+				2E4C76DF2F0121B400945A6E /* GameController.framework in Frameworks */,
+				2E4C76E32F0121B600945A6E /* AVFAudio.framework in Frameworks */,
+				2E4C76DD2F0121B200945A6E /* Metal.framework in Frameworks */,
+				2E4C76E52F0121D900945A6E /* UIKit.framework in Frameworks */,
+				2E3D0B6E2F02156B00496C82 /* SDL3_ttf.xcframework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		2E4C765B2F011C0200945A6E /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				2E4C76642F011C2000945A6E /* Foundation.framework */,
+				2E4C76622F011C1800945A6E /* UIKit.framework */,
+				2E4C76602F011C1200945A6E /* AVFAudio.framework */,
+				2E4C765E2F011C0D00945A6E /* GameController.framework */,
+				2E4C765C2F011C0300945A6E /* Metal.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		2EB9DD102F00FCDF008E89B1 = {
 			isa = PBXGroup;
 			children = (
 				2EB9DD1B2F00FCDF008E89B1 /* Vanilla Gamepad */,
+				2E4C765B2F011C0200945A6E /* Frameworks */,
 				2EB9DD1A2F00FCDF008E89B1 /* Products */,
+				2E4C774A2F012B7700945A6E /* platform.h */,
+				2E4C774B2F012C1400945A6E /* ios_stubs.c */,
+				2E3D0B6C2F02151D00496C82 /* SDL3_ttf.xcframework */,
 			);
 			sourceTree = "<group>";
 		};
 		2EB9DD1A2F00FCDF008E89B1 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				2EB9DD192F00FCDF008E89B1 /* Vanilla Gamepad.app */,
+				2EB9DD192F00FCDF008E89B1 /* VanillaGamepad.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -104,7 +151,7 @@
 				2EB9DD152F00FCDF008E89B1 /* Sources */,
 				2EB9DD162F00FCDF008E89B1 /* Frameworks */,
 				2EB9DD172F00FCDF008E89B1 /* Resources */,
-				2E3FC7312F01075000D32272 /* Embed Frameworks */,
+				2E4C76E82F01220700945A6E /* Embed Frameworks */,
 			);
 			buildRules = (
 			);
@@ -117,7 +164,7 @@
 			packageProductDependencies = (
 			);
 			productName = "Vanilla Gamepad";
-			productReference = 2EB9DD192F00FCDF008E89B1 /* Vanilla Gamepad.app */;
+			productReference = 2EB9DD192F00FCDF008E89B1 /* VanillaGamepad.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -131,6 +178,7 @@
 				TargetAttributes = {
 					2EB9DD182F00FCDF008E89B1 = {
 						CreatedOnToolsVersion = 26.2;
+						LastSwiftMigration = 2620;
 					};
 				};
 			};
@@ -168,6 +216,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				2E4C774C2F012C1900945A6E /* ios_stubs.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -295,13 +344,13 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = 9UX8PACH8T;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
-				INFOPLIST_KEY_UIMainStoryboardFile = Main;
+				INFOPLIST_KEY_UILaunchStoryboardName = "";
 				INFOPLIST_KEY_UIRequiredDeviceCapabilities = metal;
 				INFOPLIST_KEY_UIStatusBarHidden = YES;
 				INFOPLIST_KEY_UIStatusBarStyle = "";
@@ -314,9 +363,16 @@
 				);
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.phenixhartogh.Vanilla-Gamepad";
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = VanillaGamepad;
+				SDL_MAIN = "";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
@@ -326,13 +382,13 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = 9UX8PACH8T;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
-				INFOPLIST_KEY_UIMainStoryboardFile = Main;
+				INFOPLIST_KEY_UILaunchStoryboardName = "";
 				INFOPLIST_KEY_UIRequiredDeviceCapabilities = metal;
 				INFOPLIST_KEY_UIStatusBarHidden = YES;
 				INFOPLIST_KEY_UIStatusBarStyle = "";
@@ -345,9 +401,15 @@
 				);
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.phenixhartogh.Vanilla-Gamepad";
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = VanillaGamepad;
+				SDL_MAIN = "";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;

@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+ "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>PreferenceSpecifiers</key>
+  <array>
+    <dict>
+      <key>Type</key>
+      <string>PSTextFieldSpecifier</string>
+      <key>Title</key>
+      <string>Backend IP</string>
+      <key>Key</key>
+      <string>backend_ip</string>
+      <key>DefaultValue</key>
+      <string>192.168.1.100</string>
+    </dict>
+    <dict>
+      <key>Type</key>
+      <string>PSTextFieldSpecifier</string>
+      <key>Title</key>
+      <string>Backend Port</string>
+      <key>Key</key>
+      <string>backend_port</string>
+      <key>DefaultValue</key>
+      <string>51000</string>
+    </dict>
+  </array>
+</dict>
+</plist>
