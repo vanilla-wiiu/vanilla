@@ -506,6 +506,7 @@ int call_dhcp(const char *network_interface)
     client_config.interface = (char *) network_interface;
     client_config.callback = dhcp_callback;
     client_config.callback_data = nl;
+    client_config.abort_if_no_lease = 1;
 
     if (udhcpc_main() == 0) {
         ret = VANILLA_SUCCESS;
@@ -665,6 +666,26 @@ close:
     return THREADRESULT(ret);
 }
 
+int check_for_disconnection(struct sync_args *args)
+{
+    vanilla_pipe_command_t cmd;
+    char buf[1024];
+    size_t buf_len = sizeof(buf);
+    if (wpa_ctrl_recv(args->ctrl, buf, &buf_len) == 0) {
+        if (!memcmp(buf, "<3>CTRL-EVENT-DISCONNECTED", 26)) {
+            nlprint("Wii U disconnected, attempting to re-connect...");
+
+            // Let client know we lost connection
+            cmd.control_code = VANILLA_PIPE_CC_DISCONNECTED;
+            sendto(args->skt, &cmd, sizeof(cmd.control_code), 0, (const struct sockaddr *) &args->client, args->client_size);
+
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
 void create_all_relays(struct sync_args *args)
 {
     pthread_t vid_thread, aud_thread, msg_thread, cmd_thread, hid_thread;
@@ -700,18 +721,8 @@ void create_all_relays(struct sync_args *args)
     sendto(args->skt, &cmd, sizeof(cmd.control_code), 0, (const struct sockaddr *) &args->client, args->client_size);
 
     while (!is_interrupted()) {
-        char buf[1024];
-        size_t buf_len = sizeof(buf);
-        if (wpa_ctrl_recv(args->ctrl, buf, &buf_len) == 0) {
-            if (!memcmp(buf, "<3>CTRL-EVENT-DISCONNECTED", 26)) {
-                nlprint("Wii U disconnected, attempting to re-connect...");
-
-                // Let client know we lost connection
-                cmd.control_code = VANILLA_PIPE_CC_DISCONNECTED;
-                sendto(args->skt, &cmd, sizeof(cmd.control_code), 0, (const struct sockaddr *) &args->client, args->client_size);
-
-                break;
-            }
+        if (check_for_disconnection(args)) {
+            break;
         }
 
         // wpa_ctrl_recv is non-blocking, so reduce thrashing by sleeping here
@@ -1050,6 +1061,15 @@ void *do_connect(void *data)
         // Use DHCP on interface
         int r = call_dhcp(args->wireless_interface);
         if (r != VANILLA_SUCCESS) {
+            // For some reason, DHCP did not succeed. Determine if it's because
+            // the Wi-Fi disconnected mid-handshake.
+            if (check_for_disconnection(args)) {
+                // If so, start this loop over again
+                continue;
+            }
+
+            // DHCP failed for some other reason. Since we don't know what it is,
+            // treat it as a fatal error.
             nlprint("FAILED TO RUN DHCP ON %s", args->wireless_interface);
             return THREADRESULT(r);
         } else {
