@@ -271,7 +271,8 @@ void vui_sdl_fullscreen_enabled_handler(vui_context_t *ctx, int enabled, void *u
 {
     vui_sdl_context_t *sdl_ctx = (vui_sdl_context_t *) ctx->platform_data;
 
-    SDL_SetWindowFullscreen(sdl_ctx->window, enabled ? SDL_WINDOW_FULLSCREEN : 0);
+    SDL_SetWindowFullscreen(sdl_ctx->window, enabled ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0);
+    SDL_ShowCursor(!enabled);
 }
 
 void vui_sdl_audio_set_enabled(vui_context_t *ctx, int enabled, void *userdata)
@@ -570,12 +571,10 @@ int vui_init_sdl(vui_context_t *ctx, int fullscreen)
     memset(sdl_ctx, 0, sizeof(vui_sdl_context_t));
     ctx->platform_data = sdl_ctx;
 
-    SDL_WindowFlags window_flags;
+    SDL_WindowFlags window_flags = SDL_WINDOW_RESIZABLE;
     if (fullscreen) {
-        window_flags = SDL_WINDOW_FULLSCREEN;
+        window_flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
         SDL_ShowCursor(0);
-    } else {
-        window_flags = SDL_WINDOW_RESIZABLE;
     }
 
     sdl_ctx->window = SDL_CreateWindow("Vanilla", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, ctx->screen_width, ctx->screen_height, window_flags);
