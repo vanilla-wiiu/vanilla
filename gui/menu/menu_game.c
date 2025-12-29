@@ -537,7 +537,7 @@ void *vpi_event_loop(void *arg)
 
     static vpi_decode_state_t s;
     vanilla_event_t event;
-    while (vpi_game_queued_error == VANILLA_SUCCESS && vanilla_wait_event(&event)) {
+    while (vpi_game_queued_error != VANILLA_ERR_SHUTDOWN && vanilla_wait_event(&event)) {
         int stop = 0;
 
         switch (event.type) {
@@ -636,14 +636,11 @@ void *vpi_event_loop(void *arg)
         case VANILLA_EVENT_ERROR:
         {
             int backend_err = *(int *)event.data;
+
             switch (backend_err) {
             case VANILLA_SUCCESS:
             case VANILLA_ERR_CONNECTED:
-                // Do nothing
-                break;
-            case VANILLA_ERR_DISCONNECTED:
-            case VANILLA_ERR_SHUTDOWN:
-                vpi_game_queued_error = VANILLA_ERR_SHUTDOWN;
+                vpi_game_queued_error = VANILLA_SUCCESS;
                 break;
             default:
                 vpi_game_queued_error = backend_err;
