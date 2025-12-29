@@ -20,6 +20,7 @@ typedef uint32_t in_addr_t;
 #include "ui/ui_anim.h"
 #include "ui/ui_util.h"
 
+static int bglayer;
 static int fglayer;
 static int error_lbl;
 static int ip_textedit;
@@ -50,8 +51,17 @@ static void return_to_connection(vui_context_t *vui, int btn, void *v)
 {
     int layer = (intptr_t) v;
 
-    vui_callback_t cb = g_continue_callback ? g_continue_callback : vpi_menu_connection;
-    void *cb_data = g_continue_callback ? g_continue_callback_data : (void *) (intptr_t) 1;
+    vui_callback_t cb;
+    void *cb_data;
+
+    if (g_continue_callback) {
+        cb = g_continue_callback;
+        cb_data = g_continue_callback_data;
+    } else {
+        cb = vpi_menu_settings;
+        cb_data = NULL;
+        layer = bglayer; // Returning to settings, so we should fade out the entire background
+    }
 
     vui_transition_fade_layer_out(vui, layer, cb, cb_data);
 }
@@ -215,7 +225,7 @@ void vpi_menu_connection_and_return_to(vui_context_t *vui, int fade_fglayer, vui
 {
     vui_reset(vui);
 
-    int bglayer = vui_layer_create(vui);
+    bglayer = vui_layer_create(vui);
     fglayer = vui_layer_create(vui);
 
     vui_rect_t bkg_rect;
