@@ -246,6 +246,7 @@ void vpi_close_polkit_session()
 
 		vpilog("Unregistering Polkit listener\n");
 		polkit_agent_listener_unregister(polkit_handle);
+        g_clear_object(&listener);
 		polkit_handle = 0;
 
 		g_object_unref(listener);
@@ -356,30 +357,42 @@ int vpi_start_pipe()
 		// gboolean ok = polkit_authorization_result_get_is_authorized(res);
 		// gboolean chall = polkit_authorization_result_get_is_challenge(res);
 		if (!ok) {
-			g_autoptr(PolkitSubject) subject = polkit_unix_session_new_for_process_sync(getpid(), NULL, NULL);
-			g_autoptr(GError) error = NULL;
+            g_autoptr(GError) error = NULL;
+			g_autoptr(PolkitSubject) subject = polkit_unix_session_new_for_process_sync(getpid(), NULL, &error);
 
-			pk_session = 0;
-			pk_attempts = 0;
+            if (subject) {
+                pk_session = 0;
+                pk_attempts = 0;
 
-			gmainctx = g_main_context_new();
-			g_main_context_push_thread_default(gmainctx);
+                // I don't think this is strictly necessary because according to
+                // documentation, subject == null when error is set, but
+                // just to be safe...
+                g_clear_error(&error);
 
-			listener = g_object_new(vanilla_polkit_listener_get_type(), NULL);
-			vpilog("Registered Polkit listener\n");
-			polkit_handle = polkit_agent_listener_register(
-				POLKIT_AGENT_LISTENER(listener),
-				POLKIT_AGENT_REGISTER_FLAGS_NONE,
-				subject,
-				NULL, NULL, &error
-			);
-			g_main_context_pop_thread_default(gmainctx);
-			if (!polkit_handle) {
-				g_main_context_unref(gmainctx);
-				gmainctx = 0;
+                gmainctx = g_main_context_new();
+                g_main_context_push_thread_default(gmainctx);
 
-				vpilog("Failed to register Polkit listener: %s\n", error->message);
-			}
+                listener = g_object_new(vanilla_polkit_listener_get_type(), NULL);
+                polkit_handle = polkit_agent_listener_register(
+                    POLKIT_AGENT_LISTENER(listener),
+                    POLKIT_AGENT_REGISTER_FLAGS_NONE,
+                    subject,
+                    NULL, NULL, &error
+                );
+                g_main_context_pop_thread_default(gmainctx);
+
+                if (!polkit_handle) {
+                    g_main_context_unref(gmainctx);
+                    gmainctx = NULL;
+                    g_clear_object(&listener);
+
+                    vpilog("Failed to register Polkit listener: %s\n", error ? error->message : "unknown error");
+                } else {
+                    vpilog("Registered Polkit listener\n");
+                }
+            } else {
+                vpilog("Failed to create session/subject for process: %s\n", error ? error->message : "unknown error");
+            }
 		}
 	}
 #endif
