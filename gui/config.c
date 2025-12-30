@@ -96,6 +96,7 @@ void vpi_config_init()
 
     vpi_config.server_address = VANILLA_ADDRESS_LOCAL;
     vpi_config.region = VANILLA_REGION_AMERICA;
+    vpi_config.fullscreen = 1;
 
     // Load from file
     char config_fn[1024];
