@@ -1,5 +1,6 @@
 #include "ui_sdl.h"
 
+#include <stdatomic.h>
 #include <math.h>
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_hints.h>
@@ -34,6 +35,8 @@
 #define MIN(a,b) (((a)<(b))?(a):(b))
 #define PW_CHAR_SIZE 20
 #define PW_CHAR_PAD 2
+#define AUDIO_BUFFER_SIZE 1664 // Wii U never deviates from this so we can hardcode it
+#define AUDIO_BUFFER_COUNT 3
 
 typedef struct {
     SDL_Texture *texture;
@@ -68,11 +71,10 @@ typedef struct {
     AVFrame *frame;
 	SDL_Texture *pw_tex;
 
-	uint8_t *audio_buffer;
-	size_t audio_buffer_size;
-	size_t audio_buffer_start;
-	size_t audio_buffer_end;
-	pthread_mutex_t audio_buffer_mutex;
+	uint8_t audio_buffer[AUDIO_BUFFER_COUNT][AUDIO_BUFFER_SIZE];
+
+    _Atomic size_t audio_wseq;
+    _Atomic size_t audio_rseq;
 
 	Uint32 last_power_state_check;
 	vui_power_state_t last_power_state;
@@ -214,23 +216,15 @@ void vui_sdl_audio_handler(const void *data, size_t size, void *userdata)
 		return;
 	}
 
-	pthread_mutex_lock(&sdl_ctx->audio_buffer_mutex);
+    // static Uint32 last_call = 0;
+    // Uint32 now = SDL_GetTicks();
+    // vanilla_log("** PRODUCING AT %u delta %u", now, now - last_call);
+    // last_call = now;
 
-	for (size_t i = 0; i < size; ) {
-		size_t phys = sdl_ctx->audio_buffer_end % sdl_ctx->audio_buffer_size;
-		size_t max_write = MIN(sdl_ctx->audio_buffer_size - phys, size - i);
-		memcpy(sdl_ctx->audio_buffer + phys, ((const unsigned char *) data) + i, max_write);
-
-		i += max_write;
-		sdl_ctx->audio_buffer_end += max_write;
-
-		if (sdl_ctx->audio_buffer_end > sdl_ctx->audio_buffer_start + sdl_ctx->audio_buffer_size) {
-			vpilog("SKIPPED %zu AUDIO BYTES\n", (sdl_ctx->audio_buffer_end - sdl_ctx->audio_buffer_size) - sdl_ctx->audio_buffer_start);
-			sdl_ctx->audio_buffer_start = sdl_ctx->audio_buffer_end - sdl_ctx->audio_buffer_size;
-		}
-	}
-
-	pthread_mutex_unlock(&sdl_ctx->audio_buffer_mutex);
+    size_t w = atomic_load_explicit(&sdl_ctx->audio_wseq, memory_order_relaxed);
+    uint8_t *buf = sdl_ctx->audio_buffer[w % AUDIO_BUFFER_COUNT];
+    memcpy(buf, data, size);
+    atomic_fetch_add_explicit(&sdl_ctx->audio_wseq, 1, memory_order_release);
 }
 
 void vui_sdl_vibrate_handler(uint8_t vibrate, void *userdata)
@@ -326,22 +320,25 @@ void audio_callback(void *userdata, Uint8 *stream, int len)
 {
 	vui_sdl_context_t *sdl_ctx = (vui_sdl_context_t *) userdata;
 
-	pthread_mutex_lock(&sdl_ctx->audio_buffer_mutex);
+    // static Uint32 last_call = 0;
+    // Uint32 now = SDL_GetTicks();
+    // vanilla_log("== CONSUMING AT %u delta %u", now, now - last_call);
+    // last_call = now;
 
-	if ((sdl_ctx->audio_buffer_end - sdl_ctx->audio_buffer_start) >= len) {
-		for (size_t i = 0; i < len; ) {
-            size_t phys = sdl_ctx->audio_buffer_start % sdl_ctx->audio_buffer_size;
-			size_t max_write = MIN(sdl_ctx->audio_buffer_size - phys, len - i);
-			memcpy(stream + i, sdl_ctx->audio_buffer + phys, max_write);
-			i += max_write;
-			sdl_ctx->audio_buffer_start += max_write;
-		}
-	} else {
-		// Return silence
-		memset(stream, 0, len);
-	}
-
-	pthread_mutex_unlock(&sdl_ctx->audio_buffer_mutex);
+    size_t r = atomic_load_explicit(&sdl_ctx->audio_rseq, memory_order_relaxed);
+    size_t w = atomic_load_explicit(&sdl_ctx->audio_wseq, memory_order_acquire);
+    if (r != w) {
+        if (r < w - AUDIO_BUFFER_COUNT + 1) {
+            size_t newr = w - AUDIO_BUFFER_COUNT + 1;;
+            vanilla_log("  AUDIO SKIPPED FROM %zu TO %zu", r, newr);
+            r = newr;
+        }
+        memcpy(stream, sdl_ctx->audio_buffer[r % AUDIO_BUFFER_COUNT], len);
+        r++;
+        atomic_store_explicit(&sdl_ctx->audio_rseq, r, memory_order_release);
+    } else {
+        memset(stream, 0, len);
+    }
 }
 
 void mic_callback(void *userdata, Uint8 *stream, int len)
@@ -645,16 +642,15 @@ int vui_init_sdl(vui_context_t *ctx, int fullscreen)
     desired.channels = 2;
 	desired.callback = audio_callback;
 	desired.userdata = sdl_ctx;
+    desired.samples = AUDIO_BUFFER_SIZE / 2 / 2; // Buffer size (bytes) divided by 2 channels (stereo) divided by 2 bytes per sample (16-bit)
 
     sdl_ctx->audio = SDL_OpenAudioDevice(NULL, 0, &desired, &obtained, 0);
     if (sdl_ctx->audio) {
+        // vpilog("obtained.samples = %u\n", obtained.samples);
+
 		// Set up buffers
-		size_t buffer_size = obtained.samples * 4 * 3; // * 2 for 16-bit, * 2 for stereo, * 3 so there's plenty of buffer
-		sdl_ctx->audio_buffer_size = buffer_size;
-		sdl_ctx->audio_buffer = malloc(buffer_size);
-		sdl_ctx->audio_buffer_start = 0;
-		sdl_ctx->audio_buffer_end = 0;
-		pthread_mutex_init(&sdl_ctx->audio_buffer_mutex, 0);
+        atomic_store(&sdl_ctx->audio_wseq, 0);
+        atomic_store(&sdl_ctx->audio_rseq, 0);
 
 		// Set up handler for audio submitted from VPI to VUI
         ctx->audio_handler = vui_sdl_audio_handler;
@@ -766,9 +762,6 @@ void vui_close_sdl(vui_context_t *ctx)
 
 	if (sdl_ctx->audio) {
 		SDL_CloseAudioDevice(sdl_ctx->audio);
-
-		free(sdl_ctx->audio_buffer);
-		pthread_mutex_destroy(&sdl_ctx->audio_buffer_mutex);
 	}
 
 	if (sdl_ctx->mic) {
