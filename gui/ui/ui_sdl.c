@@ -166,7 +166,7 @@ void find_valid_controller(vui_sdl_context_t *sdl_ctx)
 	for (int i = 0; i < SDL_NumJoysticks(); i++) {
         const char *ctrl_name = SDL_GameControllerNameForIndex(i);
 		vpilog("  Found %i: %s\n", i, ctrl_name);
-        if (!strcmp(ctrl_name, "Steam Virtual Gamepad")) {
+        if (ctrl_name != NULL && !strcmp(ctrl_name, "Steam Virtual Gamepad")) {
             steam_virtual_gamepad_index = i;
         } else if (controller == -1) {
             controller = i;
