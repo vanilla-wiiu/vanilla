@@ -139,6 +139,7 @@ int create_socket(int *socket_out, in_port_t port, int pipe)
 #if !defined(_WIN32) && !defined(__APPLE__)
     if (!pipe && SERVER_ADDRESS == VANILLA_ADDRESS_LOCAL) {
         // Bind to wireless device
+        vanilla_log("BINDING SOCKET %i PORT %u TO INTERFACE \"%s\"", skt, port, wireless_interface);
         setsockopt(skt, SOL_SOCKET, SO_BINDTODEVICE, wireless_interface, strlen(wireless_interface));
     }
 #endif
