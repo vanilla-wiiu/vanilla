@@ -711,10 +711,15 @@ void vui_textedit_input(vui_context_t *ctx, int index, const char *text)
 {
     vui_textedit_t *edit = &ctx->textedits[index];
 
+    // Validate input parameters
+    if (!text) {
+        return;
+    }
+
     // Ensure we don't overflow our buffer
     size_t our_len = strlen(edit->text);
     size_t new_len = strlen(text);
-    if ((our_len + new_len) > (sizeof(edit->text) - 1)) {
+    if ((our_len + new_len) >= sizeof(edit->text)) {
         return;
     }
 
@@ -727,17 +732,37 @@ void vui_textedit_input(vui_context_t *ctx, int index, const char *text)
     // Copy first part
     size_t old_len = (end - edit->text);
     char tmp[sizeof(edit->text)];
+    
+    // Ensure old_len doesn't exceed buffer size
+    if (old_len >= sizeof(tmp)) {
+        return;
+    }
+    
     strncpy(tmp, edit->text, old_len);
     tmp[old_len] = 0;
 
-    // Concat new insertion
-    strcat(tmp, text);
+    // Calculate remaining space in tmp buffer
+    size_t remaining = sizeof(tmp) - old_len - 1;
+    
+    // Concat new insertion with bounds checking
+    if (new_len > remaining) {
+        return;
+    }
+    strncat(tmp, text, remaining);
 
-    // Concat rest of string
-    strcat(tmp, end);
+    // Update remaining space after adding text
+    remaining = sizeof(tmp) - strlen(tmp) - 1;
+    
+    // Concat rest of string with bounds checking
+    size_t end_len = strlen(end);
+    if (end_len > remaining) {
+        return;
+    }
+    strncat(tmp, end, remaining);
 
-    // Copy back to textedit
-    strcpy(edit->text, tmp);
+    // Copy back to textedit with bounds checking
+    strncpy(edit->text, tmp, sizeof(edit->text) - 1);
+    edit->text[sizeof(edit->text) - 1] = '\0';
 
     // Increment cursor (even if we added multiple chars, we only incremented one code point)
     vui_textedit_set_cursor(ctx, index, edit->cursor + 1);
