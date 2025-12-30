@@ -120,7 +120,7 @@ void vpi_menu_main_connect_button_action(vui_context_t *vui, int btn, void *v)
 void vpi_menu_main_edit_button_action(vui_context_t *vui, int btn, void *v)
 {
     int layer = (intptr_t) v;
-    
+
     int console = -1;
 
     for (int i = 0; i < MAIN_MENU_ENTRIES; i++) {
@@ -155,6 +155,14 @@ void vpi_menu_main(vui_context_t *vui, void *v)
     int layer = vui_layer_create(vui);
     console_menu_layer = vui_layer_create(vui);
 
+    // Console list (generate this first so the first connected console is the default option)
+    int list_item_width = SCREEN_WIDTH - BTN_SZ - BTN_SZ;
+    int list_item_height = (SCREEN_HEIGHT - BTN_SZ - BTN_SZ) / MAIN_MENU_ENTRIES;
+    for (int i = 0; i < MAIN_MENU_ENTRIES; i++) {
+        main_menu_btns[i] = vui_button_create(vui, BTN_SZ, BTN_SZ + list_item_height * i, list_item_width, list_item_height, NULL, NULL, VUI_BUTTON_STYLE_LIST, console_menu_layer, vpi_menu_main_connect_console, (void *) (intptr_t) i);
+        vui_button_update_checkable(vui, main_menu_btns[i], 1);
+    }
+
     // Left arrow
     main_menu_left_arrow_btn = vui_button_create(vui, 0, arrow_y, BTN_SZ, BTN_SZ, "<", NULL, VUI_BUTTON_STYLE_BUTTON, layer, vpi_menu_main_left_arrow, (void *) (intptr_t) console_menu_layer);
 
@@ -175,13 +183,7 @@ void vpi_menu_main(vui_context_t *vui, void *v)
     // No entries text
     main_menu_no_console_lbl = vui_label_create(vui, 0, SCREEN_HEIGHT * 2 / 5, SCREEN_WIDTH, SCREEN_HEIGHT, lang(VPI_LANG_NO_CONSOLES_SYNCED), vui_color_create(0,0,0,0.5f), VUI_FONT_SIZE_SMALL, layer);
 
-    // Console list
-    int list_item_width = SCREEN_WIDTH - BTN_SZ - BTN_SZ;
-    int list_item_height = (SCREEN_HEIGHT - BTN_SZ - BTN_SZ) / MAIN_MENU_ENTRIES;
-    for (int i = 0; i < MAIN_MENU_ENTRIES; i++) {
-        main_menu_btns[i] = vui_button_create(vui, BTN_SZ, BTN_SZ + list_item_height * i, list_item_width, list_item_height, NULL, NULL, VUI_BUTTON_STYLE_LIST, console_menu_layer, vpi_menu_main_connect_console, (void *) (intptr_t) i);
-        vui_button_update_checkable(vui, main_menu_btns[i], 1);
-    }
+    // Update state of all buttons
     vpi_menu_main_populate(vui);
 
     if (!v) {
