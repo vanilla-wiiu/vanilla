@@ -289,38 +289,43 @@ int vpi_start_epilog()
 {
 	int ret = VANILLA_ERR_GENERIC;
 
-	char ready_buf[500];
-	memset(ready_buf, 0, sizeof(ready_buf));
-	size_t read_count = 0;
-	while (read_count < sizeof(ready_buf)) {
-		ssize_t this_read = read(err_pipes[0], ready_buf + read_count, sizeof(ready_buf));
-		if (this_read > 0) {
-			read_count += this_read;
-			break;
-		}
+    char ready_buf[500];
+    memset(ready_buf, 0, sizeof(ready_buf));
 
-		if (this_read <= 0) {
-			break;
-		}
-	}
-	if (!memcmp(ready_buf, "READY", 5)) {
-		ret = VANILLA_SUCCESS;
+    while (1) {
+        size_t read_count = 0;
+        char c;
+        while (read_count < sizeof(ready_buf) && read(err_pipes[0], &c, 1) == 1) {
+            if (c == '\n') {
+                break;
+            }
+            ready_buf[read_count] = c;
+            read_count++;
+        }
+        if (!memcmp(ready_buf, "READY", 5)) {
+            ret = VANILLA_SUCCESS;
 
-		pipe_input = in_pipes[1];
-		pipe_err = err_pipes[0];
+            pipe_input = in_pipes[1];
+            pipe_err = err_pipes[0];
 
-		pthread_create(&pipe_log_thread, 0, vpi_pipe_log_thread, (void *) (intptr_t) pipe_err);
+            pthread_create(&pipe_log_thread, 0, vpi_pipe_log_thread, (void *) (intptr_t) pipe_err);
 
-		pipe_pid = potential_pipe_pid;
-	} else {
-		vpilog("GOT INVALID SIGNAL: %.*s\n", sizeof(ready_buf), ready_buf);
+            pipe_pid = potential_pipe_pid;
 
-		// Kill seems to break a lot of things so I guess we'll just leave it orphaned
-		// kill(pipe_pid, SIGKILL);
-		pipe_pid = -1;
-		close(in_pipes[1]);
-		close(err_pipes[0]);
-	}
+            break;
+        } else {
+            // vpilog("GOT INVALID SIGNAL: %.*s\n", sizeof(ready_buf), ready_buf);
+            vpilog("%.*s\n", sizeof(ready_buf), ready_buf);
+
+            // Kill seems to break a lot of things so I guess we'll just leave it orphaned
+            // kill(pipe_pid, SIGKILL);
+
+            // Don't treat this as fatal anymore
+            // pipe_pid = -1;
+            // close(in_pipes[1]);
+            // close(err_pipes[0]);
+        }
+    }
 
 	close(err_pipes[1]);
 	close(in_pipes[0]);

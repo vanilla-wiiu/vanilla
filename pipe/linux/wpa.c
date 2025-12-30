@@ -303,41 +303,6 @@ void *wpa_setup_environment(void *data)
 
     struct sync_args *args = (struct sync_args *) data;
 
-	// If this is the Steam Deck, we must switch the backend from `iwd` to `wpa_supplicant`
-	int sd_wifi_backend_changed = 0;
-	{
-		char sd_wifi_backend_buf[100] = {0};
-		ssize_t ret = run_process_and_read_stdout((const char *[]) {"steamos-wifi-set-backend", "--check", NULL}, sd_wifi_backend_buf, sizeof(sd_wifi_backend_buf));
-		if (ret > 0 && !strcmp("iwd\n", sd_wifi_backend_buf)) {
-			nlprint("STEAM DECK: SETTING WIFI BACKEND TO WPA_SUPPLICANT");
-			sd_wifi_backend_changed = 1;
-			run_process_and_read_stdout((const char *[]) {"steamos-wifi-set-backend", "wpa_supplicant", NULL}, 0, 0);
-		}
-	}
-
-#ifdef USE_LIBNM
-    // Check status of interface with NetworkManager
-    GError *nm_err;
-    NMClient *nmcli = nm_client_new(NULL, &nm_err);
-    NMDevice *nmdev = NULL;
-    gboolean is_managed = 0;
-    if (nmcli) {
-        nmdev = nm_client_get_device_by_iface(nmcli, args->wireless_interface);
-        if (!nmdev) {
-            nlprint("FAILED TO GET STATUS OF DEVICE %s", args->wireless_interface);
-        } else {
-			if ((is_managed = nm_device_get_managed(nmdev))) {
-				nm_device_set_managed(nmdev, FALSE);
-				nlprint("TEMPORARILY SET %s TO UNMANAGED", args->wireless_interface);
-			}
-		}
-    } else {
-        // Failed to get NetworkManager, host may just not have it?
-        g_message("Failed to create NetworkManager client: %s", nm_err->message);
-        g_error_free(nm_err);
-    }
-#endif
-
     // Start modified WPA supplicant
     struct wpa_params params = {0};
     params.wpa_debug_level = MSG_INFO;
@@ -350,7 +315,7 @@ void *wpa_setup_environment(void *data)
     struct wpa_global *wpa = wpa_supplicant_init(&params);
     if (!wpa) {
         nlprint("FAILED TO INIT WPA SUPPLICANT");
-        goto die_and_reenable_managed;
+        goto die;
     }
 
     struct wpa_supplicant *wpa_s = wpa_supplicant_add_iface(wpa, &interface, NULL);
@@ -395,25 +360,6 @@ die_and_kill:
     pthread_cancel(wpa_thread);
     pthread_join(wpa_thread, NULL);
     wpa_supplicant_deinit(wpa);
-
-die_and_reenable_managed:
-#ifdef USE_LIBNM
-    if (is_managed) {
-        nlprint("SETTING %s BACK TO MANAGED", args->wireless_interface);
-        nm_device_set_managed(nmdev, TRUE);
-    }
-
-die_and_close_nmcli:
-    if (nmcli) {
-        g_object_unref(nmcli);
-    }
-#endif
-
-	if (sd_wifi_backend_changed) {
-		// Restore iwd
-		nlprint("STEAM DECK: SETTING WIFI BACKEND TO IWD");
-		run_process_and_read_stdout((const char *[]) {"steamos-wifi-set-backend", "iwd", NULL}, 0, 0);
-	}
 
 die:
     return ret;
@@ -1187,6 +1133,41 @@ int install_polkit()
 
 void pipe_listen(int local, const char *wireless_interface, const char *log_file)
 {
+    // If this is the Steam Deck, we must switch the backend from `iwd` to `wpa_supplicant`
+	int sd_wifi_backend_changed = 0;
+	{
+		char sd_wifi_backend_buf[100] = {0};
+		ssize_t ret = run_process_and_read_stdout((const char *[]) {"steamos-wifi-set-backend", "--check", NULL}, sd_wifi_backend_buf, sizeof(sd_wifi_backend_buf));
+		if (ret > 0 && !strcmp("iwd\n", sd_wifi_backend_buf)) {
+			nlprint("STEAM DECK: SETTING WIFI BACKEND TO WPA_SUPPLICANT");
+			sd_wifi_backend_changed = 1;
+			run_process_and_read_stdout((const char *[]) {"steamos-wifi-set-backend", "wpa_supplicant", NULL}, 0, 0);
+		}
+	}
+
+#ifdef USE_LIBNM
+    // Check status of interface with NetworkManager
+    GError *nm_err;
+    NMClient *nmcli = nm_client_new(NULL, &nm_err);
+    NMDevice *nmdev = NULL;
+    gboolean is_managed = 0;
+    if (nmcli) {
+        nmdev = nm_client_get_device_by_iface(nmcli, wireless_interface);
+        if (!nmdev) {
+            nlprint("FAILED TO GET STATUS OF DEVICE %s", wireless_interface);
+        } else {
+			if ((is_managed = nm_device_get_managed(nmdev))) {
+				nm_device_set_managed(nmdev, FALSE);
+				nlprint("TEMPORARILY SET %s TO UNMANAGED", wireless_interface);
+			}
+		}
+    } else {
+        // Failed to get NetworkManager, host may just not have it?
+        g_message("Failed to create NetworkManager client: %s", nm_err->message);
+        g_error_free(nm_err);
+    }
+#endif
+
     // Store reference to log file
     ext_logfile = log_file;
 
@@ -1302,6 +1283,25 @@ repeat_loop:
     pthread_mutex_destroy(&main_loop_mutex);
     pthread_mutex_destroy(&action_mutex);
     pthread_mutex_destroy(&running_mutex);
+
+die_and_reenable_managed:
+#ifdef USE_LIBNM
+    if (is_managed) {
+        nlprint("SETTING %s BACK TO MANAGED", wireless_interface);
+        nm_device_set_managed(nmdev, TRUE);
+    }
+
+die_and_close_nmcli:
+    if (nmcli) {
+        g_object_unref(nmcli);
+    }
+#endif
+
+	if (sd_wifi_backend_changed) {
+		// Restore iwd
+		nlprint("STEAM DECK: SETTING WIFI BACKEND TO IWD");
+		run_process_and_read_stdout((const char *[]) {"steamos-wifi-set-backend", "iwd", NULL}, 0, 0);
+	}
 }
 
 int vanilla_has_config()
