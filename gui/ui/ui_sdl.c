@@ -60,6 +60,7 @@ typedef struct {
     SDL_AudioDeviceID audio;
     SDL_AudioDeviceID mic;
     SDL_GameController *controller;
+    SDL_GameController *controller_gyros;
     SDL_Texture *game_tex;
     int last_shown_toast;
     SDL_Texture *toast_tex;
@@ -148,28 +149,60 @@ void init_gamepad()
     key_map[SDL_SCANCODE_ESCAPE] = VPI_ACTION_DISCONNECT;
 }
 
-SDL_GameController *find_valid_controller()
+void find_valid_controller(vui_sdl_context_t *sdl_ctx)
 {
-	SDL_GameController *c = NULL;
+    // HACK: This is just for the Steam Deck. The Steam Deck provides a "virtual gamepad"
+    //       that it expects games to use, however the "virtual gamepad" doesn't provide
+    //       direct access to the Steam Deck's gyroscopes. We can bypass it, but then
+    //       Steam Deck users lose usability features like remapping (and Vanilla will
+    //       continue to receive inputs in the background, which are usually cut off on
+    //       the virtual gamepad). To try to get the best of both worlds, we use a hybrid
+    //       approach where we use the virtual gamepad for everything EXCEPT the gyros,
+    //       and then use the direct hardware access JUST for the gyros.
+    int controller = -1;
+    int steam_virtual_gamepad_index = -1;
 
 	vpilog("Looking for game controllers...\n");
 	for (int i = 0; i < SDL_NumJoysticks(); i++) {
-		vpilog("  Found %i: %s\n", i, SDL_GameControllerNameForIndex(i));
-		if (!c) {
-			c = SDL_GameControllerOpen(i);
-			if (c) {
-				// Enable gyro/accelerometer
-				SDL_GameControllerSetSensorEnabled(c, SDL_SENSOR_ACCEL, 1);
-				SDL_GameControllerSetSensorEnabled(c, SDL_SENSOR_GYRO, 1);
-			}
-		}
+        const char *ctrl_name = SDL_GameControllerNameForIndex(i);
+		vpilog("  Found %i: %s\n", i, ctrl_name);
+        if (!strcmp(ctrl_name, "Steam Virtual Gamepad")) {
+            steam_virtual_gamepad_index = i;
+        } else if (controller == -1) {
+            controller = i;
+        }
 	}
 
-	if (c) {
-		vpilog("Using game controller \"%s\"\n", SDL_GameControllerName(c));
-	}
+    SDL_GameController *steam_virtual_gamepad = NULL;
+    SDL_GameController *c = NULL;
+    if (steam_virtual_gamepad_index != -1) {
+        // Prefer the Steam Virtual Gamepad when present for everything EXCEPT gyros
+        steam_virtual_gamepad = SDL_GameControllerOpen(steam_virtual_gamepad_index);
+        vpilog("Using Steam Virtual Gamepad\n");
+    }
 
-	return c;
+    if (controller != -1) {
+        // Open regular controller
+        c = SDL_GameControllerOpen(controller);
+        if (c) {
+            // Enable gyro/accelerometer
+            const char *ctrl_name = SDL_GameControllerName(c);
+            SDL_GameControllerSetSensorEnabled(c, SDL_SENSOR_ACCEL, 1);
+            SDL_GameControllerSetSensorEnabled(c, SDL_SENSOR_GYRO, 1);
+            if (steam_virtual_gamepad) {
+                vpilog("  with \"%s\" for accelerometer/gyroscope\n", ctrl_name);
+            } else {
+                vpilog("Using game controller \"%s\"\n", ctrl_name);
+            }
+        }
+    }
+
+    if (steam_virtual_gamepad) {
+        sdl_ctx->controller = steam_virtual_gamepad;
+        sdl_ctx->controller_gyros = c;
+    } else {
+        sdl_ctx->controller = c;
+    }
 }
 
 void vui_sdl_audio_handler(const void *data, size_t size, void *userdata)
@@ -409,14 +442,22 @@ int vui_sdl_event_thread(void *data)
             case SDL_CONTROLLERDEVICEADDED:
                 // Attempt to find controller if one doesn't exist already
                 if (!sdl_ctx->controller) {
-                    sdl_ctx->controller = find_valid_controller();
+                    find_valid_controller(sdl_ctx);
                 }
                 break;
             case SDL_CONTROLLERDEVICEREMOVED:
                 // Handle current controller being removed
-                if (sdl_ctx->controller && ev.cdevice.which == SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(sdl_ctx->controller))) {
-                    SDL_GameControllerClose(sdl_ctx->controller);
-                    sdl_ctx->controller = find_valid_controller();
+                if ((sdl_ctx->controller && ev.cdevice.which == SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(sdl_ctx->controller)))
+                    || (sdl_ctx->controller_gyros && ev.cdevice.which == SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(sdl_ctx->controller_gyros)))) {
+                    if (sdl_ctx->controller) {
+                        SDL_GameControllerClose(sdl_ctx->controller);
+                        sdl_ctx->controller = NULL;
+                    }
+                    if (sdl_ctx->controller_gyros) {
+                        SDL_GameControllerClose(sdl_ctx->controller_gyros);
+                        sdl_ctx->controller_gyros = NULL;
+                    }
+                    find_valid_controller(sdl_ctx);
                 }
                 break;
             case SDL_CONTROLLERBUTTONDOWN:
@@ -544,7 +585,7 @@ int vui_sdl_event_thread(void *data)
 int vui_init_sdl(vui_context_t *ctx, int fullscreen)
 {
 	// Enable Steam Deck gyroscopes even while Steam is open and in gaming mode
-	SDL_SetHintWithPriority("SDL_GAMECONTROLLER_ALLOW_STEAM_VIRTUAL_GAMEPAD", "0", SDL_HINT_OVERRIDE);
+	// SDL_SetHintWithPriority("SDL_GAMECONTROLLER_ALLOW_STEAM_VIRTUAL_GAMEPAD", "0", SDL_HINT_OVERRIDE);
 	SDL_SetHintWithPriority(SDL_HINT_GAMECONTROLLER_IGNORE_DEVICES, "", SDL_HINT_OVERRIDE);
 
 	// One-time setup for SDL NV12
@@ -697,7 +738,10 @@ int vui_init_sdl(vui_context_t *ctx, int fullscreen)
     memset(sdl_ctx->button_cache, 0, sizeof(sdl_ctx->button_cache));
     memset(sdl_ctx->image_cache, 0, sizeof(sdl_ctx->image_cache));
     memset(sdl_ctx->textedit_cache, 0, sizeof(sdl_ctx->textedit_cache));
-    sdl_ctx->controller = find_valid_controller();
+
+    sdl_ctx->controller = NULL;
+    sdl_ctx->controller_gyros = NULL;
+    find_valid_controller(sdl_ctx);
 
     sdl_ctx->frame = av_frame_alloc();
 
