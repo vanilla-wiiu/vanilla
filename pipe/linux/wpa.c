@@ -208,7 +208,10 @@ void *read_stdin(void *arg)
 			}
 		} else if (sel < 0) {
 			perror("select()");
-		}
+		} else if (sel == 0) {
+            // Don't thrash while waiting for input
+            sleep(1);
+        }
 		pthread_mutex_lock(&main_loop_mutex);
 	}
 	pthread_mutex_unlock(&main_loop_mutex);
