@@ -139,7 +139,6 @@ int create_socket(int *socket_out, in_port_t port, int pipe)
 #if !defined(_WIN32) && !defined(__APPLE__)
     if (!pipe && SERVER_ADDRESS == VANILLA_ADDRESS_LOCAL) {
         // Bind to wireless device
-        vanilla_log("BINDING SOCKET %i PORT %u TO INTERFACE \"%s\"", skt, port, wireless_interface);
         setsockopt(skt, SOL_SOCKET, SO_BINDTODEVICE, wireless_interface, strlen(wireless_interface));
     }
 #endif
@@ -321,13 +320,6 @@ void connect_as_gamepad_internal(thread_data_t *data)
 
     int ret = VANILLA_SUCCESS;
 
-    // Open all required sockets
-    if (create_socket(&info.socket_vid, PORT_VID, 0) != VANILLA_SUCCESS) goto exit_pipe;
-    if (create_socket(&info.socket_msg, PORT_MSG, 0) != VANILLA_SUCCESS) goto exit_vid;
-    if (create_socket(&info.socket_hid, PORT_HID, 0) != VANILLA_SUCCESS) goto exit_msg;
-    if (create_socket(&info.socket_aud, PORT_AUD, 0) != VANILLA_SUCCESS) goto exit_hid;
-    if (create_socket(&info.socket_cmd, PORT_CMD, 0) != VANILLA_SUCCESS) goto exit_aud;
-
     int pipe_cc_skt = -1;
     vanilla_pipe_command_t cmd;
     cmd.control_code = VANILLA_PIPE_CC_CONNECT;
@@ -365,6 +357,13 @@ void connect_as_gamepad_internal(thread_data_t *data)
     }
 
     if (ret == VANILLA_SUCCESS) {
+        // Open all required sockets
+        if (create_socket(&info.socket_vid, PORT_VID, 0) != VANILLA_SUCCESS) goto exit_pipe;
+        if (create_socket(&info.socket_msg, PORT_MSG, 0) != VANILLA_SUCCESS) goto exit_vid;
+        if (create_socket(&info.socket_hid, PORT_HID, 0) != VANILLA_SUCCESS) goto exit_msg;
+        if (create_socket(&info.socket_aud, PORT_AUD, 0) != VANILLA_SUCCESS) goto exit_hid;
+        if (create_socket(&info.socket_cmd, PORT_CMD, 0) != VANILLA_SUCCESS) goto exit_aud;
+
         pthread_t video_thread, audio_thread, input_thread, msg_thread, cmd_thread;
 
         int cnn = VANILLA_ERR_CONNECTED;
@@ -406,22 +405,22 @@ void connect_as_gamepad_internal(thread_data_t *data)
         pthread_join(audio_thread, NULL);
         pthread_join(input_thread, NULL);
         pthread_join(cmd_thread, NULL);
-    }
 
 exit_cmd:
-    close(info.socket_cmd);
+        close(info.socket_cmd);
 
 exit_aud:
-    close(info.socket_aud);
+        close(info.socket_aud);
 
 exit_hid:
-    close(info.socket_hid);
+        close(info.socket_hid);
 
 exit_msg:
-    close(info.socket_msg);
+        close(info.socket_msg);
 
 exit_vid:
-    close(info.socket_vid);
+        close(info.socket_vid);
+    }
 
 exit_pipe:
     if (pipe_cc_skt != -1) {
