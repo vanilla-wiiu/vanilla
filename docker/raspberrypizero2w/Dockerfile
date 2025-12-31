@@ -36,4 +36,4 @@ RUN git clone --depth 1 --branch 2025.11-rc2 https://github.com/buildroot/buildr
 
 ENV FORCE_UNSAFE_CONFIGURE=1
 
-ENTRYPOINT [ "/vanilla/docker/raspberrypi0w/build.sh" ]
+ENTRYPOINT [ "/vanilla/docker/raspberrypizero2w/build.sh" ]
