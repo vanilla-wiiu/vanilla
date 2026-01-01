@@ -13,7 +13,12 @@ if(UNIX AND NOT APPLE AND NOT ANDROID)
     set(LINUX TRUE)
 endif()
 
-if(ANDROID OR MSVC)
+# Detect iOS (set by toolchain file or CMake)
+if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
+    set(IOS TRUE)
+endif()
+
+if(ANDROID OR MSVC OR IOS)
     set(vendored_default TRUE)
 else()
     set(vendored_default FALSE)
