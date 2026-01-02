@@ -533,7 +533,6 @@ if (IOS)
         "-framework CoreServices"
         "-framework Metal"
         "-framework CoreMotion"
-        iconv
     )
 endif()
 
