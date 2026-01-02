@@ -15,5 +15,3 @@ android/app/src/main/assets
 
 # macOS
 .DS_Store
-*.xcuserdata
-DerivedData/
