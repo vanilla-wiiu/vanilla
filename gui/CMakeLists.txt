@@ -458,7 +458,6 @@ if (IOS)
         "-framework CoreServices"
         "-framework Metal"
         "-framework CoreMotion"
-        iconv
     )
 endif()
 
@@ -476,11 +475,7 @@ target_link_libraries(vanilla PRIVATE
 )
 
 if (APPLE)
-    if (IOS)
-        target_link_libraries(vanilla PRIVATE "-framework VideoToolbox" "-framework CoreMedia")
-    else()
-	    target_link_libraries(vanilla PRIVATE "-framework VideoToolbox" "-framework CoreMedia" iconv)
-    endif()
+    target_link_libraries(vanilla PRIVATE "-framework VideoToolbox" "-framework CoreMedia" iconv)
 endif()
 
 if (VANILLA_BUILD_PIPE)
