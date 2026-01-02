@@ -609,6 +609,14 @@ int vui_init_sdl(vui_context_t *ctx, int fullscreen)
     memset(sdl_ctx, 0, sizeof(vui_sdl_context_t));
     ctx->platform_data = sdl_ctx;
 
+    ctx->button_map = button_map;
+    ctx->button_map_sz = SDL_CONTROLLER_BUTTON_MAX;
+    ctx->axis_map = axis_map;
+    ctx->axis_map_sz = SDL_CONTROLLER_AXIS_MAX;
+    ctx->key_map = key_map;
+    ctx->key_map_sz = SDL_NUM_SCANCODES;
+    
+
     SDL_WindowFlags window_flags = SDL_WINDOW_RESIZABLE;
     if (fullscreen) {
         window_flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
