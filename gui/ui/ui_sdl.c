@@ -533,15 +533,18 @@ int vui_sdl_event_thread(void *data)
                     if (vanilla_btn > VPI_ACTION_START_INDEX) {
                         if (ev.type == SDL_KEYDOWN)
                             vpi_menu_action(vui, (vpi_extra_action_t) vanilla_btn);
-                    } else if (vanilla_btn != -1) {
+                    } else if (vanilla_btn != -1 || vui->bind_mode) {
                         if (vui->game_mode) {
                             vanilla_set_button(vanilla_btn, ev.type == SDL_KEYDOWN ? INT16_MAX : 0);
                         } else if (ev.type == SDL_KEYDOWN) {
-                            vui_process_keydown(vui, vanilla_btn);
+                            if (vui->bind_mode)
+                                vui_process_keydown(vui, ev.key.keysym.scancode);
+                            else
+                                vui_process_keydown(vui, vanilla_btn);
                         } else {
                             vui_process_keyup(vui, vanilla_btn);
                         }
-                    }
+                    } 
                 } else if (ev.type == SDL_KEYDOWN) {
                     switch (ev.key.keysym.scancode) {
                     case SDL_SCANCODE_BACKSPACE:
@@ -951,6 +954,10 @@ void vui_sdl_draw_button(vui_context_t *vui, vui_sdl_context_t *sdl_ctx, vui_but
         } else {
             text_font = sdl_ctx->sysfont_tiny;
         }
+    } else if(btn->style == VUI_BUTTON_STYLE_SMALL) {
+        text_font = sdl_ctx->sysfont_small;
+    } else if(btn->style == VUI_BUTTON_STYLE_TINY) {
+        text_font = sdl_ctx->sysfont_tiny;
     } else {
         text_font = sdl_ctx->sysfont;
     }

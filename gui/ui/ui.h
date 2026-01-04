@@ -8,7 +8,9 @@ typedef enum {
     VUI_BUTTON_STYLE_NONE,
     VUI_BUTTON_STYLE_BUTTON,
     VUI_BUTTON_STYLE_CORNER,
-    VUI_BUTTON_STYLE_LIST
+    VUI_BUTTON_STYLE_LIST,
+    VUI_BUTTON_STYLE_SMALL,
+    VUI_BUTTON_STYLE_TINY
 } vui_button_style_t;
 
 typedef enum {

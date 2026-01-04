@@ -24,6 +24,12 @@ vui_context_t *vui_alloc(int width, int height)
     vui->vibrate_handler = 0;
     vui->font_height_handler = 0;
     vui->text_open_handler = 0;
+    vui->key_map = 0;
+    vui->key_map_sz = 0;
+    vui->button_map = 0;
+    vui->button_map_sz = 0;
+    vui->axis_map = 0;
+    vui->axis_map_sz = 0;
     vui->power_state_handler = 0;
 	vui->mic_callback = 0;
 	vui->mic_enabled_handler = 0;
@@ -874,6 +880,24 @@ void vui_image_destroy(vui_context_t *ctx, int image)
 
 void vui_process_keydown(vui_context_t *ctx, int button)
 {
+    // If we are in bind mode we need to cosume the next key press for the binding
+    if(ctx->bind_mode){
+
+        int *old_key = NULL;
+        for(int i = 0; i < ctx->key_map_sz; i++){
+            if(ctx->key_map[i] == ctx->bind_mode){
+                old_key = &ctx->key_map[i];
+                break;
+            }
+        }
+        // Treat button as a scancode NOT a Vanilla button
+        int old_val = ctx->key_map[button];
+        if(old_key) *old_key = old_val;
+        ctx->key_map[button] = ctx->bind_mode;
+
+        ctx->bind_mode = 0;
+    }
+    
     switch (button) {
     case VANILLA_BTN_LEFT:
     case VANILLA_AXIS_L_LEFT:
