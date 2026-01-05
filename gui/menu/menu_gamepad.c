@@ -43,10 +43,16 @@ static void return_to_gamepad(vui_context_t *vui, int btn, void *v)
   vui_transition_fade_layer_out(vui, layer, vpi_menu_gamepad, 0);
 }
 
-static void transition_to_keybind(vui_context_t *vui, int btn, void *v)
+static void transition_to_keybinds(vui_context_t *vui, int btn, void *v)
 {
   int layer = (intptr_t) v;
   vui_transition_fade_layer_out(vui, layer, vpi_menu_key_bindings, 0);
+}
+
+static void tranisiton_to_key_bindings_more(vui_context_t *vui, int btn, void *v)
+{
+  int layer = (intptr_t) v;
+  vui_transition_fade_layer_out(vui, layer, vpi_menu_key_bindings_more, 0);
 }
 
 static void vpi_bind_draw_callback(vui_context_t *ctx, vui_button_t *button, void *userdata)
@@ -72,6 +78,26 @@ static void vpi_bind_callback(vui_context_t *ctx, int button, void *userdata)
   if(ctx->bind_mode) return;
   ctx->bind_mode = (int) (intptr_t)userdata;
   vui_button_update_draw_handler(ctx, button, vpi_bind_draw_callback, (void *)(uintptr_t)button);
+}
+
+void vpi_menu_key_bindings_more(vui_context_t *vui, void *v)
+{
+  vui_reset(vui);
+
+  int layer = vui_layer_create(vui);
+
+  int SCREEN_WIDTH, SCREEN_HEIGHT;
+  vui_get_screen_size(vui, &SCREEN_WIDTH, &SCREEN_HEIGHT);
+
+  const int btn_width = 50;
+  const int btn_height = 50;
+  const int padding = 5;
+
+
+
+
+  vpi_menu_create_back_button(vui, layer, transition_to_keybinds, (void *) (intptr_t) layer);
+
 }
 
 void vpi_menu_key_bindings(vui_context_t *vui, void *v)
@@ -160,7 +186,8 @@ void vpi_menu_key_bindings(vui_context_t *vui, void *v)
     vui_button_update_icon_mod(vui, tv_button, gICON_COLOUR);
 
   }
-
+  
+  vui_button_create(vui, SCREEN_WIDTH - BTN_SZ, 0, BTN_SZ, BTN_SZ, lang(VPI_LANG_MORE), 0, VUI_BUTTON_STYLE_CORNER, layer, tranisiton_to_key_bindings_more, (void *) (intptr_t) layer);
   vpi_menu_create_back_button(vui, layer, return_to_gamepad, (void *) (intptr_t) layer);
 }
 
@@ -180,13 +207,10 @@ void vpi_menu_gamepad(vui_context_t *vui, void *v)
     vui_button_update_checkable(vui, swap_abxy_button, 1);
     vui_button_update_checked(vui, swap_abxy_button, vpi_config.swap_abxy);
 
-    int keyboard_bind_button = vui_button_create(vui, BTN_SZ, BTN_SZ + list_item_height * 1, list_item_width, list_item_height, "Keyboard Controls", NULL, VUI_BUTTON_STYLE_LIST, layer, transition_to_keybind, (void *)(intptr_t)layer); 
+    int keyboard_bind_button = vui_button_create(vui, BTN_SZ, BTN_SZ + list_item_height * 1, list_item_width, list_item_height, lang(VPI_LANG_KEYBOARD_CONTROLS), NULL, VUI_BUTTON_STYLE_LIST, layer, transition_to_keybinds, (void *)(intptr_t)layer); 
 
     // Back button
     vpi_menu_create_back_button(vui, layer, return_to_settings, (void *) (intptr_t) layer);
-
-    // More button
-    //vui_button_create(vui, scrw-BTN_SZ, 0, BTN_SZ, BTN_SZ, lang(VPI_LANG_MORE), 0, VUI_BUTTON_STYLE_CORNER, layer, return_to_settings, (void *) (intptr_t) layer);
 
     vui_transition_fade_layer_in(vui, layer, 0, 0);
 }
