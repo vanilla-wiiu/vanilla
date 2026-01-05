@@ -179,6 +179,11 @@ void vpi_config_init()
                                 if(key >= 0 && key < VANILLA_BTN_COUNT){
                                     vpi_config.keymap[key] = atoi((const char *)key_idx->children->content);
                                 }
+                            } else if(key_idx->type == XML_ELEMENT_NODE && !strncmp(key_idx->name, "act_", 4)){
+                                int key = atoi((const char *)(key_idx->name + 4));
+                                if(key >= 0 && key < VPI_ACTION_END_INDEX - VPI_ACTION_START_INDEX){
+                                    vpi_config.actionkeymap[key] = atoi((const char *)key_idx->children->content);
+                                }
                             }
                             key_idx = key_idx->next;
                         }
