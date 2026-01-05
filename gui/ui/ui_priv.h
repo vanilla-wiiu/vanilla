@@ -8,7 +8,7 @@
 #define MAX_BUTTON_COUNT 16
 #define MAX_BUTTON_TEXT 512
 
-typedef struct {
+typedef struct vui_button_t{
     int x;
     int y;
     int w;
@@ -21,7 +21,9 @@ typedef struct {
     char icon[MAX_BUTTON_TEXT];
     vui_button_style_t style;
     vui_button_callback_t onclick;
+    vui_button_draw_callback_t ondraw;
     void *onclick_data;
+    void *ondraw_data;
     int layer;
     int visible;
     int enabled;

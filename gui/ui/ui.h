@@ -43,9 +43,11 @@ typedef struct {
 } vui_rect_t;
 
 typedef struct vui_context_t vui_context_t;
+typedef struct vui_button_t vui_button_t;
 
 typedef void (*vui_callback_t)(vui_context_t *ctx, void *userdata);
 typedef void (*vui_button_callback_t)(vui_context_t *ctx, int button, void *userdata);
+typedef void (*vui_button_draw_callback_t)(vui_context_t *ctx, vui_button_t *button, void *userdata);
 typedef void (*vui_anim_step_callback_t)(vui_context_t *ctx, int64_t time, void *userdata);
 typedef void (*vui_mic_callback_t)(void *userdata, const uint8_t *stream, size_t len);
 typedef void (*vui_bool_callback_t)(vui_context_t *ctx, int enabled, void *userdata);
@@ -99,6 +101,7 @@ int vui_button_create(vui_context_t *ctx, int x, int y, int w, int h, const char
 void vui_button_get_geometry(vui_context_t *ctx, int button, int *x, int *y, int *w, int *h);
 int vui_button_get_checked(vui_context_t *ctx, int button);
 void vui_button_update_click_handler(vui_context_t *ctx, int index, vui_button_callback_t handler, void *userdata);
+void vui_button_update_draw_handler(vui_context_t *ctx, int index, vui_button_draw_callback_t handler, void *userdata);
 void vui_button_update_geometry(vui_context_t *ctx, int button, int x, int y, int w, int h);
 void vui_button_update_icon(vui_context_t *ctx, int button, const char *icon);
 void vui_button_update_text(vui_context_t *ctx, int button, const char *text);

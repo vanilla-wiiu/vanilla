@@ -58,12 +58,6 @@ static char get_char_from_scancode(int scancode){
 #endif
 }
 
-
-static void vpi_bind_callback(vui_context_t *ctx, int button, void *userdata)
-{
-  ctx->bind_mode = (int) (intptr_t)userdata;
-}
-
 static int find_current_keybind(const vui_context_t *ctx, int btn)
 {
   for(int i=0; i < ctx->key_map_sz; i++){
@@ -88,6 +82,28 @@ static void transition_to_keybind(vui_context_t *vui, int btn, void *v)
 {
   int layer = (intptr_t) v;
   vui_transition_fade_layer_out(vui, layer, vpi_menu_key_bindings, 0);
+}
+
+static void vpi_bind_draw_callback(vui_context_t *ctx, vui_button_t *button, void *userdata)
+{
+  // If we are still in bind mode do nothing.
+  if(ctx->bind_mode)
+    return;
+
+  int index = (int) (intptr_t) userdata;
+  
+  char bind_char[2]; bind_char[1] = '\0';
+  bind_char[0] = get_char_from_current_keybind(ctx, (int)(intptr_t)button->onclick_data);
+  vui_button_update_text(ctx, index, bind_char); 
+  
+  //Unset the draw callback
+  vui_button_update_draw_handler(ctx, index, NULL, NULL);
+}
+
+static void vpi_bind_callback(vui_context_t *ctx, int button, void *userdata)
+{
+  ctx->bind_mode = (int) (intptr_t)userdata;
+  vui_button_update_draw_handler(ctx, button, vpi_bind_draw_callback, (void *)(uintptr_t)button);
 }
 
 void vpi_menu_key_bindings(vui_context_t *vui, void *v)

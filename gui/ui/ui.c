@@ -130,6 +130,9 @@ int vui_button_create(vui_context_t *ctx, int x, int y, int w, int h, const char
     vui_button_update_checked(ctx, index, 0);
     vui_button_update_checkable(ctx, index, 0);
 
+    btn->ondraw = NULL;
+    btn->ondraw_data = NULL;
+
     ctx->button_count++;
 
     return index;
@@ -175,6 +178,13 @@ void vui_button_update_click_handler(vui_context_t *ctx, int index, vui_button_c
     vui_button_t *btn = &ctx->buttons[index];
     btn->onclick = handler;
     btn->onclick_data = userdata;
+}
+
+void vui_button_update_draw_handler(vui_context_t *ctx, int index, vui_button_draw_callback_t handler, void *userdata)
+{
+    vui_button_t *btn = &ctx->buttons[index];
+    btn->ondraw = handler;
+    btn->ondraw_data = userdata;
 }
 
 void vui_button_get_geometry(vui_context_t *ctx, int index, int *x, int *y, int *w, int *h)
@@ -882,19 +892,14 @@ void vui_process_keydown(vui_context_t *ctx, int button)
 {
     // If we are in bind mode we need to cosume the next key press for the binding
     if(ctx->bind_mode){
-
-        int *old_key = NULL;
         for(int i = 0; i < ctx->key_map_sz; i++){
             if(ctx->key_map[i] == ctx->bind_mode){
-                old_key = &ctx->key_map[i];
+                ctx->key_map[i] = ctx->key_map[button];
                 break;
             }
         }
         // Treat button as a scancode NOT a Vanilla button
-        int old_val = ctx->key_map[button];
-        if(old_key) *old_key = old_val;
         ctx->key_map[button] = ctx->bind_mode;
-
         ctx->bind_mode = 0;
     }
     

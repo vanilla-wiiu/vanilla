@@ -1318,6 +1318,9 @@ void vui_draw_sdl(vui_context_t *ctx, SDL_Renderer *renderer)
     for (int i = 0; i < ctx->button_count; i++) {
         vui_button_t *btn = &ctx->buttons[i];
 
+        if(btn->ondraw)
+            btn->ondraw(ctx, btn, btn->ondraw_data);
+
         if (!btn->visible) {
             continue;
         }
