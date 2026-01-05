@@ -120,6 +120,7 @@ void init_gamepad()
     axis_map[SDL_CONTROLLER_AXIS_TRIGGERLEFT] = VANILLA_BTN_ZL;
     axis_map[SDL_CONTROLLER_AXIS_TRIGGERRIGHT] = VANILLA_BTN_ZR;
 
+    // Default key map
     key_map[SDL_SCANCODE_UP] = VANILLA_BTN_UP;
     key_map[SDL_SCANCODE_DOWN] = VANILLA_BTN_DOWN;
     key_map[SDL_SCANCODE_LEFT] = VANILLA_BTN_LEFT;
@@ -150,6 +151,20 @@ void init_gamepad()
     key_map[SDL_SCANCODE_F5] = VPI_ACTION_TOGGLE_RECORDING;
     key_map[SDL_SCANCODE_F12] = VPI_ACTION_SCREENSHOT;
     key_map[SDL_SCANCODE_ESCAPE] = VPI_ACTION_DISCONNECT;
+
+    // Override key map with values in config
+    for(int i = 0; i < VANILLA_BTN_COUNT; i++){
+        if(vpi_config.keymap[i]){
+            for(int j = 0; j < SDL_NUM_SCANCODES; j++){
+                if(key_map[j] == i){
+                    key_map[j] = -1;
+                    break;
+                }   
+            }
+            key_map[vpi_config.keymap[i]] = i;
+        }
+    }
+
 }
 
 void find_valid_controller(vui_sdl_context_t *sdl_ctx)
@@ -759,12 +774,23 @@ int vui_init_sdl(vui_context_t *ctx, int fullscreen)
     return 0;
 }
 
+static void vui_save_gamepad_sdl()
+{
+    for(int i = 0; i < SDL_NUM_SCANCODES; i++){
+        if(key_map[i] > 0)
+            vpi_config.keymap[key_map[i]] = i;
+    }
+    vpi_config_save();
+}
+
 void vui_close_sdl(vui_context_t *ctx)
 {
     vui_sdl_context_t *sdl_ctx = (vui_sdl_context_t *) ctx->platform_data;
     if (!sdl_ctx) {
         return;
     }
+
+    vui_save_gamepad_sdl();
 
     av_frame_free(&sdl_ctx->frame);
 

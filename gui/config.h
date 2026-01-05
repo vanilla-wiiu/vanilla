@@ -20,6 +20,7 @@ typedef struct {
     int connection_setup;
     int region;
     int swap_abxy;
+    int keymap[VANILLA_BTN_COUNT];
     int fullscreen;
 } vpi_config_t;
 

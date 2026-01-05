@@ -81,6 +81,15 @@ void vpi_config_save()
     sprintf(buf, "%i", vpi_config.fullscreen);
     xmlTextWriterWriteElement(writer, BAD_CAST "fullscreen", BAD_CAST buf);
 
+    xmlTextWriterStartElement(writer, BAD_CAST "keymap");
+    for(int i = 0; i < VANILLA_BTN_COUNT; i++){
+        char id_buf[24];
+        snprintf(id_buf, sizeof(id_buf), "key_%i", i);
+        sprintf(buf, "%i", vpi_config.keymap[i]);
+        xmlTextWriterWriteElement(writer, BAD_CAST id_buf, BAD_CAST buf);
+    }
+    xmlTextWriterEndElement(writer); // keymap
+
     xmlTextWriterEndElement(writer); // vanilla
 
     xmlTextWriterEndDocument(writer);
@@ -156,6 +165,17 @@ void vpi_config_init()
                         vpi_config.swap_abxy = atoi((const char *) child->children->content);
                     } else if (!strcmp((const char *) child->name, "fullscreen")) {
                         vpi_config.fullscreen = atoi((const char *) child->children->content);
+                    } else if (!strcmp((const char *) child->name, "keymap")) {
+                        xmlNodePtr key_idx = child->children;
+                        while(key_idx){
+                            if(key_idx->type == XML_ELEMENT_NODE){
+                                int key = atoi((const char *)(key_idx->name + 4));
+                                if(key >= 0 && key < VANILLA_BTN_COUNT){
+                                    vpi_config.keymap[key] = atoi((const char *)key_idx->children->content);
+                                }
+                            }
+                            key_idx = key_idx->next;
+                        }
                     }
                 }
                 child = child->next;
