@@ -5,7 +5,7 @@
 
 #include "ui.h"
 
-#define MAX_BUTTON_COUNT 16
+#define MAX_BUTTON_COUNT 32
 #define MAX_BUTTON_TEXT 512
 
 typedef struct vui_button_t{
@@ -19,6 +19,7 @@ typedef struct vui_button_t{
     int sh;
     char text[MAX_BUTTON_TEXT];
     char icon[MAX_BUTTON_TEXT];
+    uint32_t icon_mod;
     vui_button_style_t style;
     vui_button_callback_t onclick;
     vui_button_draw_callback_t ondraw;

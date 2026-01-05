@@ -104,6 +104,7 @@ void vui_button_update_click_handler(vui_context_t *ctx, int index, vui_button_c
 void vui_button_update_draw_handler(vui_context_t *ctx, int index, vui_button_draw_callback_t handler, void *userdata);
 void vui_button_update_geometry(vui_context_t *ctx, int button, int x, int y, int w, int h);
 void vui_button_update_icon(vui_context_t *ctx, int button, const char *icon);
+void vui_button_update_icon_mod(vui_context_t *ctx, int index, uint32_t mod);
 void vui_button_update_text(vui_context_t *ctx, int button, const char *text);
 void vui_button_update_style(vui_context_t *ctx, int button, vui_button_style_t style);
 void vui_button_update_visible(vui_context_t *ctx, int button, int visible);

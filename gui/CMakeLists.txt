@@ -269,6 +269,7 @@ list(APPEND VANILLA_GUI_SRC
     ui/ui_sdl.c
     ui/ui_util.c
     ui/ui_util.h
+    ui/ui_keyboard.c
 )
 
 if (LINUX)

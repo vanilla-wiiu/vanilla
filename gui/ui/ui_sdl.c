@@ -1085,6 +1085,13 @@ void vui_sdl_draw_button(vui_context_t *vui, vui_sdl_context_t *sdl_ctx, vui_but
         icon_rect.x = icon_x;
         icon_rect.y = icon_y;
 
+        if(btn->icon_mod){
+            char r = (btn->icon_mod & 0xFF0000) >> sizeof(char) * 8 * 2;
+            char g = (btn->icon_mod & 0x00FF00) >> sizeof(char) * 8;
+            char b = (btn->icon_mod & 0x0000FF);
+            SDL_SetTextureColorMod(icon, r, g, b);
+        }
+
         SDL_RenderCopy(sdl_ctx->renderer, icon, 0, &icon_rect);
         SDL_DestroyTexture(icon);
     }

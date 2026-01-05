@@ -6,6 +6,7 @@
 #include "menu/menu_settings.h"
 #include "ui/ui_anim.h"
 #include "ui/ui_priv.h"
+#include "ui/ui_keyboard.h"
 #include "lib/vanilla.h"
 
 
@@ -21,6 +22,8 @@
 
 
 #define MAIN_MENU_ENTRIES 3
+
+
 
 static void return_to_settings(vui_context_t *vui, int btn, void *v)
 {
@@ -126,6 +129,7 @@ void vpi_menu_key_bindings(vui_context_t *vui, void *v)
   const int padding = 5;
   
   {
+    // SHOULDER BUTTONS
     char bind_char[2]; bind_char[1] = '\0';
     bind_char[0] = get_char_from_current_keybind(vui, VANILLA_BTN_ZL);
     int zl_button = vui_button_create(vui, img_x, img_y - btn_height * 2 - padding, btn_width, btn_height, bind_char, NULL, VUI_BUTTON_STYLE_SMALL, layer, vpi_bind_callback, (void *) (intptr_t)VANILLA_BTN_ZL);
@@ -142,6 +146,7 @@ void vpi_menu_key_bindings(vui_context_t *vui, void *v)
     const int abxy_x_ref = img_x + img_w + img_w / 4 - btn_width / 2;
     const int abxy_y_ref = dpad_y_ref;
     
+    // DPAD
     bind_char[0] = get_char_from_current_keybind(vui, VANILLA_BTN_UP);
     int dup_button = vui_button_create(vui, dpad_x_ref, dpad_y_ref - btn_height - padding, btn_width, btn_height, bind_char, NULL, VUI_BUTTON_STYLE_SMALL, layer, vpi_bind_callback, (void *) (intptr_t)VANILLA_BTN_UP);
     bind_char[0] = get_char_from_current_keybind(vui, VANILLA_BTN_DOWN);
@@ -151,6 +156,7 @@ void vpi_menu_key_bindings(vui_context_t *vui, void *v)
     bind_char[0] = get_char_from_current_keybind(vui, VANILLA_BTN_RIGHT);
     int drg_button = vui_button_create(vui, dpad_x_ref + btn_width, dpad_y_ref - btn_height / 2, btn_width, btn_height, bind_char, NULL, VUI_BUTTON_STYLE_SMALL, layer, vpi_bind_callback, (void *) (intptr_t)VANILLA_BTN_RIGHT);
 
+    // ABXY
     bind_char[0] = get_char_from_current_keybind(vui, VANILLA_BTN_X);
     int x_button = vui_button_create(vui, abxy_x_ref, abxy_y_ref - btn_height - padding, btn_width, btn_height, bind_char, NULL, VUI_BUTTON_STYLE_SMALL, layer, vpi_bind_callback, (void *) (intptr_t)VANILLA_BTN_X);
     bind_char[0] = get_char_from_current_keybind(vui, VANILLA_BTN_B);
@@ -159,6 +165,23 @@ void vpi_menu_key_bindings(vui_context_t *vui, void *v)
     int y_button = vui_button_create(vui, abxy_x_ref - btn_width, abxy_y_ref - btn_height / 2, btn_width, btn_height, bind_char, NULL, VUI_BUTTON_STYLE_SMALL, layer, vpi_bind_callback, (void *) (intptr_t)VANILLA_BTN_Y);
     bind_char[0] = get_char_from_current_keybind(vui, VANILLA_BTN_A);
     int a_button = vui_button_create(vui, abxy_x_ref + btn_width, abxy_y_ref - btn_height / 2, btn_width, btn_height, bind_char, NULL, VUI_BUTTON_STYLE_SMALL, layer, vpi_bind_callback, (void *) (intptr_t)VANILLA_BTN_A);
+
+    const int plus_minus_y_ref = abxy_y_ref + btn_height * 1.5;
+
+    bind_char[0] = get_char_from_current_keybind(vui, VANILLA_BTN_PLUS);
+    int plus_button = vui_button_create(vui, abxy_x_ref - btn_width, plus_minus_y_ref, btn_width, btn_height, bind_char, NULL, VUI_BUTTON_STYLE_SMALL, layer, vpi_bind_callback, (void *) (intptr_t)VANILLA_BTN_PLUS);
+    bind_char[0] = get_char_from_current_keybind(vui, VANILLA_BTN_MINUS);
+    int minus_button = vui_button_create(vui, abxy_x_ref - btn_width, plus_minus_y_ref + btn_height + padding, btn_width, btn_height, bind_char, NULL, VUI_BUTTON_STYLE_SMALL, layer, vpi_bind_callback, (void *) (intptr_t)VANILLA_BTN_MINUS);
+
+    bind_char[0] = get_char_from_current_keybind(vui, VANILLA_BTN_HOME);
+    int home_button = vui_button_create(vui, img_w - btn_width / 2, img_y + img_h + padding, btn_width, btn_height, bind_char, NULL, VUI_BUTTON_STYLE_SMALL, layer, vpi_bind_callback, (void *)(intptr_t)VANILLA_BTN_HOME);
+    bind_char[0] = get_char_from_current_keybind(vui, VANILLA_BTN_TV);
+    int tv_button = vui_button_create(vui, img_w + btn_width * 1.5, img_y + img_h + padding, btn_width, btn_height, bind_char, NULL, VUI_BUTTON_STYLE_SMALL, layer, vpi_bind_callback, (void*)(intptr_t)VANILLA_BTN_TV);
+
+    int test_button = vui_button_create(vui, dpad_x_ref, dpad_y_ref + btn_height * 2, btn_width, btn_height, NULL, VUI_KEYBOARD_ICONS[VUI_KEYBOARD_ICON_A], VUI_BUTTON_STYLE_SMALL, layer, NULL, NULL);
+    vui_button_update_icon_mod(vui, test_button, 0x1);
+
+    printf("%s\n", VUI_KEYBOARD_ICONS[VUI_KEYBOARD_ICON_A]);
 
   }
 

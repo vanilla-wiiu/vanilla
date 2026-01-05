@@ -93,6 +93,7 @@ void vui_set_fullscreen(vui_context_t *ctx, int enabled)
 int vui_button_create(vui_context_t *ctx, int x, int y, int w, int h, const char *text, const char *icon, vui_button_style_t style, int layer, vui_button_callback_t callback, void *callback_data)
 {
     if (ctx->button_count == MAX_BUTTON_COUNT) {
+        fprintf(stderr, "Could not create button! Max button count exceeded!\n");
         return -1;
     }
 
@@ -130,6 +131,7 @@ int vui_button_create(vui_context_t *ctx, int x, int y, int w, int h, const char
     vui_button_update_checked(ctx, index, 0);
     vui_button_update_checkable(ctx, index, 0);
 
+    btn->icon_mod = 0;
     btn->ondraw = NULL;
     btn->ondraw_data = NULL;
 
@@ -215,6 +217,11 @@ void vui_button_update_icon(vui_context_t *ctx, int index, const char *icon)
 {
     vui_button_t *btn = &ctx->buttons[index];
     vui_strncpy(btn->icon, icon, sizeof(btn->icon));
+}
+
+void vui_button_update_icon_mod(vui_context_t *ctx, int index, uint32_t mod)
+{
+    ctx->buttons[index].icon_mod = mod;
 }
 
 void vui_button_update_text(vui_context_t *ctx, int index, const char *text)
