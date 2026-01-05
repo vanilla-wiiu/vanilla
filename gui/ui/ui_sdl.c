@@ -44,6 +44,7 @@ typedef struct {
     int h;
     char text[MAX_BUTTON_TEXT];
     char icon[MAX_BUTTON_TEXT];
+    int32_t icon_mod;
     int checked;
 } vui_sdl_cached_texture_t;
 
@@ -1336,7 +1337,7 @@ void vui_draw_sdl(vui_context_t *ctx, SDL_Renderer *renderer)
 
         // Check if button needs to be redrawn
         vui_sdl_cached_texture_t *btn_tex = &sdl_ctx->button_cache[i];
-        if (!btn_tex->texture || btn_tex->w != btn->w || btn_tex->h != btn->h || strcmp(btn_tex->text, btn->text) || strcmp(btn_tex->icon, btn->icon) || btn_tex->checked != btn->checked) {
+        if (!btn_tex->texture || btn_tex->w != btn->w || btn_tex->h != btn->h || strcmp(btn_tex->text, btn->text) || strcmp(btn_tex->icon, btn->icon) || btn_tex->checked != btn->checked || btn_tex->icon_mod != btn->icon_mod) {
             // Must re-draw texture
             if (btn_tex->texture && (btn_tex->w != btn->w || btn_tex->h != btn->h)) {
                 SDL_DestroyTexture(btn_tex->texture);
@@ -1356,6 +1357,7 @@ void vui_draw_sdl(vui_context_t *ctx, SDL_Renderer *renderer)
 
             btn_tex->w = btn->w;
             btn_tex->h = btn->h;
+            btn_tex->icon_mod = btn->icon_mod;
             strcpy(btn_tex->text, btn->text);
             strcpy(btn_tex->icon, btn->icon);
 

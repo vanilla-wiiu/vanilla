@@ -24,6 +24,7 @@ vui_context_t *vui_alloc(int width, int height)
     vui->vibrate_handler = 0;
     vui->font_height_handler = 0;
     vui->text_open_handler = 0;
+    vui->bind_mode = 0;
     vui->key_map = 0;
     vui->key_map_sz = 0;
     vui->button_map = 0;
