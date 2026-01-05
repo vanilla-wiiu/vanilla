@@ -88,6 +88,12 @@ void vpi_config_save()
         sprintf(buf, "%i", vpi_config.keymap[i]);
         xmlTextWriterWriteElement(writer, BAD_CAST id_buf, BAD_CAST buf);
     }
+    for(int i = 0; i < VPI_ACTION_END_INDEX - VPI_ACTION_START_INDEX - 1; i++){
+        char id_buf[24];
+        snprintf(id_buf, sizeof(id_buf), "act_%i", i);
+        sprintf(buf, "%i", vpi_config.actionkeymap[i]);
+        xmlTextWriterWriteElement(writer, BAD_CAST id_buf, BAD_CAST buf);
+    }
     xmlTextWriterEndElement(writer); // keymap
 
     xmlTextWriterEndElement(writer); // vanilla
@@ -168,7 +174,7 @@ void vpi_config_init()
                     } else if (!strcmp((const char *) child->name, "keymap")) {
                         xmlNodePtr key_idx = child->children;
                         while(key_idx){
-                            if(key_idx->type == XML_ELEMENT_NODE){
+                            if(key_idx->type == XML_ELEMENT_NODE && !strncmp(key_idx->name, "key_", 4)){
                                 int key = atoi((const char *)(key_idx->name + 4));
                                 if(key >= 0 && key < VANILLA_BTN_COUNT){
                                     vpi_config.keymap[key] = atoi((const char *)key_idx->children->content);

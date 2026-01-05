@@ -165,6 +165,18 @@ void init_gamepad()
         }
     }
 
+    for(int i = 0; i < VPI_ACTION_END_INDEX - VPI_ACTION_START_INDEX - 1; i++){
+        if(vpi_config.actionkeymap[i]){
+            for(int j = 0; j < SDL_NUM_SCANCODES; j++){
+                if(key_map[j] == i + VPI_ACTION_START_INDEX + 1){
+                    key_map[j] = -1;
+                    break;
+                }
+            }
+            key_map[vpi_config.actionkeymap[i]] = i + VPI_ACTION_START_INDEX + 1;
+        }
+    }
+
 }
 
 void find_valid_controller(vui_sdl_context_t *sdl_ctx)
@@ -778,7 +790,13 @@ static void vui_save_gamepad_sdl()
 {
     for(int i = 0; i < SDL_NUM_SCANCODES; i++){
         if(key_map[i] > 0)
-            vpi_config.keymap[key_map[i]] = i;
+        {
+            if(key_map[i] > VPI_ACTION_START_INDEX){
+                vpi_config.actionkeymap[key_map[i] - VPI_ACTION_START_INDEX - 1] = i;
+            } else {
+                vpi_config.keymap[key_map[i]] = i;
+            }
+        }
     }
     vpi_config_save();
 }

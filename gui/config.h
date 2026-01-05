@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <vanilla.h>
+#include "menu/menu.h"
 
 #define VPI_CONSOLE_MAX_NAME 256
 
@@ -21,6 +22,7 @@ typedef struct {
     int region;
     int swap_abxy;
     int keymap[VANILLA_BTN_COUNT];
+    int actionkeymap[VPI_ACTION_END_INDEX - VPI_ACTION_START_INDEX];
     int fullscreen;
 } vpi_config_t;
 

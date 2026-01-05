@@ -898,7 +898,7 @@ void vui_image_destroy(vui_context_t *ctx, int image)
 
 void vui_process_keydown(vui_context_t *ctx, int button)
 {
-    // If we are in bind mode we need to cosume the next key press for the binding
+    // If we are in bind mode we need to consume the next key press for the binding
     if(ctx->bind_mode){
         for(int i = 0; i < ctx->key_map_sz; i++){
             if(ctx->key_map[i] == ctx->bind_mode){
@@ -906,7 +906,7 @@ void vui_process_keydown(vui_context_t *ctx, int button)
                 break;
             }
         }
-        // Treat button as a scancode NOT a Vanilla button
+        // Treat button as a scancode NOT a Vanilla button in bind mode
         ctx->key_map[button] = ctx->bind_mode;
         ctx->bind_mode = 0;
     }
