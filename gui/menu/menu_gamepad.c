@@ -89,11 +89,72 @@ void vpi_menu_key_bindings_more(vui_context_t *vui, void *v)
   int SCREEN_WIDTH, SCREEN_HEIGHT;
   vui_get_screen_size(vui, &SCREEN_WIDTH, &SCREEN_HEIGHT);
 
-  const int btn_width = 50;
-  const int btn_height = 50;
-  const int padding = 5;
+  const int btn_w = 50;
+  const int btn_h = 50;
+  const int padding = 15;
+
+  const int img_w = btn_w;
+  const int img_h = btn_h;
+  int img_x = SCREEN_WIDTH / 6 - img_w / 2;
+  const int img_y = SCREEN_HEIGHT / 6 - img_h / 2;
+  int btn_offset = 0;
+
+  {
+    const char *button_icon;
+
+    // Left Stick Controls
+    button_icon = vui_get_keyicon_from_scancode(find_current_keybind(vui, VANILLA_AXIS_L_UP));
+    int lup_button = vui_button_create(vui, img_x + img_w + padding, img_y + padding + (img_w * btn_offset), btn_w, btn_h, NULL, button_icon, VUI_BUTTON_STYLE_SMALL, layer, vpi_bind_callback, (void *) (intptr_t) VANILLA_AXIS_L_UP);
+    vui_button_update_icon_mod(vui, lup_button, gICON_COLOUR);
+    vui_image_create(vui, img_x, img_y + padding + (img_h * btn_offset++), img_w, img_h, "wiiu_buttons/wiiu_stick_l_up.svg", layer);
+    button_icon = vui_get_keyicon_from_scancode(find_current_keybind(vui, VANILLA_AXIS_L_LEFT));
+    int llft_button = vui_button_create(vui, img_x + img_w + padding, img_y + padding + (img_w * btn_offset), btn_w, btn_h, NULL, button_icon, VUI_BUTTON_STYLE_SMALL, layer, vpi_bind_callback, (void *) (intptr_t) VANILLA_AXIS_L_LEFT);
+    vui_button_update_icon_mod(vui, llft_button, gICON_COLOUR);
+    vui_image_create(vui, img_x, img_y + padding + (img_h * btn_offset++), img_w, img_h, "wiiu_buttons/wiiu_stick_l_left.svg", layer);
+    button_icon = vui_get_keyicon_from_scancode(find_current_keybind(vui, VANILLA_AXIS_L_DOWN));
+    int ldwn_button = vui_button_create(vui, img_x + img_w + padding, img_y + padding + (img_w * btn_offset), btn_w, btn_h, NULL, button_icon, VUI_BUTTON_STYLE_SMALL, layer, vpi_bind_callback, (void *) (intptr_t) VANILLA_AXIS_L_DOWN);
+    vui_button_update_icon_mod(vui, ldwn_button, gICON_COLOUR);
+    vui_image_create(vui, img_x, img_y + padding + (img_h * btn_offset++), img_w, img_h, "wiiu_buttons/wiiu_stick_l_down.svg", layer);
+    button_icon = vui_get_keyicon_from_scancode(find_current_keybind(vui, VANILLA_AXIS_L_RIGHT));
+    int lrgt_button = vui_button_create(vui, img_x + img_w + padding, img_y + padding + (img_w * btn_offset), btn_w, btn_h, NULL, button_icon, VUI_BUTTON_STYLE_SMALL, layer, vpi_bind_callback, (void *) (intptr_t) VANILLA_AXIS_L_RIGHT);
+    vui_button_update_icon_mod(vui, lrgt_button, gICON_COLOUR);
+    vui_image_create(vui, img_x, img_y + padding + (img_h * btn_offset++), img_w, img_h, "wiiu_buttons/wiiu_stick_l_right.svg", layer);
+    button_icon = vui_get_keyicon_from_scancode(find_current_keybind(vui, VANILLA_BTN_L3));
+    int lthree_button = vui_button_create(vui, img_x + img_w + padding, img_y + padding + (img_w * btn_offset), btn_w, btn_h, NULL, button_icon, VUI_BUTTON_STYLE_SMALL, layer, vpi_bind_callback, (void *) (intptr_t) VANILLA_BTN_L3);
+    vui_button_update_icon_mod(vui, lthree_button, gICON_COLOUR);
+    vui_image_create(vui, img_x, img_y + padding + (img_h * btn_offset++), img_w, img_h, "wiiu_buttons/wiiu_stick_top_l.svg", layer);
 
 
+    btn_offset = 0;
+    img_x += img_w * 3;
+    // Right Stick Controls
+    button_icon = vui_get_keyicon_from_scancode(find_current_keybind(vui, VANILLA_AXIS_R_UP));
+    int rup_button = vui_button_create(vui, img_x + img_w + padding, img_y + padding + (img_w * btn_offset), btn_w, btn_h, NULL, button_icon, VUI_BUTTON_STYLE_SMALL, layer, vpi_bind_callback, (void *) (intptr_t) VANILLA_AXIS_R_UP);
+    vui_button_update_icon_mod(vui, rup_button, gICON_COLOUR);
+    vui_image_create(vui, img_x, img_y + padding + (img_h * btn_offset++), img_w, img_h, "wiiu_buttons/wiiu_stick_r_up.svg", layer);
+    button_icon = vui_get_keyicon_from_scancode(find_current_keybind(vui, VANILLA_AXIS_R_LEFT));
+    int rlft_button = vui_button_create(vui, img_x + img_w + padding, img_y + padding + (img_w * btn_offset), btn_w, btn_h, NULL, button_icon, VUI_BUTTON_STYLE_SMALL, layer, vpi_bind_callback, (void *) (intptr_t) VANILLA_AXIS_R_LEFT);
+    vui_button_update_icon_mod(vui, rlft_button, gICON_COLOUR);
+    vui_image_create(vui, img_x, img_y + padding + (img_h * btn_offset++), img_w, img_h, "wiiu_buttons/wiiu_stick_r_left.svg", layer);
+    button_icon = vui_get_keyicon_from_scancode(find_current_keybind(vui, VANILLA_AXIS_R_DOWN));
+    int rdwn_button = vui_button_create(vui, img_x + img_w + padding, img_y + padding + (img_w * btn_offset), btn_w, btn_h, NULL, button_icon, VUI_BUTTON_STYLE_SMALL, layer, vpi_bind_callback, (void *) (intptr_t) VANILLA_AXIS_R_DOWN);
+    vui_button_update_icon_mod(vui, rdwn_button, gICON_COLOUR);
+    vui_image_create(vui, img_x, img_y + padding + (img_h * btn_offset++), img_w, img_h, "wiiu_buttons/wiiu_stick_r_down.svg", layer);
+    button_icon = vui_get_keyicon_from_scancode(find_current_keybind(vui, VANILLA_AXIS_R_RIGHT));
+    int rrgt_button = vui_button_create(vui, img_x + img_w + padding, img_y + padding + (img_w * btn_offset), btn_w, btn_h, NULL, button_icon, VUI_BUTTON_STYLE_SMALL, layer, vpi_bind_callback, (void *) (intptr_t) VANILLA_AXIS_R_RIGHT);
+    vui_button_update_icon_mod(vui, rrgt_button, gICON_COLOUR);
+    vui_image_create(vui, img_x, img_y + padding + (img_h * btn_offset++), img_w, img_h, "wiiu_buttons/wiiu_stick_r_right.svg", layer);
+    button_icon = vui_get_keyicon_from_scancode(find_current_keybind(vui, VANILLA_BTN_R3));
+    int rthree_button = vui_button_create(vui, img_x + img_w + padding, img_y + padding + (img_w * btn_offset), btn_w, btn_h, NULL, button_icon, VUI_BUTTON_STYLE_SMALL, layer, vpi_bind_callback, (void *) (intptr_t) VANILLA_BTN_R3);
+    vui_button_update_icon_mod(vui, rthree_button, gICON_COLOUR);
+    vui_image_create(vui, img_x, img_y + padding + (img_h * btn_offset++), img_w, img_h, "wiiu_buttons/wiiu_stick_top_r.svg", layer);
+
+    
+    btn_offset = 0;
+    img_x += img_w * 3;
+    // Special Action Buttons
+
+  }
 
 
   vpi_menu_create_back_button(vui, layer, transition_to_keybinds, (void *) (intptr_t) layer);
