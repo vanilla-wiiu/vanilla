@@ -41,6 +41,8 @@ const char *VUI_KEYBOARD_ICONS[VUI_KEYBOARD_ICON_COUNT] = {
   "keys/keyboard_9.svg",
   "keys/keyboard_return.svg",
   "keys/keyboard_ctrl.svg",
+  "keys/keyboard_ctrl_left.svg",
+  "keys/keyboard_ctrl_right.svg",
   "keys/keyboard_alt.svg",
   "keys/keyboard_shift.svg",
   "keys/keyboard_tab.svg",
@@ -118,8 +120,8 @@ const char *vui_get_keyicon_from_scancode(int scancode) {
         case SDL_SCANCODE_RETURN2:
         case SDL_SCANCODE_KP_ENTER: icon_index = VUI_KEYBOARD_ICON_RET; break;
 
-        case SDL_SCANCODE_LCTRL:
-        case SDL_SCANCODE_RCTRL:    icon_index = VUI_KEYBOARD_ICON_CTRL; break;
+        case SDL_SCANCODE_LCTRL:    icon_index = VUI_KEYBOARD_ICON_LCTRL; break;
+        case SDL_SCANCODE_RCTRL:    icon_index = VUI_KEYBOARD_ICON_RCTRL; break;
 
         case SDL_SCANCODE_LALT:
         case SDL_SCANCODE_RALT:     icon_index = VUI_KEYBOARD_ICON_ALT; break;
