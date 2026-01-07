@@ -97,8 +97,8 @@ void vpi_menu_key_bindings_more(vui_context_t *vui, void *v)
 
   const int img_w = btn_w;
   const int img_h = btn_h;
-  int img_x = SCREEN_WIDTH / 6 - img_w / 2;
-  const int img_y = SCREEN_HEIGHT / 6 - img_h / 2;
+  int img_x = SCREEN_WIDTH / 6 - img_w;
+  const int img_y = SCREEN_HEIGHT / 4 - img_h / 2;
   int btn_offset = 0;
 
   {
@@ -128,7 +128,7 @@ void vpi_menu_key_bindings_more(vui_context_t *vui, void *v)
 
 
     btn_offset = 0;
-    img_x += img_w * 3;
+    img_x += img_w * 5;
     // Right Stick Controls
     button_icon = vui_get_keyicon_from_scancode(find_current_keybind(vui, VANILLA_AXIS_R_UP));
     int rup_button = vui_button_create(vui, img_x + img_w + padding, img_y + padding + (img_w * btn_offset), btn_w, btn_h, NULL, button_icon, VUI_BUTTON_STYLE_SMALL, layer, vpi_bind_callback, (void *) (intptr_t) VANILLA_AXIS_R_UP);
@@ -153,9 +153,17 @@ void vpi_menu_key_bindings_more(vui_context_t *vui, void *v)
 
     
     btn_offset = 0;
-    img_x += img_w * 3;
+    img_x += img_w * 5;
     // Special Action Buttons
-
+    button_icon = vui_get_keyicon_from_scancode(find_current_keybind(vui, VPI_ACTION_TOGGLE_RECORDING));
+    int record_button = vui_button_create(vui, img_x + img_w + padding, img_y + padding + (img_w * btn_offset), btn_w, btn_h, NULL, button_icon, VUI_BUTTON_STYLE_SMALL, layer, vpi_bind_callback, (void *)(intptr_t) VPI_ACTION_TOGGLE_RECORDING);
+    vui_button_update_icon_mod(vui, record_button, gICON_COLOUR);
+    vui_image_create(vui, img_x, img_y + padding + (img_h * btn_offset++), img_w, img_h, "recording_icon.svg", layer);
+    button_icon = vui_get_keyicon_from_scancode(find_current_keybind(vui, VPI_ACTION_SCREENSHOT));
+    int screenshot_button = vui_button_create(vui, img_x + img_w + padding, img_y + padding + (img_w * btn_offset), btn_w, btn_h, NULL, button_icon, VUI_BUTTON_STYLE_SMALL, layer, vpi_bind_callback, (void *)(intptr_t) VPI_ACTION_SCREENSHOT);
+    vui_button_update_icon_mod(vui, screenshot_button, gICON_COLOUR);
+    vui_image_create(vui, img_x, img_y + padding + (img_h * btn_offset++), img_w, img_h, "screenshot_icon.svg", layer);
+    
   }
 
 
