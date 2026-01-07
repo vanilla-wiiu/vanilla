@@ -986,7 +986,7 @@ void vui_sdl_draw_button(vui_context_t *vui, vui_sdl_context_t *sdl_ctx, vui_but
     // Load icon if exists
     int icon_x;
     int icon_y;
-    int icon_size = btn->style == VUI_BUTTON_STYLE_CORNER ? rect.h * 1 / 3 : rect.h * 2 / 4;
+    int icon_size = btn->style == VUI_BUTTON_STYLE_CORNER ? rect.h * 1 / 3 : btn->style == VUI_BUTTON_STYLE_SMALL ? rect.h  : rect.h * 2 / 4;
     SDL_Texture *icon = 0;
     if (btn->icon[0]) {
         icon = vui_sdl_load_texture(sdl_ctx->renderer, btn->icon);

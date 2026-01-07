@@ -93,8 +93,8 @@ void vui_set_fullscreen(vui_context_t *ctx, int enabled)
 
 int vui_button_create(vui_context_t *ctx, int x, int y, int w, int h, const char *text, const char *icon, vui_button_style_t style, int layer, vui_button_callback_t callback, void *callback_data)
 {
-    if (ctx->button_count == MAX_BUTTON_COUNT) {
-        fprintf(stderr, "Could not create button! Max button count exceeded!\n");
+    if (ctx->button_count >= MAX_BUTTON_COUNT) {
+        vpilog("Could not create button! Max button count met!\n");
         return -1;
     }
 
