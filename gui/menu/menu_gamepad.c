@@ -12,10 +12,11 @@
 
 #define MAIN_MENU_ENTRIES 3
 
-static const uint32_t gICON_COLOUR = 0x99999999;
+static const uint32_t gICON_COLOUR = 0x222222;
 
 static void return_to_settings(vui_context_t *vui, int btn, void *v)
 {
+    vui->bind_mode = 0;
     int layer = (intptr_t) v;
     vui_transition_fade_layer_out(vui, layer, vpi_menu_settings, 0);
 }
@@ -39,6 +40,7 @@ static int find_current_keybind(const vui_context_t *ctx, int btn)
 
 static void return_to_gamepad(vui_context_t *vui, int btn, void *v)
 {
+  vui->bind_mode = 0;
   int layer = (intptr_t) v;
   vui_transition_fade_layer_out(vui, layer, vpi_menu_gamepad, 0);
 }
