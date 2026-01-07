@@ -39,6 +39,16 @@ const char *VUI_KEYBOARD_ICONS[VUI_KEYBOARD_ICON_COUNT] = {
   "keys/keyboard_7.svg",
   "keys/keyboard_8.svg",
   "keys/keyboard_9.svg",
+  "keys/keyboard_0_num.svg",
+  "keys/keyboard_1_num.svg",
+  "keys/keyboard_2_num.svg",
+  "keys/keyboard_3_num.svg",
+  "keys/keyboard_4_num.svg",
+  "keys/keyboard_5_num.svg",
+  "keys/keyboard_6_num.svg",
+  "keys/keyboard_7_num.svg",
+  "keys/keyboard_8_num.svg",
+  "keys/keyboard_9_num.svg",
   "keys/keyboard_return.svg",
   "keys/keyboard_ctrl.svg",
   "keys/keyboard_ctrl_left.svg",
@@ -95,26 +105,28 @@ const char *vui_get_keyicon_from_scancode(int scancode) {
         case SDL_SCANCODE_Y: icon_index = VUI_KEYBOARD_ICON_Y; break;
         case SDL_SCANCODE_Z: icon_index = VUI_KEYBOARD_ICON_Z; break;
 
-        case SDL_SCANCODE_0: 
-        case SDL_SCANCODE_KP_0: icon_index = VUI_KEYBOARD_ICON_0; break;
-        case SDL_SCANCODE_1: 
-        case SDL_SCANCODE_KP_1: icon_index = VUI_KEYBOARD_ICON_1; break;
-        case SDL_SCANCODE_2: 
-        case SDL_SCANCODE_KP_2: icon_index = VUI_KEYBOARD_ICON_2; break;
-        case SDL_SCANCODE_3: 
-        case SDL_SCANCODE_KP_3: icon_index = VUI_KEYBOARD_ICON_3; break;
-        case SDL_SCANCODE_4: 
-        case SDL_SCANCODE_KP_4: icon_index = VUI_KEYBOARD_ICON_4; break;
-        case SDL_SCANCODE_5: 
-        case SDL_SCANCODE_KP_5: icon_index = VUI_KEYBOARD_ICON_5; break;
-        case SDL_SCANCODE_6: 
-        case SDL_SCANCODE_KP_6: icon_index = VUI_KEYBOARD_ICON_6; break;
-        case SDL_SCANCODE_7: 
-        case SDL_SCANCODE_KP_7: icon_index = VUI_KEYBOARD_ICON_7; break;
-        case SDL_SCANCODE_8: 
-        case SDL_SCANCODE_KP_8: icon_index = VUI_KEYBOARD_ICON_8; break;
-        case SDL_SCANCODE_9: 
-        case SDL_SCANCODE_KP_9: icon_index = VUI_KEYBOARD_ICON_9; break;
+        case SDL_SCANCODE_0:    icon_index = VUI_KEYBOARD_ICON_0; break;
+        case SDL_SCANCODE_1:    icon_index = VUI_KEYBOARD_ICON_1; break;
+        case SDL_SCANCODE_2:    icon_index = VUI_KEYBOARD_ICON_2; break;
+        case SDL_SCANCODE_3:    icon_index = VUI_KEYBOARD_ICON_3; break;
+        case SDL_SCANCODE_4:    icon_index = VUI_KEYBOARD_ICON_4; break;
+        case SDL_SCANCODE_5:    icon_index = VUI_KEYBOARD_ICON_5; break;
+        case SDL_SCANCODE_6:    icon_index = VUI_KEYBOARD_ICON_6; break;
+        case SDL_SCANCODE_7:    icon_index = VUI_KEYBOARD_ICON_7; break;
+        case SDL_SCANCODE_8:    icon_index = VUI_KEYBOARD_ICON_8; break;
+        case SDL_SCANCODE_9:    icon_index = VUI_KEYBOARD_ICON_9; break;
+
+        case SDL_SCANCODE_KP_0: icon_index = VUI_KEYBOARD_ICON_NUMPAD_0; break;
+        case SDL_SCANCODE_KP_1: icon_index = VUI_KEYBOARD_ICON_NUMPAD_1; break;
+        case SDL_SCANCODE_KP_2: icon_index = VUI_KEYBOARD_ICON_NUMPAD_2; break;
+        case SDL_SCANCODE_KP_3: icon_index = VUI_KEYBOARD_ICON_NUMPAD_3; break;
+        case SDL_SCANCODE_KP_4: icon_index = VUI_KEYBOARD_ICON_NUMPAD_4; break;
+        case SDL_SCANCODE_KP_5: icon_index = VUI_KEYBOARD_ICON_NUMPAD_5; break;
+        case SDL_SCANCODE_KP_6: icon_index = VUI_KEYBOARD_ICON_NUMPAD_6; break;
+        case SDL_SCANCODE_KP_7: icon_index = VUI_KEYBOARD_ICON_NUMPAD_7; break;
+        case SDL_SCANCODE_KP_8: icon_index = VUI_KEYBOARD_ICON_NUMPAD_8; break;
+        case SDL_SCANCODE_KP_9: icon_index = VUI_KEYBOARD_ICON_NUMPAD_9; break;
+        
 
         case SDL_SCANCODE_RETURN:
         case SDL_SCANCODE_RETURN2:
