@@ -558,7 +558,7 @@ int vui_sdl_event_thread(void *data)
             {
                 if (vui->active_textedit == -1) {
                     int vanilla_btn = key_map[ev.key.keysym.scancode];
-                    if (vanilla_btn > VPI_ACTION_START_INDEX) {
+                    if (vanilla_btn > VPI_ACTION_START_INDEX && !vui->bind_mode) {
                         if (ev.type == SDL_KEYDOWN)
                             vpi_menu_action(vui, (vpi_extra_action_t) vanilla_btn);
                     } else if (vanilla_btn != -1 || vui->bind_mode) {

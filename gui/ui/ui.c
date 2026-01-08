@@ -909,6 +909,7 @@ void vui_process_keydown(vui_context_t *ctx, int button)
         // Treat button as a scancode NOT a Vanilla button in bind mode
         ctx->key_map[button] = ctx->bind_mode;
         ctx->bind_mode = 0;
+        return;
     }
     
     switch (button) {
