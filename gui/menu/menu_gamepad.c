@@ -13,6 +13,7 @@
 #define MAIN_MENU_ENTRIES 3
 
 static const uint32_t gICON_COLOUR = 0x222222;
+extern const int gDEFAULT_KEY_MAP[][2];
 
 static void return_to_settings(vui_context_t *vui, int btn, void *v)
 {
@@ -57,6 +58,16 @@ static void tranisiton_to_key_bindings_more(vui_context_t *vui, int btn, void *v
   vui_transition_fade_layer_out(vui, layer, vpi_menu_key_bindings_more, 0);
 }
 
+static void update_button_icons(vui_context_t *ctx)
+{
+  for(int i = 0; i < ctx->button_count; i++){
+    //                                                    Bit of a hack to stop trying to add an icon to the reset button
+    //                                                    vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
+    if(ctx->buttons[i].style != VUI_BUTTON_STYLE_SMALL || ctx->buttons[i].text[0] != '\0') continue;
+    vui_button_update_icon(ctx, i, vui_get_keyicon_from_scancode(find_current_keybind(ctx, (int)(intptr_t)ctx->buttons[i].onclick_data)));
+  }
+}
+
 static void vpi_bind_draw_callback(vui_context_t *ctx, vui_button_t *button, void *userdata)
 {
   if(ctx->bind_mode){
@@ -66,10 +77,7 @@ static void vpi_bind_draw_callback(vui_context_t *ctx, vui_button_t *button, voi
 
   button->icon_mod = gICON_COLOUR;
 
-  for(int i = 0; i < ctx->button_count; i++){
-    if(ctx->buttons[i].style != VUI_BUTTON_STYLE_SMALL) continue;
-    vui_button_update_icon(ctx, i, vui_get_keyicon_from_scancode(find_current_keybind(ctx, (int)(intptr_t)ctx->buttons[i].onclick_data)));
-  }
+  update_button_icons(ctx);
   
   //Unset the draw callback
   vui_button_update_draw_handler(ctx, (int) (intptr_t) userdata, NULL, NULL);
@@ -80,6 +88,14 @@ static void vpi_bind_callback(vui_context_t *ctx, int button, void *userdata)
   if(ctx->bind_mode) return;
   ctx->bind_mode = (int) (intptr_t)userdata;
   vui_button_update_draw_handler(ctx, button, vpi_bind_draw_callback, (void *)(uintptr_t)button);
+}
+
+static void vpi_default_keyboard_bindings(vui_context_t *ctx, int button, void *userdata)
+{
+  for(int i = 0; gDEFAULT_KEY_MAP[i][0] != -1 && gDEFAULT_KEY_MAP[i][1] != -1; i++)
+    ctx->key_map[gDEFAULT_KEY_MAP[i][0]] = gDEFAULT_KEY_MAP[i][1];
+
+  update_button_icons(ctx);
 }
 
 void vpi_menu_key_bindings_more(vui_context_t *vui, void *v)
@@ -166,6 +182,7 @@ void vpi_menu_key_bindings_more(vui_context_t *vui, void *v)
     
   }
 
+  vui_button_create(vui, 25, SCREEN_HEIGHT - BTN_SZ, 250, 50, lang(VPI_LANG_RESET_TO_DEFAULT), NULL, VUI_BUTTON_STYLE_SMALL, layer, vpi_default_keyboard_bindings, NULL);
 
   vpi_menu_create_back_button(vui, layer, transition_to_keybinds, (void *) (intptr_t) layer);
 
@@ -257,7 +274,9 @@ void vpi_menu_key_bindings(vui_context_t *vui, void *v)
     vui_button_update_icon_mod(vui, tv_button, gICON_COLOUR);
 
   }
-  
+
+  vui_button_create(vui, 25, SCREEN_HEIGHT - BTN_SZ, 250, 50, lang(VPI_LANG_RESET_TO_DEFAULT), NULL, VUI_BUTTON_STYLE_SMALL, layer, vpi_default_keyboard_bindings, NULL);
+
   vui_button_create(vui, SCREEN_WIDTH - BTN_SZ, 0, BTN_SZ, BTN_SZ, lang(VPI_LANG_MORE), 0, VUI_BUTTON_STYLE_CORNER, layer, tranisiton_to_key_bindings_more, (void *) (intptr_t) layer);
   vpi_menu_create_back_button(vui, layer, return_to_gamepad, (void *) (intptr_t) layer);
 }
