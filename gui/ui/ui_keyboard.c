@@ -72,6 +72,25 @@ const char *VUI_KEYBOARD_ICONS[VUI_KEYBOARD_ICON_COUNT] = {
   "keys/keyboard_f10.svg",
   "keys/keyboard_f11.svg",
   "keys/keyboard_f12.svg",
+  "keys/keyboard_capslock.svg",
+  "keys/keyboard_comma.svg",
+  "keys/keyboard_period.svg",
+  "keys/keyboard_minus.svg",
+  "keys/keyboard_equals.svg",
+  "keys/keyboard_slash_forward.svg",
+  "keys/keyboard_semicolon.svg",
+  "keys/keyboard_apostrophe.svg",
+  "keys/keyboard_bracket_open.svg",
+  "keys/keyboard_bracket_close.svg",
+  "keys/keyboard_slash_back.svg",
+  "keys/keyboard_insert.svg",
+  "keys/keyboard_delete.svg",
+  "keys/keyboard_home.svg",
+  "keys/keyboard_end.svg",
+  "keys/keyboard_page_up.svg",
+  "keys/keyboard_page_down.svg",
+  "keys/keyboard_tilde.svg",
+  "keys/keyboard_space.svg"
 };
 
 const char *vui_get_keyicon_from_scancode(int scancode) {
@@ -160,6 +179,27 @@ const char *vui_get_keyicon_from_scancode(int scancode) {
         case SDL_SCANCODE_F10:      icon_index = VUI_KEYBOARD_ICON_F10; break;
         case SDL_SCANCODE_F11:      icon_index = VUI_KEYBOARD_ICON_F11; break;
         case SDL_SCANCODE_F12:      icon_index = VUI_KEYBOARD_ICON_F12; break;
+
+        case SDL_SCANCODE_CAPSLOCK:      icon_index = VUI_KEYBOARD_ICON_CAPS; break;
+        case SDL_SCANCODE_COMMA:         icon_index = VUI_KEYBOARD_ICON_COMMA; break;
+        case SDL_SCANCODE_PERIOD:        icon_index = VUI_KEYBOARD_ICON_PERIOD; break;
+        case SDL_SCANCODE_MINUS:         icon_index = VUI_KEYBOARD_ICON_MINUS; break;
+        case SDL_SCANCODE_EQUALS:        icon_index = VUI_KEYBOARD_ICON_EQUALS; break;
+        case SDL_SCANCODE_SLASH:         icon_index = VUI_KEYBOARD_ICON_FORWARD_SLASH; break;
+        case SDL_SCANCODE_SEMICOLON:     icon_index = VUI_KEYBOARD_ICON_SEMICOLON; break;
+        case SDL_SCANCODE_APOSTROPHE:    icon_index = VUI_KEYBOARD_ICON_APOSTROPHE; break;
+        case SDL_SCANCODE_LEFTBRACKET:   icon_index = VUI_KEYBOARD_ICON_BRACKET_OPEN; break;
+        case SDL_SCANCODE_RIGHTBRACKET:  icon_index = VUI_KEYBOARD_ICON_BRACKET_CLOSE; break;
+        case SDL_SCANCODE_BACKSLASH:     icon_index = VUI_KEYBOARD_ICON_BACK_SLASH; break;
+        case SDL_SCANCODE_INSERT:        icon_index = VUI_KEYBOARD_ICON_INSERT; break;
+        case SDL_SCANCODE_DELETE:        icon_index = VUI_KEYBOARD_ICON_DELETE; break;
+        case SDL_SCANCODE_HOME:          icon_index = VUI_KEYBOARD_ICON_HOME; break;
+        case SDL_SCANCODE_END:           icon_index = VUI_KEYBOARD_ICON_END; break;
+        case SDL_SCANCODE_PAGEUP:        icon_index = VUI_KEYBOARD_ICON_PAGE_UP; break;
+        case SDL_SCANCODE_PAGEDOWN:      icon_index = VUI_KEYBOARD_ICON_PAGE_DOWN; break;
+
+        case SDL_SCANCODE_GRAVE:         icon_index = VUI_KEYBOARD_ICON_TILDE; break;
+        case SDL_SCANCODE_SPACE:         icon_index = VUI_KEYBOARD_ICON_SPACE; break;
 
         default:
             return NULL; 
