@@ -11,6 +11,7 @@
 #include "ui_anim.h"
 #include "ui_priv.h"
 #include "ui_util.h"
+#include "menu/menu.h"
 
 vui_context_t *vui_alloc(int width, int height)
 {
@@ -900,6 +901,10 @@ void vui_process_keydown(vui_context_t *ctx, int button)
 {
     // If we are in bind mode we need to consume the next key press for the binding
     if(ctx->bind_mode){
+        if (ctx->key_map[button] == VPI_ACTION_DISCONNECT){
+            ctx->bind_mode = 0;
+            return;
+        }
         for(int i = 0; i < ctx->key_map_sz; i++){
             if(ctx->key_map[i] == ctx->bind_mode){
                 ctx->key_map[i] = ctx->key_map[button];

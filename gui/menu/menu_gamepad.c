@@ -48,12 +48,14 @@ static void return_to_gamepad(vui_context_t *vui, int btn, void *v)
 
 static void transition_to_keybinds(vui_context_t *vui, int btn, void *v)
 {
+  vui->bind_mode = 0;
   int layer = (intptr_t) v;
   vui_transition_fade_layer_out(vui, layer, vpi_menu_key_bindings, 0);
 }
 
 static void tranisiton_to_key_bindings_more(vui_context_t *vui, int btn, void *v)
 {
+  vui->bind_mode = 0;
   int layer = (intptr_t) v;
   vui_transition_fade_layer_out(vui, layer, vpi_menu_key_bindings_more, 0);
 }
