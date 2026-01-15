@@ -46,6 +46,7 @@ RUN if [ "${ARCH}" = "aarch64" ]; then export DEBARCH="arm64"; export DEBGCC="gc
     && apt -y install libgbm-dev:$DEBARCH \
     && apt -y install libva-dev:$DEBARCH \
     && apt -y install libxkbcommon-dev:$DEBARCH \
+    && apt -y install nvidia-cuda-toolkit:$DEBARCH \
     && apt -y install libpolkit-agent-1-dev:$DEBARCH
 
 # Install newer version of CMake
