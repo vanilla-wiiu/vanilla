@@ -103,7 +103,13 @@ void sync_animation_step(vui_context_t *ctx, int64_t time, void *userdata)
 
             if (found == -1) {
                 vpi_console_entry_t console;
-                snprintf(console.name, sizeof(console.name), "Wii U %i", vpi_config.connected_console_count + 1);
+                if (vpi_config.connected_console_count == 0) {
+                    // Most users will only have one Wii U, so for their first
+                    // sync, just use "Wii U" instead of "Wii U 1"
+                    strcpy(console.name, "Wii U");
+                } else {
+                    snprintf(console.name, sizeof(console.name), "Wii U %i", vpi_config.connected_console_count + 1);
+                }
                 console.bssid = sync->data.bssid;
                 console.psk = sync->data.psk;
                 found = vpi_config_add_console(&console);
