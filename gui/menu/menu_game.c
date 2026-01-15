@@ -331,6 +331,7 @@ int vpi_decode_init(vpi_decode_state_t *s)
     // Discover the most ideal hardware decoder
     int r = VANILLA_ERR_GENERIC;
 
+#ifdef VANILLA_CUDA_AVAILABLE
     // See if we can create an NVDEC context (most NVIDIA GPUs)
     if (r != VANILLA_SUCCESS) {
         vpi_decode_exit(s);
@@ -338,6 +339,7 @@ int vpi_decode_init(vpi_decode_state_t *s)
             r = open_decoder(s, &decoders[HWDEC_TYPE_NVDEC]);
         }
     }
+#endif // VANILLA_CUDA_AVAILABLE
 
     // See if we can create a VAAPI context (most Linux systems)
     if (r != VANILLA_SUCCESS) {
