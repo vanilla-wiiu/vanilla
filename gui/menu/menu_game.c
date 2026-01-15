@@ -34,7 +34,7 @@ static char screenshot_buf[4096] = {0};
 static const int VIDEO_STREAM_INDEX = 0;
 static const int AUDIO_STREAM_INDEX = 1;
 
-int vpi_egl_available = 1;
+int vpi_egl_available = 0;
 
 static int status_lbl;
 static struct {

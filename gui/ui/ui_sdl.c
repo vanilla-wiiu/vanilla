@@ -579,6 +579,23 @@ int vui_sdl_event_thread(void *data)
     return 0;
 }
 
+int vui_init_window(vui_context_t *ctx, vui_sdl_context_t *sdl_ctx, Uint32 window_flags)
+{
+    sdl_ctx->window = SDL_CreateWindow("Vanilla", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, ctx->screen_width, ctx->screen_height, window_flags);
+    if (!sdl_ctx->window) {
+        vpilog("Failed to CreateWindow: %s\n", SDL_GetError());
+        return -1;
+    }
+
+    sdl_ctx->renderer = SDL_CreateRenderer(sdl_ctx->window, -1, SDL_RENDERER_ACCELERATED);
+    if (!sdl_ctx->renderer) {
+        vpilog("Failed to CreateRenderer: %s\n", SDL_GetError());
+        return -1;
+    }
+
+    return 0;
+}
+
 int vui_init_sdl(vui_context_t *ctx, int fullscreen)
 {
 	// Enable Steam Deck gyroscopes even while Steam is open and in gaming mode
@@ -615,24 +632,44 @@ int vui_init_sdl(vui_context_t *ctx, int fullscreen)
         SDL_ShowCursor(0);
     }
 
-    sdl_ctx->window = SDL_CreateWindow("Vanilla", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, ctx->screen_width, ctx->screen_height, window_flags);
-    if (!sdl_ctx->window) {
-        vpilog("Failed to CreateWindow: %s\n", SDL_GetError());
-        return -1;
+    // Lookup ahead of time if we're on X11 + OpenGL (will be important for later check...)
+    const char *driver = SDL_GetVideoDriver(0);
+    if (!strcmp(driver, "x11") || !strcmp(driver, "wayland")) {
+        SDL_RendererInfo info;
+        SDL_GetRenderDriverInfo(0, &info);
+        if (!strcmp(info.name, "opengl") || !strcmp(info.name, "opengles")) {
+            // This saves a small amount of time on the EGL check below because
+            // SDL will fail on the earlier CreateWindow call rather than the
+            // later CreateRenderer call.
+            window_flags |= SDL_WINDOW_OPENGL;
+            vpi_egl_available = 1;
+        }
     }
 
-    sdl_ctx->renderer = SDL_CreateRenderer(sdl_ctx->window, -1, SDL_RENDERER_ACCELERATED);
-    if (!sdl_ctx->renderer) {
+    if (vui_init_window(ctx, sdl_ctx, window_flags) != 0) {
         // Re-attempt without EGL (X11/NVIDIA do not support this)
+        vpilog("Trying again without forcing EGL...\n");
 	    SDL_SetHint(SDL_HINT_VIDEO_X11_FORCE_EGL, "0");
         vpi_egl_available = 0;
 
-        sdl_ctx->renderer = SDL_CreateRenderer(sdl_ctx->window, -1, SDL_RENDERER_ACCELERATED);
-        if (!sdl_ctx->renderer) {
+        // Determine if we created a window, destroy it if so
+        if (sdl_ctx->window) {
+            SDL_DestroyWindow(sdl_ctx->window);
+            sdl_ctx->window = 0;
+        }
+
+        // SDL video subsystem must be reinitialized after changing hint
+        SDL_QuitSubSystem(SDL_INIT_VIDEO);
+        SDL_InitSubSystem(SDL_INIT_VIDEO);
+
+        if (vui_init_window(ctx, sdl_ctx, window_flags) != 0) {
             // It's not because we forced EGL, so it's something else we're not prepared for
-            vpilog("Failed to CreateRenderer: %s\n", SDL_GetError());
             return -1;
         }
+    }
+
+    if (!vpi_egl_available) {
+        vpilog("EGL unavailable, VAAPI will be disabled\n");
     }
 
     // Open audio output device
