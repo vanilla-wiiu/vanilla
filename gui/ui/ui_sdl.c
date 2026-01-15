@@ -11,6 +11,7 @@
 #include <pthread.h>
 #include <vanilla.h>
 #include <libavutil/hwcontext.h>
+#include <libavutil/hwcontext_cuda.h>
 #include <libavutil/hwcontext_drm.h>
 #include <unistd.h>
 
@@ -632,6 +633,7 @@ int vui_init_sdl(vui_context_t *ctx, int fullscreen)
         SDL_ShowCursor(0);
     }
 
+#ifdef VANILLA_HAS_EGL
     // Lookup ahead of time if we're on X11 + OpenGL (will be important for later check...)
     const char *driver = SDL_GetVideoDriver(0);
     if (!strcmp(driver, "x11") || !strcmp(driver, "wayland")) {
@@ -645,6 +647,7 @@ int vui_init_sdl(vui_context_t *ctx, int fullscreen)
             vpi_egl_available = 1;
         }
     }
+#endif // VANILLA_HAS_EGL
 
     if (vui_init_window(ctx, sdl_ctx, window_flags) != 0) {
         // Re-attempt without EGL (X11/NVIDIA do not support this)
@@ -1544,6 +1547,94 @@ int check_has_EGL_EXT_image_dma_buf_import()
 }
 #endif // VANILLA_HAS_EGL
 
+int get_texture_from_cuda_frame(vui_sdl_context_t *sdl_ctx, AVFrame *f)
+{
+	const AVCUDAFR *desc = (const AVDRMFrameDescriptor *)f->data[0];
+
+	static PFNGLACTIVETEXTUREARBPROC glActiveTextureARB = NULL;
+	if (!glActiveTextureARB) {
+		glActiveTextureARB = SDL_GL_GetProcAddress("glActiveTextureARB");
+	}
+
+	static PFNGLEGLIMAGETARGETTEXTURE2DOESPROC glEGLImageTargetTexture2DOES = NULL;
+	if (!glEGLImageTargetTexture2DOES) {
+		glEGLImageTargetTexture2DOES = (PFNGLEGLIMAGETARGETTEXTURE2DOESPROC)eglGetProcAddress("glEGLImageTargetTexture2DOES");
+	}
+
+	int image_index = 0;
+    EGLDisplay display = eglGetCurrentDisplay();
+
+	for (int i = 0; i < desc->nb_layers; i++) {
+		const AVDRMLayerDescriptor *layer = &desc->layers[i];
+
+		for (int j = 0; j < layer->nb_planes; j++) {
+			const AVDRMPlaneDescriptor *plane = &layer->planes[j];
+			const AVDRMObjectDescriptor *object = &desc->objects[plane->object_index];
+
+            static int has_EGL_EXT_image_dma_buf_import = -1;
+            if (has_EGL_EXT_image_dma_buf_import == -1) {
+                has_EGL_EXT_image_dma_buf_import = check_has_EGL_EXT_image_dma_buf_import();
+            }
+
+            const EGLAttrib EGL_DMA_BUF_PLANE0_MODIFIER_LO_EXT_OR_NONE =
+                has_EGL_EXT_image_dma_buf_import && object->format_modifier != DRM_FORMAT_MOD_INVALID ?
+                    EGL_DMA_BUF_PLANE0_MODIFIER_LO_EXT : EGL_NONE;
+
+            if (!sdl_ctx->game_tex) {
+                sdl_ctx->game_tex = SDL_CreateTexture(
+                    sdl_ctx->renderer,
+                    layer->format == DRM_FORMAT_YUV420 ? SDL_PIXELFORMAT_IYUV : SDL_PIXELFORMAT_NV12,
+                    SDL_TEXTUREACCESS_STATIC,
+                    f->width,
+                    f->height
+                );
+
+                if (!sdl_ctx->game_tex) {
+                    vpilog("Failed to create texture for DRM PRIME frame\n");
+                    return 0;
+                }
+            }
+
+            EGLAttrib use_fmt = layer->format == DRM_FORMAT_YUV420 ? DRM_FORMAT_R8 : layer->format;
+
+            int w = f->width;
+            int h = f->height;
+            if (image_index > 0) {
+                w /= 2;
+                h /= 2;
+            }
+
+            EGLAttrib attr[] = {
+                EGL_LINUX_DRM_FOURCC_EXT, 					use_fmt,
+                EGL_WIDTH,									w,
+                EGL_HEIGHT,									h,
+                EGL_DMA_BUF_PLANE0_FD_EXT,					object->fd,
+                EGL_DMA_BUF_PLANE0_OFFSET_EXT,				plane->offset,
+                EGL_DMA_BUF_PLANE0_PITCH_EXT,				plane->pitch,
+                EGL_DMA_BUF_PLANE0_MODIFIER_LO_EXT_OR_NONE,	(object->format_modifier >> 0) & 0xFFFFFFFF,
+                EGL_DMA_BUF_PLANE0_MODIFIER_HI_EXT,			(object->format_modifier >> 32) & 0xFFFFFFFF,
+                EGL_NONE
+            };
+
+            EGLImage image = eglCreateImage(display, EGL_NO_CONTEXT, EGL_LINUX_DMA_BUF_EXT, 0, attr);
+            if (image == EGL_NO_IMAGE) {
+                vpilog("Failed to create EGLImage: 0x%x (display: %p, layer %i, plane %i)\n", eglGetError(), display, i, j);
+                return 0;
+            }
+
+			SDL_GL_BindTexture(sdl_ctx->game_tex, 0, 0);
+			glActiveTextureARB(GL_TEXTURE0_ARB + image_index);
+			glEGLImageTargetTexture2DOES(GL_TEXTURE_2D, image);
+			image_index++;
+			SDL_GL_UnbindTexture(sdl_ctx->game_tex);
+
+            eglDestroyImage(display, image);
+		}
+	}
+
+	return 1;
+}
+
 int get_texture_from_drm_prime_frame(vui_sdl_context_t *sdl_ctx, AVFrame *f)
 {
 #ifdef VANILLA_HAS_EGL
@@ -1712,6 +1803,11 @@ int vui_update_sdl(vui_context_t *vui)
                 vui_sdl_drm_present(drm_ctx, sdl_ctx->frame);
                 handle_final_blit = 0;
 #endif // VANILLA_DRM_AVAILABLE
+                break;
+            }
+            case AV_PIX_FMT_CUDA:
+            {
+
                 break;
             }
             case AV_PIX_FMT_VAAPI:

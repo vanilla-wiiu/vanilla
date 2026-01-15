@@ -283,6 +283,10 @@ if (LINUX)
     find_package(VAAPI)
 endif()
 
+if (LINUX OR WIN32)
+    find_package(CUDAToolkit)
+endif()
+
 if (VANILLA_BUILD_PIPE)
 	OPTION(VANILLA_BUILD_USE_POLKIT "Enable Polkit-based authentication" ON)
 endif()
