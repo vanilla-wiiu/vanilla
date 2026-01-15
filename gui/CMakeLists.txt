@@ -283,6 +283,10 @@ if (LINUX)
     find_package(VAAPI)
 endif()
 
+if (LINUX OR WIN32)
+    find_package(CUDAToolkit)
+endif()
+
 if (VANILLA_BUILD_PIPE)
 	OPTION(VANILLA_BUILD_USE_POLKIT "Enable Polkit-based authentication" ON)
 endif()
@@ -378,6 +382,11 @@ if (DRM_FOUND)
     target_link_libraries(vanilla PRIVATE ${DRM_LIBRARIES})
     target_compile_definitions(vanilla PRIVATE VANILLA_DRM_AVAILABLE)
     target_include_directories(vanilla PRIVATE ${DRM_INCLUDE_DIRS})
+endif()
+
+if (CUDAToolkit_FOUND)
+    target_link_libraries(vanilla PRIVATE CUDA::cudart_static)
+    target_compile_definitions(vanilla PRIVATE VANILLA_CUDA_AVAILABLE)
 endif()
 
 if (VAAPI_FOUND OR DRM_FOUND)

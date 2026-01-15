@@ -177,6 +177,18 @@ size_t build_avcc(uint8_t *dst, size_t cap,
     return (size_t)(p - dst);
 }
 
+static enum AVPixelFormat nvdec_get_format(struct AVCodecContext *s, const enum AVPixelFormat *fmt)
+{
+	while (*fmt != AV_PIX_FMT_NONE) {
+        if (*fmt == AV_PIX_FMT_CUDA) {
+            return *fmt;
+		}
+        fmt++;
+    }
+
+    return AV_PIX_FMT_NONE;
+}
+
 static enum AVPixelFormat vaapi_get_format(struct AVCodecContext *s, const enum AVPixelFormat *fmt)
 {
 	while (*fmt != AV_PIX_FMT_NONE) {
@@ -215,6 +227,7 @@ typedef struct {
 } hwdec_t;
 
 enum HwDecoderType {
+    HWDEC_TYPE_NVDEC,
     HWDEC_TYPE_VAAPI,
     HWDEC_TYPE_DRM,
     HWDEC_TYPE_SOFTWARE,
@@ -299,6 +312,10 @@ int vpi_decode_init(vpi_decode_state_t *s)
     // Initialize decoding context, preferring hardware decoding when available
     hwdec_t decoders[HWDEC_TYPE_COUNT];
 
+    decoders[HWDEC_TYPE_NVDEC].name = "NVDEC";
+    decoders[HWDEC_TYPE_NVDEC].codec = avcodec_find_decoder_by_name("h264_cuvid");
+    decoders[HWDEC_TYPE_NVDEC].get_format = nvdec_get_format;
+
     decoders[HWDEC_TYPE_VAAPI].name = "VAAPI";
     decoders[HWDEC_TYPE_VAAPI].codec = avcodec_find_decoder(AV_CODEC_ID_H264);
     decoders[HWDEC_TYPE_VAAPI].get_format = vaapi_get_format;
@@ -314,12 +331,20 @@ int vpi_decode_init(vpi_decode_state_t *s)
     // Discover the most ideal hardware decoder
     int r = VANILLA_ERR_GENERIC;
 
+    // See if we can create an NVDEC context (most NVIDIA GPUs)
+    if (r != VANILLA_SUCCESS) {
+        vpi_decode_exit(s);
+        if (((ffmpeg_err = av_hwdevice_ctx_create(&s->hw_device_ctx, AV_HWDEVICE_TYPE_CUDA, 0, 0, 0)) >= 0)) {
+            r = open_decoder(s, &decoders[HWDEC_TYPE_NVDEC]);
+        }
+    }
+
     // See if we can create a VAAPI context (most Linux systems)
     if (r != VANILLA_SUCCESS) {
         vpi_decode_exit(s);
         if (vpi_egl_available
             && ((ffmpeg_err = av_hwdevice_ctx_create(&s->hw_device_ctx, AV_HWDEVICE_TYPE_VAAPI, 0, 0, 0)) >= 0)) {
-            r = open_decoder(s, &decoders[0]);
+            r = open_decoder(s, &decoders[HWDEC_TYPE_VAAPI]);
         }
     }
 
@@ -327,14 +352,14 @@ int vpi_decode_init(vpi_decode_state_t *s)
     if (r != VANILLA_SUCCESS) {
         vpi_decode_exit(s);
         if ((ffmpeg_err = av_hwdevice_ctx_create(&s->hw_device_ctx, AV_HWDEVICE_TYPE_DRM, "/dev/dri/card0", 0, 0)) >= 0) {
-            r = open_decoder(s, &decoders[1]);
+            r = open_decoder(s, &decoders[HWDEC_TYPE_DRM]);
         }
     }
 
     // Finally, fallback to a software decoder.
     if (r != VANILLA_SUCCESS) {
         vpi_decode_exit(s);
-        r = open_decoder(s, &decoders[2]);
+        r = open_decoder(s, &decoders[HWDEC_TYPE_SOFTWARE]);
     }
 
     // We don't expect the software decoder to fail, but just in case.
