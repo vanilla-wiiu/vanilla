@@ -22,6 +22,7 @@ function(compile_ffmpeg _target_name _system_name _system_processor)
         --disable-demuxers
         --disable-muxers
         --disable-network
+        --disable-hwaccels
         --enable-muxer=mp4
         --enable-muxer=image2
         --enable-decoder=h264
@@ -108,6 +109,8 @@ function(compile_ffmpeg _target_name _system_name _system_processor)
             if (NOT "${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "arm")
                 list(APPEND FFMPEG_CONFIGURE_ARGS
                     --enable-vaapi
+                    --enable-nvdec
+                    --enable-v4l2-m2m
                 )
             endif()
         endif()
@@ -385,7 +388,7 @@ if (DRM_FOUND)
 endif()
 
 if (CUDAToolkit_FOUND)
-    target_link_libraries(vanilla PRIVATE CUDA::cudart_static)
+    target_link_libraries(vanilla PRIVATE CUDA::cudart_static vdpau)
     target_compile_definitions(vanilla PRIVATE VANILLA_CUDA_AVAILABLE)
 endif()
 
