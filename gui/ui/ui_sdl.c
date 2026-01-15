@@ -36,7 +36,7 @@
 #define PW_CHAR_SIZE 20
 #define PW_CHAR_PAD 2
 #define AUDIO_BUFFER_SIZE 1664 // Wii U never deviates from this so we can hardcode it
-#define AUDIO_BUFFER_COUNT 3
+#define AUDIO_BUFFER_COUNT 4
 
 typedef struct {
     SDL_Texture *texture;
