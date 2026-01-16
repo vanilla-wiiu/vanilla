@@ -9,24 +9,17 @@ function(compile_ffmpeg _target_name _system_name _system_processor)
     set(FFMPEG_INSTALL_DIR "${FFMPEG_PREFIX_DIR}/install")
     set(FFMPEG_CONFIGURE_ARGS
         --enable-gpl
-        --disable-shared
+        --disable-all
         --enable-static
-        --disable-programs
         --prefix=${FFMPEG_INSTALL_DIR}
-        --disable-doc
-        --disable-swresample
-        --disable-postproc
-        --disable-avfilter
-        --disable-encoders
-        --disable-decoders
-        --disable-demuxers
-        --disable-muxers
-        --disable-network
-        --disable-hwaccels
         --enable-muxer=mp4
         --enable-muxer=image2
         --enable-decoder=h264
         --enable-encoder=png
+        --enable-avformat
+        --enable-avcodec
+        --enable-avutil
+        --enable-swscale
     )
     if (NOT "${CMAKE_HOST_SYSTEM_PROCESSOR}" STREQUAL "${_system_processor}"
 		OR NOT "${CMAKE_HOST_SYSTEM_NAME}" STREQUAL "${_system_name}")
