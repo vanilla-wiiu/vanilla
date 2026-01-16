@@ -51,8 +51,7 @@ function(compile_ffmpeg _target_name _system_name _system_processor)
             --enable-hwaccel=h264_vaapi
 
             # Enable NVDEC
-            --enable-nvdec
-            --enable-hwaccel=h264_nvdec
+            --enable-decoder=h264_cuvid
 
             # Enable v4l2m2m
             --enable-decoder=h264_v4l2m2m
