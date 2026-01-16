@@ -10,6 +10,7 @@ function(compile_ffmpeg _target_name _system_name _system_processor)
     set(FFMPEG_CFLAGS "${CMAKE_C_FLAGS}")
     set(FFMPEG_LDFLAGS "${CMAKE_C_FLAGS} ${CMAKE_SHARED_LINKER_FLAGS}")
     set(FFMPEG_ENV "")
+    set(FFMPEG_DEPS "")
     set(FFMPEG_CONFIGURE_ARGS
         --enable-gpl
         --disable-all
@@ -43,6 +44,7 @@ function(compile_ffmpeg _target_name _system_name _system_processor)
 
             BUILD_IN_SOURCE 1
         )
+        list(APPEND FFMPEG_DEPS nvcodec_headers)
         list(APPEND FFMPEG_ENV "PKG_CONFIG_PATH=${FFMPEG_INSTALL_DIR}/lib/pkgconfig")
         list(APPEND FFMPEG_CONFIGURE_ARGS
             # Enable VAAPI
@@ -166,7 +168,7 @@ function(compile_ffmpeg _target_name _system_name _system_processor)
 		PREFIX ${FFMPEG_PREFIX_DIR}
         GIT_REPOSITORY https://git.ffmpeg.org/ffmpeg.git
         GIT_TAG n7.1
-        DEPENDS nvcodec_headers
+        DEPENDS ${FFMPEG_DEPS}
         CONFIGURE_COMMAND ${CMAKE_COMMAND} -E env ${FFMPEG_ENV} "../${_target_name}/configure" ${FFMPEG_CONFIGURE_ARGS}
         BUILD_COMMAND ${CMAKE_COMMAND} -E env ${FFMPEG_ENV} make -j${CMAKE_BUILD_PARALLEL_LEVEL}
         UPDATE_COMMAND ""
