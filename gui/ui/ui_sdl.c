@@ -51,6 +51,7 @@ typedef struct {
     int h;
     char text[MAX_BUTTON_TEXT];
     char icon[MAX_BUTTON_TEXT];
+    int32_t icon_mod;
     int checked;
 } vui_sdl_cached_texture_t;
 
@@ -101,6 +102,39 @@ static int axis_map[SDL_CONTROLLER_AXIS_MAX];
 static int key_map[SDL_NUM_SCANCODES];
 static int vibrate = 0;
 
+const int gDEFAULT_KEY_MAP[][2] = {
+    { SDL_SCANCODE_UP, VANILLA_BTN_UP },
+    { SDL_SCANCODE_DOWN, VANILLA_BTN_DOWN },
+    { SDL_SCANCODE_LEFT, VANILLA_BTN_LEFT },
+    { SDL_SCANCODE_RIGHT, VANILLA_BTN_RIGHT },
+    { SDL_SCANCODE_Z, VANILLA_BTN_A },
+    { SDL_SCANCODE_X, VANILLA_BTN_B },
+    { SDL_SCANCODE_C, VANILLA_BTN_X },
+    { SDL_SCANCODE_V, VANILLA_BTN_Y },
+    { SDL_SCANCODE_RETURN, VANILLA_BTN_PLUS },
+    { SDL_SCANCODE_LCTRL, VANILLA_BTN_MINUS },
+    { SDL_SCANCODE_H, VANILLA_BTN_HOME },
+    { SDL_SCANCODE_Y, VANILLA_BTN_TV },
+    { SDL_SCANCODE_W, VANILLA_AXIS_L_UP },
+    { SDL_SCANCODE_A, VANILLA_AXIS_L_LEFT },
+    { SDL_SCANCODE_S, VANILLA_AXIS_L_DOWN },
+    { SDL_SCANCODE_D, VANILLA_AXIS_L_RIGHT },
+    { SDL_SCANCODE_E, VANILLA_BTN_L3 },
+    { SDL_SCANCODE_KP_8, VANILLA_AXIS_R_UP },
+    { SDL_SCANCODE_KP_4, VANILLA_AXIS_R_LEFT },
+    { SDL_SCANCODE_KP_2, VANILLA_AXIS_R_DOWN },
+    { SDL_SCANCODE_KP_6, VANILLA_AXIS_R_RIGHT },
+    { SDL_SCANCODE_KP_5, VANILLA_BTN_R3 },
+    { SDL_SCANCODE_T, VANILLA_BTN_L },
+    { SDL_SCANCODE_G, VANILLA_BTN_ZL },
+    { SDL_SCANCODE_U, VANILLA_BTN_R },
+    { SDL_SCANCODE_J, VANILLA_BTN_ZR },
+    { SDL_SCANCODE_F5, VPI_ACTION_TOGGLE_RECORDING },
+    { SDL_SCANCODE_F12, VPI_ACTION_SCREENSHOT },
+    { SDL_SCANCODE_ESCAPE, VPI_ACTION_DISCONNECT },
+    {-1, -1}
+};
+
 void init_gamepad()
 {
 	vibrate = 0;
@@ -133,36 +167,35 @@ void init_gamepad()
     axis_map[SDL_CONTROLLER_AXIS_TRIGGERLEFT] = VANILLA_BTN_ZL;
     axis_map[SDL_CONTROLLER_AXIS_TRIGGERRIGHT] = VANILLA_BTN_ZR;
 
-    key_map[SDL_SCANCODE_UP] = VANILLA_BTN_UP;
-    key_map[SDL_SCANCODE_DOWN] = VANILLA_BTN_DOWN;
-    key_map[SDL_SCANCODE_LEFT] = VANILLA_BTN_LEFT;
-    key_map[SDL_SCANCODE_RIGHT] = VANILLA_BTN_RIGHT;
-    key_map[SDL_SCANCODE_Z] = VANILLA_BTN_A;
-    key_map[SDL_SCANCODE_X] = VANILLA_BTN_B;
-    key_map[SDL_SCANCODE_C] = VANILLA_BTN_X;
-    key_map[SDL_SCANCODE_V] = VANILLA_BTN_Y;
-    key_map[SDL_SCANCODE_RETURN] = VANILLA_BTN_PLUS;
-    key_map[SDL_SCANCODE_LCTRL] = VANILLA_BTN_MINUS;
-    key_map[SDL_SCANCODE_H] = VANILLA_BTN_HOME;
-    key_map[SDL_SCANCODE_Y] = VANILLA_BTN_TV;
-    key_map[SDL_SCANCODE_W] = VANILLA_AXIS_L_UP;
-    key_map[SDL_SCANCODE_A] = VANILLA_AXIS_L_LEFT;
-    key_map[SDL_SCANCODE_S] = VANILLA_AXIS_L_DOWN;
-    key_map[SDL_SCANCODE_D] = VANILLA_AXIS_L_RIGHT;
-    key_map[SDL_SCANCODE_E] = VANILLA_BTN_L3;
-    key_map[SDL_SCANCODE_KP_8] = VANILLA_AXIS_R_UP;
-    key_map[SDL_SCANCODE_KP_4] = VANILLA_AXIS_R_LEFT;
-    key_map[SDL_SCANCODE_KP_2] = VANILLA_AXIS_R_DOWN;
-    key_map[SDL_SCANCODE_KP_6] = VANILLA_AXIS_R_RIGHT;
-    key_map[SDL_SCANCODE_KP_5] = VANILLA_BTN_R3;
-    key_map[SDL_SCANCODE_T] = VANILLA_BTN_L;
-    key_map[SDL_SCANCODE_G] = VANILLA_BTN_ZL;
-    key_map[SDL_SCANCODE_U] = VANILLA_BTN_R;
-    key_map[SDL_SCANCODE_J] = VANILLA_BTN_ZR;
+    // Set keymap with default values
+    for(int i = 0; gDEFAULT_KEY_MAP[i][0] != -1 && gDEFAULT_KEY_MAP[i][1] != -1; i++)
+        key_map[gDEFAULT_KEY_MAP[i][0]] = gDEFAULT_KEY_MAP[i][1];
 
-    key_map[SDL_SCANCODE_F5] = VPI_ACTION_TOGGLE_RECORDING;
-    key_map[SDL_SCANCODE_F12] = VPI_ACTION_SCREENSHOT;
-    key_map[SDL_SCANCODE_ESCAPE] = VPI_ACTION_DISCONNECT;
+    // Override key map with values in config
+    for(int i = 0; i < VANILLA_BTN_COUNT; i++){
+        if(vpi_config.keymap[i]){
+            for(int j = 0; j < SDL_NUM_SCANCODES; j++){
+                if(key_map[j] == i){
+                    key_map[j] = -1;
+                    break;
+                }   
+            }
+            key_map[vpi_config.keymap[i]] = i;
+        }
+    }
+
+    for(int i = 0; i < VPI_ACTION_END_INDEX - VPI_ACTION_START_INDEX - 1; i++){
+        if(vpi_config.actionkeymap[i]){
+            for(int j = 0; j < SDL_NUM_SCANCODES; j++){
+                if(key_map[j] == i + VPI_ACTION_START_INDEX + 1){
+                    key_map[j] = -1;
+                    break;
+                }
+            }
+            key_map[vpi_config.actionkeymap[i]] = i + VPI_ACTION_START_INDEX + 1;
+        }
+    }
+
 }
 
 void find_valid_controller(vui_sdl_context_t *sdl_ctx)
@@ -544,18 +577,21 @@ int vui_sdl_event_thread(void *data)
             {
                 if (vui->active_textedit == -1) {
                     int vanilla_btn = key_map[ev.key.keysym.scancode];
-                    if (vanilla_btn > VPI_ACTION_START_INDEX) {
+                    if (vanilla_btn > VPI_ACTION_START_INDEX && !vui->bind_mode) {
                         if (ev.type == SDL_KEYDOWN)
                             vpi_menu_action(vui, (vpi_extra_action_t) vanilla_btn);
-                    } else if (vanilla_btn != -1) {
+                    } else if (vanilla_btn != -1 || vui->bind_mode) {
                         if (vui->game_mode) {
                             vanilla_set_button(vanilla_btn, ev.type == SDL_KEYDOWN ? INT16_MAX : 0);
                         } else if (ev.type == SDL_KEYDOWN) {
-                            vui_process_keydown(vui, vanilla_btn);
+                            if (vui->bind_mode)
+                                vui_process_keydown(vui, ev.key.keysym.scancode);
+                            else
+                                vui_process_keydown(vui, vanilla_btn);
                         } else {
                             vui_process_keyup(vui, vanilla_btn);
                         }
-                    }
+                    } 
                 } else if (ev.type == SDL_KEYDOWN) {
                     switch (ev.key.keysym.scancode) {
                     case SDL_SCANCODE_BACKSPACE:
@@ -636,6 +672,14 @@ int vui_init_sdl(vui_context_t *ctx, int fullscreen)
     vui_sdl_context_t *sdl_ctx = malloc(sizeof(vui_sdl_context_t));
     memset(sdl_ctx, 0, sizeof(vui_sdl_context_t));
     ctx->platform_data = sdl_ctx;
+
+    ctx->button_map = button_map;
+    ctx->button_map_sz = SDL_CONTROLLER_BUTTON_MAX;
+    ctx->axis_map = axis_map;
+    ctx->axis_map_sz = SDL_CONTROLLER_AXIS_MAX;
+    ctx->key_map = key_map;
+    ctx->key_map_sz = SDL_NUM_SCANCODES;
+    
 
     SDL_WindowFlags window_flags = SDL_WINDOW_RESIZABLE;
     if (fullscreen) {
@@ -797,12 +841,29 @@ int vui_init_sdl(vui_context_t *ctx, int fullscreen)
     return 0;
 }
 
+static void vui_save_gamepad_sdl()
+{
+    for(int i = 0; i < SDL_NUM_SCANCODES; i++){
+        if(key_map[i] > 0)
+        {
+            if(key_map[i] > VPI_ACTION_START_INDEX){
+                vpi_config.actionkeymap[key_map[i] - VPI_ACTION_START_INDEX - 1] = i;
+            } else {
+                vpi_config.keymap[key_map[i]] = i;
+            }
+        }
+    }
+    vpi_config_save();
+}
+
 void vui_close_sdl(vui_context_t *ctx)
 {
     vui_sdl_context_t *sdl_ctx = (vui_sdl_context_t *) ctx->platform_data;
     if (!sdl_ctx) {
         return;
     }
+
+    vui_save_gamepad_sdl();
 
     av_frame_free(&sdl_ctx->frame);
 
@@ -980,7 +1041,7 @@ void vui_sdl_draw_button(vui_context_t *vui, vui_sdl_context_t *sdl_ctx, vui_but
     // Load icon if exists
     int icon_x;
     int icon_y;
-    int icon_size = btn->style == VUI_BUTTON_STYLE_CORNER ? rect.h * 1 / 3 : rect.h * 2 / 4;
+    int icon_size = btn->style == VUI_BUTTON_STYLE_CORNER ? rect.h * 1 / 3 : btn->style == VUI_BUTTON_STYLE_SMALL ? rect.h : rect.h * 2 / 4;
     SDL_Texture *icon = 0;
     if (btn->icon[0]) {
         icon = vui_sdl_load_texture(sdl_ctx->renderer, btn->icon);
@@ -993,6 +1054,10 @@ void vui_sdl_draw_button(vui_context_t *vui, vui_sdl_context_t *sdl_ctx, vui_but
         } else {
             text_font = sdl_ctx->sysfont_tiny;
         }
+    } else if(btn->style == VUI_BUTTON_STYLE_SMALL) {
+        text_font = sdl_ctx->sysfont_small;
+    } else if(btn->style == VUI_BUTTON_STYLE_TINY) {
+        text_font = sdl_ctx->sysfont_tiny;
     } else {
         text_font = sdl_ctx->sysfont;
     }
@@ -1119,6 +1184,13 @@ void vui_sdl_draw_button(vui_context_t *vui, vui_sdl_context_t *sdl_ctx, vui_but
         icon_rect.w = icon_rect.h = icon_size;
         icon_rect.x = icon_x;
         icon_rect.y = icon_y;
+
+        if(btn->icon_mod){
+            char r = (btn->icon_mod & 0xFF0000) >> sizeof(char) * 8 * 2;
+            char g = (btn->icon_mod & 0x00FF00) >> sizeof(char) * 8;
+            char b = (btn->icon_mod & 0x0000FF);
+            SDL_SetTextureColorMod(icon, r, g, b);
+        }
 
         SDL_RenderCopy(sdl_ctx->renderer, icon, 0, &icon_rect);
         SDL_DestroyTexture(icon);
@@ -1353,6 +1425,9 @@ void vui_draw_sdl(vui_context_t *ctx, SDL_Renderer *renderer)
     for (int i = 0; i < ctx->button_count; i++) {
         vui_button_t *btn = &ctx->buttons[i];
 
+        if(btn->ondraw)
+            btn->ondraw(ctx, btn, btn->ondraw_data);
+
         if (!btn->visible) {
             continue;
         }
@@ -1361,7 +1436,7 @@ void vui_draw_sdl(vui_context_t *ctx, SDL_Renderer *renderer)
 
         // Check if button needs to be redrawn
         vui_sdl_cached_texture_t *btn_tex = &sdl_ctx->button_cache[i];
-        if (!btn_tex->texture || btn_tex->w != btn->w || btn_tex->h != btn->h || strcmp(btn_tex->text, btn->text) || strcmp(btn_tex->icon, btn->icon) || btn_tex->checked != btn->checked) {
+        if (!btn_tex->texture || btn_tex->w != btn->w || btn_tex->h != btn->h || strcmp(btn_tex->text, btn->text) || strcmp(btn_tex->icon, btn->icon) || btn_tex->checked != btn->checked || btn_tex->icon_mod != btn->icon_mod) {
             // Must re-draw texture
             if (btn_tex->texture && (btn_tex->w != btn->w || btn_tex->h != btn->h)) {
                 SDL_DestroyTexture(btn_tex->texture);
@@ -1381,6 +1456,7 @@ void vui_draw_sdl(vui_context_t *ctx, SDL_Renderer *renderer)
 
             btn_tex->w = btn->w;
             btn_tex->h = btn->h;
+            btn_tex->icon_mod = btn->icon_mod;
             strcpy(btn_tex->text, btn->text);
             strcpy(btn_tex->icon, btn->icon);
 

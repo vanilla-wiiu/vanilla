@@ -11,6 +11,7 @@
 #include "ui_anim.h"
 #include "ui_priv.h"
 #include "ui_util.h"
+#include "menu/menu.h"
 
 vui_context_t *vui_alloc(int width, int height)
 {
@@ -24,6 +25,13 @@ vui_context_t *vui_alloc(int width, int height)
     vui->vibrate_handler = 0;
     vui->font_height_handler = 0;
     vui->text_open_handler = 0;
+    vui->bind_mode = 0;
+    vui->key_map = 0;
+    vui->key_map_sz = 0;
+    vui->button_map = 0;
+    vui->button_map_sz = 0;
+    vui->axis_map = 0;
+    vui->axis_map_sz = 0;
     vui->power_state_handler = 0;
 	vui->mic_callback = 0;
 	vui->mic_enabled_handler = 0;
@@ -86,7 +94,8 @@ void vui_set_fullscreen(vui_context_t *ctx, int enabled)
 
 int vui_button_create(vui_context_t *ctx, int x, int y, int w, int h, const char *text, const char *icon, vui_button_style_t style, int layer, vui_button_callback_t callback, void *callback_data)
 {
-    if (ctx->button_count == MAX_BUTTON_COUNT) {
+    if (ctx->button_count >= MAX_BUTTON_COUNT) {
+        vpilog("Could not create button! Max button count met!\n");
         return -1;
     }
 
@@ -123,6 +132,10 @@ int vui_button_create(vui_context_t *ctx, int x, int y, int w, int h, const char
     vui_button_update_enabled(ctx, index, 1);
     vui_button_update_checked(ctx, index, 0);
     vui_button_update_checkable(ctx, index, 0);
+
+    btn->icon_mod = 0;
+    btn->ondraw = NULL;
+    btn->ondraw_data = NULL;
 
     ctx->button_count++;
 
@@ -171,6 +184,13 @@ void vui_button_update_click_handler(vui_context_t *ctx, int index, vui_button_c
     btn->onclick_data = userdata;
 }
 
+void vui_button_update_draw_handler(vui_context_t *ctx, int index, vui_button_draw_callback_t handler, void *userdata)
+{
+    vui_button_t *btn = &ctx->buttons[index];
+    btn->ondraw = handler;
+    btn->ondraw_data = userdata;
+}
+
 void vui_button_get_geometry(vui_context_t *ctx, int index, int *x, int *y, int *w, int *h)
 {
     vui_button_t *btn = &ctx->buttons[index];
@@ -199,6 +219,11 @@ void vui_button_update_icon(vui_context_t *ctx, int index, const char *icon)
 {
     vui_button_t *btn = &ctx->buttons[index];
     vui_strncpy(btn->icon, icon, sizeof(btn->icon));
+}
+
+void vui_button_update_icon_mod(vui_context_t *ctx, int index, uint32_t mod)
+{
+    ctx->buttons[index].icon_mod = mod;
 }
 
 void vui_button_update_text(vui_context_t *ctx, int index, const char *text)
@@ -874,6 +899,24 @@ void vui_image_destroy(vui_context_t *ctx, int image)
 
 void vui_process_keydown(vui_context_t *ctx, int button)
 {
+    // If we are in bind mode we need to consume the next key press for the binding
+    if(ctx->bind_mode){
+        if (ctx->key_map[button] == VPI_ACTION_DISCONNECT){
+            ctx->bind_mode = 0;
+            return;
+        }
+        for(int i = 0; i < ctx->key_map_sz; i++){
+            if(ctx->key_map[i] == ctx->bind_mode){
+                ctx->key_map[i] = ctx->key_map[button];
+                break;
+            }
+        }
+        // Treat button as a scancode NOT a Vanilla button in bind mode
+        ctx->key_map[button] = ctx->bind_mode;
+        ctx->bind_mode = 0;
+        return;
+    }
+    
     switch (button) {
     case VANILLA_BTN_LEFT:
     case VANILLA_AXIS_L_LEFT:

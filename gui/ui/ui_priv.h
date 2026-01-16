@@ -5,10 +5,10 @@
 
 #include "ui.h"
 
-#define MAX_BUTTON_COUNT 16
+#define MAX_BUTTON_COUNT 32
 #define MAX_BUTTON_TEXT 512
 
-typedef struct {
+typedef struct vui_button_t{
     int x;
     int y;
     int w;
@@ -19,9 +19,12 @@ typedef struct {
     int sh;
     char text[MAX_BUTTON_TEXT];
     char icon[MAX_BUTTON_TEXT];
+    uint32_t icon_mod;
     vui_button_style_t style;
     vui_button_callback_t onclick;
+    vui_button_draw_callback_t ondraw;
     void *onclick_data;
+    void *ondraw_data;
     int layer;
     int visible;
     int enabled;
@@ -131,8 +134,15 @@ typedef struct vui_context_t {
     vui_vibrate_handler_t vibrate_handler;
     void *vibrate_handler_data;
     int game_mode;
+    int bind_mode;
     int selected_button;
     int cancel_button;
+  int *button_map;
+  int button_map_sz;
+  int *axis_map;
+  int axis_map_sz;
+  int *key_map;
+  int key_map_sz;
     vui_font_height_handler_t font_height_handler;
     void *font_height_handler_data;
     vui_text_open_handler_t text_open_handler;
