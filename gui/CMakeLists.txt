@@ -7,6 +7,9 @@ set(_ffmpeg_components avformat avcodec avutil swscale)
 function(compile_ffmpeg _target_name _system_name _system_processor)
 	set(FFMPEG_PREFIX_DIR "${CMAKE_CURRENT_BINARY_DIR}/FFmpeg-${_system_name}-${_system_processor}")
     set(FFMPEG_INSTALL_DIR "${FFMPEG_PREFIX_DIR}/install")
+    set(FFMPEG_CFLAGS "${CMAKE_C_FLAGS}")
+    set(FFMPEG_LDFLAGS "${CMAKE_C_FLAGS} ${CMAKE_SHARED_LINKER_FLAGS}")
+    set(FFMPEG_ENV "")
     set(FFMPEG_CONFIGURE_ARGS
         --enable-gpl
         --disable-all
@@ -20,11 +23,43 @@ function(compile_ffmpeg _target_name _system_name _system_processor)
         --enable-avcodec
         --enable-avutil
         --enable-swscale
+        --enable-parser=h264
+        --enable-bsf=h264_mp4toannexb
+        --enable-bsf=h264_redundant_pps
+        --enable-bsf=h264_metadata
+        --disable-vdpau # We have no pathway to display for VDPAU at this time
     )
+
+    # Add hardware accelerators
+    if(LINUX)
+        ExternalProject_Add(nvcodec_headers
+            GIT_REPOSITORY https://github.com/FFmpeg/nv-codec-headers.git
+            GIT_TAG        master
+            UPDATE_DISCONNECTED 1
+
+            CONFIGURE_COMMAND ""
+            BUILD_COMMAND     $(MAKE)
+            INSTALL_COMMAND   $(MAKE) PREFIX=${FFMPEG_INSTALL_DIR} install
+
+            BUILD_IN_SOURCE 1
+        )
+        list(APPEND FFMPEG_ENV "PKG_CONFIG_PATH=${FFMPEG_INSTALL_DIR}/lib/pkgconfig")
+        list(APPEND FFMPEG_CONFIGURE_ARGS
+            # Enable VAAPI
+            --enable-hwaccel=h264_vaapi
+
+            # Enable NVDEC
+            --enable-nvdec
+            --enable-hwaccel=h264_nvdec
+
+            # Enable v4l2m2m
+            --enable-decoder=h264_v4l2m2m
+        )
+    endif()
+
     if (NOT "${CMAKE_HOST_SYSTEM_PROCESSOR}" STREQUAL "${_system_processor}"
 		OR NOT "${CMAKE_HOST_SYSTEM_NAME}" STREQUAL "${_system_name}")
         set(FFMPEG_TARGET_OS ${_system_name})
-        set(FFMPEG_ENV "")
         if (MINGW)
             set(FFMPEG_TARGET_OS "mingw32")
             list(APPEND FFMPEG_CONFIGURE_ARGS
@@ -35,8 +70,8 @@ function(compile_ffmpeg _target_name _system_name _system_processor)
             set(FFMPEG_TARGET_OS "win32")
         elseif(APPLE)
             set(FFMPEG_TARGET_OS "darwin")
-			set(FFMPEG_LDFLAGS "${CMAKE_C_FLAGS} -arch ${_system_processor} -mmacosx-version-min=${CMAKE_OSX_DEPLOYMENT_TARGET} -L${CMAKE_OSX_SYSROOT}/usr/lib -lSystem")
-			set(FFMPEG_CFLAGS "${CMAKE_C_FLAGS} -arch ${_system_processor} -mmacosx-version-min=${CMAKE_OSX_DEPLOYMENT_TARGET} -w -I${CMAKE_OSX_SYSROOT}/usr/include")
+			set(FFMPEG_LDFLAGS "${FFMPEG_LDFLAGS} -arch ${_system_processor} -mmacosx-version-min=${CMAKE_OSX_DEPLOYMENT_TARGET} -L${CMAKE_OSX_SYSROOT}/usr/lib -lSystem")
+			set(FFMPEG_CFLAGS "${FFMPEG_CFLAGS} -arch ${_system_processor} -mmacosx-version-min=${CMAKE_OSX_DEPLOYMENT_TARGET} -w -I${CMAKE_OSX_SYSROOT}/usr/include")
             list(APPEND FFMPEG_CONFIGURE_ARGS
 				--disable-asm
 				--nm=${CMAKE_NM}
@@ -48,9 +83,6 @@ function(compile_ffmpeg _target_name _system_name _system_processor)
 				--strip=${CMAKE_STRIP}
                 --host-cc=${CMAKE_C_COMPILER}
                 --host-ld=${CMAKE_C_COMPILER}
-				--extra-cflags=${FFMPEG_CFLAGS}
-				--extra-cxxflags=${FFMPEG_CFLAGS}
-				--extra-ldflags=${FFMPEG_LDFLAGS}
             )
         elseif(ANDROID)
             set(FFMPEG_TARGET_OS "android")
@@ -77,8 +109,6 @@ function(compile_ffmpeg _target_name _system_name _system_processor)
 				--cross-prefix=${_android_ffmpeg_cross_prefix}
 				--host-cc=${_android_ffmpeg_cross_prefix}clang
 				--host-ld=${_android_ffmpeg_cross_prefix}clang
-                --extra-cflags=${CMAKE_C_FLAGS}
-                --extra-ldflags=${CMAKE_SHARED_LINKER_FLAGS} # CMAKE_STATIC_LINKER_FLAGS is technically more appropriate but it's empty for some reason
                 --sysroot=${CMAKE_ANDROID_NDK}/toolchains/llvm/prebuilt/linux-${CMAKE_HOST_SYSTEM_PROCESSOR}/sysroot
                 --ar=${CMAKE_ANDROID_NDK}/toolchains/llvm/prebuilt/linux-${CMAKE_HOST_SYSTEM_PROCESSOR}/bin/llvm-ar
                 --ranlib=${CMAKE_ANDROID_NDK}/toolchains/llvm/prebuilt/linux-${CMAKE_HOST_SYSTEM_PROCESSOR}/bin/llvm-ranlib
@@ -96,16 +126,7 @@ function(compile_ffmpeg _target_name _system_name _system_processor)
                 --ranlib=${CMAKE_RANLIB}
                 --cross-prefix=${_system_processor}-linux-gnu-
                 --host-cc=${CMAKE_C_COMPILER}
-                --extra-cflags=${CMAKE_C_FLAGS}
-                --extra-ldflags=${CMAKE_SHARED_LINKER_FLAGS}
             )
-            if (NOT "${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "arm")
-                list(APPEND FFMPEG_CONFIGURE_ARGS
-                    --enable-vaapi
-                    --enable-nvdec
-                    --enable-v4l2-m2m
-                )
-            endif()
         endif()
         list(APPEND FFMPEG_CONFIGURE_ARGS
             --enable-cross-compile
@@ -134,11 +155,18 @@ function(compile_ffmpeg _target_name _system_name _system_processor)
     list(APPEND FFMPEG_FILES ${FFMPEG_INCLUDE_DIR})
     include_directories(${FFMPEG_INCLUDE_DIR})
 
+    list(APPEND FFMPEG_CONFIGURE_ARGS
+        --extra-cflags=${FFMPEG_CFLAGS}
+        --extra-cxxflags=${FFMPEG_CFLAGS}
+        --extra-ldflags=${FFMPEG_LDFLAGS}
+    )
+
     ExternalProject_Add(${_target_name}
         DOWNLOAD_DIR ${CMAKE_CURRENT_BINARY_DIR}
 		PREFIX ${FFMPEG_PREFIX_DIR}
         GIT_REPOSITORY https://git.ffmpeg.org/ffmpeg.git
         GIT_TAG n7.1
+        DEPENDS nvcodec_headers
         CONFIGURE_COMMAND ${CMAKE_COMMAND} -E env ${FFMPEG_ENV} "../${_target_name}/configure" ${FFMPEG_CONFIGURE_ARGS}
         BUILD_COMMAND ${CMAKE_COMMAND} -E env ${FFMPEG_ENV} make -j${CMAKE_BUILD_PARALLEL_LEVEL}
         UPDATE_COMMAND ""
@@ -381,7 +409,7 @@ if (DRM_FOUND)
 endif()
 
 if (CUDAToolkit_FOUND)
-    target_link_libraries(vanilla PRIVATE CUDA::cudart_static vdpau)
+    target_link_libraries(vanilla PRIVATE CUDA::cudart_static)
     target_compile_definitions(vanilla PRIVATE VANILLA_CUDA_AVAILABLE)
 endif()
 
