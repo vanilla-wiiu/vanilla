@@ -317,6 +317,8 @@ int vpi_start_epilog()
             // vpilog("GOT INVALID SIGNAL: %.*s\n", sizeof(ready_buf), ready_buf);
             vpilog("%.*s\n", sizeof(ready_buf), ready_buf);
 
+            break;
+
             // Kill seems to break a lot of things so I guess we'll just leave it orphaned
             // kill(pipe_pid, SIGKILL);
 
