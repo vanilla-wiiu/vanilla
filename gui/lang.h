@@ -58,6 +58,7 @@ typedef enum {
     __VPI_LANG_T_COUNT
 } vpi_lang_t;
 
+void lang_choice(char *curr_lang);
 const char *lang(vpi_lang_t id);
 
 #endif // VANILLA_PI_LANG_H
