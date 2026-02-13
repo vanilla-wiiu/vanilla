@@ -48,6 +48,7 @@ Extra Vanilla functionality can be accessed through these keyboard shortcuts. On
 | --------------------- | ------------- |
 | Start/Stop Recording  | F5            |
 | Take Screenshot       | F12           |
+| Toggle Fullscreen     | F11           |
 | Disconnect            | Esc           |
 
 ### Gameplay
