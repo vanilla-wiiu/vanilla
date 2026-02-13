@@ -36,9 +36,14 @@ int SDL_main(int argc, const char **argv)
 		} else if (!strcmp(argv[i], "-h") || !strcmp(argv[i], "--help")) {
 			display_cli_help(argv);
 			return 0;
-		} else if (!strcmp(argv[i], "-fr") || !strcmp(argv[i], "--french")){
-            consumed = 1;
-            strcpy(curr_lang, "fr");
+		} else if (!strcmp(argv[i], "--lang")){
+            if (!((i + 1) < argc)) {
+                vpilog("Error: No language specified!\n");
+                display_cli_help(argv);
+                return 1;
+            }
+            consumed = 2;
+            strcpy(curr_lang, argv[i+1]);
         }
 		if (consumed <= 0) {
 			vpilog("Invalid argument(s): %s\n\n", argv[i]);
@@ -46,7 +51,11 @@ int SDL_main(int argc, const char **argv)
 			return 1;
 		}
 	}
-    lang_choice(curr_lang);
+
+    if (!lang_choice(curr_lang)) {
+        vpilog("Invalid language: %s\n\n", curr_lang);
+        return 1;
+    }
 
     vanilla_install_logger(vpilog_va);
 
@@ -96,8 +105,8 @@ exit:
 void display_cli_help(const char **argv) {
 	vpilog("Usage: %s [options]\n\n", argv[0]);
 	vpilog("Options:\n");
-	vpilog("    -w, --window        Run Vanilla in a window (overrides config)\n");
-	vpilog("    -f, --fullscreen    Run Vanilla full screen (overrides config)\n");
-	vpilog("    -h, --help          Show this help message\n");
-    vpilog("    -fr, --french       Run Vanilla in the french language\n");
+	vpilog("    -w  --window        Run Vanilla in a window (overrides config)\n");
+	vpilog("    -f  --fullscreen    Run Vanilla full screen (overrides config)\n");
+	vpilog("    -h  --help          Show this help message\n");
+    vpilog("        --lang <code>   Override the default language\n");
 }
