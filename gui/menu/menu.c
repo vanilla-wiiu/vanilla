@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include <vanilla.h>
 
+#include "config.h"
 #include "menu_common.h"
 #include "menu_game.h"
 #include "menu_main.h"
@@ -69,6 +70,12 @@ void vpi_menu_action(vui_context_t *vui, vpi_extra_action_t action)
             vpi_menu_quit_vanilla(vui);
         }
         break;
+    }
+    case VPI_ACTION_TOGGLE_FULLSCREEN:
+    {
+        vpi_config.fullscreen = !vpi_config.fullscreen;
+        vpi_config_save();
+        vui_set_fullscreen(vui, vpi_config.fullscreen);
     }
     }
 }
