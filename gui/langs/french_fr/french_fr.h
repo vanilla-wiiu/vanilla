@@ -54,8 +54,8 @@ static const char *lang_str_fr[__VPI_LANG_T_COUNT] = {
 	"AVERTISSEMENT",
     "Cette option va installer une règle Polkit qui va permettre au backend de Vanilla d'éxecuter en root sans entrée de mot de passe.\n\nIl n'y a pas de risques inhérents de contourner les systèmes de sécurité. Activez cette option si vous acceptez cez risques.\n\nNOTE: Si vous utilisez le Steam Deck, ça va aussi déactiver read-only access de votre partition système.",
     "Je comprend",
-    "Activer le Contournage du Mot de Passe Root",
-    "Désactiver le Contournage du Mot de Passe Root",
+    "Activer le Skip de Mot de Passe Root",
+    "Désactiver le Skip du Mot de Passe Root",
     "Inverser les boutons AB/XY",
     "Plein Écran",
 };
