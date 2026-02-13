@@ -163,6 +163,7 @@ void init_gamepad()
     key_map[SDL_SCANCODE_F5] = VPI_ACTION_TOGGLE_RECORDING;
     key_map[SDL_SCANCODE_F12] = VPI_ACTION_SCREENSHOT;
     key_map[SDL_SCANCODE_ESCAPE] = VPI_ACTION_DISCONNECT;
+    key_map[SDL_SCANCODE_F11] = VPI_ACTION_TOGGLE_FULLSCREEN;
 }
 
 void find_valid_controller(vui_sdl_context_t *sdl_ctx)
