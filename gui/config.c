@@ -80,6 +80,9 @@ void vpi_config_save()
     sprintf(buf, "%i", vpi_config.fullscreen);
     xmlTextWriterWriteElement(writer, BAD_CAST "fullscreen", BAD_CAST buf);
 
+    sprintf(buf, "%i", vpi_config.cursor_in_fullscreen);
+    xmlTextWriterWriteElement(writer, BAD_CAST "cursorinfullscreen", BAD_CAST buf);
+
     xmlTextWriterEndElement(writer); // vanilla
 
     xmlTextWriterEndDocument(writer);
@@ -97,6 +100,7 @@ void vpi_config_init()
     vpi_config.server_address = VANILLA_ADDRESS_LOCAL;
     vpi_config.region = VANILLA_REGION_AMERICA;
     vpi_config.fullscreen = 1;
+    vpi_config.cursor_in_fullscreen = 0;
 
     // Load from file
     char config_fn[1024];
@@ -155,6 +159,8 @@ void vpi_config_init()
                         vpi_config.swap_abxy = atoi((const char *) child->children->content);
                     } else if (!strcmp((const char *) child->name, "fullscreen")) {
                         vpi_config.fullscreen = atoi((const char *) child->children->content);
+                    } else if (!strcmp((const char *) child->name, "cursorinfullscreen")) {
+                        vpi_config.cursor_in_fullscreen = atoi((const char *) child->children->content);
                     }
                 }
                 child = child->next;

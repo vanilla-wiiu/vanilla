@@ -313,7 +313,7 @@ void vui_sdl_fullscreen_enabled_handler(vui_context_t *ctx, int enabled, void *u
     vui_sdl_context_t *sdl_ctx = (vui_sdl_context_t *) ctx->platform_data;
 
     SDL_SetWindowFullscreen(sdl_ctx->window, enabled ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0);
-    SDL_ShowCursor(!enabled);
+    SDL_ShowCursor(vpi_config.cursor_in_fullscreen || !enabled);
 }
 
 void vui_sdl_audio_set_enabled(vui_context_t *ctx, int enabled, void *userdata)
@@ -640,7 +640,7 @@ int vui_init_sdl(vui_context_t *ctx, int fullscreen)
     SDL_WindowFlags window_flags = SDL_WINDOW_RESIZABLE;
     if (fullscreen) {
         window_flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
-        SDL_ShowCursor(0);
+        SDL_ShowCursor(vpi_config.cursor_in_fullscreen);
     }
 
 #ifdef VANILLA_HAS_EGL

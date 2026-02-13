@@ -21,6 +21,7 @@ typedef struct {
     int region;
     int swap_abxy;
     int fullscreen;
+    int cursor_in_fullscreen;
 } vpi_config_t;
 
 extern vpi_config_t vpi_config;
