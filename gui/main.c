@@ -7,6 +7,8 @@
 #include "platform.h"
 #include "ui/ui.h"
 #include "ui/ui_sdl.h"
+#include "lang.h"
+char curr_lang[3] = "en";
 
 #define SCREEN_WIDTH    854
 #define SCREEN_HEIGHT   480
@@ -34,13 +36,17 @@ int SDL_main(int argc, const char **argv)
 		} else if (!strcmp(argv[i], "-h") || !strcmp(argv[i], "--help")) {
 			display_cli_help(argv);
 			return 0;
-		}
+		} else if (!strcmp(argv[i], "-fr") || !strcmp(argv[i], "--french")){
+            consumed = 1;
+            strcpy(curr_lang, "fr");
+        }
 		if (consumed <= 0) {
 			vpilog("Invalid argument(s): %s\n\n", argv[i]);
 			display_cli_help(argv);
 			return 1;
 		}
 	}
+    lang_choice(curr_lang);
 
     vanilla_install_logger(vpilog_va);
 
@@ -93,4 +99,5 @@ void display_cli_help(const char **argv) {
 	vpilog("    -w, --window        Run Vanilla in a window (overrides config)\n");
 	vpilog("    -f, --fullscreen    Run Vanilla full screen (overrides config)\n");
 	vpilog("    -h, --help          Show this help message\n");
+    vpilog("    -fr, --french       Run Vanilla in the french language\n");
 }
