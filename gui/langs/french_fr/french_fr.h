@@ -57,6 +57,7 @@ static const char *lang_str_fr[__VPI_LANG_T_COUNT] = {
     "Désactiver le Skip du Mot de Passe Root",
     "Inverser les boutons AB/XY",
     "Plein Écran",
+    "Language: Français"
 };
 
 #endif
