@@ -55,9 +55,13 @@ typedef enum {
 	VPI_LANG_DISABLE_PASSWORD_SKIP,
     VPI_LANG_SWAP_ABXY_BUTTONS,
 	VPI_LANG_FULLSCREEN,
+    VPI_LANG_LANG_CHOICE,
     __VPI_LANG_T_COUNT
 } vpi_lang_t;
 
+int lang_choice(char *curr_lang);
+char *switch_lang(const char *curr_lang);
 const char *lang(vpi_lang_t id);
+const char *get_lang();
 
 #endif // VANILLA_PI_LANG_H
