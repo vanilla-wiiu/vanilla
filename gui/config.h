@@ -6,6 +6,10 @@
 #include "menu/menu.h"
 
 #define VPI_CONSOLE_MAX_NAME 256
+#define VPI_CONFIG_BUTTONMAP_SIZE 32
+#define VPI_CONFIG_AXISMAP_SIZE 8
+#define VPI_CONFIG_KEYMAP_SIZE 512
+#define VPI_CONFIG_UNMAPPED -2
 
 typedef struct {
     char name[VPI_CONSOLE_MAX_NAME];
@@ -21,8 +25,9 @@ typedef struct {
     int connection_setup;
     int region;
     int swap_abxy;
-    int keymap[VANILLA_BTN_COUNT];
-    int actionkeymap[VPI_ACTION_END_INDEX - VPI_ACTION_START_INDEX];
+    int keymap[VPI_CONFIG_KEYMAP_SIZE];
+    int buttonmap[VPI_CONFIG_BUTTONMAP_SIZE];
+    int axismap[VPI_CONFIG_AXISMAP_SIZE];
     int fullscreen;
 } vpi_config_t;
 
@@ -34,5 +39,6 @@ int vpi_config_add_console(vpi_console_entry_t *entry);
 void vpi_config_rename_console(uint8_t index, const char *name);
 void vpi_config_remove_console(uint8_t index);
 void vpi_config_save();
+void vpi_config_reset_default_controls();
 
 #endif // VANILLA_PI_CONFIG_H

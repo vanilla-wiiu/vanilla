@@ -93,7 +93,6 @@ enum VUIKeyboardIcons{
     VUI_KEYBOARD_ICON_COUNT
 };
 
-
 extern const char *VUI_KEYBOARD_ICONS[VUI_KEYBOARD_ICON_COUNT];
 
 const char *vui_get_keyicon_from_scancode(int keycode);

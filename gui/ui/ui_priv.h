@@ -3,6 +3,7 @@
 
 #include <sys/time.h>
 
+#include "config.h"
 #include "ui.h"
 
 #define MAX_BUTTON_COUNT 32
@@ -22,9 +23,8 @@ typedef struct vui_button_t{
     uint32_t icon_mod;
     vui_button_style_t style;
     vui_button_callback_t onclick;
-    vui_button_draw_callback_t ondraw;
+    vui_font_size_t font_size;
     void *onclick_data;
-    void *ondraw_data;
     int layer;
     int visible;
     int enabled;
@@ -134,15 +134,11 @@ typedef struct vui_context_t {
     vui_vibrate_handler_t vibrate_handler;
     void *vibrate_handler_data;
     int game_mode;
-    int bind_mode;
+    vui_key_override_t key_override_handler;
+    vui_callback_t key_override_cancel_handler;
+    void *key_override_handler_data;
     int selected_button;
     int cancel_button;
-  int *button_map;
-  int button_map_sz;
-  int *axis_map;
-  int axis_map_sz;
-  int *key_map;
-  int key_map_sz;
     vui_font_height_handler_t font_height_handler;
     void *font_height_handler_data;
     vui_text_open_handler_t text_open_handler;
@@ -159,6 +155,10 @@ typedef struct vui_context_t {
 	void *audio_enabled_handler_data;
 	vui_bool_callback_t fullscreen_enabled_handler;
 	void *fullscreen_enabled_handler_data;
+
+    int default_button_map[VPI_CONFIG_BUTTONMAP_SIZE];
+    int default_axis_map[VPI_CONFIG_AXISMAP_SIZE];
+    int default_key_map[VPI_CONFIG_KEYMAP_SIZE];
 } vui_context_t;
 
 #endif // VANILLA_PI_UI_PRIV_H

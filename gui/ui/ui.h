@@ -8,9 +8,7 @@ typedef enum {
     VUI_BUTTON_STYLE_NONE,
     VUI_BUTTON_STYLE_BUTTON,
     VUI_BUTTON_STYLE_CORNER,
-    VUI_BUTTON_STYLE_LIST,
-    VUI_BUTTON_STYLE_SMALL,
-    VUI_BUTTON_STYLE_TINY
+    VUI_BUTTON_STYLE_LIST
 } vui_button_style_t;
 
 typedef enum {
@@ -51,6 +49,7 @@ typedef void (*vui_button_draw_callback_t)(vui_context_t *ctx, vui_button_t *but
 typedef void (*vui_anim_step_callback_t)(vui_context_t *ctx, int64_t time, void *userdata);
 typedef void (*vui_mic_callback_t)(void *userdata, const uint8_t *stream, size_t len);
 typedef void (*vui_bool_callback_t)(vui_context_t *ctx, int enabled, void *userdata);
+typedef void (*vui_key_override_t)(vui_context_t *ctx, int key, void *userdata);
 
 typedef enum {
     VUI_DIR_LEFT,
@@ -100,11 +99,12 @@ int vui_layer_destroy(vui_context_t *ctx);
 int vui_button_create(vui_context_t *ctx, int x, int y, int w, int h, const char *text, const char *icon, vui_button_style_t style, int layer, vui_button_callback_t callback, void *callback_data);
 void vui_button_get_geometry(vui_context_t *ctx, int button, int *x, int *y, int *w, int *h);
 int vui_button_get_checked(vui_context_t *ctx, int button);
+void *vui_button_get_click_handler_data(vui_context_t *ctx, int button);
 void vui_button_update_click_handler(vui_context_t *ctx, int index, vui_button_callback_t handler, void *userdata);
-void vui_button_update_draw_handler(vui_context_t *ctx, int index, vui_button_draw_callback_t handler, void *userdata);
 void vui_button_update_geometry(vui_context_t *ctx, int button, int x, int y, int w, int h);
 void vui_button_update_icon(vui_context_t *ctx, int button, const char *icon);
 void vui_button_update_icon_mod(vui_context_t *ctx, int index, uint32_t mod);
+void vui_button_update_font_size(vui_context_t *ctx, int index, int font_size);
 void vui_button_update_text(vui_context_t *ctx, int button, const char *text);
 void vui_button_update_style(vui_context_t *ctx, int button, vui_button_style_t style);
 void vui_button_update_visible(vui_context_t *ctx, int button, int visible);
@@ -166,6 +166,10 @@ void vui_process_mouseup(vui_context_t *ctx, int x, int y);
 void vui_process_keydown(vui_context_t *ctx, int button);
 void vui_process_keyup(vui_context_t *ctx, int button);
 void vui_vibrate_set(vui_context_t *ctx, uint8_t val);
+void vui_set_key_listener(vui_context_t *ctx, vui_key_override_t callback, vui_callback_t cancel_callback, void *callback_data);
+void vui_clear_key_listener(vui_context_t *ctx);
+int vui_get_key_mapping(vui_context_t *ctx, int vanilla_button);
+void vui_set_key_mapping(vui_context_t *ctx, int vanilla_button, int keycode);
 
 /**
  * Power-related functions

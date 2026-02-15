@@ -25,19 +25,16 @@ vui_context_t *vui_alloc(int width, int height)
     vui->vibrate_handler = 0;
     vui->font_height_handler = 0;
     vui->text_open_handler = 0;
-    vui->bind_mode = 0;
-    vui->key_map = 0;
-    vui->key_map_sz = 0;
-    vui->button_map = 0;
-    vui->button_map_sz = 0;
-    vui->axis_map = 0;
-    vui->axis_map_sz = 0;
+    vui->key_override_handler = 0;
     vui->power_state_handler = 0;
 	vui->mic_callback = 0;
 	vui->mic_enabled_handler = 0;
 	vui->audio_enabled_handler = 0;
 	vui->fullscreen_enabled_handler = 0;
     vui->quit = 0;
+    for (int i = 0; i < VPI_CONFIG_KEYMAP_SIZE; i++) vui->default_key_map[i] = -1;
+    for (int i = 0; i < VPI_CONFIG_BUTTONMAP_SIZE; i++) vui->default_button_map[i] = -1;
+    for (int i = 0; i < VPI_CONFIG_AXISMAP_SIZE; i++) vui->default_axis_map[i] = -1;
     vui_reset(vui);
     return vui;
 }
@@ -132,10 +129,9 @@ int vui_button_create(vui_context_t *ctx, int x, int y, int w, int h, const char
     vui_button_update_enabled(ctx, index, 1);
     vui_button_update_checked(ctx, index, 0);
     vui_button_update_checkable(ctx, index, 0);
+    vui_button_update_font_size(ctx, index, VUI_FONT_SIZE_NORMAL);
 
     btn->icon_mod = 0;
-    btn->ondraw = NULL;
-    btn->ondraw_data = NULL;
 
     ctx->button_count++;
 
@@ -184,13 +180,6 @@ void vui_button_update_click_handler(vui_context_t *ctx, int index, vui_button_c
     btn->onclick_data = userdata;
 }
 
-void vui_button_update_draw_handler(vui_context_t *ctx, int index, vui_button_draw_callback_t handler, void *userdata)
-{
-    vui_button_t *btn = &ctx->buttons[index];
-    btn->ondraw = handler;
-    btn->ondraw_data = userdata;
-}
-
 void vui_button_get_geometry(vui_context_t *ctx, int index, int *x, int *y, int *w, int *h)
 {
     vui_button_t *btn = &ctx->buttons[index];
@@ -204,6 +193,11 @@ int vui_button_get_checked(vui_context_t *ctx, int index)
 {
     vui_button_t *btn = &ctx->buttons[index];
     return btn->checked;
+}
+
+void *vui_button_get_click_handler_data(vui_context_t *ctx, int button)
+{
+    return ctx->buttons[button].onclick_data;
 }
 
 void vui_button_update_geometry(vui_context_t *ctx, int index, int x, int y, int w, int h)
@@ -224,6 +218,11 @@ void vui_button_update_icon(vui_context_t *ctx, int index, const char *icon)
 void vui_button_update_icon_mod(vui_context_t *ctx, int index, uint32_t mod)
 {
     ctx->buttons[index].icon_mod = mod;
+}
+
+void vui_button_update_font_size(vui_context_t *ctx, int index, int font_size)
+{
+    ctx->buttons[index].font_size = font_size;
 }
 
 void vui_button_update_text(vui_context_t *ctx, int index, const char *text)
@@ -567,6 +566,72 @@ void vui_vibrate_set(vui_context_t *ctx, uint8_t val)
     }
 }
 
+int vui_get_key_mapping(vui_context_t *ctx, int vanilla_button);
+void vui_set_key_mapping(vui_context_t *ctx, int vanilla_button, int keycode);
+
+void vui_set_key_listener(vui_context_t *ctx, vui_key_override_t callback, vui_callback_t cancel_callback, void *callback_data)
+{
+    ctx->key_override_handler = callback;
+    ctx->key_override_cancel_handler = cancel_callback;
+    ctx->key_override_handler_data = callback_data;
+}
+
+void vui_clear_key_listener(vui_context_t *ctx)
+{
+    ctx->key_override_handler = NULL;
+}
+
+int vui_get_key_mapping(vui_context_t *ctx, int vanilla_button)
+{
+    // First, search for config override
+    for (int i = 0; i < VPI_CONFIG_KEYMAP_SIZE; i++) {
+        if (vpi_config.keymap[i] == vanilla_button) {
+            return i;
+        }
+    }
+
+    // Fallback to default key
+    for (int i = 0; i < VPI_CONFIG_KEYMAP_SIZE; i++) {
+        if (ctx->default_key_map[i] == vanilla_button) {
+            if (vpi_config.keymap[i] == VPI_CONFIG_UNMAPPED) {
+                return i;
+            }
+        }
+    }
+
+    return -1;
+}
+
+void vui_set_key_mapping(vui_context_t *ctx, int vanilla_button, int keycode)
+{
+    // Remove all mappings for this button
+    for (int i = 0; i < VPI_CONFIG_KEYMAP_SIZE; i++) {
+        if (vpi_config.keymap[i] == vanilla_button) {
+            vpi_config.keymap[i] = VPI_CONFIG_UNMAPPED;
+        }
+    }
+
+    if (ctx->default_key_map[keycode] == vanilla_button) {
+        // This is our default mapping, so just remove the override
+        vpi_config.keymap[keycode] = VPI_CONFIG_UNMAPPED;
+    } else {
+        // Must override the mapping
+        vpi_config.keymap[keycode] = vanilla_button;
+
+        // Mask any keys that also press this button
+        for (int i = 0; i < VPI_CONFIG_KEYMAP_SIZE; i++) {
+            if (ctx->default_key_map[i] == vanilla_button) {
+                if (vpi_config.keymap[i] == VPI_CONFIG_UNMAPPED) {
+                    vpi_config.keymap[i] = -1;
+                }
+                break;
+            }
+        }
+    }
+
+    vpi_config_save();
+}
+
 int vui_layer_create(vui_context_t *ctx)
 {
     int cur_layer = ctx->layers;
@@ -899,24 +964,6 @@ void vui_image_destroy(vui_context_t *ctx, int image)
 
 void vui_process_keydown(vui_context_t *ctx, int button)
 {
-    // If we are in bind mode we need to consume the next key press for the binding
-    if(ctx->bind_mode){
-        if (ctx->key_map[button] == VPI_ACTION_DISCONNECT){
-            ctx->bind_mode = 0;
-            return;
-        }
-        for(int i = 0; i < ctx->key_map_sz; i++){
-            if(ctx->key_map[i] == ctx->bind_mode){
-                ctx->key_map[i] = ctx->key_map[button];
-                break;
-            }
-        }
-        // Treat button as a scancode NOT a Vanilla button in bind mode
-        ctx->key_map[button] = ctx->bind_mode;
-        ctx->bind_mode = 0;
-        return;
-    }
-    
     switch (button) {
     case VANILLA_BTN_LEFT:
     case VANILLA_AXIS_L_LEFT:
