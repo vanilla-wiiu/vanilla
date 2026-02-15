@@ -27,30 +27,38 @@ typedef struct {
 } InputPacketAccelerometer;
 
 typedef struct {
-    // Little endian
-    signed roll : 24;
-    signed pitch : 24;
-    signed yaw : 24;
+    uint8_t roll[3];
+    uint8_t pitch[3];
+    uint8_t yaw[3];
 } InputPacketGyroscope;
 
 typedef struct {
-    signed char unknown[6];
+    uint8_t packed[6];
 } InputPacketMagnet;
 
 typedef struct {
-    unsigned pad : 1;
-    unsigned extra : 3;
-    unsigned value : 12;
-} TouchCoord;
+    uint8_t pad;
+    uint8_t extra;
+    uint16_t value;
+} TouchCoordData;
 
 typedef struct {
-    TouchCoord x;
-    TouchCoord y;
-} TouchPoint;
+    uint8_t data[2];
+} TouchCoordWire;
+
+typedef struct {
+    TouchCoordData x;
+    TouchCoordData y;
+} TouchPointData;
+
+typedef struct {
+    TouchCoordWire x;
+    TouchCoordWire y;
+} TouchPointWire;
 
 typedef struct {
     // Big endian
-    TouchPoint points[10];
+    TouchPointWire points[10];
 } TouchScreenState;
 
 pthread_mutex_t button_mtx;
@@ -80,6 +88,42 @@ typedef struct {
 } InputPacket;
 
 #pragma pack(pop)
+
+static inline TouchCoordWire pack_touch_coord(
+    TouchCoordData coord
+)
+{
+    uint16_t word =
+        ((coord.pad & 0x01) << 0) |
+        ((coord.extra & 0x07) << 1) |
+        ((coord.value & 0x0FFF) << 4);
+
+    TouchCoordWire out;
+    out.data[0] = (uint8_t)reverse_bits((uint8_t)((word >> 8) & 0xFF), 8);
+    out.data[1] = (uint8_t)reverse_bits((uint8_t)(word & 0xFF), 8);
+    return out;
+}
+
+static inline void pack_s24_le(uint8_t out[3], int32_t v)
+{
+    if (v > 8388607) v = 8388607;
+    if (v < -8388608) v = -8388608;
+
+    uint32_t u = (uint32_t)(v & 0x00FFFFFF);
+
+    out[0] = (uint8_t)(u & 0xFF);
+    out[1] = (uint8_t)((u >> 8) & 0xFF);
+    out[2] = (uint8_t)((u >> 16) & 0xFF);
+}
+
+static inline InputPacketGyroscope pack_gyroscope(int32_t roll, int32_t pitch, int32_t yaw)
+{
+    InputPacketGyroscope gyro;
+    pack_s24_le(gyro.roll, roll);
+    pack_s24_le(gyro.pitch, pitch);
+    pack_s24_le(gyro.yaw, yaw);
+    return gyro;
+}
 
 void set_button_state(int button, int32_t value)
 {
@@ -169,27 +213,26 @@ void send_input(int socket_hid, const sockaddr_u *addr, size_t addr_size)
 
     pthread_mutex_lock(&button_mtx);
 
-    ip.touchscreen.points[9].x.extra = reverse_bits(current_battery_status, 3);
+    TouchPointData touch_points[10] = {0};
+
+    touch_points[9].x.extra = reverse_bits(current_battery_status, 3);
 
     if (current_touch_x >= 0 && current_touch_y >= 0) {
         for (int i = 0; i < 10; i++) {
-            ip.touchscreen.points[i].x.pad = 1;
-            ip.touchscreen.points[i].y.pad = 1;
-            ip.touchscreen.points[i].x.value = reverse_bits(scale_x_touch_value(current_touch_x), 12);
-            ip.touchscreen.points[i].y.value = reverse_bits(scale_y_touch_value(current_touch_y), 12);
+            touch_points[i].x.pad = 1;
+            touch_points[i].y.pad = 1;
+            touch_points[i].x.value = reverse_bits(scale_x_touch_value(current_touch_x), 12);
+            touch_points[i].y.value = reverse_bits(scale_y_touch_value(current_touch_y), 12);
         }
 
-        ip.touchscreen.points[0].y.extra = reverse_bits(2, 3);
-        ip.touchscreen.points[1].x.extra = reverse_bits(7, 3);
-        ip.touchscreen.points[1].y.extra = reverse_bits(3, 3);
+        touch_points[0].y.extra = reverse_bits(2, 3);
+        touch_points[1].x.extra = reverse_bits(7, 3);
+        touch_points[1].y.extra = reverse_bits(3, 3);
     }
 
-    for (int byte = 0; byte < sizeof(ip.touchscreen); byte += 2)
-    {
-        unsigned char *touchscreen_bytes = (unsigned char *)(&ip.touchscreen);
-        unsigned char first = (unsigned char)reverse_bits(touchscreen_bytes[byte], 8);
-        touchscreen_bytes[byte] = (unsigned char)reverse_bits(touchscreen_bytes[byte + 1], 8);
-        touchscreen_bytes[byte + 1] = first;
+    for (int i = 0; i < 10; i++) {
+        ip.touchscreen.points[i].x = pack_touch_coord(touch_points[i].x);
+        ip.touchscreen.points[i].y = pack_touch_coord(touch_points[i].y);
     }
 
     uint16_t button_mask = 0;
@@ -231,9 +274,11 @@ void send_input(int socket_hid, const sockaddr_u *addr, size_t addr_size)
     ip.accelerometer.y = unpack_float(current_buttons[VANILLA_SENSOR_ACCEL_Y]) * -800;
     ip.accelerometer.z = unpack_float(current_buttons[VANILLA_SENSOR_ACCEL_Z]) * 800;
 
-    ip.gyroscope.yaw = (unpack_float(current_buttons[VANILLA_SENSOR_GYRO_YAW]) * (180.0f/M_PI)) / ((200.0f * 6.0f) / 154000.0f);
-    ip.gyroscope.pitch = (unpack_float(current_buttons[VANILLA_SENSOR_GYRO_PITCH]) * (180.0f/M_PI)) / ((200.0f * 6.0f) / 154000.0f);
-    ip.gyroscope.roll = (unpack_float(current_buttons[VANILLA_SENSOR_GYRO_ROLL]) * (180.0f/M_PI)) / ((200.0f * 6.0f) / 154000.0f);
+    ip.gyroscope = pack_gyroscope(
+        (int32_t)((unpack_float(current_buttons[VANILLA_SENSOR_GYRO_ROLL]) * (180.0f/M_PI)) / ((200.0f * 6.0f) / 154000.0f)),
+        (int32_t)((unpack_float(current_buttons[VANILLA_SENSOR_GYRO_PITCH]) * (180.0f/M_PI)) / ((200.0f * 6.0f) / 154000.0f)),
+        (int32_t)((unpack_float(current_buttons[VANILLA_SENSOR_GYRO_YAW]) * (180.0f/M_PI)) / ((200.0f * 6.0f) / 154000.0f))
+    );
 
     pthread_mutex_unlock(&button_mtx);
 
