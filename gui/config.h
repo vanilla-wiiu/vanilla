@@ -17,6 +17,7 @@ typedef struct {
     vpi_console_entry_t *connected_console_entries;
     uint32_t server_address;
     char wireless_interface[VPI_CONSOLE_MAX_NAME];
+    char recording_dir[1024];
     int connection_setup;
     int region;
     int swap_abxy;

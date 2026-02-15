@@ -83,6 +83,8 @@ void vpi_config_save()
     sprintf(buf, "%i", vpi_config.cursor_in_fullscreen);
     xmlTextWriterWriteElement(writer, BAD_CAST "cursorinfullscreen", BAD_CAST buf);
 
+    xmlTextWriterWriteElement(writer, BAD_CAST "recordingdir", BAD_CAST vpi_config.recording_dir);
+
     xmlTextWriterEndElement(writer); // vanilla
 
     xmlTextWriterEndDocument(writer);
@@ -150,6 +152,10 @@ void vpi_config_init()
                     } else if (!strcmp((const char *) child->name, "wireless")) {
                         if (child->children) {
                             vui_strncpy(vpi_config.wireless_interface, (const char *) child->children->content, sizeof(vpi_config.wireless_interface));
+                        }
+                    } else if (!strcmp((const char *) child->name, "recordingdir")) {
+                        if (child->children) {
+                            vui_strncpy(vpi_config.recording_dir, (const char *) child->children->content, sizeof(vpi_config.recording_dir));
                         }
                     } else if (!strcmp((const char *) child->name, "connectionsetup")) {
                         vpi_config.connection_setup = atoi((const char *) child->children->content);
