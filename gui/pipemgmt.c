@@ -317,13 +317,15 @@ int vpi_start_epilog()
             // vpilog("GOT INVALID SIGNAL: %.*s\n", sizeof(ready_buf), ready_buf);
             vpilog("%.*s\n", sizeof(ready_buf), ready_buf);
 
-            // Kill seems to break a lot of things so I guess we'll just leave it orphaned
-            // kill(pipe_pid, SIGKILL);
+            if (pipe_pid != -1) {
+                kill(pipe_pid, SIGKILL);
+                pipe_pid = -1;
+            }
 
-            // Don't treat this as fatal anymore
-            // pipe_pid = -1;
-            // close(in_pipes[1]);
-            // close(err_pipes[0]);
+            close(in_pipes[1]);
+            close(err_pipes[0]);
+
+            break;
         }
     }
 
