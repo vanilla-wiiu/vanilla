@@ -58,8 +58,12 @@ void vpi_asset_filename(char *buf, size_t size, const char *type, const char *fi
 #if defined(ANDROID)
     snprintf(buf, size, "%s/%s", type, filename);
 #elif defined(_WIN32) || defined(__APPLE__)
-    snprintf(buf, size, "%s/assets/%s/%s", SDL_GetBasePath(), type, filename);
+    char *base_path = SDL_GetBasePath();
+    snprintf(buf, size, "%s/assets/%s/%s", base_path, type, filename);
+    SDL_free(base_path);
 #else
-    snprintf(buf, size, "%s/../share/vanilla/assets/%s/%s", SDL_GetBasePath(), type, filename);
+    char *base_path = SDL_GetBasePath();
+    snprintf(buf, size, "%s/../share/vanilla/assets/%s/%s", base_path, type, filename);
+    SDL_free(base_path);
 #endif
 }
