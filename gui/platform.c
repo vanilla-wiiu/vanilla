@@ -15,17 +15,21 @@ static char pref_path[4096] = {0};
 
 void vpi_config_filename(char *out, size_t out_size)
 {
-    vpi_get_data_filename(out, out_size, "config.xml");
+    vpi_get_data_filename(out, out_size, "config.xml", NULL);
 }
 
-void vpi_get_data_filename(char *out, size_t out_size, const char *filename)
+void vpi_get_data_filename(char *out, size_t out_size, const char *filename, const char *preferred_dir)
 {
-    if (!pref_path[0]) {
-        char *s = SDL_GetPrefPath("", "Vanilla");
-        vui_strncpy(pref_path, s, sizeof(pref_path));
-        SDL_free(s);
+    if (preferred_dir && preferred_dir[0]) {
+        snprintf(out, out_size, "%s/%s", preferred_dir, filename);
+    } else {
+        if (!pref_path[0]) {
+            char *s = SDL_GetPrefPath("", "Vanilla");
+            vui_strncpy(pref_path, s, sizeof(pref_path));
+            SDL_free(s);
+        }
+        snprintf(out, out_size, "%s%s", pref_path, filename);
     }
-    snprintf(out, out_size, "%s%s", pref_path, filename);
 }
 
 void vpilog_va(const char *fmt, va_list va)

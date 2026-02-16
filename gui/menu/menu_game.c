@@ -34,7 +34,7 @@ static char screenshot_buf[4096] = {0};
 static const int VIDEO_STREAM_INDEX = 0;
 static const int AUDIO_STREAM_INDEX = 1;
 
-int vpi_egl_available = 1;
+int vpi_egl_available = 0;
 
 static int status_lbl;
 static struct {
@@ -177,6 +177,18 @@ size_t build_avcc(uint8_t *dst, size_t cap,
     return (size_t)(p - dst);
 }
 
+static enum AVPixelFormat nvdec_get_format(struct AVCodecContext *s, const enum AVPixelFormat *fmt)
+{
+	while (*fmt != AV_PIX_FMT_NONE) {
+        if (*fmt == AV_PIX_FMT_CUDA) {
+            return *fmt;
+		}
+        fmt++;
+    }
+
+    return AV_PIX_FMT_NONE;
+}
+
 static enum AVPixelFormat vaapi_get_format(struct AVCodecContext *s, const enum AVPixelFormat *fmt)
 {
 	while (*fmt != AV_PIX_FMT_NONE) {
@@ -208,42 +220,49 @@ typedef struct {
     AVBufferRef *hw_device_ctx;
 } vpi_decode_state_t;
 
-int vpi_decode_init(vpi_decode_state_t *s)
+typedef struct {
+    const char *name;
+    const AVCodec *codec;
+    enum AVPixelFormat (*get_format)(struct AVCodecContext *s, const enum AVPixelFormat * fmt);
+} hwdec_t;
+
+enum HwDecoderType {
+    HWDEC_TYPE_NVDEC,
+    HWDEC_TYPE_VAAPI,
+    HWDEC_TYPE_DRM,
+    HWDEC_TYPE_SOFTWARE,
+    HWDEC_TYPE_COUNT
+};
+
+void vpi_decode_exit(vpi_decode_state_t *s)
+{
+    if (s->frame)
+        av_frame_free(&s->frame);
+
+    if (s->pkt)
+	    av_packet_free(&s->pkt);
+
+    if (vpi_present_frame)
+	    av_frame_free(&vpi_present_frame);
+
+    if (s->codec_ctx)
+        avcodec_free_context(&s->codec_ctx);
+
+	if (s->hw_device_ctx)
+		av_buffer_unref(&s->hw_device_ctx);
+}
+
+int open_decoder(vpi_decode_state_t *s, hwdec_t *dec)
 {
     int ffmpeg_err;
 
-    // Initialize FFmpeg
-	const AVCodec *codec = 0;
-	enum AVPixelFormat (*get_format)(struct AVCodecContext *s, const enum AVPixelFormat * fmt);
-
-	// Test for VAAPI
-	if (vpi_egl_available && ((ffmpeg_err = av_hwdevice_ctx_create(&s->hw_device_ctx, AV_HWDEVICE_TYPE_VAAPI, 0, 0, 0)) >= 0)) {
-		vpilog("Decoding: VAAPI\n");
-		codec = avcodec_find_decoder(AV_CODEC_ID_H264);
-		get_format = vaapi_get_format;
-	} else if ((ffmpeg_err = av_hwdevice_ctx_create(&s->hw_device_ctx, AV_HWDEVICE_TYPE_DRM, "/dev/dri/card0", 0, 0)) >= 0) {
-		vpilog("Decoding: DRM\n");
-		codec = avcodec_find_decoder_by_name("h264_v4l2m2m");
-		get_format = drm_get_format;
-	}
-
-	// If we couldn't find a decoder (regardless of if we found hwaccel), fallback to software
-	if (!codec) {
-		if (s->hw_device_ctx) {
-			av_buffer_unref(&s->hw_device_ctx);
-		}
-		vpilog("Decoding: Software\n");
-		codec = avcodec_find_decoder(AV_CODEC_ID_H264);
-		get_format = 0;
-	}
-
 	// If we couldn't find a hardware or software decoder, fail
-	if (!codec) {
+	if (!dec->codec) {
 		vpilog("No decoder was available\n");
         return VANILLA_ERR_GENERIC;
 	}
 
-    s->codec_ctx = avcodec_alloc_context3(codec);
+    s->codec_ctx = avcodec_alloc_context3(dec->codec);
 	if (!s->codec_ctx) {
 		vpilog("Failed to allocate codec context\n");
         return VANILLA_ERR_GENERIC;
@@ -253,8 +272,8 @@ int vpi_decode_init(vpi_decode_state_t *s)
         s->codec_ctx->hw_device_ctx = av_buffer_ref(s->hw_device_ctx);
 	}
 
-	if (get_format) {
-		s->codec_ctx->get_format = get_format;
+	if (dec->get_format) {
+		s->codec_ctx->get_format = dec->get_format;
 	}
 
     const int BUILD_AVCC = 0;
@@ -275,11 +294,81 @@ int vpi_decode_init(vpi_decode_state_t *s)
         );
     }
 
-	ffmpeg_err = avcodec_open2(s->codec_ctx, codec, NULL);
+	ffmpeg_err = avcodec_open2(s->codec_ctx, dec->codec, NULL);
     if (ffmpeg_err < 0) {
 		vpilog("Failed to open decoder: %i\n", ffmpeg_err);
         return VANILLA_ERR_GENERIC;
 	}
+
+    vpilog("Decoding: %s\n", dec->name);
+
+    return VANILLA_SUCCESS;
+}
+
+int vpi_decode_init(vpi_decode_state_t *s)
+{
+    int ffmpeg_err;
+
+    // Initialize decoding context, preferring hardware decoding when available
+    hwdec_t decoders[HWDEC_TYPE_COUNT];
+
+    decoders[HWDEC_TYPE_NVDEC].name = "NVDEC";
+    decoders[HWDEC_TYPE_NVDEC].codec = avcodec_find_decoder_by_name("h264_cuvid");
+    decoders[HWDEC_TYPE_NVDEC].get_format = nvdec_get_format;
+
+    decoders[HWDEC_TYPE_VAAPI].name = "VAAPI";
+    decoders[HWDEC_TYPE_VAAPI].codec = avcodec_find_decoder(AV_CODEC_ID_H264);
+    decoders[HWDEC_TYPE_VAAPI].get_format = vaapi_get_format;
+
+    decoders[HWDEC_TYPE_DRM].name = "DRM";
+    decoders[HWDEC_TYPE_DRM].codec = avcodec_find_decoder_by_name("h264_v4l2m2m");
+    decoders[HWDEC_TYPE_DRM].get_format = drm_get_format;
+
+    decoders[HWDEC_TYPE_SOFTWARE].name = "Software";
+    decoders[HWDEC_TYPE_SOFTWARE].codec = avcodec_find_decoder(AV_CODEC_ID_H264);
+    decoders[HWDEC_TYPE_SOFTWARE].get_format = 0;
+
+    // Discover the most ideal hardware decoder
+    int r = VANILLA_ERR_GENERIC;
+
+#ifdef VANILLA_CUDA_AVAILABLE
+    // See if we can create an NVDEC context (most NVIDIA GPUs)
+    if (r != VANILLA_SUCCESS) {
+        vpi_decode_exit(s);
+        if (((ffmpeg_err = av_hwdevice_ctx_create(&s->hw_device_ctx, AV_HWDEVICE_TYPE_CUDA, 0, 0, 0)) >= 0)) {
+            r = open_decoder(s, &decoders[HWDEC_TYPE_NVDEC]);
+        }
+    }
+#endif // VANILLA_CUDA_AVAILABLE
+
+    // See if we can create a VAAPI context (most Linux systems)
+    if (r != VANILLA_SUCCESS) {
+        vpi_decode_exit(s);
+        if (vpi_egl_available
+            && ((ffmpeg_err = av_hwdevice_ctx_create(&s->hw_device_ctx, AV_HWDEVICE_TYPE_VAAPI, 0, 0, 0)) >= 0)) {
+            r = open_decoder(s, &decoders[HWDEC_TYPE_VAAPI]);
+        }
+    }
+
+    // See if we can create a DRM context (Raspberry Pi, et al.)
+    if (r != VANILLA_SUCCESS) {
+        vpi_decode_exit(s);
+        if ((ffmpeg_err = av_hwdevice_ctx_create(&s->hw_device_ctx, AV_HWDEVICE_TYPE_DRM, "/dev/dri/card0", 0, 0)) >= 0) {
+            r = open_decoder(s, &decoders[HWDEC_TYPE_DRM]);
+        }
+    }
+
+    // Finally, fallback to a software decoder.
+    if (r != VANILLA_SUCCESS) {
+        vpi_decode_exit(s);
+        r = open_decoder(s, &decoders[HWDEC_TYPE_SOFTWARE]);
+    }
+
+    // We don't expect the software decoder to fail, but just in case.
+    if (r != VANILLA_SUCCESS) {
+        vpi_decode_exit(s);
+        return r;
+    }
 
 	AVFrame *decoding_frame = av_frame_alloc();
     if (!decoding_frame) {
@@ -301,27 +390,7 @@ int vpi_decode_init(vpi_decode_state_t *s)
 
 	s->frame = av_frame_alloc();
 
-    vpilog("initialized state!\n");
-
     return VANILLA_SUCCESS;
-}
-
-void vpi_decode_exit(vpi_decode_state_t *s)
-{
-    if (s->frame)
-        av_frame_free(&s->frame);
-
-    if (s->pkt)
-	    av_packet_free(&s->pkt);
-
-    if (vpi_present_frame)
-	    av_frame_free(&vpi_present_frame);
-
-    if (s->codec_ctx)
-        avcodec_free_context(&s->codec_ctx);
-
-	if (s->hw_device_ctx)
-		av_buffer_unref(&s->hw_device_ctx);
 }
 
 int64_t get_recording_timestamp(AVRational timebase)

@@ -11,19 +11,26 @@
 #include <pthread.h>
 #include <vanilla.h>
 #include <libavutil/hwcontext.h>
-#include <libavutil/hwcontext_drm.h>
 #include <unistd.h>
 
 #ifdef VANILLA_HAS_EGL
 #include <SDL2/SDL_egl.h>
 #include <SDL2/SDL_opengl.h>
 #include <SDL2/SDL_opengles2.h>
-#endif
+#endif // #ifdef VANILLA_HAS_EGL
+
 
 #ifdef VANILLA_DRM_AVAILABLE
+#include <libavutil/hwcontext_drm.h>
 #include <drm_fourcc.h>
 #include "ui_sdl_drm.h"
-#endif
+#endif // VANILLA_DRM_AVAILABLE
+
+#ifdef VANILLA_CUDA_AVAILABLE
+#include <libavutil/hwcontext_cuda.h>
+#include <cuda_runtime.h>
+#include <cuda_gl_interop.h>
+#endif // VANILLA_CUDA_AVAILABLE
 
 #include "config.h"
 #include "menu/menu.h"
@@ -36,7 +43,7 @@
 #define PW_CHAR_SIZE 20
 #define PW_CHAR_PAD 2
 #define AUDIO_BUFFER_SIZE 1664 // Wii U never deviates from this so we can hardcode it
-#define AUDIO_BUFFER_COUNT 3
+#define AUDIO_BUFFER_COUNT 4
 
 typedef struct {
     SDL_Texture *texture;
@@ -82,6 +89,13 @@ typedef struct {
 
 	uint16_t last_vibration_state;
 } vui_sdl_context_t;
+
+#ifdef VANILLA_CUDA_AVAILABLE
+typedef struct {
+    struct cudaGraphicsResource *resY;
+    struct cudaGraphicsResource *resUV;
+} vui_cuda_context_t;
+#endif
 
 static int vibrate = 0;
 
@@ -291,7 +305,7 @@ void vui_sdl_fullscreen_enabled_handler(vui_context_t *ctx, int enabled, void *u
     vui_sdl_context_t *sdl_ctx = (vui_sdl_context_t *) ctx->platform_data;
 
     SDL_SetWindowFullscreen(sdl_ctx->window, enabled ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0);
-    SDL_ShowCursor(!enabled);
+    SDL_ShowCursor(vpi_config.cursor_in_fullscreen || !enabled);
 }
 
 void vui_sdl_get_key_mapping_handler(vui_context_t *ctx, int vanilla_btn, void *userdata)
@@ -614,14 +628,28 @@ int vui_sdl_event_thread(void *data)
     return 0;
 }
 
+int vui_init_window(vui_context_t *ctx, vui_sdl_context_t *sdl_ctx, Uint32 window_flags)
+{
+    sdl_ctx->window = SDL_CreateWindow("Vanilla", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, ctx->screen_width, ctx->screen_height, window_flags);
+    if (!sdl_ctx->window) {
+        vpilog("Failed to CreateWindow: %s\n", SDL_GetError());
+        return -1;
+    }
+
+    sdl_ctx->renderer = SDL_CreateRenderer(sdl_ctx->window, -1, SDL_RENDERER_ACCELERATED);
+    if (!sdl_ctx->renderer) {
+        vpilog("Failed to CreateRenderer: %s\n", SDL_GetError());
+        return -1;
+    }
+
+    return 0;
+}
+
 int vui_init_sdl(vui_context_t *ctx, int fullscreen)
 {
 	// Enable Steam Deck gyroscopes even while Steam is open and in gaming mode
 	// SDL_SetHintWithPriority("SDL_GAMECONTROLLER_ALLOW_STEAM_VIRTUAL_GAMEPAD", "0", SDL_HINT_OVERRIDE);
 	SDL_SetHintWithPriority(SDL_HINT_GAMECONTROLLER_IGNORE_DEVICES, "", SDL_HINT_OVERRIDE);
-
-	// One-time setup for SDL NV12
-	SDL_SetHint("SDL_RENDER_OPENGL_NV12_RG_SHADER", "1");
 
 	// Force EGL when using X11 so that VAAPI works
 	SDL_SetHint(SDL_HINT_VIDEO_X11_FORCE_EGL, "1");
@@ -647,27 +675,49 @@ int vui_init_sdl(vui_context_t *ctx, int fullscreen)
     SDL_WindowFlags window_flags = SDL_WINDOW_RESIZABLE;
     if (fullscreen) {
         window_flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
-        SDL_ShowCursor(0);
+        SDL_ShowCursor(vpi_config.cursor_in_fullscreen);
     }
 
-    sdl_ctx->window = SDL_CreateWindow("Vanilla", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, ctx->screen_width, ctx->screen_height, window_flags);
-    if (!sdl_ctx->window) {
-        vpilog("Failed to CreateWindow: %s\n", SDL_GetError());
-        return -1;
+#ifdef VANILLA_HAS_EGL
+    // Lookup ahead of time if we're on X11 + OpenGL (will be important for later check...)
+    const char *driver = SDL_GetVideoDriver(0);
+    if (!strcmp(driver, "x11") || !strcmp(driver, "wayland")) {
+        SDL_RendererInfo info;
+        SDL_GetRenderDriverInfo(0, &info);
+        if (!strcmp(info.name, "opengl") || !strcmp(info.name, "opengles")) {
+            // This saves a small amount of time on the EGL check below because
+            // SDL will fail on the earlier CreateWindow call rather than the
+            // later CreateRenderer call.
+            window_flags |= SDL_WINDOW_OPENGL;
+            vpi_egl_available = 1;
+        }
     }
+#endif // VANILLA_HAS_EGL
 
-    sdl_ctx->renderer = SDL_CreateRenderer(sdl_ctx->window, -1, SDL_RENDERER_ACCELERATED);
-    if (!sdl_ctx->renderer) {
+    if (vui_init_window(ctx, sdl_ctx, window_flags) != 0) {
         // Re-attempt without EGL (X11/NVIDIA do not support this)
+        vpilog("Trying again without forcing EGL...\n");
 	    SDL_SetHint(SDL_HINT_VIDEO_X11_FORCE_EGL, "0");
         vpi_egl_available = 0;
 
-        sdl_ctx->renderer = SDL_CreateRenderer(sdl_ctx->window, -1, SDL_RENDERER_ACCELERATED);
-        if (!sdl_ctx->renderer) {
+        // Determine if we created a window, destroy it if so
+        if (sdl_ctx->window) {
+            SDL_DestroyWindow(sdl_ctx->window);
+            sdl_ctx->window = 0;
+        }
+
+        // SDL video subsystem must be reinitialized after changing hint
+        SDL_QuitSubSystem(SDL_INIT_VIDEO);
+        SDL_InitSubSystem(SDL_INIT_VIDEO);
+
+        if (vui_init_window(ctx, sdl_ctx, window_flags) != 0) {
             // It's not because we forced EGL, so it's something else we're not prepared for
-            vpilog("Failed to CreateRenderer: %s\n", SDL_GetError());
             return -1;
         }
+    }
+
+    if (!vpi_egl_available) {
+        vpilog("EGL unavailable, VAAPI will be disabled\n");
     }
 
     // Open audio output device
@@ -1560,6 +1610,70 @@ int check_has_EGL_EXT_image_dma_buf_import()
 }
 #endif // VANILLA_HAS_EGL
 
+#ifdef VANILLA_CUDA_AVAILABLE
+int get_texture_from_cuda_frame(vui_cuda_context_t *cuda_ctx, vui_sdl_context_t *sdl_ctx, AVFrame *f)
+{
+    if (!sdl_ctx->game_tex) {
+        // Use SHADER_NV12_RA for CUDA frames
+        SDL_SetHint("SDL_RENDER_OPENGL_NV12_RG_SHADER", "0");
+
+        sdl_ctx->game_tex = SDL_CreateTexture(
+            sdl_ctx->renderer,
+            SDL_PIXELFORMAT_NV12,
+            SDL_TEXTUREACCESS_STATIC,
+            f->width,
+            f->height
+        );
+
+        if (!sdl_ctx->game_tex) {
+            vpilog("Failed to create texture for CUDA frame\n");
+            return 0;
+        }
+
+        GLuint texY, texUV;
+
+        static PFNGLACTIVETEXTUREARBPROC glActiveTextureARB = NULL;
+        if (!glActiveTextureARB) {
+            glActiveTextureARB = SDL_GL_GetProcAddress("glActiveTextureARB");
+        }
+
+        static PFNGLGETINTEGERVPROC glGetIntegerv = NULL;
+        if (!glGetIntegerv) {
+            glGetIntegerv = SDL_GL_GetProcAddress("glGetIntegerv");
+        }
+
+        SDL_GL_BindTexture(sdl_ctx->game_tex, 0, 0);
+        glActiveTextureARB(GL_TEXTURE0_ARB + 0);
+        glGetIntegerv(GL_TEXTURE_BINDING_2D, &texY);
+        glActiveTextureARB(GL_TEXTURE0_ARB + 1);
+        glGetIntegerv(GL_TEXTURE_BINDING_2D, &texUV);
+        SDL_GL_UnbindTexture(sdl_ctx->game_tex);
+
+        cudaGraphicsGLRegisterImage(&cuda_ctx->resY, texY, GL_TEXTURE_2D, cudaGraphicsRegisterFlagsWriteDiscard);
+        cudaGraphicsGLRegisterImage(&cuda_ctx->resUV, texUV, GL_TEXTURE_2D, cudaGraphicsRegisterFlagsWriteDiscard);
+    }
+
+    cudaStream_t stream = 0;
+
+    cudaGraphicsMapResources(1, &cuda_ctx->resY, stream);
+    cudaGraphicsMapResources(1, &cuda_ctx->resUV, stream);
+
+    cudaArray_t arrY = 0;
+    cudaArray_t arrUV = 0;
+
+    cudaGraphicsSubResourceGetMappedArray(&arrY, cuda_ctx->resY, 0, 0);
+    cudaGraphicsSubResourceGetMappedArray(&arrUV, cuda_ctx->resUV, 0, 0);
+
+    cudaMemcpy2DToArrayAsync(arrY, 0, 0, f->data[0], f->linesize[0], f->width, f->height, cudaMemcpyDeviceToDevice, stream);
+    cudaMemcpy2DToArrayAsync(arrUV, 0, 0, f->data[1], f->linesize[1], f->width, f->height / 2, cudaMemcpyDeviceToDevice, stream);
+
+    cudaGraphicsUnmapResources(1, &cuda_ctx->resY, stream);
+    cudaGraphicsUnmapResources(1, &cuda_ctx->resUV, stream);
+
+	return 1;
+}
+#endif // VANILLA_CUDA_AVAILABLE
+
 int get_texture_from_drm_prime_frame(vui_sdl_context_t *sdl_ctx, AVFrame *f)
 {
 #ifdef VANILLA_HAS_EGL
@@ -1595,6 +1709,9 @@ int get_texture_from_drm_prime_frame(vui_sdl_context_t *sdl_ctx, AVFrame *f)
                     EGL_DMA_BUF_PLANE0_MODIFIER_LO_EXT : EGL_NONE;
 
             if (!sdl_ctx->game_tex) {
+                // Use SHADER_NV12_RG for VAAPI NV12 frames
+                SDL_SetHint("SDL_RENDER_OPENGL_NV12_RG_SHADER", "1");
+
                 sdl_ctx->game_tex = SDL_CreateTexture(
                     sdl_ctx->renderer,
                     layer->format == DRM_FORMAT_YUV420 ? SDL_PIXELFORMAT_IYUV : SDL_PIXELFORMAT_NV12,
@@ -1673,6 +1790,9 @@ int vui_update_sdl(vui_context_t *vui)
 #ifdef VANILLA_DRM_AVAILABLE
     static vanilla_drm_ctx_t *drm_ctx = NULL;
 #endif // VANILLA_DRM_AVAILABLE
+#ifdef VANILLA_CUDA_AVAILABLE
+    static vui_cuda_context_t *cuda_ctx = NULL;
+#endif // VANILLA_CUDA_AVAILABLE
 
     int handle_final_blit = 1;
     if (!vui->game_mode) {
@@ -1682,6 +1802,14 @@ int vui_update_sdl(vui_context_t *vui)
             vui_sdl_drm_free(&drm_ctx); // will set to null
         }
 #endif // VANILLA_DRM_AVAILABLE
+#ifdef VANILLA_CUDA_AVAILABLE
+        if (cuda_ctx) {
+            if (cuda_ctx->resY) cudaGraphicsUnregisterResource(cuda_ctx->resY);
+            if (cuda_ctx->resUV) cudaGraphicsUnregisterResource(cuda_ctx->resUV);
+            free(cuda_ctx);
+            cuda_ctx = NULL;
+        }
+#endif // VANILLA_CUDA_AVAILABLE
 
         // Draw vui to a custom texture
         vui_draw_sdl(vui, renderer);
@@ -1728,6 +1856,18 @@ int vui_update_sdl(vui_context_t *vui)
                 vui_sdl_drm_present(drm_ctx, sdl_ctx->frame);
                 handle_final_blit = 0;
 #endif // VANILLA_DRM_AVAILABLE
+                break;
+            }
+            case AV_PIX_FMT_CUDA:
+            {
+#ifdef VANILLA_CUDA_AVAILABLE
+                if (!cuda_ctx) {
+                    cuda_ctx = malloc(sizeof(vui_cuda_context_t));
+                    cuda_ctx->resY = 0;
+                    cuda_ctx->resUV = 0;
+                }
+                get_texture_from_cuda_frame(cuda_ctx, sdl_ctx, sdl_ctx->frame);
+#endif // VANILLA_CUDA_AVAILABLE
                 break;
             }
             case AV_PIX_FMT_VAAPI:

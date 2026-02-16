@@ -48,6 +48,12 @@ RUN if [ "${ARCH}" = "aarch64" ]; then export DEBARCH="arm64"; export DEBGCC="gc
     && apt -y install libxkbcommon-dev:$DEBARCH \
     && apt -y install libpolkit-agent-1-dev:$DEBARCH
 
+RUN if [ "${ARCH}" = "x86_64" ]; \
+        then sed -i 's/ main$/ main contrib non-free non-free-firmware/' /etc/apt/sources.list.d/debian.sources; \
+        apt -y update; \
+        apt -y install nvidia-cuda-toolkit; \
+    fi
+
 # Install newer version of CMake
 ENV CMAKE_VER=3.31.5
 RUN wget https://github.com/Kitware/CMake/releases/download/v$CMAKE_VER/cmake-$CMAKE_VER-linux-$(uname -m).sh \
