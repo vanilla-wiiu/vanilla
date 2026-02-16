@@ -22,7 +22,7 @@ static const char *lang_str_fr[__VPI_LANG_T_COUNT] = {
     "Êtes-vous sûre que vous voulez supprimer \"%s\"?",
     "\"%s\" Supprimé avec Succès",
     "Renommer",
-    "Supprimer"
+    "Supprimer",
     "Retour",
     "Plus",
     "Controlles",
@@ -35,7 +35,6 @@ static const char *lang_str_fr[__VPI_LANG_T_COUNT] = {
     "Mettre en place comment Vanilla se connecte à la Wii U",
     "Choisissez 'Local' pour vous connecter directement avec la matériel sur votre système. Sinon, vous aurez peut-être besoin d'un serveur compatible pour relayer les paquets nécessaires.",
     "Choisissez l'interface sans fil à utiliser pour la connexion.",
-    "Enter the IP address of the server you wish to connect through.",
     "Entrez l'adresse IP du serveur auquel vous voulez vous connecter",
     "Capture d'écran enregistrée à \"%s\"",
     "L'enregistrement a commencé à \"%s\"",
@@ -58,6 +57,7 @@ static const char *lang_str_fr[__VPI_LANG_T_COUNT] = {
     "Désactiver le Skip du Mot de Passe Root",
     "Inverser les boutons AB/XY",
     "Plein Écran",
+    "Language: Français"
 };
 
 #endif

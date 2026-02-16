@@ -14,6 +14,10 @@
 #include "pipe/def.h"
 #include "ui/ui_anim.h"
 
+vui_context_t *vui_count[16];
+vpi_lang_t text_count[16];
+int old_back_layer;
+
 static void return_to_main(vui_context_t *vui, int btn, void *v)
 {
     int layer = (intptr_t) v;
@@ -42,6 +46,17 @@ static void thunk_to_quit(vui_context_t *vui, int button, void *v)
 {
     vpi_menu_quit_vanilla(vui);
 }
+
+static void change_language(vui_context_t *vui, int button, void *v)
+{
+    switch_lang(get_lang());
+    for(int i = 0; i < 16; i++){
+        if(!vui_count[i]) {continue;}
+        vui_button_update_text(vui_count[i], i, lang(text_count[i]));
+        vpi_menu_create_back_button(vui, old_back_layer, return_to_main, (void *) (intptr_t) old_back_layer);
+    }
+}
+
 
 #ifdef VANILLA_POLKIT_AVAILABLE
 static void do_polkit_install(vui_context_t *vui, void *v)
@@ -108,6 +123,7 @@ void vpi_menu_settings(vui_context_t *vui, void *v)
     vui_reset(vui);
 
     int fglayer = vui_layer_create(vui);
+    old_back_layer = fglayer;
 
     int scrw, scrh;
     vui_get_screen_size(vui, &scrw, &scrh);
@@ -121,6 +137,7 @@ void vpi_menu_settings(vui_context_t *vui, void *v)
         VPI_LANG_REGION,
         -1,
         -1,
+        VPI_LANG_LANG_CHOICE,
     };
 
     // Highlight currently implemented functionality
@@ -130,7 +147,9 @@ void vpi_menu_settings(vui_context_t *vui, void *v)
         transition_to_region,
         0,
         0,
+        change_language,
     };
+
 
     static const int button_count = sizeof(SETTINGS_NAMES) / sizeof(int);
     int buttons[button_count];
@@ -154,11 +173,14 @@ void vpi_menu_settings(vui_context_t *vui, void *v)
 
 	int btnw = scrw*3/4;
 	int btnx = scrw/2 - btnw/2;
-	int btny = scrh/10;
+	int btny = scrh/16;
+    int btnh = BTN_SZ/1.1;
 	for (int index = 0; index < button_count; index++) {
 		if (SETTINGS_ACTION[index]) {
-			buttons[index] = vui_button_create(vui, btnx, btny, btnw, BTN_SZ, lang(SETTINGS_NAMES[index]), 0, VUI_BUTTON_STYLE_BUTTON, fglayer, SETTINGS_ACTION[index], (void *) (intptr_t) fglayer);
-            btny += BTN_SZ;
+            vui_count[index] = vui;
+            text_count[index] = SETTINGS_NAMES[index];
+			buttons[index] = vui_button_create(vui, btnx, btny, btnw, btnh, lang(SETTINGS_NAMES[index]), 0, VUI_BUTTON_STYLE_BUTTON, fglayer, SETTINGS_ACTION[index], (void *) (intptr_t) fglayer);
+            btny += btnh;
 		}
 	}
 
@@ -169,6 +191,7 @@ void vpi_menu_settings(vui_context_t *vui, void *v)
 #endif
 
     // Back button
+    
     vpi_menu_create_back_button(vui, fglayer, return_to_main, (void *) (intptr_t) fglayer);
 
     vui_transition_fade_layer_in(vui, fglayer, 0, 0);

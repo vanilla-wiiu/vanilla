@@ -57,6 +57,7 @@ static const char *lang_str_en[__VPI_LANG_T_COUNT] = {
 	"Disable Root Password Skip",
 	"Swap AB/XY buttons",
     "Full Screen",
+    "Language: English",
 };
 
 #endif
