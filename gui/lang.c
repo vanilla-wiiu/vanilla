@@ -1,60 +1,43 @@
+#include <string.h>
 #include "lang.h"
-
-static const char *lang_str[__VPI_LANG_T_COUNT] = {
-    "Sync",
-    "Connect",
-    "Edit",
-    "Settings",
-    "OK",
-    "Cancel",
-    "Touch the symbols in the order they are displayed on the TV screen from left to right.",
-    "If the symbols are not displayed on the TV screen, press the SYNC Button on the Wii U console.",
-    "Connecting to the Wii U console...",
-    "Sync Failed",
-    "Vanilla needs root permission to configure the wireless interface for connection.",
-    "Please enter your \"sudo\" password here.",
-    "Error",
-    "No consoles synced",
-    "Connecting to \"%s\"...",
-    "Are you sure you want to delete \"%s\"?",
-    "Successfully deleted \"%s\"",
-    "Rename",
-    "Delete",
-    "Back",
-    "More",
-    "Controls",
-    "Audio",
-    "Connection",
-    "Webcam",
-    "Region",
-    "Local",
-    "Via Server",
-    "Set up how Vanilla connects to the Wii U",
-    "Choose 'Local' to connect directly with the hardware on your system. Otherwise, you may need a compatible 'server' to relay the necessary packets.",
-    "Select the wireless interface to use for the connection.",
-    "Enter the IP address of the server you wish to connect through.",
-    "Screenshot saved to \"%s\"",
-    "Recording started to \"%s\"",
-    "Recording finished",
-    "Connection lost, attempting to re-connect...",
-    "Your platform is not capable of \"Local\" connection, and must connect via a server.",
-    "Failed to save screenshot (%i)",
-    "Select gamepad region",
-    "Gamepad region must match the console region or else the console will throw an error. This has no other effect on usage.",
-    "Japan",
-    "America",
-    "Europe",
-    "Quit",
-	"Authentication failed. Please try again.",
-	"Don't ask again",
-	"WARNING",
-	"This option will install a Polkit rule that will allow Vanilla's backend to run as root without password entry.\n\nThere are inherent risks to bypassing security systems. Only enable this if you are willing to accept those risks.\n\nNOTE: If you are using the Steam Deck, this will also disable read-only access to your system partition.",
-	"I acknowledge",
-	"Enable Root Password Skip",
-	"Disable Root Password Skip",
-	"Swap AB/XY buttons",
-    "Full Screen",
+#include "langs/english_en/english_en.h"
+#include "langs/french_fr/french_fr.h"
+static char *langs_order[2] = {
+    "en",
+    "fr",
 };
+static const int lang_c = sizeof(langs_order) / sizeof(langs_order[0]);
+static const char *lang_str[__VPI_LANG_T_COUNT];
+char lang_history[3];
+
+int lang_choice(char *curr_lang){
+    if (strcmp(curr_lang, "en") == 0) {
+        memcpy(lang_str, lang_str_en, sizeof(lang_str));
+    }
+    else if (strcmp(curr_lang, "fr") == 0) {
+        memcpy(lang_str, lang_str_fr, sizeof(lang_str));
+    }
+    else {
+        return 0;
+    }
+    memcpy(lang_history, curr_lang, sizeof(lang_history));
+    return 1;
+}
+
+char *switch_lang(const char *curr_lang){
+    for(int i = 0; i < lang_c; i++){
+        if(strcmp(langs_order[i], curr_lang) == 0) {
+            int next = (i + 1) % lang_c;
+            lang_choice(langs_order[next]);
+            return langs_order[next];
+        }
+    }
+    return NULL;
+}
+
+const char *get_lang(){
+    return lang_history;
+}
 
 const char *lang(vpi_lang_t id)
 {

@@ -4,5 +4,6 @@
 #include "ui/ui.h"
 
 void vpi_menu_settings(vui_context_t *vui, void *v);
+extern int IsSettings;
 
 #endif // VANILLA_PI_MENU_SETTINGS_H
