@@ -80,6 +80,11 @@ void vpi_config_save()
     sprintf(buf, "%i", vpi_config.fullscreen);
     xmlTextWriterWriteElement(writer, BAD_CAST "fullscreen", BAD_CAST buf);
 
+    sprintf(buf, "%i", vpi_config.cursor_in_fullscreen);
+    xmlTextWriterWriteElement(writer, BAD_CAST "cursorinfullscreen", BAD_CAST buf);
+
+    xmlTextWriterWriteElement(writer, BAD_CAST "recordingdir", BAD_CAST vpi_config.recording_dir);
+
     xmlTextWriterEndElement(writer); // vanilla
 
     xmlTextWriterEndDocument(writer);
@@ -97,6 +102,7 @@ void vpi_config_init()
     vpi_config.server_address = VANILLA_ADDRESS_LOCAL;
     vpi_config.region = VANILLA_REGION_AMERICA;
     vpi_config.fullscreen = 1;
+    vpi_config.cursor_in_fullscreen = 0;
 
     // Load from file
     char config_fn[1024];
@@ -147,6 +153,10 @@ void vpi_config_init()
                         if (child->children) {
                             vui_strncpy(vpi_config.wireless_interface, (const char *) child->children->content, sizeof(vpi_config.wireless_interface));
                         }
+                    } else if (!strcmp((const char *) child->name, "recordingdir")) {
+                        if (child->children) {
+                            vui_strncpy(vpi_config.recording_dir, (const char *) child->children->content, sizeof(vpi_config.recording_dir));
+                        }
                     } else if (!strcmp((const char *) child->name, "connectionsetup")) {
                         vpi_config.connection_setup = atoi((const char *) child->children->content);
                     } else if (!strcmp((const char *) child->name, "region")) {
@@ -155,6 +165,8 @@ void vpi_config_init()
                         vpi_config.swap_abxy = atoi((const char *) child->children->content);
                     } else if (!strcmp((const char *) child->name, "fullscreen")) {
                         vpi_config.fullscreen = atoi((const char *) child->children->content);
+                    } else if (!strcmp((const char *) child->name, "cursorinfullscreen")) {
+                        vpi_config.cursor_in_fullscreen = atoi((const char *) child->children->content);
                     }
                 }
                 child = child->next;

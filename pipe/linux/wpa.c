@@ -638,10 +638,9 @@ int check_for_disconnection(struct sync_args *args)
 void create_all_relays(struct sync_args *args)
 {
     pthread_t vid_thread, aud_thread, msg_thread, cmd_thread, hid_thread;
+    struct relay_info vid_info, aud_info, msg_info, cmd_info, hid_info;
 
     if (!args->local) {
-        struct relay_info vid_info, aud_info, msg_info, cmd_info, hid_info;
-
         // Set common info for all
         vid_info.wireless_interface = aud_info.wireless_interface = msg_info.wireless_interface = cmd_info.wireless_interface = hid_info.wireless_interface = args->wireless_interface;
         vid_info.local = aud_info.local = msg_info.local = cmd_info.local = hid_info.local = args->local;

@@ -5,7 +5,7 @@
 #include <stdlib.h>
 
 void vpi_config_filename(char *out, size_t out_size);
-void vpi_get_data_filename(char *out, size_t out_size, const char *filename);
+void vpi_get_data_filename(char *out, size_t out_size, const char *filename, const char *preferred_dir);
 
 void vpilog_va(const char *fmt, va_list va);
 void vpilog(const char *fmt, ...);
