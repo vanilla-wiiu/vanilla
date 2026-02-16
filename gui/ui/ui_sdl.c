@@ -154,6 +154,7 @@ void init_gamepad(vui_context_t *ctx)
     ctx->default_key_map[SDL_SCANCODE_J] = VANILLA_BTN_ZR;
     ctx->default_key_map[SDL_SCANCODE_F5] = VPI_ACTION_TOGGLE_RECORDING;
     ctx->default_key_map[SDL_SCANCODE_F12] = VPI_ACTION_SCREENSHOT;
+    ctx->default_key_map[SDL_SCANCODE_F11] = VPI_ACTION_TOGGLE_FULLSCREEN;
     ctx->default_key_map[SDL_SCANCODE_ESCAPE] = VPI_ACTION_DISCONNECT;
 }
 

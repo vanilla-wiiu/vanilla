@@ -161,6 +161,8 @@ void vpi_menu_key_bindings_more(vui_context_t *vui, void *v)
         // Special Action Buttons
         create_key_bind_button(vui, VPI_ACTION_TOGGLE_RECORDING, img_x + img_w + padding, img_y + padding + (img_w * btn_offset), btn_w, btn_h, layer);
         vui_image_create(vui, img_x, img_y + padding + (img_h * btn_offset++), img_w, img_h, "recording_icon.svg", layer);
+        create_key_bind_button(vui, VPI_ACTION_TOGGLE_FULLSCREEN, img_x + img_w + padding, img_y + padding + (img_w * btn_offset), btn_w, btn_h, layer);
+        vui_image_create(vui, img_x, img_y + padding + (img_h * btn_offset++), img_w, img_h, "fullscreen_icon.svg", layer);
         create_key_bind_button(vui, VPI_ACTION_SCREENSHOT, img_x + img_w + padding, img_y + padding + (img_w * btn_offset), btn_w, btn_h, layer);
         vui_image_create(vui, img_x, img_y + padding + (img_h * btn_offset++), img_w, img_h, "screenshot_icon.svg", layer);
     }

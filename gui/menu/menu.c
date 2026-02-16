@@ -71,5 +71,11 @@ void vpi_menu_action(vui_context_t *vui, vpi_extra_action_t action)
         }
         break;
     }
+    case VPI_ACTION_TOGGLE_FULLSCREEN:
+    {
+        vpi_config.fullscreen = !vpi_config.fullscreen;
+        vpi_config_save();
+        vui_set_fullscreen(vui, vpi_config.fullscreen);
+    }
     }
 }
