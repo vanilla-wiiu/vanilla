@@ -2,6 +2,7 @@
 
 #include "config.h"
 #include "lang.h"
+#include "menu/menu.h"
 #include "menu/menu_common.h"
 #include "menu/menu_settings.h"
 #include "ui/ui_anim.h"

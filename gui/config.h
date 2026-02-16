@@ -3,7 +3,6 @@
 
 #include <stdint.h>
 #include <vanilla.h>
-#include "menu/menu.h"
 
 #define VPI_CONSOLE_MAX_NAME 256
 #define VPI_CONFIG_BUTTONMAP_SIZE 32

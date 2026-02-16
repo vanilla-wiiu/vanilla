@@ -281,7 +281,7 @@ void vpi_config_init()
                                     while (axis) {
                                         if (axis->type == XML_ELEMENT_NODE && !strcmp(axis->name, "axis")) {
                                             int id = -1;
-                                            xmlAttr *attribute = btn->properties;
+                                            xmlAttr *attribute = axis->properties;
                                             while (attribute) {
                                                 if (!strcmp(attribute->name, "id")) {
                                                     id = atoi((const char *) attribute->children->content);
@@ -293,7 +293,7 @@ void vpi_config_init()
                                                 continue;
                                             }
 
-                                            int val = atoi((const char *) btn->children->content);
+                                            int val = atoi((const char *) axis->children->content);
                                             vpi_config.axismap[id] = val;
                                         }
                                         axis = axis->next;
