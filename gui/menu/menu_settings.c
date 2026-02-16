@@ -17,6 +17,7 @@
 vui_context_t *vui_count[16];
 vpi_lang_t text_count[16];
 int old_back_layer;
+int IsSettings = 0;
 
 static void return_to_main(vui_context_t *vui, int btn, void *v)
 {
@@ -121,6 +122,7 @@ static void toggle_fullscreen(vui_context_t *vui, int button, void *v)
 void vpi_menu_settings(vui_context_t *vui, void *v)
 {
     vui_reset(vui);
+    IsSettings = 1;
 
     int fglayer = vui_layer_create(vui);
     old_back_layer = fglayer;

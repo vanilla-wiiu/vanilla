@@ -191,4 +191,5 @@ void vpi_menu_main(vui_context_t *vui, void *v)
     } else {
         vui_transition_fade_layer_in(vui, layer, NULL, NULL);
     }
+    IsSettings = 0;
 }

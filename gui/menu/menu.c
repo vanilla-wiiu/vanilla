@@ -11,7 +11,10 @@
 #include "menu_common.h"
 #include "menu_game.h"
 #include "menu_main.h"
+#include "menu_settings.h"
 #include "platform.h"
+
+#include "ui/ui_anim.h"
 
 void vpi_mic_callback(void *userdata, const uint8_t *data, size_t len)
 {
@@ -66,8 +69,13 @@ void vpi_menu_action(vui_context_t *vui, vpi_extra_action_t action)
             // Send shutdown signal
             vpi_game_shutdown();
         } else {
-            // Quit Vanilla entirely
-            vpi_menu_quit_vanilla(vui);
+            // Quit Vanilla entirely or go back to menu
+            if(IsSettings == 1){
+                vui_transition_fade_layer_out(vui, 0, vpi_menu_main, (void *) (intptr_t) 1);
+            }
+            else{
+                vpi_menu_quit_vanilla(vui);
+            }
         }
         break;
     }
