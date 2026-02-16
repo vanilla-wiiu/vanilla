@@ -103,5 +103,7 @@ void display_cli_help(const char **argv) {
 	vpilog("Options:\n");
 	vpilog("    -w, --window        Run Vanilla in a window (overrides config)\n");
 	vpilog("    -f, --fullscreen    Run Vanilla full screen (overrides config)\n");
+    vpilog("    --show-cursor       Run Vanilla with the cursor visible (overrides config)\n");
+    vpilog("    --no-cursor         Run Vanilla without the cursor visible (overrides config)\n");
 	vpilog("    -h, --help          Show this help message\n");
 }
