@@ -170,6 +170,8 @@ void vpi_menu_key_bindings_more(vui_context_t *vui, void *v)
     vpi_menu_create_back_button(vui, layer, transition_to_keybinds, (void *) (intptr_t) layer);
 
     vui_transition_fade_layer_in(vui, layer, 0, 0);
+
+    vui_start_passive_animation(vui, animate_button, 0);
 }
 
 void vpi_menu_key_bindings(vui_context_t *vui, void *v)
