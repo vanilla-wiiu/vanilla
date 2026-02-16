@@ -13,7 +13,6 @@
 
 vpi_config_t vpi_config;
 
-
 void hex_to_string(char *output, uint8_t *data, size_t count)
 {
     for (size_t i = 0; i < count; i++) {
@@ -256,8 +255,49 @@ void vpi_config_init()
                                         key = key->next;
                                     }
                                 } else if (!strcmp(section->name, "buttons")) {
-                                } else if (!strcmp(section->name, "axes")) {
+                                    xmlNodePtr btn = section->children;
+                                    while (btn) {
+                                        if (btn->type == XML_ELEMENT_NODE && !strcmp(btn->name, "button")) {
+                                            int id = -1;
+                                            xmlAttr *attribute = btn->properties;
+                                            while (attribute) {
+                                                if (!strcmp(attribute->name, "id")) {
+                                                    id = atoi((const char *) attribute->children->content);
+                                                }
+                                                attribute = attribute->next;
+                                            }
 
+                                            if (id == -1) {
+                                                continue;
+                                            }
+
+                                            int val = atoi((const char *) btn->children->content);
+                                            vpi_config.buttonmap[id] = val;
+                                        }
+                                        btn = btn->next;
+                                    }
+                                } else if (!strcmp(section->name, "axes")) {
+                                    xmlNodePtr axis = section->children;
+                                    while (axis) {
+                                        if (axis->type == XML_ELEMENT_NODE && !strcmp(axis->name, "axis")) {
+                                            int id = -1;
+                                            xmlAttr *attribute = btn->properties;
+                                            while (attribute) {
+                                                if (!strcmp(attribute->name, "id")) {
+                                                    id = atoi((const char *) attribute->children->content);
+                                                }
+                                                attribute = attribute->next;
+                                            }
+
+                                            if (id == -1) {
+                                                continue;
+                                            }
+
+                                            int val = atoi((const char *) btn->children->content);
+                                            vpi_config.axismap[id] = val;
+                                        }
+                                        axis = axis->next;
+                                    }
                                 }
                             }
                             section = section->next;

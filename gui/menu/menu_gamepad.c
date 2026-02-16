@@ -1,7 +1,5 @@
 #include "menu_gamepad.h"
 
-#include <sys/time.h>
-
 #include "config.h"
 #include "lang.h"
 #include "menu/menu_common.h"
@@ -13,7 +11,6 @@
 #define MAIN_MENU_ENTRIES 3
 
 static const uint32_t gICON_COLOUR = 0x222222;
-extern const int gDEFAULT_KEY_MAP[][2];
 
 static int map_buttons[32];
 static size_t map_button_count = 0;
@@ -112,9 +109,6 @@ static void listen_key_binding(vui_context_t *ctx, int key, void *userdata)
 
 static void vpi_bind_callback(vui_context_t *ctx, int button, void *userdata)
 {
-    struct timeval tv;
-    gettimeofday(&tv, 0);
-
     active_bind_button.button = (int) (intptr_t)userdata;
     active_bind_button.ui_button = button;
     vui_set_key_listener(ctx, listen_key_binding, cancel_key_listen, userdata);
