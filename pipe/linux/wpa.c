@@ -312,6 +312,8 @@ void *wpa_setup_environment(void *data)
     interface.ifname = args->wireless_interface;
     interface.confname = args->wireless_config;
 
+    run_process_and_read_stdout((const char *[]) {"rfkill", "unblock", "wlan", NULL}, 0, 0);
+
     struct wpa_global *wpa = wpa_supplicant_init(&params);
     if (!wpa) {
         nlprint("FAILED TO INIT WPA SUPPLICANT");
