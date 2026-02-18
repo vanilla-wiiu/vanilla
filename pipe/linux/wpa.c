@@ -1134,6 +1134,38 @@ int install_polkit()
 
 void pipe_listen(int local, const char *wireless_interface, const char *log_file)
 {
+
+    // Store reference to log file
+    ext_logfile = log_file;
+
+    // Ensure local domain sockets can be written to by everyone
+    umask(0000);
+
+    int skt = open_socket(local, VANILLA_PIPE_CMD_SERVER_PORT);
+    if (skt == -1) {
+        nlprint("Failed to open server socket");
+        return;
+    }
+
+    vanilla_pipe_command_t cmd;
+
+    sockaddr_u addr;
+
+    pthread_mutex_init(&running_mutex, NULL);
+    pthread_mutex_init(&action_mutex, NULL);
+    pthread_mutex_init(&main_loop_mutex, NULL);
+
+	pthread_t stdin_thread;
+	pthread_create(&stdin_thread, NULL, read_stdin, NULL);
+
+	set_signals();
+
+    main_loop = 1;
+
+    pthread_mutex_lock(&main_loop_mutex);
+
+    nlprint("READY");
+
     // If this is the Steam Deck, we must switch the backend from `iwd` to `wpa_supplicant`
 	int sd_wifi_backend_changed = 0;
 	{
@@ -1168,37 +1200,6 @@ void pipe_listen(int local, const char *wireless_interface, const char *log_file
         g_error_free(nm_err);
     }
 #endif
-
-    // Store reference to log file
-    ext_logfile = log_file;
-
-    // Ensure local domain sockets can be written to by everyone
-    umask(0000);
-
-    int skt = open_socket(local, VANILLA_PIPE_CMD_SERVER_PORT);
-    if (skt == -1) {
-        nlprint("Failed to open server socket");
-        return;
-    }
-
-    vanilla_pipe_command_t cmd;
-
-    sockaddr_u addr;
-
-    pthread_mutex_init(&running_mutex, NULL);
-    pthread_mutex_init(&action_mutex, NULL);
-    pthread_mutex_init(&main_loop_mutex, NULL);
-
-	pthread_t stdin_thread;
-	pthread_create(&stdin_thread, NULL, read_stdin, NULL);
-
-	set_signals();
-
-    main_loop = 1;
-
-    pthread_mutex_lock(&main_loop_mutex);
-
-    nlprint("READY");
 
     while (main_loop) {
         pthread_mutex_unlock(&main_loop_mutex);
