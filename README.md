@@ -3,7 +3,7 @@
 This is a **work-in-progress** software clone of the Wii U gamepad. No warranty is provided and everything should be considered **alpha** at best.
 
 <p align="center">
-    <img src="https://raw.githubusercontent.com/vanilla-wiiu/vanilla/master/images/screenshot1.png">
+    <img src="https://raw.githubusercontent.com/vanilla-wiiu/vanilla/master/images/screenshot2.png">
     <br>
     <a href="https://youtu.be/DSgFu4rDxgc">
         Announcement Video
