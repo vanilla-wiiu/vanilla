@@ -349,8 +349,8 @@ if (NOT VANILLA_BUILD_VENDORED)
 endif()
 
 target_link_libraries(vanilla PRIVATE
-    ${_sdl_lib}
     SDL2::SDL2main
+    ${_sdl_lib}
     SDL2_ttf
     SDL2_image
     libvanilla
