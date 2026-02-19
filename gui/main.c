@@ -23,6 +23,7 @@ int SDL_main(int argc, const char **argv)
 {
     // Default to full screen unless "-w" is specified
     int override_fs = -1;
+    int override_fs_cursor = -1;
 	for (int i = 1, consumed; i < argc; i += consumed) {
 		consumed = -1;
 		 if (!strcmp(argv[i], "-w") || !strcmp(argv[i], "--window")) {
@@ -30,6 +31,12 @@ int SDL_main(int argc, const char **argv)
 			consumed = 1;
 		} else if (!strcmp(argv[i], "-f") || !strcmp(argv[i], "--fullscreen")) {
             override_fs = 1;
+            consumed = 1;
+        } else if (!strcmp(argv[i], "--show-cursor")) {
+            override_fs_cursor = 1;
+            consumed = 1;
+        } else if (!strcmp(argv[i], "--no-cursor")) {
+            override_fs_cursor = 0;
             consumed = 1;
 		} else if (!strcmp(argv[i], "-h") || !strcmp(argv[i], "--help")) {
 			display_cli_help(argv);
@@ -55,6 +62,10 @@ int SDL_main(int argc, const char **argv)
     // Check if override fullscreen, if so set it in the config, but don't save
     if (override_fs != -1) {
         vpi_config.fullscreen = override_fs;
+    }
+
+    if(override_fs_cursor != -1) {
+        vpi_config.cursor_in_fullscreen = override_fs_cursor;
     }
 
     // Initialize UI system
@@ -92,5 +103,7 @@ void display_cli_help(const char **argv) {
 	vpilog("Options:\n");
 	vpilog("    -w, --window        Run Vanilla in a window (overrides config)\n");
 	vpilog("    -f, --fullscreen    Run Vanilla full screen (overrides config)\n");
+    vpilog("    --show-cursor       Run Vanilla with the cursor visible (overrides config)\n");
+    vpilog("    --no-cursor         Run Vanilla without the cursor visible (overrides config)\n");
 	vpilog("    -h, --help          Show this help message\n");
 }
