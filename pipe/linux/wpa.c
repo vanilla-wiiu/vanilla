@@ -312,8 +312,6 @@ void *wpa_setup_environment(void *data)
     interface.ifname = args->wireless_interface;
     interface.confname = args->wireless_config;
 
-    run_process_and_read_stdout((const char *[]) {"rfkill", "unblock", "wlan", NULL}, 0, 0);
-
     struct wpa_global *wpa = wpa_supplicant_init(&params);
     if (!wpa) {
         nlprint("FAILED TO INIT WPA SUPPLICANT");
@@ -1134,6 +1132,8 @@ int install_polkit()
 
 void pipe_listen(int local, const char *wireless_interface, const char *log_file)
 {
+    // Some setups require this
+    run_process_and_read_stdout((const char *[]) {"rfkill", "unblock", "wlan", NULL}, 0, 0);
 
     // Store reference to log file
     ext_logfile = log_file;
