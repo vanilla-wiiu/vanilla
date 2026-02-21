@@ -158,6 +158,10 @@ void init_gamepad(vui_context_t *ctx)
     ctx->default_key_map[SDL_SCANCODE_ESCAPE] = VPI_ACTION_DISCONNECT;
 }
 
+int active_controller_index = -1;
+
+extern int select_controller;
+
 void find_valid_controller(vui_sdl_context_t *sdl_ctx)
 {
     // HACK: This is just for the Steam Deck. The Steam Deck provides a "virtual gamepad"
@@ -170,17 +174,37 @@ void find_valid_controller(vui_sdl_context_t *sdl_ctx)
     //       and then use the direct hardware access JUST for the gyros.
     int controller = -1;
     int steam_virtual_gamepad_index = -1;
+    int num_joysticks = SDL_NumJoysticks();
 
 	vpilog("Looking for game controllers...\n");
-	for (int i = 0; i < SDL_NumJoysticks(); i++) {
-        const char *ctrl_name = SDL_GameControllerNameForIndex(i);
-		vpilog("  Found %i: %s\n", i, ctrl_name);
-        if (ctrl_name != NULL && !strcmp(ctrl_name, "Steam Virtual Gamepad")) {
-            steam_virtual_gamepad_index = i;
-        } else if (controller == -1) {
-            controller = i;
+    if (select_controller == 1 && num_joysticks > 0) {
+        for (int i = 0; i < num_joysticks; i++) {
+            vpilog("  Found %i: %s\n", i, SDL_GameControllerNameForIndex(i));
         }
-	}
+        vpilog("Select your controller (use the number assigned to it): ");
+        char input[10];
+        if (fgets(input, sizeof(input), stdin)) {
+            int selected = atoi(input);
+            if (selected >= 0 && selected < num_joysticks) {
+                controller = selected;
+            } else {
+                vpilog("\nSelected controller is invalid. Falling back to auto-select.\n");
+                select_controller = 0;
+            }
+        }
+    }
+
+    if (select_controller == 0) {
+	    for (int i = 0; i < num_joysticks; i++) {
+            const char *ctrl_name = SDL_GameControllerNameForIndex(i);
+		    vpilog("  Found %i: %s\n", i, ctrl_name);
+            if (ctrl_name != NULL && !strcmp(ctrl_name, "Steam Virtual Gamepad")) {
+                steam_virtual_gamepad_index = i;
+            } else if (controller == -1) {
+                    controller = i;
+            }
+	    }
+    }
 
     SDL_GameController *steam_virtual_gamepad = NULL;
     SDL_GameController *c = NULL;
@@ -209,8 +233,59 @@ void find_valid_controller(vui_sdl_context_t *sdl_ctx)
     if (steam_virtual_gamepad) {
         sdl_ctx->controller = steam_virtual_gamepad;
         sdl_ctx->controller_gyros = c;
+        active_controller_index = steam_virtual_gamepad_index;
     } else {
         sdl_ctx->controller = c;
+        active_controller_index = controller;
+    }
+}
+
+void vui_sdl_set_controller(vui_context_t *ctx, int index)
+{
+    vui_sdl_context_t *sdl_ctx = (vui_sdl_context_t *) ctx->platform_data;
+
+    if (sdl_ctx->controller) {
+        SDL_GameControllerClose(sdl_ctx->controller);
+    }
+    if (sdl_ctx->controller_gyros && sdl_ctx->controller_gyros != sdl_ctx->controller) {
+        SDL_GameControllerClose(sdl_ctx->controller_gyros);
+    }
+    
+    sdl_ctx->controller = NULL;
+    sdl_ctx->controller_gyros = NULL;
+    active_controller_index = index;
+
+    if (index >= 0) {
+        SDL_GameController *primary = SDL_GameControllerOpen(index);
+        SDL_GameController *gyros = NULL;
+
+        if (primary) {
+            const char *selected_name = SDL_GameControllerName(primary);
+            if (selected_name && !strcmp(selected_name, "Steam Virtual Gamepad")) {
+                for (int i = 0; i < SDL_NumJoysticks(); i++) {
+                    const char *search_name = SDL_GameControllerNameForIndex(i);
+                    if (search_name && strcmp(search_name, "Steam Virtual Gamepad") != 0) {
+                        gyros = SDL_GameControllerOpen(i);
+                        if (gyros) {
+                            SDL_GameControllerSetSensorEnabled(gyros, SDL_SENSOR_ACCEL, 1);
+                            SDL_GameControllerSetSensorEnabled(gyros, SDL_SENSOR_GYRO, 1);
+                            break;
+                        }
+                    }
+                }
+            } else {
+                SDL_GameControllerSetSensorEnabled(primary, SDL_SENSOR_ACCEL, 1);
+                SDL_GameControllerSetSensorEnabled(primary, SDL_SENSOR_GYRO, 1);
+            }
+
+            sdl_ctx->controller = primary;
+            sdl_ctx->controller_gyros = gyros;
+
+            vpilog("Now using game controller \"%s\"\n", SDL_GameControllerName(primary)); 
+            if (gyros) {
+                vpilog("  with \"%s\" for accelerometer/gyroscope\n", SDL_GameControllerName(gyros));
+            }
+        }
     }
 }
 

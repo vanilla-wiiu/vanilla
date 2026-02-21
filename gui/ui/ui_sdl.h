@@ -3,6 +3,9 @@
 
 #include "ui.h"
 
+extern int active_controller_index;
+void vui_sdl_set_controller(vui_context_t *ctx, int index);
+
 /**
  * System-related functions
  */
