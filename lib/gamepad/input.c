@@ -136,13 +136,6 @@ static inline uint16_t pack_touchcoord(TouchCoord *unpacked)
     return ((uint16_t) ((unpacked->pad & 0x1u) | ((unpacked->extra & 0x7u) << 1) | ((unpacked->value & 0xFFFu) << 4)));
 }
 
-int32_t bytes_to_s24le(uint8_t *b)
-{
-    int32_t c = 0;
-
-    return c;
-}
-
 uint16_t resolve_axis_value(float axis, float neg, float pos, int flip)
 {
     float val = axis < 0 ? axis / 32768.0f : axis / 32767.0f;
