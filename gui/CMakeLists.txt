@@ -274,7 +274,6 @@ list(APPEND VANILLA_GUI_SRC
     #game/game_decode_ffmpeg.c
     # game/game_decode.c
     # game/game_main.c
-    main.c
     menu/menu.c
     menu/menu_common.c
     menu/menu_connection.c
@@ -325,11 +324,18 @@ if (VANILLA_BUILD_USE_POLKIT)
 endif()
 
 # Declare executable
+add_library(vanillagui STATIC ${VANILLA_GUI_SRC})
 if (ANDROID)
-    add_library(vanilla SHARED ${VANILLA_GUI_SRC})
+    add_library(vanilla SHARED main.c)
 else()
-    add_executable(vanilla MACOSX_BUNDLE ${VANILLA_GUI_SRC})
+    add_executable(vanilla MACOSX_BUNDLE main.c)
 endif()
+target_link_libraries(vanilla PRIVATE vanillagui)
+target_include_directories(vanilla PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/../lib"
+    "${CMAKE_CURRENT_SOURCE_DIR}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/.."
+)
 
 if (APPLE)
 	# Set bundle name to be more user-friendly
@@ -348,7 +354,7 @@ if (NOT VANILLA_BUILD_VENDORED)
     find_package(SDL2_image REQUIRED)
 endif()
 
-target_link_libraries(vanilla PRIVATE
+target_link_libraries(vanillagui PRIVATE
     SDL2::SDL2main
     ${_sdl_lib}
     SDL2_ttf
@@ -358,7 +364,7 @@ target_link_libraries(vanilla PRIVATE
 )
 
 if (ANDROID)
-    target_link_libraries(vanilla PRIVATE
+    target_link_libraries(vanillagui PRIVATE
         SDL2main
         log
     )
@@ -369,7 +375,7 @@ if (NOT VANILLA_BUILD_VENDORED)
     find_package(FFmpeg REQUIRED COMPONENTS avformat avcodec avutil swscale)
 endif()
 
-target_link_libraries(vanilla PRIVATE
+target_link_libraries(vanillagui PRIVATE
     FFmpeg::avformat
     FFmpeg::avcodec
     FFmpeg::avutil
@@ -378,70 +384,70 @@ target_link_libraries(vanilla PRIVATE
 )
 
 if (APPLE)
-	target_link_libraries(vanilla PRIVATE "-framework VideoToolbox" "-framework CoreMedia" iconv)
+	target_link_libraries(vanillagui PRIVATE "-framework VideoToolbox" "-framework CoreMedia" iconv)
 endif()
 
 if (VANILLA_BUILD_PIPE)
 	# Assume this platform is capable of running vanilla-pipe
-    target_compile_definitions(vanilla PRIVATE VANILLA_PIPE_AVAILABLE)
+    target_compile_definitions(vanillagui PRIVATE VANILLA_PIPE_AVAILABLE)
 endif()
 
 OPTION(VANILLA_GUI_ENABLE_WINDOWED "Enable windowed mode in Vanilla GUI" ON)
 if (VANILLA_GUI_ENABLE_WINDOWED)
-    target_compile_definitions(vanilla PRIVATE VANILLA_GUI_ENABLE_WINDOWED)
+    target_compile_definitions(vanillagui PRIVATE VANILLA_GUI_ENABLE_WINDOWED)
 endif()
 
 if (VANILLA_BUILD_USE_POLKIT)
 	# Find Polkit and GLIB libraries
 	find_package(PkgConfig REQUIRED)
 	pkg_check_modules(PC_POLKIT polkit-agent-1 REQUIRED IMPORTED_TARGET)
-	target_include_directories(vanilla PRIVATE ${PC_POLKIT_INCLUDE_DIRS})
-	target_link_libraries(vanilla PRIVATE ${PC_POLKIT_LIBRARIES})
-	target_compile_definitions(vanilla PRIVATE VANILLA_POLKIT_AVAILABLE)
+	target_include_directories(vanillagui PRIVATE ${PC_POLKIT_INCLUDE_DIRS})
+	target_link_libraries(vanillagui PRIVATE ${PC_POLKIT_LIBRARIES})
+	target_compile_definitions(vanillagui PRIVATE VANILLA_POLKIT_AVAILABLE)
 endif()
 
 if (VAAPI_FOUND)
-    target_link_libraries(vanilla PRIVATE VAAPI::VAAPI VAAPI::VA VAAPI::DRM va-x11 X11)
+    target_link_libraries(vanillagui PRIVATE VAAPI::VAAPI VAAPI::VA VAAPI::DRM va-x11 X11)
 endif()
 
 if (DRM_FOUND)
-    target_link_libraries(vanilla PRIVATE ${DRM_LIBRARIES})
-    target_compile_definitions(vanilla PRIVATE VANILLA_DRM_AVAILABLE)
-    target_include_directories(vanilla PRIVATE ${DRM_INCLUDE_DIRS})
+    target_link_libraries(vanillagui PRIVATE ${DRM_LIBRARIES})
+    target_compile_definitions(vanillagui PRIVATE VANILLA_DRM_AVAILABLE)
+    target_include_directories(vanillagui PRIVATE ${DRM_INCLUDE_DIRS})
 endif()
 
 if (CUDAToolkit_FOUND)
-    target_link_libraries(vanilla PRIVATE CUDA::cudart_static)
-    target_compile_definitions(vanilla PRIVATE VANILLA_CUDA_AVAILABLE)
+    target_link_libraries(vanillagui PRIVATE CUDA::cudart_static)
+    target_compile_definitions(vanillagui PRIVATE VANILLA_CUDA_AVAILABLE)
 endif()
 
 if (VAAPI_FOUND OR DRM_FOUND)
     find_package(PkgConfig REQUIRED)
     pkg_check_modules(EGL REQUIRED egl)
-    target_include_directories(vanilla PRIVATE ${EGL_INCLUDE_DIRS})
-    target_link_directories(vanilla PRIVATE ${EGL_LIBRARY_DIRS})
-    target_link_libraries(vanilla PRIVATE ${EGL_LIBRARIES})
-    target_compile_definitions(vanilla PRIVATE VANILLA_HAS_EGL)
+    target_include_directories(vanillagui PRIVATE ${EGL_INCLUDE_DIRS})
+    target_link_directories(vanillagui PRIVATE ${EGL_LIBRARY_DIRS})
+    target_link_libraries(vanillagui PRIVATE ${EGL_LIBRARIES})
+    target_compile_definitions(vanillagui PRIVATE VANILLA_HAS_EGL)
 endif()
 
 # Find libxml2 (used for storing/parsing user config)
 if (VANILLA_BUILD_VENDORED)
-    target_link_libraries(vanilla PRIVATE LibXml2::LibXml2)
+    target_link_libraries(vanillagui PRIVATE LibXml2::LibXml2)
 else()
     find_package(LibXML2 REQUIRED)
-    target_link_libraries(vanilla PRIVATE ${LibXML2_LIBRARIES})
-    target_include_directories(vanilla PRIVATE ${LibXML2_INCLUDE_DIR})
+    target_link_libraries(vanillagui PRIVATE ${LibXML2_LIBRARIES})
+    target_include_directories(vanillagui PRIVATE ${LibXML2_INCLUDE_DIR})
 endif()
 
 
 # Link with winsock2 on Windows
 if (WIN32)
-    set_target_properties(vanilla PROPERTIES WIN32_EXECUTABLE true)
-    target_link_libraries(vanilla PRIVATE wsock32 ws2_32)
+    set_target_properties(vanillagui PROPERTIES WIN32_EXECUTABLE true)
+    target_link_libraries(vanillagui PRIVATE wsock32 ws2_32)
 endif()
 
 # Set up include directories around the repository
-target_include_directories(vanilla PRIVATE
+target_include_directories(vanillagui PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/../lib"
     "${CMAKE_CURRENT_SOURCE_DIR}"
     "${CMAKE_CURRENT_SOURCE_DIR}/.."
@@ -479,4 +485,20 @@ else()
         install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/res/com.mattkc.vanilla.svg" DESTINATION share/pixmaps)
         install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/res/com.mattkc.vanilla_rounded.svg" DESTINATION share/pixmaps)
     endif()
+endif()
+
+if (VANILLA_BUILD_TESTS)
+    add_executable(vanillalatencytest
+        tests/latencytest.c
+    )
+    target_include_directories(vanillalatencytest PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}"
+    )
+    target_link_libraries(vanillalatencytest PRIVATE
+        FFmpeg::avformat
+        FFmpeg::avcodec
+        FFmpeg::avutil
+        vanillagui
+    )
+    install(TARGETS vanillalatencytest)
 endif()
