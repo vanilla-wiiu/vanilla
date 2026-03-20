@@ -681,11 +681,13 @@ int vui_init_sdl(vui_context_t *ctx, int fullscreen)
 
 #ifdef VANILLA_HAS_EGL
     // Lookup ahead of time if we're on X11 + OpenGL (will be important for later check...)
-    const char *driver = SDL_GetVideoDriver(0);
+    const char *driver = SDL_GetCurrentVideoDriver();
     if (!strcmp(driver, "x11") || !strcmp(driver, "wayland")) {
         SDL_RendererInfo info;
         SDL_GetRenderDriverInfo(0, &info);
-        if (!strcmp(info.name, "opengl") || !strcmp(info.name, "opengles")) {
+        if (!strcmp(info.name, "opengl")
+            || !strcmp(info.name, "opengles")
+            || !strcmp(info.name, "opengles2")) {
             // This saves a small amount of time on the EGL check below because
             // SDL will fail on the earlier CreateWindow call rather than the
             // later CreateRenderer call.
