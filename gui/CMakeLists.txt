@@ -298,14 +298,20 @@ list(APPEND VANILLA_GUI_SRC
 
 if (LINUX)
     # Link with DRM if available
-    find_package(DRM)
-    if (DRM_FOUND)
-        list(APPEND VANILLA_GUI_SRC
-            ui/ui_sdl_drm.c
-        )
+    option(VANILLA_BUILD_USE_DRM "Enable DRM video output" ON)
+    if (VANILLA_BUILD_USE_DRM)
+        find_package(DRM)
+        if (DRM_FOUND)
+            list(APPEND VANILLA_GUI_SRC
+                ui/ui_sdl_drm.c
+            )
+        endif()
 	endif()
 
-    find_package(VAAPI)
+    option(VANILLA_BUILD_USE_VAAPI "Enable VAAPI hardware decoding" ON)
+    if (VANILLA_BUILD_USE_VAAPI)
+        find_package(VAAPI)
+    endif()
 endif()
 
 if (LINUX OR WIN32)
