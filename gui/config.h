@@ -30,6 +30,7 @@ typedef struct {
     int axismap[VPI_CONFIG_AXISMAP_SIZE];
     int fullscreen;
     int cursor_in_fullscreen;
+    int fast_drm;
 } vpi_config_t;
 
 extern vpi_config_t vpi_config;
