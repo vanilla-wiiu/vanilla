@@ -319,7 +319,7 @@ if (LINUX OR WIN32)
 endif()
 
 if (VANILLA_BUILD_PIPE)
-	OPTION(VANILLA_BUILD_USE_POLKIT "Enable Polkit-based authentication" ON)
+	OPTION(VANILLA_BUILD_USE_POLKIT "Enable Polkit-based authentication" ${LINUX})
 endif()
 
 if (VANILLA_BUILD_USE_POLKIT)
