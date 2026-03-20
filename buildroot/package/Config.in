@@ -1,3 +1,4 @@
 source "$BR2_EXTERNAL_VANILLA_PATH/package/nexmon/Config.in"
 source "$BR2_EXTERNAL_VANILLA_PATH/package/rpi-ffmpeg/Config.in"
 source "$BR2_EXTERNAL_VANILLA_PATH/package/vanilla/Config.in"
+source "$BR2_EXTERNAL_VANILLA_PATH/package/nvidia-tegra-bsp/Config.in"

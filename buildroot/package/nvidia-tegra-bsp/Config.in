@@ -1,0 +1,12 @@
+config BR2_PACKAGE_NVIDIA_TEGRA_BSP
+    bool "NVIDIA Tegra proprietary libraries"
+    depends on BR2_aarch64
+    depends on !BR2_PACKAGE_MESA3D
+    select BR2_PACKAGE_HAS_LIBEGL
+    select BR2_PACKAGE_HAS_LIBGLES
+    select BR2_PACKAGE_LIBGLVND_DISPATCH_EGL if BR2_PACKAGE_LIBGLVND
+    select BR2_PACKAGE_LIBGLVND_DISPATCH_GLES if BR2_PACKAGE_LIBGLVND
+    help
+      NVIDIA proprietary Tegra BSP libraries including
+      EGL, GLES, X11 DDX driver, and multimedia libraries
+      for Tegra X1 (Nintendo Switch).

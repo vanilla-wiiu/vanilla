@@ -1,1 +1,9 @@
 source "$BR2_EXTERNAL_VANILLA_PATH/package/Config.in"
+
+config BR2_LINUX_TEGRA_T210_DEPS
+	bool "Fetch out-of-tree Tegra T210 kernel dependencies"
+	depends on BR2_LINUX_KERNEL
+	help
+	  Clone the out-of-tree nvidia/switchroot kernel repos
+	  (nvgpu, soc-t210, platform-nx, etc.) after kernel extraction.
+	  Required for Tegra T210 (Nintendo Switch) L4T builds.
