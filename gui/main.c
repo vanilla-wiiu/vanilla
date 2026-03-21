@@ -17,6 +17,8 @@
 
 #include "pipemgmt.h"
 
+int select_controller = 0;
+
 void display_cli_help(const char **argv);
 
 int SDL_main(int argc, const char **argv)
@@ -31,7 +33,10 @@ int SDL_main(int argc, const char **argv)
 		} else if (!strcmp(argv[i], "-f") || !strcmp(argv[i], "--fullscreen")) {
             override_fs = 1;
             consumed = 1;
-		} else if (!strcmp(argv[i], "-h") || !strcmp(argv[i], "--help")) {
+		} else if (!strcmp(argv[i], "-c") || !strcmp(argv[i], "--controller")) {
+            select_controller = 1;
+            consumed = 1;
+        } else if (!strcmp(argv[i], "-h") || !strcmp(argv[i], "--help")) {
 			display_cli_help(argv);
 			return 0;
 		}
@@ -92,5 +97,6 @@ void display_cli_help(const char **argv) {
 	vpilog("Options:\n");
 	vpilog("    -w, --window        Run Vanilla in a window (overrides config)\n");
 	vpilog("    -f, --fullscreen    Run Vanilla full screen (overrides config)\n");
+    vpilog("    -c, --controller    Lets you select your controller from a list of detected controllers\n");
 	vpilog("    -h, --help          Show this help message\n");
 }
