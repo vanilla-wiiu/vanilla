@@ -87,6 +87,9 @@ void vpi_config_save()
     sprintf(buf, "%i", vpi_config.fullscreen);
     xmlTextWriterWriteElement(writer, BAD_CAST "fullscreen", BAD_CAST buf);
 
+    sprintf(buf, "%i", vpi_config.fast_drm);
+    xmlTextWriterWriteElement(writer, BAD_CAST "fastdrm", BAD_CAST buf);
+
     xmlTextWriterStartElement(writer, BAD_CAST "controls");
     if (vpi_config.keymap) {
         xmlTextWriterStartElement(writer, BAD_CAST "keys");
@@ -237,6 +240,8 @@ void vpi_config_init()
                         vpi_config.region = atoi((const char *) child->children->content);
                     } else if (!strcmp((const char *) child->name, "swapabxy")) {
                         vpi_config.swap_abxy = atoi((const char *) child->children->content);
+                    } else if (!strcmp((const char *) child->name, "fastdrm")) {
+                        vpi_config.fast_drm = atoi((const char *) child->children->content);
                     } else if (!strcmp((const char *) child->name, "fullscreen")) {
                         vpi_config.fullscreen = atoi((const char *) child->children->content);
                     } else if (!strcmp((const char *) child->name, "controls")) {

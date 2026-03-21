@@ -214,13 +214,6 @@ static enum AVPixelFormat drm_get_format(struct AVCodecContext *s, const enum AV
 }
 
 typedef struct {
-    AVCodecContext *codec_ctx;
-    AVPacket *pkt;
-    AVFrame *frame;
-    AVBufferRef *hw_device_ctx;
-} vpi_decode_state_t;
-
-typedef struct {
     const char *name;
     const AVCodec *codec;
     enum AVPixelFormat (*get_format)(struct AVCodecContext *s, const enum AVPixelFormat * fmt);

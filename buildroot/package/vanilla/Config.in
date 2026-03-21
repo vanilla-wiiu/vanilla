@@ -7,6 +7,13 @@ config BR2_PACKAGE_VANILLA
 
 if BR2_PACKAGE_VANILLA
 
+config BR2_PACKAGE_VANILLA_USE_VAAPI
+    bool "Enable VAAPI"
+
+config BR2_PACKAGE_VANILLA_USE_DRM
+    bool "Enable DRM"
+    default y
+
 config BR2_PACKAGE_VANILLA_USE_LOCAL
     bool "Local build"
     help

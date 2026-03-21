@@ -756,11 +756,13 @@ int vui_init_sdl(vui_context_t *ctx, int fullscreen)
 
 #ifdef VANILLA_HAS_EGL
     // Lookup ahead of time if we're on X11 + OpenGL (will be important for later check...)
-    const char *driver = SDL_GetVideoDriver(0);
+    const char *driver = SDL_GetCurrentVideoDriver();
     if (!strcmp(driver, "x11") || !strcmp(driver, "wayland")) {
         SDL_RendererInfo info;
         SDL_GetRenderDriverInfo(0, &info);
-        if (!strcmp(info.name, "opengl") || !strcmp(info.name, "opengles")) {
+        if (!strcmp(info.name, "opengl")
+            || !strcmp(info.name, "opengles")
+            || !strcmp(info.name, "opengles2")) {
             // This saves a small amount of time on the EGL check below because
             // SDL will fail on the earlier CreateWindow call rather than the
             // later CreateRenderer call.
@@ -1923,14 +1925,20 @@ int vui_update_sdl(vui_context_t *vui)
             switch (sdl_ctx->frame->format) {
             case AV_PIX_FMT_DRM_PRIME:
             {
-                // get_texture_from_drm_prime_frame(sdl_ctx, sdl_ctx->frame);
-
 #ifdef VANILLA_DRM_AVAILABLE
-                if (!drm_ctx) {
-                    vui_sdl_drm_initialize(&drm_ctx, sdl_ctx->window);
+                // For very low powered systems, we can save a little time by
+                // skipping SDL2 entirely and rendering straight to DRM. However,
+                // we lose features like "toast" notifications and upscaling, so
+                // this is provided as an option only.
+                if (vpi_config.fast_drm) {
+                    if (!drm_ctx) {
+                        vui_sdl_drm_initialize(&drm_ctx, sdl_ctx->window);
+                    }
+                    vui_sdl_drm_present(drm_ctx, sdl_ctx->frame);
+                    handle_final_blit = 0;
+                } else {
+                    get_texture_from_drm_prime_frame(sdl_ctx, sdl_ctx->frame);
                 }
-                vui_sdl_drm_present(drm_ctx, sdl_ctx->frame);
-                handle_final_blit = 0;
 #endif // VANILLA_DRM_AVAILABLE
                 break;
             }
