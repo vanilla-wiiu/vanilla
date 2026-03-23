@@ -1,4 +1,4 @@
-FROM ubuntu:24.04
+FROM docker.io/ubuntu:24.04
 
 # Install build dependencies
 RUN apt update && \

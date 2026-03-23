@@ -1,4 +1,4 @@
-FROM ubuntu:24.04
+FROM docker.io/ubuntu:24.04
 
 RUN apt -y update
 RUN DEBIAN_FRONTEND=noninteractive TZ=Etc/UTC apt -y install gcc-mingw-w64 g++-mingw-w64 git wget make nasm
