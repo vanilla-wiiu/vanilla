@@ -21,8 +21,9 @@ void display_cli_help(const char **argv);
 
 int SDL_main(int argc, const char **argv)
 {
-    // Default to full screen unless "-w" is specified
+    // Determine whether we're overriding the fullscreen setting in the config
     int override_fs = -1;
+
 	for (int i = 1, consumed; i < argc; i += consumed) {
 		consumed = -1;
 		 if (!strcmp(argv[i], "-w") || !strcmp(argv[i], "--window")) {
