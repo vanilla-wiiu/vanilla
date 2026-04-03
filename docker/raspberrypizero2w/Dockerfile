@@ -6,9 +6,8 @@ ENV ARCH=${ARCH}
 ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ=Etc/UTC
 
-RUN apt -y update
-
-RUN apt -y install which \
+RUN apt -y update && \
+    apt -y install which \
     sed \
     make \
     binutils \
@@ -30,7 +29,10 @@ RUN apt -y install which \
     findutils \
     gawk \
     wget \
-    git
+    git && \
+    apt-get clean && \
+    apt-get autoremove --yes && \
+    rm -rf /var/lib/{apt,dpkg,cache,log}/
 
 RUN git clone --depth 1 --branch 2025.11-rc2 https://github.com/buildroot/buildroot.git /buildroot
 

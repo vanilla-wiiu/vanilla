@@ -54,6 +54,10 @@ RUN if [ "${ARCH}" = "x86_64" ]; \
         apt -y install nvidia-cuda-toolkit; \
     fi
 
+RUN apt-get clean && \
+    apt-get autoremove --yes && \
+    rm -rf /var/lib/{apt,dpkg,cache,log}/
+
 # Install newer version of CMake
 ENV CMAKE_VER=3.31.5
 RUN wget https://github.com/Kitware/CMake/releases/download/v$CMAKE_VER/cmake-$CMAKE_VER-linux-$(uname -m).sh \
