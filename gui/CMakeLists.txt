@@ -400,7 +400,7 @@ endif()
 
 OPTION(VANILLA_GUI_ENABLE_WINDOWED "Enable windowed mode in Vanilla GUI" ON)
 if (VANILLA_GUI_ENABLE_WINDOWED)
-    target_compile_definitions(vanillagui PRIVATE VANILLA_GUI_ENABLE_WINDOWED)
+    target_compile_definitions(vanillagui PUBLIC VANILLA_GUI_ENABLE_WINDOWED)
 endif()
 
 if (VANILLA_BUILD_USE_POLKIT)
