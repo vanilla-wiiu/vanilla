@@ -1,7 +1,13 @@
-FROM ubuntu:24.04
+FROM docker.io/ubuntu:24.04
 
-RUN apt -y update
-RUN DEBIAN_FRONTEND=noninteractive TZ=Etc/UTC apt -y install gcc-mingw-w64 g++-mingw-w64 git wget make nasm
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=Etc/UTC
+
+RUN apt -y update && \
+    apt -y install gcc-mingw-w64 g++-mingw-w64 git wget make nasm && \
+    apt-get clean && \
+    apt-get autoremove --yes && \
+    rm -rf /var/lib/{apt,dpkg,cache,log}/
 
 # Install newer version of CMake
 ENV CMAKE_VER=3.31.5
