@@ -1,11 +1,14 @@
 #include "menu_gamepad.h"
 
+#include <SDL.h>
+
 #include "config.h"
 #include "lang.h"
 #include "menu/menu.h"
 #include "menu/menu_common.h"
 #include "menu/menu_settings.h"
 #include "ui/ui_anim.h"
+#include "ui/ui_sdl.h"
 #include "ui/ui_keyboard.h"
 #include "lib/vanilla.h"
 
@@ -262,6 +265,69 @@ void vpi_menu_key_bindings(vui_context_t *vui, void *v)
     vui_start_passive_animation(vui, animate_button, 0);
 }
 
+void vpi_menu_controller_select(vui_context_t *vui, void *v);
+
+static void transition_to_controller_select(vui_context_t *vui, int btn, void *v)
+{
+    vui_clear_key_listener(vui);
+    int layer = (intptr_t) v;
+    vui_transition_fade_layer_out(vui, layer, vpi_menu_controller_select, 0);
+}
+
+static void on_controller_selected(vui_context_t *vui, int btn, void *v)
+{
+    int selected_index = (intptr_t)v;
+    vpilog("Changing to game controller \"%s\"\n", SDL_GameControllerNameForIndex(selected_index));
+    
+    vui_sdl_set_controller(vui, selected_index);
+
+    int first_btn_id = btn - selected_index;
+    for (int i = 0; i < SDL_NumJoysticks(); i++) {
+        vui_button_update_checked(vui, first_btn_id + i, (i == selected_index) ? 1 : 0);
+    }
+}
+
+void vpi_menu_controller_select(vui_context_t *vui, void *v)
+{
+    vui_reset(vui);
+    int layer = vui_layer_create(vui);
+
+    int SCREEN_WIDTH, SCREEN_HEIGHT;
+    vui_get_screen_size(vui, &SCREEN_WIDTH, &SCREEN_HEIGHT);
+
+    int num_joysticks = SDL_NumJoysticks();
+    int entries = num_joysticks > 0 ? num_joysticks : 1;
+
+    int list_item_width = SCREEN_WIDTH - BTN_SZ - BTN_SZ;
+    int list_item_height = (SCREEN_HEIGHT - BTN_SZ - BTN_SZ) / entries;
+    
+    if (list_item_height > 100) list_item_height = 100;
+
+    if (num_joysticks == 0) {
+        vui_button_create(vui, BTN_SZ, BTN_SZ, list_item_width, list_item_height, "No Controllers Found", NULL, VUI_BUTTON_STYLE_LIST, layer, NULL, NULL);
+    } else {
+        for (int i = 0; i < num_joysticks; i++) {
+            const char *name = SDL_GameControllerNameForIndex(i);
+            if (!name) name = "Unknown Controller";
+
+            int btn_id = vui_button_create(vui, BTN_SZ, BTN_SZ + (list_item_height * i), list_item_width, list_item_height, name, NULL, VUI_BUTTON_STYLE_LIST, layer, on_controller_selected, (void *)(intptr_t)i);
+            
+            vui_button_update_checkable(vui, btn_id, 1);
+            
+            if (i == active_controller_index) {
+                vui_button_update_checked(vui, btn_id, 1);
+            } else {
+                vui_button_update_checked(vui, btn_id, 0);
+            }
+        }
+    }
+
+    vpi_menu_create_back_button(vui, layer, return_to_gamepad, (void *) (intptr_t) layer);
+
+    vui_transition_fade_layer_in(vui, layer, 0, 0);
+}
+
+
 void vpi_menu_gamepad(vui_context_t *vui, void *v)
 {
     vui_reset(vui);
@@ -280,8 +346,11 @@ void vpi_menu_gamepad(vui_context_t *vui, void *v)
 
     int keyboard_bind_button = vui_button_create(vui, BTN_SZ, BTN_SZ + list_item_height * 1, list_item_width, list_item_height, lang(VPI_LANG_KEYBOARD_CONTROLS), NULL, VUI_BUTTON_STYLE_LIST, layer, transition_to_keybinds, (void *)(intptr_t)layer);
 
+    int select_controller_button = vui_button_create(vui, BTN_SZ, BTN_SZ + list_item_height * 2, list_item_width, list_item_height, "Select Controller", NULL, VUI_BUTTON_STYLE_LIST, layer, transition_to_controller_select, (void *)(intptr_t)layer);
+
     // Back button
     vpi_menu_create_back_button(vui, layer, return_to_settings, (void *) (intptr_t) layer);
 
     vui_transition_fade_layer_in(vui, layer, 0, 0);
 }
+
