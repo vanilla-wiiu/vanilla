@@ -1,4 +1,4 @@
-FROM debian:bookworm
+FROM docker.io/debian:trixie
 
 ARG ARCH=x86_64
 ENV ARCH=${ARCH}
@@ -12,47 +12,51 @@ RUN if [ "${ARCH}" = "aarch64" ]; then export DEBARCH="arm64"; export DEBGCC="gc
     && dpkg --add-architecture $DEBARCH \
     && apt -y update \
     && apt -y install $DEBGCC ninja-build nasm git wget pkg-config make autoconf libtool bison flex \
-    && apt -y install libpulse-dev:$DEBARCH \
-    && apt -y install libasound2-dev:$DEBARCH \
-    && apt -y install libx11-dev:$DEBARCH \
-    && apt -y install libdrm-dev:$DEBARCH \
-    && apt -y install libwayland-dev:$DEBARCH \
-    && apt -y install libxext-dev:$DEBARCH \
-    && apt -y install libxcb-xinput-dev:$DEBARCH \
-    && apt -y install libgl1-mesa-dev:$DEBARCH \
-    && apt -y install libegl-dev:$DEBARCH \
-    && apt -y install libopengl-dev:$DEBARCH \
-    && apt -y install libnm-dev:$DEBARCH \
-    && apt -y install libdrm-dev:$DEBARCH \
-    && apt -y install libxi-dev:$DEBARCH \
-    && apt -y install libxcb-xinput-dev:$DEBARCH \
-    && apt -y install libdbus-1-dev:$DEBARCH \
-    && apt -y install libibus-1.0-dev:$DEBARCH \
-    && apt -y install libsndio-dev:$DEBARCH \
-    && apt -y install libxrandr-dev:$DEBARCH \
-    && apt -y install libsamplerate0-dev:$DEBARCH \
-    && apt -y install libpipewire-0.3-dev:$DEBARCH \
-    && apt -y install libjack-dev:$DEBARCH \
-    && apt -y install libxcursor-dev:$DEBARCH \
-    && apt -y install libxss-dev:$DEBARCH \
-    && apt -y install libdecor-0-dev:$DEBARCH \
-    && apt -y install libudev-dev:$DEBARCH \
-    && apt -y install libxinerama-dev:$DEBARCH \
-    && apt -y install libxv-dev:$DEBARCH \
-    && apt -y install libxxf86vm-dev:$DEBARCH \
-    && apt -y install libxt-dev:$DEBARCH \
-    && apt -y install libsm-dev:$DEBARCH \
-    && apt -y install libice-dev:$DEBARCH \
-    && apt -y install libgbm-dev:$DEBARCH \
-    && apt -y install libva-dev:$DEBARCH \
-    && apt -y install libxkbcommon-dev:$DEBARCH \
-    && apt -y install libpolkit-agent-1-dev:$DEBARCH
+        libpulse-dev:$DEBARCH \
+        libasound2-dev:$DEBARCH \
+        libx11-dev:$DEBARCH \
+        libdrm-dev:$DEBARCH \
+        libwayland-dev:$DEBARCH \
+        libxext-dev:$DEBARCH \
+        libxcb-xinput-dev:$DEBARCH \
+        libgl1-mesa-dev:$DEBARCH \
+        libegl-dev:$DEBARCH \
+        libopengl-dev:$DEBARCH \
+        libnm-dev:$DEBARCH \
+        libdrm-dev:$DEBARCH \
+        libxi-dev:$DEBARCH \
+        libxcb-xinput-dev:$DEBARCH \
+        libdbus-1-dev:$DEBARCH \
+        libibus-1.0-dev:$DEBARCH \
+        libsndio-dev:$DEBARCH \
+        libxrandr-dev:$DEBARCH \
+        libsamplerate0-dev:$DEBARCH \
+        libpipewire-0.3-dev:$DEBARCH \
+        libjack-dev:$DEBARCH \
+        libxcursor-dev:$DEBARCH \
+        libxss-dev:$DEBARCH \
+        libdecor-0-dev:$DEBARCH \
+        libudev-dev:$DEBARCH \
+        libxinerama-dev:$DEBARCH \
+        libxv-dev:$DEBARCH \
+        libxxf86vm-dev:$DEBARCH \
+        libxt-dev:$DEBARCH \
+        libsm-dev:$DEBARCH \
+        libice-dev:$DEBARCH \
+        libgbm-dev:$DEBARCH \
+        libva-dev:$DEBARCH \
+        libxkbcommon-dev:$DEBARCH \
+        libpolkit-agent-1-dev:$DEBARCH
 
 RUN if [ "${ARCH}" = "x86_64" ]; \
         then sed -i 's/ main$/ main contrib non-free non-free-firmware/' /etc/apt/sources.list.d/debian.sources; \
         apt -y update; \
         apt -y install nvidia-cuda-toolkit; \
     fi
+
+RUN apt-get clean && \
+    apt-get autoremove --yes && \
+    rm -rf /var/lib/{apt,dpkg,cache,log}/
 
 # Install newer version of CMake
 ENV CMAKE_VER=3.31.5
