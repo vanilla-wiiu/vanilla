@@ -354,10 +354,10 @@ void audio_callback(void *userdata, Uint8 *stream, int len)
     size_t r = atomic_load_explicit(&sdl_ctx->audio_rseq, memory_order_relaxed);
     size_t w = atomic_load_explicit(&sdl_ctx->audio_wseq, memory_order_acquire);
     if (r != w) {
-        if (r < w - AUDIO_BUFFER_COUNT + 1) {
-            size_t newr = w - AUDIO_BUFFER_COUNT + 1;;
-            vanilla_log("  AUDIO SKIPPED FROM %zu TO %zu", r, newr);
-            r = newr;
+        size_t min = w - AUDIO_BUFFER_COUNT + 1;
+        if (r < min) {
+            vanilla_log("  AUDIO SKIPPED FROM %zu TO %zu", r, min);
+            r = min;
         }
         memcpy(stream, sdl_ctx->audio_buffer[r % AUDIO_BUFFER_COUNT], len);
         r++;
@@ -640,7 +640,23 @@ int vui_sdl_event_thread(void *data)
 
 int vui_init_window(vui_context_t *ctx, vui_sdl_context_t *sdl_ctx, Uint32 window_flags)
 {
-    sdl_ctx->window = SDL_CreateWindow("Vanilla", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, ctx->screen_width, ctx->screen_height, window_flags);
+    int win_w, win_h;
+    if (window_flags & SDL_WINDOW_FULLSCREEN || window_flags & SDL_WINDOW_FULLSCREEN_DESKTOP) {
+        // NOTE: Set window size to fullscreen. Theoretically, this shouldn't be
+        //       necessary, but on the Nintendo Switch, if we set the window size
+        //       to 854x480, everything gets cropped to that size on its 1280x720
+        //       screen. Might be a bug with the specific SDL version we use in
+        //       our Buildroot system, but still this is a cheap fix.
+        SDL_DisplayMode mode;
+        SDL_GetCurrentDisplayMode(0, &mode);
+        win_w = mode.w;
+        win_h = mode.h;
+    } else {
+        win_w = ctx->screen_width;
+        win_h = ctx->screen_height;
+    }
+
+    sdl_ctx->window = SDL_CreateWindow("Vanilla", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, win_w, win_h, window_flags);
     if (!sdl_ctx->window) {
         vpilog("Failed to CreateWindow: %s\n", SDL_GetError());
         return -1;
@@ -666,11 +682,6 @@ int vui_init_sdl(vui_context_t *ctx, int fullscreen)
 
     // Enable linear filtering
     SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "linear");
-
-	// By default, SDL2 uses X11, even on Wayland systems. This probably isn't
-	// a big deal, but just in case we want it to prefer Wayland, this is how
-	// we can do it.
-	// SDL_SetHint(SDL_HINT_VIDEODRIVER, "wayland,x11");
 
     // Initialize SDL
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER) < 0) {
@@ -1791,8 +1802,6 @@ int vui_update_sdl(vui_context_t *vui)
 
     vui_sdl_context_t *sdl_ctx = (vui_sdl_context_t *) vui->platform_data;
 
-    SDL_Rect *dst_rect = &sdl_ctx->dst_rect;
-
     SDL_Renderer *renderer = sdl_ctx->renderer;
 
     vui_update(vui);
@@ -1997,29 +2006,34 @@ int vui_update_sdl(vui_context_t *vui)
         }
 
         // Calculate our destination rectangle
-        int win_w, win_h;
-        SDL_GetWindowSize(sdl_ctx->window, &win_w, &win_h);
-        if (win_w == vui->screen_width && win_h == vui->screen_height) {
+
+        SDL_SetRenderTarget(renderer, NULL);
+
+        int out_w, out_h;
+        int tex_w = vui->screen_width, tex_h = vui->screen_height;
+
+        SDL_GetRendererOutputSize(renderer, &out_w, &out_h);
+
+        // Hold a reference to the dst_rect for later mouse operations
+        SDL_Rect *dst_rect = &sdl_ctx->dst_rect;
+        if (out_w == tex_w && out_h == tex_h) {
             dst_rect->x = 0;
             dst_rect->y = 0;
-            dst_rect->w = vui->screen_width;
-            dst_rect->h = vui->screen_height;
-        } else if (win_w * 100 / win_h > vui->screen_width * 100 / vui->screen_height) {
-            // Window is wider than texture, scale by height
-            dst_rect->h = win_h;
+            dst_rect->w = tex_w;
+            dst_rect->h = tex_h;
+        } else if ((int64_t)out_w * tex_h > (int64_t)out_h * tex_w) {
+            dst_rect->h = out_h;
             dst_rect->y = 0;
-            dst_rect->w = win_h * vui->screen_width / vui->screen_height;
-            dst_rect->x = win_w / 2 - dst_rect->w / 2;
+            dst_rect->w = out_h * tex_w / tex_h;
+            dst_rect->x = (out_w - dst_rect->w) / 2;
         } else {
-            // Window is taller than texture, scale by width
-            dst_rect->w = win_w;
+            dst_rect->w = out_w;
             dst_rect->x = 0;
-            dst_rect->h = win_w * vui->screen_height / vui->screen_width;
-            dst_rect->y = win_h / 2 - dst_rect->h / 2;
+            dst_rect->h = out_w * tex_h / tex_w;
+            dst_rect->y = (out_h - dst_rect->h) / 2;
         }
 
         // Copy texture to window
-        SDL_SetRenderTarget(renderer, NULL);
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
         SDL_RenderClear(renderer);
         SDL_RenderCopy(renderer, main_tex, NULL, dst_rect);
