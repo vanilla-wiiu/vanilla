@@ -112,54 +112,57 @@ void vpi_menu_settings(vui_context_t *vui, void *v)
     int scrw, scrh;
     vui_get_screen_size(vui, &scrw, &scrh);
 
-    const int FS_SETTING = 3;
-	const int PW_SKIP_SETTING = 4;
+    // Set up settings menu
+    #define SETTINGS_COUNT 5
+    int SETTINGS_NAMES[SETTINGS_COUNT];
+    vui_button_callback_t SETTINGS_ACTION[SETTINGS_COUNT];
+    int buttons[SETTINGS_COUNT];
 
-    static int SETTINGS_NAMES[] = {
-        VPI_LANG_CONNECTION,
-        VPI_LANG_CONTROLS,
-        VPI_LANG_REGION,
-        -1,
-        -1,
-    };
+    size_t sc = 0;
 
-    // Highlight currently implemented functionality
-    static vui_button_callback_t SETTINGS_ACTION[] = {
-        transition_to_connection,
-        transition_to_gamepad,
-        transition_to_region,
-        0,
-        0,
-    };
+    // Connection menu
+    SETTINGS_NAMES[sc] = VPI_LANG_CONNECTION;
+    SETTINGS_ACTION[sc] = transition_to_connection;
+    sc++;
 
-    static const int button_count = sizeof(SETTINGS_NAMES) / sizeof(int);
-    int buttons[button_count];
+    // Controls menu
+    SETTINGS_NAMES[sc] = VPI_LANG_CONTROLS;
+    SETTINGS_ACTION[sc] = transition_to_gamepad;
+    sc++;
 
+    // Full screen option (if on a platform that supports windowed mode)
+    // Else, add a quit button
 #ifdef VANILLA_GUI_ENABLE_WINDOWED
-    SETTINGS_NAMES[FS_SETTING] = VPI_LANG_FULLSCREEN;
-	SETTINGS_ACTION[FS_SETTING] = toggle_fullscreen;
+    int FS_SETTING = sc;
+    SETTINGS_NAMES[sc] = VPI_LANG_FULLSCREEN;
+	SETTINGS_ACTION[sc] = toggle_fullscreen;
+    sc++;
+#else
+    SETTINGS_NAMES[sc] = VPI_LANG_QUIT;
+    SETTINGS_ACTION[sc] = thunk_to_quit;
+    sc++;
 #endif
 
+    // Polkit option (if on a platform that supports polkit)
 #ifdef VANILLA_POLKIT_AVAILABLE
 	int pw_skip_str;
 	vui_button_callback_t pw_skip_action;
 	if (access(POLKIT_ACTION_DST, F_OK) == 0) {
-        SETTINGS_NAMES[PW_SKIP_SETTING] = VPI_LANG_DISABLE_PASSWORD_SKIP;
-		SETTINGS_ACTION[PW_SKIP_SETTING] = transition_to_uninstall_polkit_rule;
+        SETTINGS_NAMES[sc] = VPI_LANG_DISABLE_PASSWORD_SKIP;
+		SETTINGS_ACTION[sc] = transition_to_uninstall_polkit_rule;
     } else {
-		SETTINGS_NAMES[PW_SKIP_SETTING] = VPI_LANG_ENABLE_PASSWORD_SKIP;
-		SETTINGS_ACTION[PW_SKIP_SETTING] = transition_to_install_polkit_rule;
+		SETTINGS_NAMES[sc] = VPI_LANG_ENABLE_PASSWORD_SKIP;
+		SETTINGS_ACTION[sc] = transition_to_install_polkit_rule;
 	}
+    sc++;
 #endif
 
 	int btnw = scrw*3/4;
 	int btnx = scrw/2 - btnw/2;
 	int btny = scrh/10;
-	for (int index = 0; index < button_count; index++) {
-		if (SETTINGS_ACTION[index]) {
-			buttons[index] = vui_button_create(vui, btnx, btny, btnw, BTN_SZ, lang(SETTINGS_NAMES[index]), 0, VUI_BUTTON_STYLE_BUTTON, fglayer, SETTINGS_ACTION[index], (void *) (intptr_t) fglayer);
-            btny += BTN_SZ;
-		}
+	for (int index = 0; index < sc; index++) {
+        buttons[index] = vui_button_create(vui, btnx, btny, btnw, BTN_SZ, lang(SETTINGS_NAMES[index]), 0, VUI_BUTTON_STYLE_BUTTON, fglayer, SETTINGS_ACTION[index], (void *) (intptr_t) fglayer);
+        btny += BTN_SZ;
 	}
 
 #ifdef VANILLA_GUI_ENABLE_WINDOWED
