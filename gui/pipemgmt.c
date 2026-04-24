@@ -317,9 +317,9 @@ int vpi_start_epilog()
             // vpilog("GOT INVALID SIGNAL: %.*s\n", sizeof(ready_buf), ready_buf);
             vpilog("%.*s\n", sizeof(ready_buf), ready_buf);
 
-            if (pipe_pid != -1) {
-                kill(pipe_pid, SIGKILL);
-                pipe_pid = -1;
+            if (potential_pipe_pid != -1) {
+                kill(potential_pipe_pid, SIGKILL);
+                potential_pipe_pid = -1;
             }
 
             close(in_pipes[1]);
