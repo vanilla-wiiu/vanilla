@@ -173,6 +173,15 @@ void find_valid_controller(vui_sdl_context_t *sdl_ctx)
 
 	vpilog("Looking for game controllers...\n");
 	for (int i = 0; i < SDL_NumJoysticks(); i++) {
+        SDL_JoystickGUID guid = SDL_JoystickGetDeviceGUID(i);
+        char guid_str[64];
+        SDL_JoystickGetGUIDString(guid, guid_str, sizeof(guid_str));
+
+        // Ignore left and right joycon devices
+        if (!strcmp(guid_str, "0600c2f47e0500000620000000000000") || !strcmp(guid_str, "060091737e0500000720000000000000")) {
+            continue;
+        }
+
         const char *ctrl_name = SDL_GameControllerNameForIndex(i);
 		vpilog("  Found %i: %s\n", i, ctrl_name);
         if (ctrl_name != NULL && !strcmp(ctrl_name, "Steam Virtual Gamepad")) {
@@ -488,7 +497,7 @@ int vui_sdl_event_thread(void *data)
 
                     if (vanilla_btn != -1) {
                         if (vanilla_btn > VPI_ACTION_START_INDEX) {
-                            if (ev.type == SDL_CONTROLLERBUTTONDOWN) {
+                            if (ev.cbutton.state == SDL_PRESSED) {
                                 vpi_menu_action(vui, (vpi_extra_action_t) vanilla_btn);
                             }
                         } else {
@@ -503,8 +512,8 @@ int vui_sdl_event_thread(void *data)
                             }
 
                             if (vui->game_mode) {
-                                vanilla_set_button(vanilla_btn, ev.type == SDL_CONTROLLERBUTTONDOWN ? INT16_MAX : 0);
-                            } else if (ev.type == SDL_CONTROLLERBUTTONDOWN) {
+                                vanilla_set_button(vanilla_btn, ev.cbutton.state == SDL_PRESSED ? INT16_MAX : 0);
+                            } else if (ev.cbutton.state == SDL_PRESSED) {
                                 vui_process_keydown(vui, vanilla_btn);
                             } else {
                                 vui_process_keyup(vui, vanilla_btn);
