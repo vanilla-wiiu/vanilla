@@ -103,6 +103,13 @@ static void toggle_fullscreen(vui_context_t *vui, int button, void *v)
     vui_button_update_checked(vui, button, vpi_config.fullscreen);
 }
 
+static void toggle_hwdec(vui_context_t *vui, int button, void *v)
+{
+    vpi_config.force_software_decode = !vpi_config.force_software_decode;
+    vpi_config_save();
+    vui_button_update_checked(vui, button, !vpi_config.force_software_decode);
+}
+
 void vpi_menu_settings(vui_context_t *vui, void *v)
 {
     vui_reset(vui);
@@ -157,6 +164,17 @@ void vpi_menu_settings(vui_context_t *vui, void *v)
     sc++;
 #endif
 
+#if defined(VANILLA_CUDA_AVAILABLE) || defined(VANILLA_DRM_AVAILABLE) || defined(VANILLA_VAAPI_AVAILABLE)
+#define VANILLA_HAS_HWDEC
+#endif
+
+#ifdef VANILLA_HAS_HWDEC
+    int HWDEC_SETTING = sc;
+    SETTINGS_NAMES[sc] = VPI_LANG_HWDEC;
+	SETTINGS_ACTION[sc] = toggle_hwdec;
+    sc++;
+#endif
+
 	int btnw = scrw*3/4;
 	int btnx = scrw/2 - btnw/2;
 	int btny = scrh/10;
@@ -169,6 +187,11 @@ void vpi_menu_settings(vui_context_t *vui, void *v)
     // Make full screen button checkable
     vui_button_update_checkable(vui, buttons[FS_SETTING], 1);
     vui_button_update_checked(vui, buttons[FS_SETTING], vpi_config.fullscreen);
+#endif
+
+#ifdef VANILLA_HAS_HWDEC
+    vui_button_update_checkable(vui, buttons[HWDEC_SETTING], 1);
+    vui_button_update_checked(vui, buttons[HWDEC_SETTING], !vpi_config.force_software_decode);
 #endif
 
     // Back button

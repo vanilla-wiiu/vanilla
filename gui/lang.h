@@ -58,6 +58,7 @@ typedef enum {
     VPI_LANG_RESET_TO_DEFAULT,
     VPI_LANG_RESET,
 	VPI_LANG_FULLSCREEN,
+    VPI_LANG_HWDEC,
     __VPI_LANG_T_COUNT
 } vpi_lang_t;
 

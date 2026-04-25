@@ -324,30 +324,32 @@ int vpi_decode_init(vpi_decode_state_t *s)
     // Discover the most ideal hardware decoder
     int r = VANILLA_ERR_GENERIC;
 
+    if (!vpi_config.force_software_decode) {
 #ifdef VANILLA_CUDA_AVAILABLE
-    // See if we can create an NVDEC context (most NVIDIA GPUs)
-    if (r != VANILLA_SUCCESS) {
-        vpi_decode_exit(s);
-        if (((ffmpeg_err = av_hwdevice_ctx_create(&s->hw_device_ctx, AV_HWDEVICE_TYPE_CUDA, 0, 0, 0)) >= 0)) {
-            r = open_decoder(s, &decoders[HWDEC_TYPE_NVDEC]);
+        // See if we can create an NVDEC context (most NVIDIA GPUs)
+        if (r != VANILLA_SUCCESS) {
+            vpi_decode_exit(s);
+            if (((ffmpeg_err = av_hwdevice_ctx_create(&s->hw_device_ctx, AV_HWDEVICE_TYPE_CUDA, 0, 0, 0)) >= 0)) {
+                r = open_decoder(s, &decoders[HWDEC_TYPE_NVDEC]);
+            }
         }
-    }
 #endif // VANILLA_CUDA_AVAILABLE
 
-    // See if we can create a VAAPI context (most Linux systems)
-    if (r != VANILLA_SUCCESS) {
-        vpi_decode_exit(s);
-        if (vpi_egl_available
-            && ((ffmpeg_err = av_hwdevice_ctx_create(&s->hw_device_ctx, AV_HWDEVICE_TYPE_VAAPI, 0, 0, 0)) >= 0)) {
-            r = open_decoder(s, &decoders[HWDEC_TYPE_VAAPI]);
+        // See if we can create a VAAPI context (most Linux systems)
+        if (r != VANILLA_SUCCESS) {
+            vpi_decode_exit(s);
+            if (vpi_egl_available
+                && ((ffmpeg_err = av_hwdevice_ctx_create(&s->hw_device_ctx, AV_HWDEVICE_TYPE_VAAPI, 0, 0, 0)) >= 0)) {
+                r = open_decoder(s, &decoders[HWDEC_TYPE_VAAPI]);
+            }
         }
-    }
 
-    // See if we can create a DRM context (Raspberry Pi, et al.)
-    if (r != VANILLA_SUCCESS) {
-        vpi_decode_exit(s);
-        if ((ffmpeg_err = av_hwdevice_ctx_create(&s->hw_device_ctx, AV_HWDEVICE_TYPE_DRM, "/dev/dri/card0", 0, 0)) >= 0) {
-            r = open_decoder(s, &decoders[HWDEC_TYPE_DRM]);
+        // See if we can create a DRM context (Raspberry Pi, et al.)
+        if (r != VANILLA_SUCCESS) {
+            vpi_decode_exit(s);
+            if ((ffmpeg_err = av_hwdevice_ctx_create(&s->hw_device_ctx, AV_HWDEVICE_TYPE_DRM, "/dev/dri/card0", 0, 0)) >= 0) {
+                r = open_decoder(s, &decoders[HWDEC_TYPE_DRM]);
+            }
         }
     }
 

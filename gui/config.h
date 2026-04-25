@@ -31,6 +31,7 @@ typedef struct {
     int fullscreen;
     int cursor_in_fullscreen;
     int fast_drm;
+    int force_software_decode;
 } vpi_config_t;
 
 extern vpi_config_t vpi_config;

@@ -57,6 +57,7 @@ static const char *lang_str[__VPI_LANG_T_COUNT] = {
     "Reset To Defaults",
     "Reset",
     "Full Screen",
+    "Hardware Decoding"
 };
 
 const char *lang(vpi_lang_t id)
