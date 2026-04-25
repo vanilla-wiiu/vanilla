@@ -1,0 +1,24 @@
+<?xml version="1.0"?>
+<vanilla>
+	<consoles>
+		<console>
+			<name>Wii U</name>
+			<bssid>9ce63589f813</bssid>
+			<psk>e6a31b46fd78b758e15245486e6ca81d12d7aec63ace0007a742b91500b7d40c</psk>
+		</console>
+	</consoles>
+	<server>FFFFFFFF</server>
+	<wireless>wlan0</wireless>
+	<connectionsetup>1</connectionsetup>
+	<region>0</region>
+	<swapabxy>0</swapabxy>
+	<fullscreen>1</fullscreen>
+	<fastdrm>0</fastdrm>
+	<controls>
+		<keys/>
+		<buttons/>
+		<axes/>
+	</controls>
+	<cursorinfullscreen>0</cursorinfullscreen>
+	<recordingdir></recordingdir>
+</vanilla>

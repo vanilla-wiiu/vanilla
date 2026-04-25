@@ -1,0 +1,43 @@
+#!/bin/sh
+
+# Buildroot doesn't allow us to have a ld.conf.so.d so force the LD_LIBRARY_PATH here
+export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:/usr/lib/aarch64-linux-gnu/tegra:/usr/lib/aarch64-linux-gnu/tegra-egl"
+export DISPLAY=:0
+export SDL_VIDEODRIVER=x11
+
+# Listen for power button presses
+/usr/bin/vanilla-nx-power-btn &
+POWER_BTN_WATCHER_PID=$!
+/usr/bin/vanilla-nx-volume-btn &
+VOLUME_BTN_WATCHER_PID=$!
+
+# Ensure watcher is closed
+cleanup() {
+    kill "$POWER_BTN_WATCHER_PID" 2>/dev/null
+    kill "$VOLUME_BTN_WATCHER_PID" 2>/dev/null
+}
+trap cleanup EXIT
+
+# Start X
+X "$DISPLAY" -nolisten tcp vt1 &
+X_PID=$!
+
+# Wait until X is responsive
+for i in 1 2 3 4 5 6 7 8 9 10; do
+    xset q >/dev/null 2>&1 && break
+    sleep 1
+done
+
+# Run Vanilla in foreground
+/usr/bin/vanilla > /vanilla.log 2>&1
+APP_RC=$?
+
+# Clean up X
+kill "$X_PID" 2>/dev/null
+wait "$X_PID" 2>/dev/null
+
+# Reboot when app exits
+reboot -f
+
+# Fallback if reboot fails
+exit "$APP_RC"

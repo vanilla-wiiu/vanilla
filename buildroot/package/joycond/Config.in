@@ -1,0 +1,6 @@
+config BR2_PACKAGE_JOYCOND
+	bool "joycond"
+	help
+		Userspace daemon to combine joy-cons from the hid-nintendo kernel driver
+
+		https://github.com/DanielOgorchock/joycond.git

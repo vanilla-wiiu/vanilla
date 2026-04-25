@@ -1,0 +1,11 @@
+#!/bin/sh
+case "$1" in
+    start)
+        # Wait for the device, with a timeout
+        for i in $(seq 1 50); do
+            [ -b /dev/mmcblk0p1 ] && break
+            usleep 100000
+        done
+        mount /dev/mmcblk0p1 2>/dev/null || mount -a
+        ;;
+esac

@@ -1,0 +1,16 @@
+#!/bin/sh
+
+# Listen for volume button presses, in which case increase/decrease volume in ALSA
+
+DEV=/dev/input/event5
+
+evtest "$DEV" 2>/dev/null | while read -r line; do
+    case "$line" in
+        *KEY_VOLUMEDOWN*,\ value\ 1*)
+            amixer sset 'x Speaker' 5%- >/dev/null
+            ;;
+        *KEY_VOLUMEUP*,\ value\ 1*)
+            amixer sset 'x Speaker' 5%+ unmute >/dev/null
+            ;;
+    esac
+done

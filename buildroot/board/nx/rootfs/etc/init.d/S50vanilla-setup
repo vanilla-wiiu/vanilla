@@ -1,0 +1,19 @@
+#!/bin/sh
+
+case "$1" in
+    start)
+        # Run joycond to provide virtual combined joycon device
+        /usr/bin/joycond &
+        ;;
+    stop)
+        killall joycond 2>/dev/null
+        ;;
+    restart)
+        "$0" stop
+        "$0" start
+        ;;
+    *)
+        echo "Usage: $0 {start|stop|restart}"
+        exit 1
+        ;;
+esac
