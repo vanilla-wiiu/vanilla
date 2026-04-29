@@ -70,6 +70,7 @@ typedef struct {
     TTF_Font *sysfont_tiny;
     SDL_AudioDeviceID audio;
     SDL_AudioDeviceID mic;
+    SDL_AudioStream *mic_resampler;
     SDL_GameController *controller;
     SDL_GameController *controller_gyros;
     SDL_Texture *game_tex;
@@ -370,8 +371,31 @@ void audio_callback(void *userdata, Uint8 *stream, int len)
 void mic_callback(void *userdata, Uint8 *stream, int len)
 {
 	vui_context_t *ctx = (vui_context_t *) userdata;
-	if (ctx->mic_callback)
-    	ctx->mic_callback(ctx->mic_callback_data, stream, len);
+	vui_sdl_context_t *sdl_ctx = (vui_sdl_context_t *) ctx->platform_data;
+
+	if (!ctx->mic_callback) {
+		return;
+	}
+
+	if (sdl_ctx->mic_resampler) {
+		// We open the mic at the same rate as playback (48kHz) to avoid
+		// reconfiguring the shared Tegra audio clock domain, then resample
+		// down to the 16kHz the Wii U expects.
+		SDL_AudioStreamPut(sdl_ctx->mic_resampler, stream, len);
+		int avail;
+		while ((avail = SDL_AudioStreamAvailable(sdl_ctx->mic_resampler)) > 0) {
+			uint8_t buf[2048];
+			int chunk = avail < (int) sizeof(buf) ? avail : (int) sizeof(buf);
+			int got = SDL_AudioStreamGet(sdl_ctx->mic_resampler, buf, chunk);
+			if (got > 0) {
+				ctx->mic_callback(ctx->mic_callback_data, buf, got);
+			} else {
+				break;
+			}
+		}
+	} else {
+		ctx->mic_callback(ctx->mic_callback_data, stream, len);
+	}
 }
 
 int32_t pack_float(float f)
@@ -771,15 +795,25 @@ int vui_init_sdl(vui_context_t *ctx, int fullscreen)
         vpilog("Failed to open audio device\n");
     }
 
-    // Open audio input device
+    // Open audio input device. We open at the same rate as playback (48kHz)
+    // because some shared-clock-domain audio hardware (e.g. Tegra ASoC) will
+    // reconfigure the codec/I2S rate on capture open, which then breaks any
+    // playback stream that was running at a different rate. We resample to
+    // 16kHz in software in mic_callback before forwarding to the Wii U.
     SDL_AudioSpec mic_desired = {0};
-    mic_desired.freq = 16000;
+    mic_desired.freq = 48000;
     mic_desired.format = AUDIO_S16LSB;
     mic_desired.callback = mic_callback;
 	mic_desired.userdata = ctx;
     mic_desired.channels = 1;
     sdl_ctx->mic = SDL_OpenAudioDevice(NULL, 1, &mic_desired, NULL, 0);
     if (sdl_ctx->mic) {
+		sdl_ctx->mic_resampler = SDL_NewAudioStream(
+			AUDIO_S16LSB, 1, 48000,
+			AUDIO_S16LSB, 1, 16000);
+		if (!sdl_ctx->mic_resampler) {
+			vpilog("Failed to create mic resampler: %s\n", SDL_GetError());
+		}
 		ctx->mic_enabled_handler = vui_sdl_mic_set_enabled;
 		ctx->mic_enabled_handler_data = sdl_ctx;
 	} else {
@@ -874,6 +908,11 @@ void vui_close_sdl(vui_context_t *ctx)
 
 	if (sdl_ctx->mic) {
 		SDL_CloseAudioDevice(sdl_ctx->mic);
+	}
+
+	if (sdl_ctx->mic_resampler) {
+		SDL_FreeAudioStream(sdl_ctx->mic_resampler);
+		sdl_ctx->mic_resampler = NULL;
 	}
 
 	if (sdl_ctx->pw_tex) {
