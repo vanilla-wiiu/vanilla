@@ -25,4 +25,8 @@ ifneq ($(BR2_PACKAGE_VANILLA_USE_DRM),y)
     VANILLA_CONF_OPTS += -DVANILLA_BUILD_USE_DRM=OFF
 endif
 
+ifneq ($(BR2_PACKAGE_VANILLA_USE_NX_IMU),y)
+    VANILLA_CONF_OPTS += -DVANILLA_NX_IMU=ON
+endif
+
 $(eval $(cmake-package))

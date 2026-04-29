@@ -308,6 +308,16 @@ if (LINUX)
         endif()
 	endif()
 
+    # Read Joy-Con IMU directly from hid-nintendo (Nintendo Switch / L4T).
+    # joycond's virtual Pro Controller doesn't forward sensor data, so SDL
+    # has no path to the IMU on this platform.
+    option(VANILLA_NX_IMU "Read Joy-Con IMU directly via hid-nintendo evdev" OFF)
+    if (VANILLA_NX_IMU)
+        list(APPEND VANILLA_GUI_SRC
+            platform_nx_imu.c
+        )
+    endif()
+
     option(VANILLA_BUILD_USE_VAAPI "Enable VAAPI hardware decoding" ON)
     if (VANILLA_BUILD_USE_VAAPI)
         find_package(VAAPI)
@@ -396,6 +406,10 @@ endif()
 if (VANILLA_BUILD_PIPE)
 	# Assume this platform is capable of running vanilla-pipe
     target_compile_definitions(vanillagui PRIVATE VANILLA_PIPE_AVAILABLE)
+endif()
+
+if (VANILLA_NX_IMU)
+    target_compile_definitions(vanillagui PRIVATE VANILLA_NX_IMU)
 endif()
 
 OPTION(VANILLA_GUI_ENABLE_WINDOWED "Enable windowed mode in Vanilla GUI" ON)

@@ -39,6 +39,10 @@
 #include "ui_priv.h"
 #include "ui_util.h"
 
+#ifdef VANILLA_NX_IMU
+#include "platform_nx_imu.h"
+#endif
+
 #define MIN(a,b) (((a)<(b))?(a):(b))
 #define PW_CHAR_SIZE 20
 #define PW_CHAR_PAD 2
@@ -396,13 +400,6 @@ void mic_callback(void *userdata, Uint8 *stream, int len)
 	} else {
 		ctx->mic_callback(ctx->mic_callback_data, stream, len);
 	}
-}
-
-int32_t pack_float(float f)
-{
-    int32_t x;
-    memcpy(&x, &f, sizeof(int32_t));
-    return x;
 }
 
 int vui_sdl_event_thread(void *data)
@@ -881,6 +878,10 @@ int vui_init_sdl(vui_context_t *ctx, int fullscreen)
     sdl_ctx->controller_gyros = NULL;
     find_valid_controller(sdl_ctx);
 
+#ifdef VANILLA_NX_IMU
+    vpi_nx_imu_init();
+#endif
+
     sdl_ctx->frame = av_frame_alloc();
 
 	// Initialize gamepad lookup tables
@@ -897,6 +898,10 @@ void vui_close_sdl(vui_context_t *ctx)
     }
 
     av_frame_free(&sdl_ctx->frame);
+
+#ifdef VANILLA_NX_IMU
+    vpi_nx_imu_quit();
+#endif
 
     if (sdl_ctx->controller) {
         SDL_GameControllerClose(sdl_ctx->controller);
