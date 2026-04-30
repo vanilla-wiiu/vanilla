@@ -16,7 +16,6 @@ config BR2_PACKAGE_VANILLA_USE_DRM
 
 config BR2_PACKAGE_VANILLA_USE_NX_IMU
     bool "Use Nintendo Switch motion sensors"
-    default n
 
 config BR2_PACKAGE_VANILLA_USE_LOCAL
     bool "Local build"
