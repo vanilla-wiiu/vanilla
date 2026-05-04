@@ -147,7 +147,7 @@ jobs:
 
     - name: Acquire Buildroot
       if: steps.cache-buildroot.outputs.cache-hit != 'true'
-      run: git clone --depth 1 --branch 2025.11-rc2 https://github.com/buildroot/buildroot.git $GITHUB_WORKSPACE/build/buildroot
+      run: git clone --depth 1 --branch 2025.11-rc2 https://github.com/buildroot/buildroot.git $BUILDROOT_PATH
 
     - name: Build Vanilla
       run: |
