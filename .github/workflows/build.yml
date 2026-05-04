@@ -152,7 +152,7 @@ jobs:
     - name: Build Vanilla
       run: |
         # Use the copy of Vanilla provided by us rather than downloading
-        make -C /buildroot O=/build BR2_EXTERNAL="$GITHUB_WORKSPACE"/buildroot vanilla_raspberrypi0w_defconfig
+        make -C $BUILDROOT_PATH BR2_EXTERNAL="$GITHUB_WORKSPACE"/buildroot vanilla_raspberrypi0w_defconfig
         $BUILDROOT_PATH/utils/config -e BR2_PACKAGE_VANILLA_USE_LOCAL
         $BUILDROOT_PATH/utils/config --set-str BR2_PACKAGE_VANILLA_LOCAL_PATH "$GITHUB_WORKSPACE"
 
