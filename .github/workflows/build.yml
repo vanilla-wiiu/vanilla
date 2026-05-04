@@ -27,15 +27,6 @@ jobs:
           - os: macos
             arch: universal
             artifact: vanilla-macos-universal.zip
-          - os: raspberrypi0w
-            arch: armv6l
-            artifact: vanilla-raspberrypi0w-image.zip
-          - os: raspberrypizero2w
-            arch: aarch64
-            artifact: vanilla-raspberrypizero2w-image.zip
-          - os: nintendoswitch
-            arch: aarch64
-            artifact: vanilla-nintendoswitch-image.zip
     runs-on: ubuntu-24.04
     steps:
     - uses: actions/checkout@v4
@@ -82,6 +73,99 @@ jobs:
       if: ${{ matrix.platform.os == 'android' }}
       run: |
         cp build/app-release.apk ${{ matrix.platform.artifact }}
+
+    - name: Upload a Build Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ matrix.platform.os }} ${{ matrix.platform.arch }}
+        path: ${{ matrix.platform.artifact }}
+
+    - name: Upload Continuous Release
+      if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' && github.repository == 'vanilla-wiiu/vanilla' }}
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        curl -fLOSs --retry 2 --retry-delay 60 https://github.com/probonopd/uploadtool/raw/master/upload.sh
+        bash upload.sh ${{ matrix.platform.artifact }}
+  buildroot:
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - os: raspberrypi0w
+            arch: armv6l
+            artifact: vanilla-raspberrypi0w-image.zip
+          - os: raspberrypizero2w
+            arch: aarch64
+            artifact: vanilla-raspberrypizero2w-image.zip
+          - os: nintendoswitch
+            arch: aarch64
+            artifact: vanilla-nintendoswitch-image.zip
+    runs-on: ubuntu-24.04
+    env:
+      BUILDROOT_PATH: ${{ github.workspace }}/buildroot
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Install dependencies for Buildroot
+      if: ${{ matrix.platform.arch != 'x86_64' && matrix.platform.os == 'linux' }}
+      run: |
+        apt -y update
+        apt -y install which \
+          sed \
+          make \
+          binutils \
+          build-essential \
+          diffutils \
+          gcc \
+          g++ \
+          bash \
+          patch \
+          gzip \
+          bzip2 \
+          perl \
+          tar \
+          cpio \
+          unzip \
+          rsync \
+          file \
+          bc \
+          findutils \
+          gawk \
+          wget \
+          git
+
+    - name: Cache Buildroot
+      id: cache-buildroot
+      uses: actions/cache@v4
+      with:
+        path: vanilla-buildroot-cache
+        key: ${{ matrix.platform.os }}-buildroot-system
+
+    - name: Acquire Buildroot
+      if: steps.cache-buildroot.outputs.cache-hit != 'true'
+      run: git clone --depth 1 --branch 2025.11-rc2 https://github.com/buildroot/buildroot.git $GITHUB_WORKSPACE/build/buildroot
+
+    - name: Build Vanilla
+      run: |
+        $BUILDROOT_PATH/utils/config -e BR2_PACKAGE_VANILLA
+        $BUILDROOT_PATH/utils/config -e BR2_PACKAGE_VANILLA_USE_LOCAL
+        $BUILDROOT_PATH/utils/config --set-str BR2_PACKAGE_VANILLA_LOCAL_PATH "$GITHUB_WORKSPACE"
+        make -C $BUILDROOT_PATH vanilla-dirclean
+        make -C $BUILDROOT_PATH
+
+    - name: Archive (Raspberry Pi)
+      if: matrix.platform.os == 'raspberrypi0w' || matrix.platform.os == 'raspberrypizero2w'
+      run: |
+        zip $GITHUB_WORKSPACE/${{ matrix.platform.artifact }} $BUILDROOT_PATH/build/images/sdcard.img
+
+    - name: Archive (Nintendo Switch)
+      if: matrix.platform.os == 'nintendoswitch'
+      run: |
+        zip $GITHUB_WORKSPACE/${{ matrix.platform.artifact }} $BUILDROOT_PATH/build/images/rootfs.cpio.gz
 
     - name: Upload a Build Artifact
       uses: actions/upload-artifact@v4
