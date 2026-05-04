@@ -46,17 +46,18 @@ jobs:
       if: ${{ matrix.platform.arch != 'x86_64' && matrix.platform.os == 'linux' }}
       run: sudo apt -y update && sudo apt -y install qemu-user-static binfmt-support
 
-    - name: Restore Docker cache
-      uses: actions/cache@v4
-      id: cache
-      with:
-        path: /var/lib/docker/overlay2
-        key: ${{ matrix.platform.os }}-${{ matrix.platform.arch }}
+    - uses: docker/setup-buildx-action@v3
 
     - name: Build Docker image
-      run: |
-        cd docker/${{ matrix.platform.os }}
-        docker build --build-arg ARCH=${{ matrix.platform.arch }} -t vanilla-${{ matrix.platform.os }}-${{ matrix.platform.arch }} .
+      uses: docker/build-push-action@v6
+      with:
+        context: docker/${{ matrix.platform.os }}
+        build-args: |
+            ARCH=${{ matrix.platform.arch }}
+            tags: vanilla-${{ matrix.platform.os }}-${{ matrix.platform.arch }}
+            load: true
+            cache-from: type=gha,scope=vanilla-${{ matrix.platform.os }}-${{ matrix.platform.arch }}
+            cache-to: type=gha,scope=vanilla-${{ matrix.platform.os }}-${{ matrix.platform.arch }},mode=max
 
     - name: Run Docker container
       run: |
