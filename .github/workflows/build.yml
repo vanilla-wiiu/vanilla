@@ -54,14 +54,18 @@ jobs:
         context: docker/${{ matrix.platform.os }}
         build-args: |
             ARCH=${{ matrix.platform.arch }}
-            tags: vanilla-${{ matrix.platform.os }}-${{ matrix.platform.arch }}
-            load: true
-            cache-from: type=gha,scope=vanilla-${{ matrix.platform.os }}-${{ matrix.platform.arch }}
-            cache-to: type=gha,scope=vanilla-${{ matrix.platform.os }}-${{ matrix.platform.arch }},mode=max
+        tags: vanilla-${{ matrix.platform.os }}-${{ matrix.platform.arch }}
+        load: true
+        cache-from: type=gha,scope=vanilla-${{ matrix.platform.os }}-${{ matrix.platform.arch }}
+        cache-to: type=gha,scope=vanilla-${{ matrix.platform.os }}-${{ matrix.platform.arch }},mode=max
 
     - name: Run Docker container
       run: |
-        docker run -v "${{ github.workspace }}:/vanilla" -v "${{ github.workspace }}/build:/install" -e ANDROID_SIGNING_KEY=${{ secrets.ANDROID_SIGNING_KEY }} vanilla-${{ matrix.platform.os }}-${{ matrix.platform.arch }}
+        docker run \
+            -v "${{ github.workspace }}:/vanilla" \
+            -v "${{ github.workspace }}/build:/install" \
+            -e ANDROID_SIGNING_KEY=${{ secrets.ANDROID_SIGNING_KEY }} \
+            vanilla-${{ matrix.platform.os }}-${{ matrix.platform.arch }}
 
     - name: Archive (Linux)
       if: ${{ matrix.platform.os == 'linux' }}
