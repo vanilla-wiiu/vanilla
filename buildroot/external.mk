@@ -16,11 +16,11 @@ DT_VER = l4t/l4t-r32.5
 define LINUX_ACQUIRE_DEPS
 	test -d "$(BUILD_DIR)/nvidia" || \
 		git clone -b $(NV_VER) --single-branch \
-		https://github.com/CTCaer/switch-l4t-kernel-nvidia.git \
+		https://github.com/theofficialgman/switch-l4t-kernel-nvidia.git \
 		"$(BUILD_DIR)/nvidia"
 	test -d "$(BUILD_DIR)/hardware/nvidia/platform/t210/nx" || \
 		git clone -b $(NX_VER) --single-branch \
-		https://github.com/CTCaer/switch-l4t-platform-t210-nx.git \
+		https://github.com/theofficialgman/switch-l4t-platform-t210-nx.git \
 		"$(BUILD_DIR)/hardware/nvidia/platform/t210/nx"
 	test -d "$(BUILD_DIR)/nvgpu" || \
 		git clone -b $(NG_VER) --single-branch \
