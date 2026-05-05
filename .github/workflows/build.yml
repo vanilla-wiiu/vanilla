@@ -104,7 +104,7 @@ jobs:
             artifact: vanilla-nintendoswitch-image.zip
     runs-on: ubuntu-24.04
     env:
-      BUILDROOT_PATH: ${{ github.workspace }}/../buildroot
+      BUILDROOT_PATH: ${{ github.workspace }}/buildroot-work
     steps:
     - uses: actions/checkout@v4
       with:
