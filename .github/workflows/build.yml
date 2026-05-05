@@ -96,9 +96,9 @@ jobs:
           - os: raspberrypi0w
             arch: armv6l
             artifact: vanilla-raspberrypi0w-image.zip
-          - os: raspberrypizero2w
+          - os: raspberrypizero2w_64
             arch: aarch64
-            artifact: vanilla-raspberrypizero2w-image.zip
+            artifact: vanilla-raspberrypizero2w_64-image.zip
           - os: nintendoswitch
             arch: aarch64
             artifact: vanilla-nintendoswitch-image.zip
