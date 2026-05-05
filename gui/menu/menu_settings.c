@@ -120,7 +120,7 @@ void vpi_menu_settings(vui_context_t *vui, void *v)
     vui_get_screen_size(vui, &scrw, &scrh);
 
     // Set up settings menu
-    #define SETTINGS_COUNT 5
+    #define SETTINGS_COUNT 10
     int SETTINGS_NAMES[SETTINGS_COUNT];
     vui_button_callback_t SETTINGS_ACTION[SETTINGS_COUNT];
     int buttons[SETTINGS_COUNT];
@@ -135,6 +135,11 @@ void vpi_menu_settings(vui_context_t *vui, void *v)
     // Controls menu
     SETTINGS_NAMES[sc] = VPI_LANG_CONTROLS;
     SETTINGS_ACTION[sc] = transition_to_gamepad;
+    sc++;
+
+    // Controls menu
+    SETTINGS_NAMES[sc] = VPI_LANG_REGION;
+    SETTINGS_ACTION[sc] = transition_to_region;
     sc++;
 
     // Full screen option (if on a platform that supports windowed mode)
