@@ -163,11 +163,13 @@ jobs:
     - name: Archive (Raspberry Pi)
       if: matrix.platform.os == 'raspberrypi0w' || matrix.platform.os == 'raspberrypizero2w'
       run: |
+        ls -lAR $BUILDROOT_PATH
         zip $GITHUB_WORKSPACE/${{ matrix.platform.artifact }} $BUILDROOT_PATH/images/sdcard.img
 
     - name: Archive (Nintendo Switch)
       if: matrix.platform.os == 'nintendoswitch'
       run: |
+        ls -lAR $BUILDROOT_PATH
         zip $GITHUB_WORKSPACE/${{ matrix.platform.artifact }} $BUILDROOT_PATH/images/rootfs.cpio.gz
 
     - name: Upload a Build Artifact
