@@ -1,4 +1,4 @@
-FROM docker.io/debian:trixie
+FROM docker.io/debian:bookworm
 
 ARG ARCH=x86_64
 ENV ARCH=${ARCH}
