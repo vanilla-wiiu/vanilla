@@ -161,12 +161,12 @@ static void publish(const float a[3], const float g[3])
     // Transform from Switch chassis coords to Wii U GamePad coords.
     // Switch upright (screen facing user) should map to GamePad upright.
     float ax = -a[0];   // Negate X for correct roll
-    float ay = -a[2];   // GamePad Y = -Switch Z
-    float az = -a[1];   // GamePad Z = -Switch Y
+    float ay = a[2];   // GamePad Y = -Switch Z
+    float az = a[1];   // GamePad Z = -Switch Y
 
     float gx = -g[0];   // Negate X for correct roll
-    float gy = -g[2];
-    float gz = -g[1];
+    float gy = g[2];
+    float gz = g[1];
 
     vanilla_set_button(VANILLA_SENSOR_ACCEL_X, pack_float(ax));
     vanilla_set_button(VANILLA_SENSOR_ACCEL_Y, pack_float(ay));

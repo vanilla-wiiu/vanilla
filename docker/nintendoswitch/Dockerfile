@@ -18,6 +18,7 @@ RUN dpkg --add-architecture i386 && \
     g++ \
     bash \
     patch \
+    python3 \
     gzip \
     bzip2 \
     perl \
