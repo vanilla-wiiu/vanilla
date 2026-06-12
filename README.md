@@ -3,7 +3,7 @@
 > This is a **work-in-progress** software clone of the Wii U gamepad. No warranty is provided and everything should be considered **alpha** at best.
 
 > [!NOTE]
-> Vanilla currently supports most main features of the WiiU Gamepad. To view supported and planned features click [here](#supported-features).
+> Vanilla currently supports most main features of the Wii U Gamepad. To view supported and planned features click [here](#supported-features).
 <p align="center">
     <img src="https://raw.githubusercontent.com/vanilla-wiiu/vanilla/master/images/screenshot3.png">
     <br>
