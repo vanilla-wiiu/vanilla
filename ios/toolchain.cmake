@@ -1,7 +1,17 @@
 set(CMAKE_SYSTEM_NAME iOS)
-set(CMAKE_OSX_DEPLOYMENT_TARGET 13.0 CACHE STRING "Minimum iOS version")
 
-# Default to arm64 for device builds
+# Two build variants (see ios/README.md), both arm64:
+#   modern (default) - App Store friendly, iOS 15+ (Xcode 26 SDK floor)
+#   legacy           - back-compat build, iOS 12.0 (covers every 64-bit device);
+#                      built with Xcode 15/16. Enable with -DVANILLA_IOS_LEGACY=ON
+if(VANILLA_IOS_LEGACY)
+    set(_vanilla_ios_default_deployment 12.0)
+else()
+    set(_vanilla_ios_default_deployment 15.0)
+endif()
+set(CMAKE_OSX_DEPLOYMENT_TARGET ${_vanilla_ios_default_deployment} CACHE STRING "Minimum iOS version")
+
+# Device builds are arm64; simulator uses the host arch.
 if(NOT DEFINED CMAKE_OSX_ARCHITECTURES)
     if(DEFINED IOS_SIMULATOR AND IOS_SIMULATOR)
         execute_process(

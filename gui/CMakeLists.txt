@@ -399,7 +399,7 @@ add_library(vanillagui STATIC ${VANILLA_GUI_SRC})
 if (ANDROID)
     add_library(vanilla SHARED main.c)
 elseif(IOS)
-    add_executable(vanilla MACOSX_BUNDLE 
+    add_executable(vanilla MACOSX_BUNDLE
         main.c
     )
     set_target_properties(vanilla PROPERTIES
@@ -421,12 +421,22 @@ elseif(IOS)
         VERBATIM
         COMMENT "Compiling LaunchScreen.storyboard"
     )
-    
+
     # Compile app icon with actool
     if(CMAKE_OSX_SYSROOT MATCHES "simulator")
         set(ACTOOL_PLATFORM "iphonesimulator")
     else()
         set(ACTOOL_PLATFORM "iphoneos")
+    endif()
+
+    if(VANILLA_IOS_LEGACY)
+        set(_vanilla_icon_input "${CMAKE_SOURCE_DIR}/ios/Assets.xcassets")
+        set(_vanilla_icon_extra_args)
+        set(_vanilla_icon_comment "Compiling Assets.xcassets")
+    else()
+        set(_vanilla_icon_input "${CMAKE_SOURCE_DIR}/ios/AppIcon.icon")
+        set(_vanilla_icon_extra_args --include-all-app-icons)
+        set(_vanilla_icon_comment "Compiling AppIcon.icon")
     endif()
 
     add_custom_command(
@@ -436,15 +446,15 @@ elseif(IOS)
                 --enable-on-demand-resources NO
                 --app-icon AppIcon
                 --platform ${ACTOOL_PLATFORM}
-                --include-all-app-icons
+                ${_vanilla_icon_extra_args}
                 --minimum-deployment-target "${CMAKE_OSX_DEPLOYMENT_TARGET}"
                 --target-device iphone --target-device ipad
                 --output-partial-info-plist "${CMAKE_CURRENT_BINARY_DIR}/AssetCatalog-Info.plist"
-                "${CMAKE_SOURCE_DIR}/ios/AppIcon.icon"
+                "${_vanilla_icon_input}"
         VERBATIM
-        COMMENT "Compiling AppIcon.icon"
+        COMMENT "${_vanilla_icon_comment}"
     )
-    
+
     # Merge the partial plist from actool into the bundle's Info.plist
     add_custom_command(
         TARGET vanilla POST_BUILD

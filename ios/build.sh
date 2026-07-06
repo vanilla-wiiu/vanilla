@@ -14,6 +14,7 @@ TARGET_SDK="iphoneos"
 CLEAN_BUILD=0
 NINJA_EXPLICITLY_DISABLED=0
 SKIP_ADHOC_SIGNING=0
+LEGACY=0
 
 print_usage() {
     echo "Usage: $0 [OPTIONS]"
@@ -21,6 +22,9 @@ print_usage() {
     echo "Options:"
     echo "  --debug         Build in Debug mode (default: Release)"
     echo "  --simulator     Build for iOS Simulator instead of device"
+    echo "  --legacy        Build the legacy iOS 12.0 back-compat variant (arm64)"
+    echo "                  instead of the modern App Store build (iOS 15). Requires"
+    echo "                  Xcode 15/16 (Xcode 26 cannot target below iOS 15)."
     echo "  --clean         Clean build directory before building"
     echo "  --no-ninja      Do not use Ninja generator even if available"
     echo "  --no-signing    Skip ad-hoc code signing for simulator builds"
@@ -36,6 +40,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --simulator)
             TARGET_SDK="iphonesimulator"
+            shift
+            ;;
+        --legacy)
+            LEGACY=1
             shift
             ;;
         --clean)
@@ -69,9 +77,19 @@ if [ "$TARGET_SDK" = "iphonesimulator" ]; then
     BUILD_DIR="${PROJECT_ROOT}/build/ios-simulator"
     IOS_SIMULATOR_FLAG="-DIOS_SIMULATOR=ON"
 else
+    # Both modern and legacy device builds are arm64; the toolchain picks the
+    # deployment target (iOS 15 vs iOS 12) from VANILLA_IOS_LEGACY.
     ARCH="arm64"
     BUILD_DIR="${PROJECT_ROOT}/build/ios-device"
     IOS_SIMULATOR_FLAG=""
+fi
+
+# Keep modern and legacy build trees separate so they don't clobber each other.
+if [ "$LEGACY" -eq 1 ]; then
+    BUILD_DIR="${BUILD_DIR}-legacy"
+    LEGACY_FLAG="ON"
+else
+    LEGACY_FLAG="OFF"
 fi
 
 if [ "$CLEAN_BUILD" -eq 1 ]; then
@@ -99,6 +117,7 @@ cmake -B "$BUILD_DIR" \
     -DCMAKE_OSX_ARCHITECTURES="${ARCH}" \
     -DVANILLA_BUILD_PIPE=OFF \
     -DVANILLA_BUILD_VENDORED=ON \
+    -DVANILLA_IOS_LEGACY="${LEGACY_FLAG}" \
     -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
     ${IOS_SIMULATOR_FLAG} \
     ${GENERATOR} \
