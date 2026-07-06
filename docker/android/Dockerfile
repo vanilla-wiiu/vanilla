@@ -1,4 +1,4 @@
-FROM ubuntu:24.04
+FROM docker.io/ubuntu:24.04
 
 # Install build dependencies
 RUN apt update && \
@@ -10,7 +10,8 @@ RUN apt update && \
 # Install Android SDK command line tools
 RUN mkdir -p /opt/android/cmdline-tools && \
     wget 'https://dl.google.com/android/repository/commandlinetools-linux-6200805_latest.zip' -P /tmp && \
-    unzip -d /opt/android/cmdline-tools /tmp/commandlinetools-linux-6200805_latest.zip
+    unzip -d /opt/android/cmdline-tools /tmp/commandlinetools-linux-6200805_latest.zip && \
+    rm /tmp/commandlinetools-linux-6200805_latest.zip
 
 ENV ANDROID_NDK="25.1.8937393"
 ENV SYSTEM_ARCH="x86_64"

@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<vanilla>
+	<consoles></consoles>
+	<server>FFFFFFFF</server>
+	<wireless>wlan0</wireless>
+	<connectionsetup>1</connectionsetup>
+	<region>0</region>
+	<swapabxy>0</swapabxy>
+	<fullscreen>1</fullscreen>
+	<fastdrm>0</fastdrm>
+	<controls>
+		<keys/>
+		<buttons/>
+		<axes/>
+	</controls>
+	<cursorinfullscreen>0</cursorinfullscreen>
+	<recordingdir></recordingdir>
+</vanilla>

@@ -1,8 +1,59 @@
-<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <!-- Generator: Adobe Illustrator 15.1.0, SVG Export Plug-In . SVG Version: 6.00 Build 0)  -->
-<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
-<svg version="1.1" id="Layer_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
-	 width="72px" height="72px" viewBox="0 0 72 72" enable-background="new 0 0 72 72" xml:space="preserve">
-<path fill="#ED2224" d="M36.143,9.601c-5.631,9.257-16.662,20.982-25.688,27.154c9.026,5.708,20.057,17.896,25.688,26.846
-	c5.632-8.949,17.28-21.138,25.998-27.077C53.423,30.583,41.774,18.857,36.143,9.601z"/>
+
+<svg
+   version="1.1"
+   id="Layer_1"
+   x="0px"
+   y="0px"
+   width="72px"
+   height="72px"
+   viewBox="0 0 72 72"
+   enable-background="new 0 0 72 72"
+   xml:space="preserve"
+   sodipodi:docname="diamond.svg"
+   inkscape:version="1.4.3 (0d15f75042, 2025-12-25)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg"><defs
+   id="defs1"><inkscape:path-effect
+     effect="mirror_symmetry"
+     start_point="36.15,9.601"
+     end_point="36.15,63.601"
+     center_point="36.15,36.601"
+     id="path-effect1"
+     is_visible="true"
+     lpeversion="1.2"
+     lpesatellites=""
+     mode="free"
+     discard_orig_path="false"
+     fuse_paths="true"
+     oposite_fuse="false"
+     split_items="false"
+     split_open="false"
+     link_styles="false" /></defs><sodipodi:namedview
+   id="namedview1"
+   pagecolor="#ffffff"
+   bordercolor="#000000"
+   borderopacity="0.25"
+   inkscape:showpageshadow="2"
+   inkscape:pageopacity="0.0"
+   inkscape:pagecheckerboard="0"
+   inkscape:deskcolor="#d1d1d1"
+   inkscape:zoom="5.6568542"
+   inkscape:cx="82.731493"
+   inkscape:cy="21.213203"
+   inkscape:window-width="2560"
+   inkscape:window-height="1382"
+   inkscape:window-x="0"
+   inkscape:window-y="0"
+   inkscape:window-maximized="1"
+   inkscape:current-layer="Layer_1" />
+<path
+   fill="#ed2224"
+   d="m 36.142578,9.6015625 c -1.556807,3.9038415 -17.24694,23.8159095 -22.09375,27.5136715 11.352885,8.37303 20.593716,23.431382 22.09375,26.486328 l 0.0078,-0.01172 0.0059,0.01172 C 37.656284,60.546616 46.899068,45.488264 58.251953,37.115234 53.405143,33.417472 37.713057,13.505403 36.15625,9.6015625 l -0.0059,0.011719 z"
+   id="path1"
+   style="display:inline;opacity:1"
+   sodipodi:nodetypes="ccccc" />
 </svg>

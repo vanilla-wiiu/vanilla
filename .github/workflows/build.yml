@@ -54,6 +54,9 @@ jobs:
           - os: raspberrypizero2w
             arch: aarch64
             artifact: vanilla-raspberrypizero2w-image.zip
+          - os: nintendoswitch
+            arch: aarch64
+            artifact: vanilla-nintendoswitch-image.zip
     runs-on: ubuntu-24.04
     steps:
     - uses: actions/checkout@v4
@@ -64,29 +67,34 @@ jobs:
       if: ${{ matrix.platform.arch != 'x86_64' && matrix.platform.os == 'linux' }}
       run: sudo apt -y update && sudo apt -y install qemu-user-static binfmt-support
 
-    - name: Restore Docker cache
-      uses: actions/cache@v4
-      id: cache
-      with:
-        path: /var/lib/docker/overlay2
-        key: ${{ matrix.platform.os }}-${{ matrix.platform.arch }}
+    - uses: docker/setup-buildx-action@v3
 
     - name: Build Docker image
-      run: |
-        cd docker/${{ matrix.platform.os }}
-        docker build --build-arg ARCH=${{ matrix.platform.arch }} -t vanilla-${{ matrix.platform.os }}-${{ matrix.platform.arch }} .
+      uses: docker/build-push-action@v6
+      with:
+        context: .
+        file: docker/${{ matrix.platform.os }}/Dockerfile
+        build-args: |
+            ARCH=${{ matrix.platform.arch }}
+        tags: vanilla-${{ matrix.platform.os }}-${{ matrix.platform.arch }}
+        load: true
+        cache-from: type=gha,scope=vanilla-${{ matrix.platform.os }}-${{ matrix.platform.arch }}
+        cache-to: type=gha,scope=vanilla-${{ matrix.platform.os }}-${{ matrix.platform.arch }},mode=max
 
     - name: Run Docker container
       run: |
-        docker run -v "${{ github.workspace }}:/vanilla" -v "${{ github.workspace }}/build:/install" -e ANDROID_SIGNING_KEY=${{ secrets.ANDROID_SIGNING_KEY }} vanilla-${{ matrix.platform.os }}-${{ matrix.platform.arch }}
+        docker run \
+            -v "${{ github.workspace }}:/vanilla" \
+            -v "${{ github.workspace }}/build:/install" \
+            vanilla-${{ matrix.platform.os }}-${{ matrix.platform.arch }}
 
     - name: Archive (Linux)
       if: ${{ matrix.platform.os == 'linux' }}
       run: |
         tar czf ${{ matrix.platform.artifact }} -C "${{ github.workspace }}/build" .
 
-    - name: Archive (Windows/macOS/Raspberry Pi)
-      if: ${{ matrix.platform.os == 'windows' || matrix.platform.os == 'macos' || matrix.platform.os == 'raspberrypi0w' || matrix.platform.os == 'raspberrypizero2w' }}
+    - name: Archive (Windows/macOS/Raspberry Pi/Nintendo Switch)
+      if: ${{ matrix.platform.os == 'windows' || matrix.platform.os == 'macos' || matrix.platform.os == 'raspberrypi0w' || matrix.platform.os == 'raspberrypizero2w' || matrix.platform.os == 'nintendoswitch' }}
       run: |
         cd build
         zip -r ../${{ matrix.platform.artifact }} .
@@ -94,7 +102,17 @@ jobs:
     - name: Archive (Android)
       if: ${{ matrix.platform.os == 'android' }}
       run: |
-        cp build/app-release.apk ${{ matrix.platform.artifact }}
+        if [ -n "${{ secrets.ANDROID_SIGNING_KEY }}" ]; then
+            docker run \
+                -v "${{ github.workspace }}:/vanilla" \
+                -v "${{ github.workspace }}/build:/install" \
+                --entrypoint apksigner \
+                vanilla-${{ matrix.platform.os }}-${{ matrix.platform.arch }} \
+                sign --ks /vanilla/docker/android/vanilla.jks --out /install/app-release-signed.apk --ks-pass pass:${{ secrets.ANDROID_SIGNING_KEY }} /install/app-release.apk
+            cp build/app-release-signed.apk ${{ matrix.platform.artifact }}
+        else
+            cp build/app-release.apk ${{ matrix.platform.artifact }}
+        fi
 
     - name: Upload a Build Artifact
       uses: actions/upload-artifact@v4

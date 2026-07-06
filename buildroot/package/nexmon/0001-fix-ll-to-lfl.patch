@@ -1,0 +1,13 @@
+--- a/buildtools/b43/assembler/Makefile
++++ b/buildtools/b43/assembler/Makefile
+@@ -24,8 +24,8 @@
+ 		   -Wshadow -Wpointer-arith
+ SPARSEFLAGS	= $(CFLAGS) -D__transparent_union__=__unused__ -D_STRING_ARCH_unaligned=1 \
+ 		  -D__builtin_stpcpy=stpcpy
+-#LDFLAGS		+= -lfl
+-LDFLAGS		+= -ll
++LDFLAGS		+= -lfl
++#LDFLAGS		+= -ll
+ 
+ BIN		= b43-asm.bin
+ SRCS		= parser.c scanner.c main.c initvals.c util.c args.c

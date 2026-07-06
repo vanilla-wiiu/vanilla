@@ -1,4 +1,4 @@
-FROM debian:bookworm
+FROM docker.io/debian:trixie
 
 ARG ARCH=x86_64
 ENV ARCH=${ARCH}
@@ -6,9 +6,8 @@ ENV ARCH=${ARCH}
 ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ=Etc/UTC
 
-RUN apt -y update
-
-RUN apt -y install which \
+RUN apt -y update && \
+    apt -y install which \
     sed \
     make \
     binutils \
@@ -30,10 +29,22 @@ RUN apt -y install which \
     findutils \
     gawk \
     wget \
-    git
+    git && \
+    apt-get clean && \
+    apt-get autoremove --yes && \
+    rm -rf /var/lib/{apt,dpkg,cache,log}/
 
 RUN git clone --depth 1 --branch 2025.11-rc2 https://github.com/buildroot/buildroot.git /buildroot
 
 ENV FORCE_UNSAFE_CONFIGURE=1
+
+# Build everything except for Vanilla
+COPY buildroot /vanilla/buildroot
+RUN make -C /buildroot O=/build BR2_EXTERNAL=/vanilla/buildroot vanilla_raspberrypi0w_defconfig && \
+    /buildroot/utils/config --file /build/.config -d BR2_PACKAGE_VANILLA && \
+    make -C /buildroot O=/build && \
+    /buildroot/utils/config --file /build/.config -e BR2_PACKAGE_VANILLA && \
+    /buildroot/utils/config --file /build/.config -e BR2_PACKAGE_VANILLA_USE_LOCAL && \
+    /buildroot/utils/config --file /build/.config --set-str BR2_PACKAGE_VANILLA_LOCAL_PATH /vanilla
 
 ENTRYPOINT [ "/vanilla/docker/raspberrypi0w/build.sh" ]

@@ -29,8 +29,10 @@ void display_cli_help(char **argv);
 
 int SDL_main(int argc, char **argv)
 {
-    // Default to full screen unless "-w" is specified
+    // Determine whether we're overriding the fullscreen setting in the config
     int override_fs = -1;
+    int force_swdec = 0;
+
 	for (int i = 1, consumed; i < argc; i += consumed) {
 		consumed = -1;
 		 if (!strcmp(argv[i], "-w") || !strcmp(argv[i], "--window")) {
@@ -38,6 +40,9 @@ int SDL_main(int argc, char **argv)
 			consumed = 1;
 		} else if (!strcmp(argv[i], "-f") || !strcmp(argv[i], "--fullscreen")) {
             override_fs = 1;
+            consumed = 1;
+        } else if (!strcmp(argv[i], "-s") || !strcmp(argv[i], "--swdec")) {
+            force_swdec = 1;
             consumed = 1;
 		} else if (!strcmp(argv[i], "-h") || !strcmp(argv[i], "--help")) {
 			display_cli_help(argv);
@@ -54,6 +59,8 @@ int SDL_main(int argc, char **argv)
 
     // Load config
     vpi_config_init();
+
+    vpi_config.force_software_decode |= force_swdec;
 
 #ifndef VANILLA_GUI_ENABLE_WINDOWED
     // Window mode is disabled, so we'll just enable fullscreen
@@ -100,5 +107,6 @@ void display_cli_help(char **argv) {
 	vpilog("Options:\n");
 	vpilog("    -w, --window        Run Vanilla in a window (overrides config)\n");
 	vpilog("    -f, --fullscreen    Run Vanilla full screen (overrides config)\n");
+	vpilog("    -s, --swdec         Force software decoding (overrides config)\n");
 	vpilog("    -h, --help          Show this help message\n");
 }

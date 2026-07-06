@@ -1,0 +1,26 @@
+#!/bin/sh
+#
+# Restore ALSA mixer state at boot
+#
+
+ALSACTL=/usr/sbin/alsactl
+ASOUND_STATE=/var/lib/alsa/asound.state
+
+case "$1" in
+    start)
+        printf "Restoring ALSA state: "
+        $ALSACTL -f $ASOUND_STATE restore && echo "OK" || echo "FAIL"
+        ;;
+    stop)
+        # intentionally NOT storing on shutdown — see note below
+        ;;
+    restart|reload)
+        "$0" start
+        ;;
+    *)
+        echo "Usage: $0 {start|stop|restart}"
+        exit 1
+        ;;
+esac
+
+exit 0

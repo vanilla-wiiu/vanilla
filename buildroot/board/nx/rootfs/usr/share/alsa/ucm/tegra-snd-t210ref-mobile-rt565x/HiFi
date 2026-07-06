@@ -1,0 +1,191 @@
+# Use case Configuration for Nintendo Switch
+
+SectionVerb {
+
+	EnableSequence [
+		cdev "hw:tegrasndt210ref"
+
+		cset "name='x OUT MIXL DAC L1 Switch' off"
+		cset "name='x OUT MIXR DAC R1 Switch' off"
+		cset "name='x SPK MIXL DAC L1 Switch' off"
+		cset "name='x SPK MIXR DAC R1 Switch' off"
+		cset "name='ADMAIF1 Mux' I2S1"
+		cset "name='I2S1 Mux' ADMAIF1"
+		cset "name='I2S1 Sample Rate' 48000"
+	]
+
+	DisableSequence [
+		cdev "hw:tegrasndt210ref"
+		cset "name='x OUT MIXL DAC L1 Switch' off"
+		cset "name='x OUT MIXR DAC R1 Switch' off"
+		cset "name='x SPK MIXL DAC L1 Switch' off"
+		cset "name='x SPK MIXR DAC R1 Switch' off"
+		cset "name='I2S1 Sample Rate' 0"
+	]
+
+	# ALSA PCM
+	Value {
+	}
+}
+
+SectionDevice."Headphones" {
+	Comment "Headphones playback"
+
+	ConflictingDevice [
+		"Speaker"
+	]
+
+	EnableSequence [
+		cdev "hw:tegrasndt210ref"
+
+		cset "name='x HPO MIX HPVOL Switch' on"
+		cset "name='x HP L Playback Switch' on"
+		cset "name='x HP R Playback Switch' on"
+		cset "name='x OUT MIXL DAC L1 Switch' on"
+		cset "name='x OUT MIXR DAC R1 Switch' on"
+		cset "name='x Stereo DAC MIXL DAC L1 Switch' on"
+		cset "name='x Stereo DAC MIXR DAC R1 Switch' on"
+		cset "name='x DAC1 HP Playback Volume' 170,170"
+		cset "name='x HP Playback Volume' 31,31"
+		cset "name='x HP Channel Switch' on,on"
+	]
+
+	DisableSequence [
+		cdev "hw:tegrasndt210ref"
+
+		cset "name='x HP Playback Volume' 0,0"
+		cset "name='x HP Channel Switch' off,off"
+		cset "name='x DAC1 HP Playback Volume' 0,0"
+		cset "name='x OUT MIXL DAC L1 Switch' off"
+		cset "name='x OUT MIXR DAC R1 Switch' off"
+		cset "name='x HPO MIX HPVOL Switch' off"
+		cset "name='x HP L Playback Switch' off"
+		cset "name='x HP R Playback Switch' off"
+		cset "name='x Stereo DAC MIXL DAC L1 Switch' off"
+		cset "name='x Stereo DAC MIXR DAC R1 Switch' off"
+	]
+
+	Value {
+		PlaybackPCM "hw:tegrasndt210ref"
+
+		PlaybackChannels "2"
+		PlaybackRate "48000"
+		PlaybackVolume "x DAC1 HP Playback Volume"
+		PlaybackSwitch "x HP Channel Switch"
+		JackControl "x Headphone Jack"
+	}
+}
+
+SectionDevice."Speaker" {
+	Comment "Speaker playback"
+
+	ConflictingDevice [
+		"Headphones"
+	]
+
+	EnableSequence [
+		cdev "hw:tegrasndt210ref"
+
+		cset "name='x SPK MIXL DAC L1 Switch' on"
+		cset "name='x SPK MIXR DAC R1 Switch' on"
+		cset "name='x Speaker Channel Switch' on,on"
+		cset "name='x SPOL MIX SPKVOL L Switch' on"
+		cset "name='x SPOR MIX SPKVOL R Switch' on"
+		cset "name='x Stereo DAC MIXL DAC L1 Switch' on"
+		cset "name='x Stereo DAC MIXR DAC R1 Switch' on"
+		cset "name='x DAC1 Speaker Playback Volume' 148,148"
+		cset "name='x Speaker Playback Volume' 35,35"
+		cset "name='x Speaker L Playback Switch' on"
+		cset "name='x Speaker R Playback Switch' on"
+	]
+
+	DisableSequence [
+		cdev "hw:tegrasndt210ref"
+
+		cset "name='x Speaker L Playback Switch' off"
+		cset "name='x Speaker R Playback Switch' off"
+		cset "name='x Speaker Channel Switch' off,off"
+		cset "name='x Speaker Playback Volume' 35,35"
+		cset "name='x DAC1 Speaker Playback Volume' 0,0"
+		cset "name='x SPK MIXL DAC L1 Switch' off"
+		cset "name='x SPK MIXR DAC R1 Switch' off"
+		cset "name='x SPOL MIX SPKVOL L Switch' off"
+		cset "name='x SPOR MIX SPKVOL R Switch' off"
+		cset "name='x Stereo DAC MIXL DAC L1 Switch' off"
+		cset "name='x Stereo DAC MIXR DAC R1 Switch' off"
+	]
+
+	Value {
+		PlaybackPCM "hw:tegrasndt210ref"
+
+		PlaybackChannels "2"
+		PlaybackRate "48000"
+		PlaybackVolume "x DAC1 Speaker Playback Volume"
+		PlaybackSwitch "x Speaker Channel Switch"
+	}
+}
+
+SectionDevice."HeadsetMic" {
+	Comment "Headset Microphone"
+
+	ConflictingDevice [
+		"DummyMic"
+	]
+
+	EnableSequence [
+		cdev "hw:tegrasndt210ref"
+
+		cset "name='x IN1 Boost' 5"
+		cset "name='x Stereo ADC MIXL ADC1 Switch' on"
+		cset "name='x ADC IF1 Data Switch' 2"
+		cset "name='x ADC MIC Capture Volume' 47,0"
+		cset "name='x ADC Capture Switch' on,off"
+		cset "name='x RECMIXL BST1 Switch' on"
+	]
+
+	DisableSequence [
+		cdev "hw:tegrasndt210ref"
+
+		cset "name='x RECMIXL BST1 Switch' off"
+		cset "name='x Stereo ADC MIXL ADC1 Switch' off"
+		cset "name='x ADC MIC Capture Volume' 0,0"
+		cset "name='x ADC Capture Switch' off"
+		cset "name='x ADC IF1 Data Switch' 0"
+	]
+
+	Value {
+		CapturePCM "hw:tegrasndt210ref"
+
+		CapturePriority "100"
+		CaptureChannels "2"
+		CaptureRate "48000"
+		CaptureVolume "x ADC MIC Capture Volume"
+		CaptureSwitch "x ADC Capture Switch"
+		JackControl "x Mic Jack"
+	}
+}
+
+SectionDevice."DummyMic" {
+	Comment "Dummy Microphone"
+
+	ConflictingDevice [
+		"HeadsetMic"
+	]
+
+	EnableSequence [
+		cdev "hw:tegrasndt210ref"
+	]
+
+	DisableSequence [
+		cdev "hw:tegrasndt210ref"
+	]
+
+	Value {
+		CapturePCM "hw:tegrasndt210ref"
+
+		CapturePriority "100"
+		CaptureChannels "2"
+		CaptureRate "48000"
+	}
+}
+

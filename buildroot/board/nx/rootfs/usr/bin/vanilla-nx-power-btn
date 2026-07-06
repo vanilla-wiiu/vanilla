@@ -1,0 +1,15 @@
+#!/bin/sh
+
+# Listen for power button presses, in which case quit Vanilla (which should in turn reboot the Switch)
+
+DEV=/dev/input/event0
+APP=vanilla
+
+evtest "$DEV" 2>/dev/null | while read -r line; do
+    case "$line" in
+        *KEY_SLEEP*,\ value\ 1*)
+            pid="$(pidof "$APP" | awk '{print $1}')"
+            [ -n "$pid" ] && kill -TERM "$pid"
+            ;;
+    esac
+done

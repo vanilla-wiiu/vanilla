@@ -39,6 +39,10 @@
 #include "ui_priv.h"
 #include "ui_util.h"
 
+#ifdef VANILLA_NX_IMU
+#include "platform_nx_imu.h"
+#endif
+
 #define MIN(a,b) (((a)<(b))?(a):(b))
 #define PW_CHAR_SIZE 20
 #define PW_CHAR_PAD 2
@@ -51,6 +55,7 @@ typedef struct {
     int h;
     char text[MAX_BUTTON_TEXT];
     char icon[MAX_BUTTON_TEXT];
+    int32_t icon_mod;
     int checked;
 } vui_sdl_cached_texture_t;
 
@@ -69,6 +74,7 @@ typedef struct {
     TTF_Font *sysfont_tiny;
     SDL_AudioDeviceID audio;
     SDL_AudioDeviceID mic;
+    SDL_AudioStream *mic_resampler;
     SDL_GameController *controller;
     SDL_GameController *controller_gyros;
     SDL_Texture *game_tex;
@@ -96,73 +102,65 @@ typedef struct {
 } vui_cuda_context_t;
 #endif
 
-static int button_map[SDL_CONTROLLER_BUTTON_MAX];
-static int axis_map[SDL_CONTROLLER_AXIS_MAX];
-static int key_map[SDL_NUM_SCANCODES];
 static int vibrate = 0;
 
-void init_gamepad()
+void init_gamepad(vui_context_t *ctx)
 {
 	vibrate = 0;
 
-    // Initialize arrays to -1
-    for (int i = 0; i < SDL_CONTROLLER_BUTTON_MAX; i++) button_map[i] = -1;
-    for (int i = 0; i < SDL_CONTROLLER_AXIS_MAX; i++) axis_map[i] = -1;
-    for (int i = 0; i < SDL_NUM_SCANCODES; i++) key_map[i] = -1;
-
-    button_map[SDL_CONTROLLER_BUTTON_A] = VANILLA_BTN_A;
-    button_map[SDL_CONTROLLER_BUTTON_B] = VANILLA_BTN_B;
-    button_map[SDL_CONTROLLER_BUTTON_X] = VANILLA_BTN_X;
-    button_map[SDL_CONTROLLER_BUTTON_Y] = VANILLA_BTN_Y;
-    button_map[SDL_CONTROLLER_BUTTON_BACK] = VANILLA_BTN_MINUS;
-    button_map[SDL_CONTROLLER_BUTTON_GUIDE] = VANILLA_BTN_HOME;
-    button_map[SDL_CONTROLLER_BUTTON_MISC1] = VANILLA_BTN_TV;
-    button_map[SDL_CONTROLLER_BUTTON_START] = VANILLA_BTN_PLUS;
-    button_map[SDL_CONTROLLER_BUTTON_LEFTSTICK] = VANILLA_BTN_L3;
-    button_map[SDL_CONTROLLER_BUTTON_RIGHTSTICK] = VANILLA_BTN_R3;
-    button_map[SDL_CONTROLLER_BUTTON_LEFTSHOULDER] = VANILLA_BTN_L;
-    button_map[SDL_CONTROLLER_BUTTON_RIGHTSHOULDER] = VANILLA_BTN_R;
-    button_map[SDL_CONTROLLER_BUTTON_DPAD_UP] = VANILLA_BTN_UP;
-    button_map[SDL_CONTROLLER_BUTTON_DPAD_DOWN] = VANILLA_BTN_DOWN;
-    button_map[SDL_CONTROLLER_BUTTON_DPAD_LEFT] = VANILLA_BTN_LEFT;
-    button_map[SDL_CONTROLLER_BUTTON_DPAD_RIGHT] = VANILLA_BTN_RIGHT;
-    axis_map[SDL_CONTROLLER_AXIS_LEFTX] = VANILLA_AXIS_L_X;
-    axis_map[SDL_CONTROLLER_AXIS_LEFTY] = VANILLA_AXIS_L_Y;
-    axis_map[SDL_CONTROLLER_AXIS_RIGHTX] = VANILLA_AXIS_R_X;
-    axis_map[SDL_CONTROLLER_AXIS_RIGHTY] = VANILLA_AXIS_R_Y;
-    axis_map[SDL_CONTROLLER_AXIS_TRIGGERLEFT] = VANILLA_BTN_ZL;
-    axis_map[SDL_CONTROLLER_AXIS_TRIGGERRIGHT] = VANILLA_BTN_ZR;
-
-    key_map[SDL_SCANCODE_UP] = VANILLA_BTN_UP;
-    key_map[SDL_SCANCODE_DOWN] = VANILLA_BTN_DOWN;
-    key_map[SDL_SCANCODE_LEFT] = VANILLA_BTN_LEFT;
-    key_map[SDL_SCANCODE_RIGHT] = VANILLA_BTN_RIGHT;
-    key_map[SDL_SCANCODE_Z] = VANILLA_BTN_A;
-    key_map[SDL_SCANCODE_X] = VANILLA_BTN_B;
-    key_map[SDL_SCANCODE_C] = VANILLA_BTN_X;
-    key_map[SDL_SCANCODE_V] = VANILLA_BTN_Y;
-    key_map[SDL_SCANCODE_RETURN] = VANILLA_BTN_PLUS;
-    key_map[SDL_SCANCODE_LCTRL] = VANILLA_BTN_MINUS;
-    key_map[SDL_SCANCODE_H] = VANILLA_BTN_HOME;
-    key_map[SDL_SCANCODE_Y] = VANILLA_BTN_TV;
-    key_map[SDL_SCANCODE_W] = VANILLA_AXIS_L_UP;
-    key_map[SDL_SCANCODE_A] = VANILLA_AXIS_L_LEFT;
-    key_map[SDL_SCANCODE_S] = VANILLA_AXIS_L_DOWN;
-    key_map[SDL_SCANCODE_D] = VANILLA_AXIS_L_RIGHT;
-    key_map[SDL_SCANCODE_E] = VANILLA_BTN_L3;
-    key_map[SDL_SCANCODE_KP_8] = VANILLA_AXIS_R_UP;
-    key_map[SDL_SCANCODE_KP_4] = VANILLA_AXIS_R_LEFT;
-    key_map[SDL_SCANCODE_KP_2] = VANILLA_AXIS_R_DOWN;
-    key_map[SDL_SCANCODE_KP_6] = VANILLA_AXIS_R_RIGHT;
-    key_map[SDL_SCANCODE_KP_5] = VANILLA_BTN_R3;
-    key_map[SDL_SCANCODE_T] = VANILLA_BTN_L;
-    key_map[SDL_SCANCODE_G] = VANILLA_BTN_ZL;
-    key_map[SDL_SCANCODE_U] = VANILLA_BTN_R;
-    key_map[SDL_SCANCODE_J] = VANILLA_BTN_ZR;
-
-    key_map[SDL_SCANCODE_F5] = VPI_ACTION_TOGGLE_RECORDING;
-    key_map[SDL_SCANCODE_F12] = VPI_ACTION_SCREENSHOT;
-    key_map[SDL_SCANCODE_ESCAPE] = VPI_ACTION_DISCONNECT;
+    // Set up default keys/buttons/axes
+    ctx->default_button_map[SDL_CONTROLLER_BUTTON_A] = VANILLA_BTN_A;
+    ctx->default_button_map[SDL_CONTROLLER_BUTTON_B] = VANILLA_BTN_B;
+    ctx->default_button_map[SDL_CONTROLLER_BUTTON_X] = VANILLA_BTN_X;
+    ctx->default_button_map[SDL_CONTROLLER_BUTTON_Y] = VANILLA_BTN_Y;
+    ctx->default_button_map[SDL_CONTROLLER_BUTTON_BACK] = VANILLA_BTN_MINUS;
+    ctx->default_button_map[SDL_CONTROLLER_BUTTON_GUIDE] = VANILLA_BTN_HOME;
+    ctx->default_button_map[SDL_CONTROLLER_BUTTON_MISC1] = VANILLA_BTN_TV;
+    ctx->default_button_map[SDL_CONTROLLER_BUTTON_START] = VANILLA_BTN_PLUS;
+    ctx->default_button_map[SDL_CONTROLLER_BUTTON_LEFTSTICK] = VANILLA_BTN_L3;
+    ctx->default_button_map[SDL_CONTROLLER_BUTTON_RIGHTSTICK] = VANILLA_BTN_R3;
+    ctx->default_button_map[SDL_CONTROLLER_BUTTON_LEFTSHOULDER] = VANILLA_BTN_L;
+    ctx->default_button_map[SDL_CONTROLLER_BUTTON_RIGHTSHOULDER] = VANILLA_BTN_R;
+    ctx->default_button_map[SDL_CONTROLLER_BUTTON_DPAD_UP] = VANILLA_BTN_UP;
+    ctx->default_button_map[SDL_CONTROLLER_BUTTON_DPAD_DOWN] = VANILLA_BTN_DOWN;
+    ctx->default_button_map[SDL_CONTROLLER_BUTTON_DPAD_LEFT] = VANILLA_BTN_LEFT;
+    ctx->default_button_map[SDL_CONTROLLER_BUTTON_DPAD_RIGHT] = VANILLA_BTN_RIGHT;
+    ctx->default_axis_map[SDL_CONTROLLER_AXIS_LEFTX] = VANILLA_AXIS_L_X;
+    ctx->default_axis_map[SDL_CONTROLLER_AXIS_LEFTY] = VANILLA_AXIS_L_Y;
+    ctx->default_axis_map[SDL_CONTROLLER_AXIS_RIGHTX] = VANILLA_AXIS_R_X;
+    ctx->default_axis_map[SDL_CONTROLLER_AXIS_RIGHTY] = VANILLA_AXIS_R_Y;
+    ctx->default_axis_map[SDL_CONTROLLER_AXIS_TRIGGERLEFT] = VANILLA_BTN_ZL;
+    ctx->default_axis_map[SDL_CONTROLLER_AXIS_TRIGGERRIGHT] = VANILLA_BTN_ZR;
+    ctx->default_key_map[SDL_SCANCODE_UP] = VANILLA_BTN_UP;
+    ctx->default_key_map[SDL_SCANCODE_DOWN] = VANILLA_BTN_DOWN;
+    ctx->default_key_map[SDL_SCANCODE_LEFT] = VANILLA_BTN_LEFT;
+    ctx->default_key_map[SDL_SCANCODE_RIGHT] = VANILLA_BTN_RIGHT;
+    ctx->default_key_map[SDL_SCANCODE_Z] = VANILLA_BTN_A;
+    ctx->default_key_map[SDL_SCANCODE_X] = VANILLA_BTN_B;
+    ctx->default_key_map[SDL_SCANCODE_C] = VANILLA_BTN_X;
+    ctx->default_key_map[SDL_SCANCODE_V] = VANILLA_BTN_Y;
+    ctx->default_key_map[SDL_SCANCODE_RETURN] = VANILLA_BTN_PLUS;
+    ctx->default_key_map[SDL_SCANCODE_LCTRL] = VANILLA_BTN_MINUS;
+    ctx->default_key_map[SDL_SCANCODE_H] = VANILLA_BTN_HOME;
+    ctx->default_key_map[SDL_SCANCODE_Y] = VANILLA_BTN_TV;
+    ctx->default_key_map[SDL_SCANCODE_W] = VANILLA_AXIS_L_UP;
+    ctx->default_key_map[SDL_SCANCODE_A] = VANILLA_AXIS_L_LEFT;
+    ctx->default_key_map[SDL_SCANCODE_S] = VANILLA_AXIS_L_DOWN;
+    ctx->default_key_map[SDL_SCANCODE_D] = VANILLA_AXIS_L_RIGHT;
+    ctx->default_key_map[SDL_SCANCODE_E] = VANILLA_BTN_L3;
+    ctx->default_key_map[SDL_SCANCODE_KP_8] = VANILLA_AXIS_R_UP;
+    ctx->default_key_map[SDL_SCANCODE_KP_4] = VANILLA_AXIS_R_LEFT;
+    ctx->default_key_map[SDL_SCANCODE_KP_2] = VANILLA_AXIS_R_DOWN;
+    ctx->default_key_map[SDL_SCANCODE_KP_6] = VANILLA_AXIS_R_RIGHT;
+    ctx->default_key_map[SDL_SCANCODE_KP_5] = VANILLA_BTN_R3;
+    ctx->default_key_map[SDL_SCANCODE_T] = VANILLA_BTN_L;
+    ctx->default_key_map[SDL_SCANCODE_G] = VANILLA_BTN_ZL;
+    ctx->default_key_map[SDL_SCANCODE_U] = VANILLA_BTN_R;
+    ctx->default_key_map[SDL_SCANCODE_J] = VANILLA_BTN_ZR;
+    ctx->default_key_map[SDL_SCANCODE_F5] = VPI_ACTION_TOGGLE_RECORDING;
+    ctx->default_key_map[SDL_SCANCODE_F12] = VPI_ACTION_SCREENSHOT;
+    ctx->default_key_map[SDL_SCANCODE_F11] = VPI_ACTION_TOGGLE_FULLSCREEN;
+    ctx->default_key_map[SDL_SCANCODE_ESCAPE] = VPI_ACTION_DISCONNECT;
 }
 
 void find_valid_controller(vui_sdl_context_t *sdl_ctx)
@@ -180,6 +178,15 @@ void find_valid_controller(vui_sdl_context_t *sdl_ctx)
 
 	vpilog("Looking for game controllers...\n");
 	for (int i = 0; i < SDL_NumJoysticks(); i++) {
+        SDL_JoystickGUID guid = SDL_JoystickGetDeviceGUID(i);
+        char guid_str[64];
+        SDL_JoystickGetGUIDString(guid, guid_str, sizeof(guid_str));
+
+        // Ignore left and right joycon devices
+        if (!strcmp(guid_str, "0600c2f47e0500000620000000000000") || !strcmp(guid_str, "060091737e0500000720000000000000")) {
+            continue;
+        }
+
         const char *ctrl_name = SDL_GameControllerNameForIndex(i);
 		vpilog("  Found %i: %s\n", i, ctrl_name);
         if (ctrl_name != NULL && !strcmp(ctrl_name, "Steam Virtual Gamepad")) {
@@ -313,7 +320,17 @@ void vui_sdl_fullscreen_enabled_handler(vui_context_t *ctx, int enabled, void *u
     vui_sdl_context_t *sdl_ctx = (vui_sdl_context_t *) ctx->platform_data;
 
     SDL_SetWindowFullscreen(sdl_ctx->window, enabled ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0);
-    SDL_ShowCursor(!enabled);
+    SDL_ShowCursor(vpi_config.cursor_in_fullscreen || !enabled);
+}
+
+void vui_sdl_get_key_mapping_handler(vui_context_t *ctx, int vanilla_btn, void *userdata)
+{
+
+}
+
+void vui_sdl_set_key_mapping_handler(vui_context_t *ctx, int vanilla_btn, int key, void *userdata)
+{
+
 }
 
 void vui_sdl_audio_set_enabled(vui_context_t *ctx, int enabled, void *userdata)
@@ -342,10 +359,10 @@ void audio_callback(void *userdata, Uint8 *stream, int len)
     size_t r = atomic_load_explicit(&sdl_ctx->audio_rseq, memory_order_relaxed);
     size_t w = atomic_load_explicit(&sdl_ctx->audio_wseq, memory_order_acquire);
     if (r != w) {
-        if (r < w - AUDIO_BUFFER_COUNT + 1) {
-            size_t newr = w - AUDIO_BUFFER_COUNT + 1;;
-            vanilla_log("  AUDIO SKIPPED FROM %zu TO %zu", r, newr);
-            r = newr;
+        size_t min = w - AUDIO_BUFFER_COUNT + 1;
+        if (r < min) {
+            vanilla_log("  AUDIO SKIPPED FROM %zu TO %zu", r, min);
+            r = min;
         }
         memcpy(stream, sdl_ctx->audio_buffer[r % AUDIO_BUFFER_COUNT], len);
         r++;
@@ -358,15 +375,31 @@ void audio_callback(void *userdata, Uint8 *stream, int len)
 void mic_callback(void *userdata, Uint8 *stream, int len)
 {
 	vui_context_t *ctx = (vui_context_t *) userdata;
-	if (ctx->mic_callback)
-    	ctx->mic_callback(ctx->mic_callback_data, stream, len);
-}
+	vui_sdl_context_t *sdl_ctx = (vui_sdl_context_t *) ctx->platform_data;
 
-int32_t pack_float(float f)
-{
-    int32_t x;
-    memcpy(&x, &f, sizeof(int32_t));
-    return x;
+	if (!ctx->mic_callback) {
+		return;
+	}
+
+	if (sdl_ctx->mic_resampler) {
+		// We open the mic at the same rate as playback (48kHz) to avoid
+		// reconfiguring the shared Tegra audio clock domain, then resample
+		// down to the 16kHz the Wii U expects.
+		SDL_AudioStreamPut(sdl_ctx->mic_resampler, stream, len);
+		int avail;
+		while ((avail = SDL_AudioStreamAvailable(sdl_ctx->mic_resampler)) > 0) {
+			uint8_t buf[2048];
+			int chunk = avail < (int) sizeof(buf) ? avail : (int) sizeof(buf);
+			int got = SDL_AudioStreamGet(sdl_ctx->mic_resampler, buf, chunk);
+			if (got > 0) {
+				ctx->mic_callback(ctx->mic_callback_data, buf, got);
+			} else {
+				break;
+			}
+		}
+	} else {
+		ctx->mic_callback(ctx->mic_callback_data, stream, len);
+	}
 }
 
 int vui_sdl_event_thread(void *data)
@@ -474,34 +507,53 @@ int vui_sdl_event_thread(void *data)
             case SDL_CONTROLLERBUTTONDOWN:
             case SDL_CONTROLLERBUTTONUP:
                 if (sdl_ctx->controller && ev.cdevice.which == SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(sdl_ctx->controller))) {
-                    int vanilla_btn = button_map[ev.cbutton.button];
-                    if (vanilla_btn > VPI_ACTION_START_INDEX) {
-                        if (ev.type == SDL_CONTROLLERBUTTONDOWN)
-                            vpi_menu_action(vui, (vpi_extra_action_t) vanilla_btn);
-                    } else if (vanilla_btn != -1) {
-                        // Handle ABXY swap
-                        if (vpi_config.swap_abxy) {
-                            switch (vanilla_btn) {
-                            case VANILLA_BTN_A: vanilla_btn = VANILLA_BTN_B; break;
-                            case VANILLA_BTN_B: vanilla_btn = VANILLA_BTN_A; break;
-                            case VANILLA_BTN_X: vanilla_btn = VANILLA_BTN_Y; break;
-                            case VANILLA_BTN_Y: vanilla_btn = VANILLA_BTN_X; break;
-                            }
-                        }
+                    int btn_idx = ev.cbutton.button;
+                    int vanilla_btn;
 
-                        if (vui->game_mode) {
-                            vanilla_set_button(vanilla_btn, ev.type == SDL_CONTROLLERBUTTONDOWN ? INT16_MAX : 0);
-                        } else if (ev.type == SDL_CONTROLLERBUTTONDOWN) {
-                            vui_process_keydown(vui, vanilla_btn);
+                    // First try to read from config. If unmapped, fallback to default.
+                    vanilla_btn = vpi_config.buttonmap[btn_idx];
+                    if (vanilla_btn == VPI_CONFIG_UNMAPPED) {
+                        vanilla_btn = vui->default_button_map[btn_idx];
+                    }
+
+                    if (vanilla_btn != -1) {
+                        if (vanilla_btn > VPI_ACTION_START_INDEX) {
+                            if (ev.cbutton.state == SDL_PRESSED) {
+                                vpi_menu_action(vui, (vpi_extra_action_t) vanilla_btn);
+                            }
                         } else {
-                            vui_process_keyup(vui, vanilla_btn);
+                            // Handle ABXY swap
+                            if (vpi_config.swap_abxy) {
+                                switch (vanilla_btn) {
+                                case VANILLA_BTN_A: vanilla_btn = VANILLA_BTN_B; break;
+                                case VANILLA_BTN_B: vanilla_btn = VANILLA_BTN_A; break;
+                                case VANILLA_BTN_X: vanilla_btn = VANILLA_BTN_Y; break;
+                                case VANILLA_BTN_Y: vanilla_btn = VANILLA_BTN_X; break;
+                                }
+                            }
+
+                            if (vui->game_mode) {
+                                vanilla_set_button(vanilla_btn, ev.cbutton.state == SDL_PRESSED ? INT16_MAX : 0);
+                            } else if (ev.cbutton.state == SDL_PRESSED) {
+                                vui_process_keydown(vui, vanilla_btn);
+                            } else {
+                                vui_process_keyup(vui, vanilla_btn);
+                            }
                         }
                     }
                 }
                 break;
             case SDL_CONTROLLERAXISMOTION:
                 if (sdl_ctx->controller && ev.cdevice.which == SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(sdl_ctx->controller))) {
-                    int vanilla_axis = axis_map[ev.caxis.axis];
+                    int axis_idx = ev.caxis.axis;
+                    int vanilla_axis;
+
+                    // First try to read from config. If unmapped, fallback to default.
+                    vanilla_axis = vpi_config.axismap[axis_idx];
+                    if (vanilla_axis == VPI_CONFIG_UNMAPPED) {
+                        vanilla_axis = vui->default_axis_map[ev.caxis.axis];
+                    }
+
                     Sint16 axis_value = ev.caxis.value;
                     if (vanilla_axis != -1) {
                         if (vui->game_mode) {
@@ -542,8 +594,22 @@ int vui_sdl_event_thread(void *data)
             case SDL_KEYDOWN:
             case SDL_KEYUP:
             {
-                if (vui->active_textedit == -1) {
-                    int vanilla_btn = key_map[ev.key.keysym.scancode];
+                if (vui->key_override_handler) {
+                    if (ev.key.keysym.scancode == SDL_SCANCODE_ESCAPE) {
+                        vui->key_override_cancel_handler(vui, vui->key_override_handler_data);
+                    } else {
+                        vui->key_override_handler(vui, ev.key.keysym.scancode, vui->key_override_handler_data);
+                    }
+                } else if (vui->active_textedit == -1) {
+                    int key_idx = ev.key.keysym.scancode;
+                    int vanilla_btn;
+
+                    // First try to read from config. If unmapped, fallback to default.
+                    vanilla_btn = vpi_config.keymap[key_idx];
+                    if (vanilla_btn == VPI_CONFIG_UNMAPPED) {
+                        vanilla_btn = vui->default_key_map[key_idx];
+                    }
+
                     if (vanilla_btn > VPI_ACTION_START_INDEX) {
                         if (ev.type == SDL_KEYDOWN)
                             vpi_menu_action(vui, (vpi_extra_action_t) vanilla_btn);
@@ -595,7 +661,23 @@ int vui_sdl_event_thread(void *data)
 
 int vui_init_window(vui_context_t *ctx, vui_sdl_context_t *sdl_ctx, Uint32 window_flags)
 {
-    sdl_ctx->window = SDL_CreateWindow("Vanilla", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, ctx->screen_width, ctx->screen_height, window_flags);
+    int win_w, win_h;
+    if (window_flags & SDL_WINDOW_FULLSCREEN || window_flags & SDL_WINDOW_FULLSCREEN_DESKTOP) {
+        // NOTE: Set window size to fullscreen. Theoretically, this shouldn't be
+        //       necessary, but on the Nintendo Switch, if we set the window size
+        //       to 854x480, everything gets cropped to that size on its 1280x720
+        //       screen. Might be a bug with the specific SDL version we use in
+        //       our Buildroot system, but still this is a cheap fix.
+        SDL_DisplayMode mode;
+        SDL_GetCurrentDisplayMode(0, &mode);
+        win_w = mode.w;
+        win_h = mode.h;
+    } else {
+        win_w = ctx->screen_width;
+        win_h = ctx->screen_height;
+    }
+
+    sdl_ctx->window = SDL_CreateWindow("Vanilla", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, win_w, win_h, window_flags);
     if (!sdl_ctx->window) {
         vpilog("Failed to CreateWindow: %s\n", SDL_GetError());
         return -1;
@@ -622,11 +704,6 @@ int vui_init_sdl(vui_context_t *ctx, int fullscreen)
     // Enable linear filtering
     SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "linear");
 
-	// By default, SDL2 uses X11, even on Wayland systems. This probably isn't
-	// a big deal, but just in case we want it to prefer Wayland, this is how
-	// we can do it.
-	// SDL_SetHint(SDL_HINT_VIDEODRIVER, "wayland,x11");
-
     // Initialize SDL
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER) < 0) {
         vpilog("Failed to initialize SDL: %s\n", SDL_GetError());
@@ -640,16 +717,18 @@ int vui_init_sdl(vui_context_t *ctx, int fullscreen)
     SDL_WindowFlags window_flags = SDL_WINDOW_RESIZABLE;
     if (fullscreen) {
         window_flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
-        SDL_ShowCursor(0);
+        SDL_ShowCursor(vpi_config.cursor_in_fullscreen);
     }
 
 #ifdef VANILLA_HAS_EGL
     // Lookup ahead of time if we're on X11 + OpenGL (will be important for later check...)
-    const char *driver = SDL_GetVideoDriver(0);
+    const char *driver = SDL_GetCurrentVideoDriver();
     if (!strcmp(driver, "x11") || !strcmp(driver, "wayland")) {
         SDL_RendererInfo info;
         SDL_GetRenderDriverInfo(0, &info);
-        if (!strcmp(info.name, "opengl") || !strcmp(info.name, "opengles")) {
+        if (!strcmp(info.name, "opengl")
+            || !strcmp(info.name, "opengles")
+            || !strcmp(info.name, "opengles2")) {
             // This saves a small amount of time on the EGL check below because
             // SDL will fail on the earlier CreateWindow call rather than the
             // later CreateRenderer call.
@@ -713,15 +792,25 @@ int vui_init_sdl(vui_context_t *ctx, int fullscreen)
         vpilog("Failed to open audio device\n");
     }
 
-    // Open audio input device
+    // Open audio input device. We open at the same rate as playback (48kHz)
+    // because some shared-clock-domain audio hardware (e.g. Tegra ASoC) will
+    // reconfigure the codec/I2S rate on capture open, which then breaks any
+    // playback stream that was running at a different rate. We resample to
+    // 16kHz in software in mic_callback before forwarding to the Wii U.
     SDL_AudioSpec mic_desired = {0};
-    mic_desired.freq = 16000;
+    mic_desired.freq = 48000;
     mic_desired.format = AUDIO_S16LSB;
     mic_desired.callback = mic_callback;
 	mic_desired.userdata = ctx;
     mic_desired.channels = 1;
     sdl_ctx->mic = SDL_OpenAudioDevice(NULL, 1, &mic_desired, NULL, 0);
     if (sdl_ctx->mic) {
+		sdl_ctx->mic_resampler = SDL_NewAudioStream(
+			AUDIO_S16LSB, 1, 48000,
+			AUDIO_S16LSB, 1, 16000);
+		if (!sdl_ctx->mic_resampler) {
+			vpilog("Failed to create mic resampler: %s\n", SDL_GetError());
+		}
 		ctx->mic_enabled_handler = vui_sdl_mic_set_enabled;
 		ctx->mic_enabled_handler_data = sdl_ctx;
 	} else {
@@ -789,10 +878,14 @@ int vui_init_sdl(vui_context_t *ctx, int fullscreen)
     sdl_ctx->controller_gyros = NULL;
     find_valid_controller(sdl_ctx);
 
+#ifdef VANILLA_NX_IMU
+    vpi_nx_imu_init();
+#endif
+
     sdl_ctx->frame = av_frame_alloc();
 
 	// Initialize gamepad lookup tables
-	init_gamepad();
+	init_gamepad(ctx);
 
     return 0;
 }
@@ -806,6 +899,10 @@ void vui_close_sdl(vui_context_t *ctx)
 
     av_frame_free(&sdl_ctx->frame);
 
+#ifdef VANILLA_NX_IMU
+    vpi_nx_imu_quit();
+#endif
+
     if (sdl_ctx->controller) {
         SDL_GameControllerClose(sdl_ctx->controller);
     }
@@ -816,6 +913,11 @@ void vui_close_sdl(vui_context_t *ctx)
 
 	if (sdl_ctx->mic) {
 		SDL_CloseAudioDevice(sdl_ctx->mic);
+	}
+
+	if (sdl_ctx->mic_resampler) {
+		SDL_FreeAudioStream(sdl_ctx->mic_resampler);
+		sdl_ctx->mic_resampler = NULL;
 	}
 
 	if (sdl_ctx->pw_tex) {
@@ -980,7 +1082,7 @@ void vui_sdl_draw_button(vui_context_t *vui, vui_sdl_context_t *sdl_ctx, vui_but
     // Load icon if exists
     int icon_x;
     int icon_y;
-    int icon_size = btn->style == VUI_BUTTON_STYLE_CORNER ? rect.h * 1 / 3 : rect.h * 2 / 4;
+    int icon_size = btn->style == VUI_BUTTON_STYLE_CORNER ? rect.h * 1 / 3 : btn->font_size == VUI_FONT_SIZE_SMALL ? rect.h : rect.h * 2 / 4;
     SDL_Texture *icon = 0;
     if (btn->icon[0]) {
         icon = vui_sdl_load_texture(sdl_ctx->renderer, btn->icon);
@@ -994,7 +1096,17 @@ void vui_sdl_draw_button(vui_context_t *vui, vui_sdl_context_t *sdl_ctx, vui_but
             text_font = sdl_ctx->sysfont_tiny;
         }
     } else {
-        text_font = sdl_ctx->sysfont;
+        switch (btn->font_size) {
+        case VUI_FONT_SIZE_SMALL:
+            text_font = sdl_ctx->sysfont_small;
+            break;
+        case VUI_FONT_SIZE_TINY:
+            text_font = sdl_ctx->sysfont_tiny;
+            break;
+        default:
+            text_font = sdl_ctx->sysfont;
+            break;
+        }
     }
 
     const int btn_radius = rect.h * 2 / 10;
@@ -1119,6 +1231,13 @@ void vui_sdl_draw_button(vui_context_t *vui, vui_sdl_context_t *sdl_ctx, vui_but
         icon_rect.w = icon_rect.h = icon_size;
         icon_rect.x = icon_x;
         icon_rect.y = icon_y;
+
+        if(btn->icon_mod){
+            char r = (btn->icon_mod & 0xFF0000) >> sizeof(char) * 8 * 2;
+            char g = (btn->icon_mod & 0x00FF00) >> sizeof(char) * 8;
+            char b = (btn->icon_mod & 0x0000FF);
+            SDL_SetTextureColorMod(icon, r, g, b);
+        }
 
         SDL_RenderCopy(sdl_ctx->renderer, icon, 0, &icon_rect);
         SDL_DestroyTexture(icon);
@@ -1361,7 +1480,7 @@ void vui_draw_sdl(vui_context_t *ctx, SDL_Renderer *renderer)
 
         // Check if button needs to be redrawn
         vui_sdl_cached_texture_t *btn_tex = &sdl_ctx->button_cache[i];
-        if (!btn_tex->texture || btn_tex->w != btn->w || btn_tex->h != btn->h || strcmp(btn_tex->text, btn->text) || strcmp(btn_tex->icon, btn->icon) || btn_tex->checked != btn->checked) {
+        if (!btn_tex->texture || btn_tex->w != btn->w || btn_tex->h != btn->h || strcmp(btn_tex->text, btn->text) || strcmp(btn_tex->icon, btn->icon) || btn_tex->checked != btn->checked || btn_tex->icon_mod != btn->icon_mod) {
             // Must re-draw texture
             if (btn_tex->texture && (btn_tex->w != btn->w || btn_tex->h != btn->h)) {
                 SDL_DestroyTexture(btn_tex->texture);
@@ -1381,6 +1500,7 @@ void vui_draw_sdl(vui_context_t *ctx, SDL_Renderer *renderer)
 
             btn_tex->w = btn->w;
             btn_tex->h = btn->h;
+            btn_tex->icon_mod = btn->icon_mod;
             strcpy(btn_tex->text, btn->text);
             strcpy(btn_tex->icon, btn->icon);
 
@@ -1726,8 +1846,6 @@ int vui_update_sdl(vui_context_t *vui)
 
     vui_sdl_context_t *sdl_ctx = (vui_sdl_context_t *) vui->platform_data;
 
-    SDL_Rect *dst_rect = &sdl_ctx->dst_rect;
-
     SDL_Renderer *renderer = sdl_ctx->renderer;
 
     vui_update(vui);
@@ -1794,14 +1912,20 @@ int vui_update_sdl(vui_context_t *vui)
             switch (sdl_ctx->frame->format) {
             case AV_PIX_FMT_DRM_PRIME:
             {
-                // get_texture_from_drm_prime_frame(sdl_ctx, sdl_ctx->frame);
-
 #ifdef VANILLA_DRM_AVAILABLE
-                if (!drm_ctx) {
-                    vui_sdl_drm_initialize(&drm_ctx, sdl_ctx->window);
+                // For very low powered systems, we can save a little time by
+                // skipping SDL2 entirely and rendering straight to DRM. However,
+                // we lose features like "toast" notifications and upscaling, so
+                // this is provided as an option only.
+                if (vpi_config.fast_drm) {
+                    if (!drm_ctx) {
+                        vui_sdl_drm_initialize(&drm_ctx, sdl_ctx->window);
+                    }
+                    vui_sdl_drm_present(drm_ctx, sdl_ctx->frame);
+                    handle_final_blit = 0;
+                } else {
+                    get_texture_from_drm_prime_frame(sdl_ctx, sdl_ctx->frame);
                 }
-                vui_sdl_drm_present(drm_ctx, sdl_ctx->frame);
-                handle_final_blit = 0;
 #endif // VANILLA_DRM_AVAILABLE
                 break;
             }
@@ -1926,29 +2050,34 @@ int vui_update_sdl(vui_context_t *vui)
         }
 
         // Calculate our destination rectangle
-        int win_w, win_h;
-        SDL_GetWindowSize(sdl_ctx->window, &win_w, &win_h);
-        if (win_w == vui->screen_width && win_h == vui->screen_height) {
+
+        SDL_SetRenderTarget(renderer, NULL);
+
+        int out_w, out_h;
+        int tex_w = vui->screen_width, tex_h = vui->screen_height;
+
+        SDL_GetRendererOutputSize(renderer, &out_w, &out_h);
+
+        // Hold a reference to the dst_rect for later mouse operations
+        SDL_Rect *dst_rect = &sdl_ctx->dst_rect;
+        if (out_w == tex_w && out_h == tex_h) {
             dst_rect->x = 0;
             dst_rect->y = 0;
-            dst_rect->w = vui->screen_width;
-            dst_rect->h = vui->screen_height;
-        } else if (win_w * 100 / win_h > vui->screen_width * 100 / vui->screen_height) {
-            // Window is wider than texture, scale by height
-            dst_rect->h = win_h;
+            dst_rect->w = tex_w;
+            dst_rect->h = tex_h;
+        } else if ((int64_t)out_w * tex_h > (int64_t)out_h * tex_w) {
+            dst_rect->h = out_h;
             dst_rect->y = 0;
-            dst_rect->w = win_h * vui->screen_width / vui->screen_height;
-            dst_rect->x = win_w / 2 - dst_rect->w / 2;
+            dst_rect->w = out_h * tex_w / tex_h;
+            dst_rect->x = (out_w - dst_rect->w) / 2;
         } else {
-            // Window is taller than texture, scale by width
-            dst_rect->w = win_w;
+            dst_rect->w = out_w;
             dst_rect->x = 0;
-            dst_rect->h = win_w * vui->screen_height / vui->screen_width;
-            dst_rect->y = win_h / 2 - dst_rect->h / 2;
+            dst_rect->h = out_w * tex_h / tex_w;
+            dst_rect->y = (out_h - dst_rect->h) / 2;
         }
 
         // Copy texture to window
-        SDL_SetRenderTarget(renderer, NULL);
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
         SDL_RenderClear(renderer);
         SDL_RenderCopy(renderer, main_tex, NULL, dst_rect);

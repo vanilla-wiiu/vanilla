@@ -3,6 +3,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <string.h>
 
 void vui_strncpy(char *dst, const char *src, size_t max_dst_size);
 size_t vui_utf8_cp_len(const char *s);
@@ -12,5 +13,12 @@ static inline int intmin(int a, int b) { return a < b ? a : b; }
 static inline int intmax(int a, int b) { return a > b ? a : b; }
 static inline int64_t int64min(int64_t a, int64_t b) { return a < b ? a : b; }
 static inline int64_t int64max(int64_t a, int64_t b) { return a > b ? a : b; }
+
+static inline int32_t pack_float(float f)
+{
+    int32_t x;
+    memcpy(&x, &f, sizeof(int32_t));
+    return x;
+}
 
 #endif // VANILLA_PI_UI_UTIL_H

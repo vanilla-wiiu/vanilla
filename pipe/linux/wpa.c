@@ -639,19 +639,14 @@ int check_for_disconnection(struct sync_args *args)
 void create_all_relays(struct sync_args *args)
 {
     pthread_t vid_thread, aud_thread, msg_thread, cmd_thread, hid_thread;
+    struct relay_info vid_info, aud_info, msg_info, cmd_info, hid_info;
 
     if (!args->local) {
-        struct relay_info *vid_info = malloc(sizeof(*vid_info));
-        struct relay_info *aud_info = malloc(sizeof(*aud_info));
-        struct relay_info *msg_info = malloc(sizeof(*msg_info));
-        struct relay_info *cmd_info = malloc(sizeof(*cmd_info));
-        struct relay_info *hid_info = malloc(sizeof(*hid_info));
-
-        if (!vid_info || !aud_info || !msg_info || !cmd_info || !hid_info) {
-            nlprint("FAILED TO ALLOC RELAY INFO STRUCTS");
-            free(vid_info); free(aud_info); free(msg_info); free(cmd_info); free(hid_info);
-            return;
-        }
+        // Set common info for all
+        vid_info.wireless_interface = aud_info.wireless_interface = msg_info.wireless_interface = cmd_info.wireless_interface = hid_info.wireless_interface = args->wireless_interface;
+        vid_info.local = aud_info.local = msg_info.local = cmd_info.local = hid_info.local = args->local;
+        vid_info.client = aud_info.client = msg_info.client = cmd_info.client = hid_info.client = args->client;
+        vid_info.client_size = aud_info.client_size = msg_info.client_size = cmd_info.client_size = hid_info.client_size = args->client_size;
 
         // Fill common fields
         *vid_info = (struct relay_info){
@@ -1172,6 +1167,40 @@ int install_polkit()
 
 void pipe_listen(int local, const char *wireless_interface, const char *log_file)
 {
+    // Some setups require this
+    run_process_and_read_stdout((const char *[]) {"rfkill", "unblock", "wlan", NULL}, 0, 0);
+
+    // Store reference to log file
+    ext_logfile = log_file;
+
+    // Ensure local domain sockets can be written to by everyone
+    umask(0000);
+
+    int skt = open_socket(local, VANILLA_PIPE_CMD_SERVER_PORT);
+    if (skt == -1) {
+        nlprint("Failed to open server socket");
+        return;
+    }
+
+    vanilla_pipe_command_t cmd;
+
+    sockaddr_u addr;
+
+    pthread_mutex_init(&running_mutex, NULL);
+    pthread_mutex_init(&action_mutex, NULL);
+    pthread_mutex_init(&main_loop_mutex, NULL);
+
+	pthread_t stdin_thread;
+	pthread_create(&stdin_thread, NULL, read_stdin, NULL);
+
+	set_signals();
+
+    main_loop = 1;
+
+    pthread_mutex_lock(&main_loop_mutex);
+
+    nlprint("READY");
+
     // If this is the Steam Deck, we must switch the backend from `iwd` to `wpa_supplicant`
 	int sd_wifi_backend_changed = 0;
 	{
@@ -1206,37 +1235,6 @@ void pipe_listen(int local, const char *wireless_interface, const char *log_file
         g_error_free(nm_err);
     }
 #endif
-
-    // Store reference to log file
-    ext_logfile = log_file;
-
-    // Ensure local domain sockets can be written to by everyone
-    umask(0000);
-
-    int skt = open_socket(local, VANILLA_PIPE_CMD_SERVER_PORT);
-    if (skt == -1) {
-        nlprint("Failed to open server socket");
-        return;
-    }
-
-    vanilla_pipe_command_t cmd;
-
-    sockaddr_u addr;
-
-    pthread_mutex_init(&running_mutex, NULL);
-    pthread_mutex_init(&action_mutex, NULL);
-    pthread_mutex_init(&main_loop_mutex, NULL);
-
-	pthread_t stdin_thread;
-	pthread_create(&stdin_thread, NULL, read_stdin, NULL);
-
-	set_signals();
-
-    main_loop = 1;
-
-    pthread_mutex_lock(&main_loop_mutex);
-
-    nlprint("READY");
 
     while (main_loop) {
         pthread_mutex_unlock(&main_loop_mutex);

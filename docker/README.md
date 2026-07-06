@@ -4,10 +4,10 @@ Since Vanilla's infrastructure can be somewhat complicated (and to aid in auto-b
 
 Usage is as follows for all platforms:
 
-- First, build the Docker image. We give it the tag `vanilla-build:latest` but you can choose anything.
+- First, build the Docker image. We give it the tag `vanilla-build:latest` but you can choose anything. Vanilla's Dockerfiles are designed to be run from the context of the source code root, so `cd` there and type the following command:
 
   ```
-  docker build -t vanilla-build:latest .
+  docker build -f docker/<platform>/Dockerfile -t vanilla-build:latest .
   ```
 
 - Secondly, use the new Docker image to build. Two volumes must be mounted, `/vanilla` for the source directory, and `/install` for the final compiled file structure. The following paths (`~/vanilla-src` and `~/vanilla-build`) are provided as an example, but you should select paths that make the most sense on your system.

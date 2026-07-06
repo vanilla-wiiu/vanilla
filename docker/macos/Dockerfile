@@ -1,10 +1,13 @@
-FROM ubuntu:24.04
+FROM docker.io/ubuntu:24.04
 
 ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=Etc/UTC
 
-RUN apt -y update
-
-RUN apt -y install build-essential git clang patch python3 cmake patch libssl-dev libxml2-dev liblzma-dev cpio libbz2-dev zlib1g-dev bash wget nasm
+RUN apt -y update && \
+    apt -y install build-essential git clang patch python3 cmake patch libssl-dev libxml2-dev liblzma-dev cpio libbz2-dev zlib1g-dev bash wget nasm && \
+    apt-get clean && \
+    apt-get autoremove --yes && \
+    rm -rf /var/lib/{apt,dpkg,cache,log}/
 
 RUN git clone https://github.com/tpoechtrager/osxcross
 

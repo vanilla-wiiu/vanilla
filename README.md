@@ -3,7 +3,7 @@
 This is a **work-in-progress** software clone of the Wii U gamepad. No warranty is provided and everything should be considered **alpha** at best.
 
 <p align="center">
-    <img src="https://raw.githubusercontent.com/vanilla-wiiu/vanilla/master/images/screenshot1.png">
+    <img src="https://raw.githubusercontent.com/vanilla-wiiu/vanilla/master/images/screenshot3.png">
     <br>
     <a href="https://youtu.be/DSgFu4rDxgc">
         Announcement Video
@@ -24,9 +24,9 @@ An Arch User Repository (AUR) package called `vanilla-wiiu-git` is available for
 
 ## What devices are supported?
 
+- [Nintendo Switch](https://github.com/vanilla-wiiu/vanilla/wiki/Nintendo-Switch)
 - [Steam Deck](https://github.com/vanilla-wiiu/vanilla/wiki/Steam-Deck)
 - [Linux](https://github.com/vanilla-wiiu/vanilla/wiki/Linux-Setup-Guide) (check [Wi-Fi hardware compatibility](https://github.com/vanilla-wiiu/vanilla/wiki/Wireless-Compatibility))
-- [Nintendo Switch](https://github.com/vanilla-wiiu/vanilla/wiki/Linux-Setup-Guide) (requires [Broadcom firmware patch](https://github.com/vanilla-wiiu/nexmon) or [external Wi-Fi adapter](https://github.com/vanilla-wiiu/vanilla/wiki/Linux-Setup-Guide#nintendo-switch))
 - [Android](https://github.com/vanilla-wiiu/vanilla/wiki/Android-Setup-Guide) (currently frontend only)
 - [Windows](https://github.com/vanilla-wiiu/vanilla/wiki/Windows-Setup-Guide) (currently frontend only)
 - [Raspberry Pi](https://github.com/vanilla-wiiu/vanilla/wiki/Raspberry-Pi) (requires [external Wi-Fi adapter](https://github.com/vanilla-wiiu/vanilla/wiki/Linux-Setup-Guide#raspberry-pi))
@@ -47,6 +47,7 @@ Extra Vanilla functionality can be accessed through these keyboard shortcuts. On
 | Function              | Key           |
 | --------------------- | ------------- |
 | Start/Stop Recording  | F5            |
+| Toggle Fullscreen     | F11           |
 | Take Screenshot       | F12           |
 | Disconnect            | Esc           |
 
