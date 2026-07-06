@@ -499,7 +499,8 @@ endif()
 if (IOS)
     # These are random and im not sure which are actually needed
     target_link_libraries(vanilla PRIVATE
-        SDL2main
+        SDL2::SDL2main
+        ${_sdl_lib}
         "-framework Foundation"
         "-framework UIKit"
         "-framework CoreGraphics"
