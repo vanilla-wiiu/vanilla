@@ -18,6 +18,8 @@ if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
     set(IOS TRUE)
 endif()
 
+option(VANILLA_IOS_LEGACY "Build for iOS 12.0" OFF)
+
 if(ANDROID OR MSVC OR IOS)
     set(vendored_default TRUE)
 else()

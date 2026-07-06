@@ -445,6 +445,16 @@ elseif(IOS)
         set(ACTOOL_PLATFORM "iphoneos")
     endif()
 
+    if(VANILLA_IOS_LEGACY)
+        set(_vanilla_icon_input "${CMAKE_SOURCE_DIR}/ios/Assets.xcassets")
+        set(_vanilla_icon_extra_args)
+        set(_vanilla_icon_comment "Compiling Assets.xcassets")
+    else()
+        set(_vanilla_icon_input "${CMAKE_SOURCE_DIR}/ios/AppIcon.icon")
+        set(_vanilla_icon_extra_args --include-all-app-icons)
+        set(_vanilla_icon_comment "Compiling AppIcon.icon")
+    endif()
+
     add_custom_command(
         TARGET vanilla POST_BUILD
         COMMAND xcrun actool
@@ -452,13 +462,13 @@ elseif(IOS)
                 --enable-on-demand-resources NO
                 --app-icon AppIcon
                 --platform ${ACTOOL_PLATFORM}
-                --include-all-app-icons
+                ${_vanilla_icon_extra_args}
                 --minimum-deployment-target "${CMAKE_OSX_DEPLOYMENT_TARGET}"
                 --target-device iphone --target-device ipad
                 --output-partial-info-plist "${CMAKE_CURRENT_BINARY_DIR}/AssetCatalog-Info.plist"
-                "${CMAKE_SOURCE_DIR}/ios/AppIcon.icon"
+                "${_vanilla_icon_input}"
         VERBATIM
-        COMMENT "Compiling AppIcon.icon"
+        COMMENT "${_vanilla_icon_comment}"
     )
 
     # Merge the partial plist from actool into the bundle's Info.plist
@@ -613,7 +623,6 @@ endif()
 # Find libxml2 (used for storing/parsing user config)
 if (VANILLA_BUILD_VENDORED)
     if (IOS)
-        # iOS: use system libxml2 from SDK
         target_link_libraries(vanillagui PRIVATE "-lxml2")
         target_include_directories(vanillagui PRIVATE "${CMAKE_OSX_SYSROOT}/usr/include/libxml2")
     else()
@@ -653,7 +662,7 @@ elseif(IOS)
         COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/assets" "$<TARGET_FILE_DIR:vanilla>/assets"
     )
 elseif(APPLE)
-	# Put assets in correct place relative to build
+    # Put assets in correct place relative to build
     add_custom_command(
         TARGET vanilla POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_directory_if_different "${CMAKE_CURRENT_SOURCE_DIR}/assets" "$<TARGET_FILE_DIR:vanilla>/../Resources/assets"
