@@ -495,7 +495,7 @@ void *do_relay(void *data)
         }
     }
     return NULL;
-    }
+}
 
 relay_ports create_ports(int from_socket, int to_socket, const sockaddr_u *to_addr, size_t to_addr_size)
 {
@@ -612,7 +612,6 @@ close_console_connection:
     close(from_console);
 
 close:
-    free(info);
     return THREADRESULT(ret);
 }
 
@@ -648,54 +647,20 @@ void create_all_relays(struct sync_args *args)
         vid_info.client = aud_info.client = msg_info.client = cmd_info.client = hid_info.client = args->client;
         vid_info.client_size = aud_info.client_size = msg_info.client_size = cmd_info.client_size = hid_info.client_size = args->client_size;
 
-        // Fill common fields
-        *vid_info = (struct relay_info){
-            .wireless_interface = args->wireless_interface,
-            .local = args->local,
-            .client = args->client,
-            .client_size = args->client_size,
-            .port = PORT_VID
-        };
+        vid_info.port = PORT_VID;
+        aud_info.port = PORT_AUD;
+        msg_info.port = PORT_MSG;
+        cmd_info.port = PORT_CMD;
+        hid_info.port = PORT_HID;
 
-        *aud_info = (struct relay_info){
-            .wireless_interface = args->wireless_interface,
-            .local = args->local,
-            .client = args->client,
-            .client_size = args->client_size,
-            .port = PORT_AUD
-        };
-
-        *msg_info = (struct relay_info){
-            .wireless_interface = args->wireless_interface,
-            .local = args->local,
-            .client = args->client,
-            .client_size = args->client_size,
-            .port = PORT_MSG
-        };
-
-        *cmd_info = (struct relay_info){
-            .wireless_interface = args->wireless_interface,
-            .local = args->local,
-            .client = args->client,
-            .client_size = args->client_size,
-            .port = PORT_CMD
-        };
-
-        *hid_info = (struct relay_info){
-            .wireless_interface = args->wireless_interface,
-            .local = args->local,
-            .client = args->client,
-            .client_size = args->client_size,
-            .port = PORT_HID
-        };
-
+        // Enable relays
         relay_running = 1;
 
-        pthread_create(&vid_thread, NULL, open_relay, vid_info);
-        pthread_create(&aud_thread, NULL, open_relay, aud_info);
-        pthread_create(&msg_thread, NULL, open_relay, msg_info);
-        pthread_create(&cmd_thread, NULL, open_relay, cmd_info);
-        pthread_create(&hid_thread, NULL, open_relay, hid_info);
+        pthread_create(&vid_thread, NULL, open_relay, &vid_info);
+        pthread_create(&aud_thread, NULL, open_relay, &aud_info);
+        pthread_create(&msg_thread, NULL, open_relay, &msg_info);
+        pthread_create(&cmd_thread, NULL, open_relay, &cmd_info);
+        pthread_create(&hid_thread, NULL, open_relay, &hid_info);
     }
 
     // Notify client that we are connected
@@ -707,7 +672,7 @@ void create_all_relays(struct sync_args *args)
         if (check_for_disconnection(args)) {
             break;
         }
-        
+
         // wpa_ctrl_recv is non-blocking, so reduce thrashing by sleeping here
         sleep(1);
     }

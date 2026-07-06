@@ -36,7 +36,7 @@ typedef struct {
 } InputPacketGyroscope;
 
 typedef struct {
-    uint8_t packed[6];
+    signed char unknown[6];
 } InputPacketMagnet;
 
 typedef struct {
@@ -46,9 +46,9 @@ typedef struct {
 } TouchCoord;
 
 typedef struct {
-    TouchCoordWire x;
-    TouchCoordWire y;
-} TouchPointWire;
+    TouchCoord x;
+    TouchCoord y;
+} TouchPoint;
 
 typedef struct {
     int16_t x;
@@ -87,42 +87,6 @@ typedef struct {
 } InputPacket;
 
 #pragma pack(pop)
-
-static inline TouchCoordWire pack_touch_coord(
-    TouchCoordData coord
-)
-{
-    uint16_t word =
-        ((coord.pad & 0x01) << 0) |
-        ((coord.extra & 0x07) << 1) |
-        ((coord.value & 0x0FFF) << 4);
-
-    TouchCoordWire out;
-    out.data[0] = (uint8_t)reverse_bits((uint8_t)((word >> 8) & 0xFF), 8);
-    out.data[1] = (uint8_t)reverse_bits((uint8_t)(word & 0xFF), 8);
-    return out;
-}
-
-static inline void pack_s24_le(uint8_t out[3], int32_t v)
-{
-    if (v > 8388607) v = 8388607;
-    if (v < -8388608) v = -8388608;
-
-    uint32_t u = (uint32_t)(v & 0x00FFFFFF);
-
-    out[0] = (uint8_t)(u & 0xFF);
-    out[1] = (uint8_t)((u >> 8) & 0xFF);
-    out[2] = (uint8_t)((u >> 16) & 0xFF);
-}
-
-static inline InputPacketGyroscope pack_gyroscope(int32_t roll, int32_t pitch, int32_t yaw)
-{
-    InputPacketGyroscope gyro;
-    pack_s24_le(gyro.roll, roll);
-    pack_s24_le(gyro.pitch, pitch);
-    pack_s24_le(gyro.yaw, yaw);
-    return gyro;
-}
 
 void set_button_state(int button, int32_t value)
 {
