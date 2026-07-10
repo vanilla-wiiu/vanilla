@@ -318,7 +318,7 @@ int vpi_decode_init(vpi_decode_state_t *s)
     decoders[HWDEC_TYPE_DRM].get_format = drm_get_format;
 
     decoders[HWDEC_TYPE_SOFTWARE].name = "Software";
-    decoders[HWDEC_TYPE_SOFTWARE].codec = avcodec_find_decoder(AV_CODEC_ID_H264);
+    decoders[HWDEC_TYPE_SOFTWARE].codec = avcodec_find_decoder_by_name("h264"); // avcodec_find_decoder(AV_CODEC_ID_H264);
     decoders[HWDEC_TYPE_SOFTWARE].get_format = 0;
 
     // Discover the most ideal hardware decoder

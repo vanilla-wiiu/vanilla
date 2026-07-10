@@ -90,6 +90,9 @@ void vpi_config_save()
     sprintf(buf, "%i", vpi_config.fast_drm);
     xmlTextWriterWriteElement(writer, BAD_CAST "fastdrm", BAD_CAST buf);
 
+    sprintf(buf, "%i", vpi_config.force_software_decode);
+    xmlTextWriterWriteElement(writer, BAD_CAST "swdec", BAD_CAST buf);
+
     xmlTextWriterStartElement(writer, BAD_CAST "controls");
     if (vpi_config.keymap) {
         xmlTextWriterStartElement(writer, BAD_CAST "keys");
@@ -244,6 +247,8 @@ void vpi_config_init()
                         vpi_config.fast_drm = atoi((const char *) child->children->content);
                     } else if (!strcmp((const char *) child->name, "fullscreen")) {
                         vpi_config.fullscreen = atoi((const char *) child->children->content);
+                    } else if (!strcmp((const char *) child->name, "swdec")) {
+                        vpi_config.force_software_decode = atoi((const char *) child->children->content);
                     } else if (!strcmp((const char *) child->name, "controls")) {
                         xmlNodePtr section = child->children;
                         while(section){
