@@ -302,10 +302,12 @@ void vui_sdl_text_open_handler(vui_context_t *ctx, int textedit, int open, void 
 
 vui_power_state_t vui_sdl_power_state_handler(vui_context_t *ctx, int *percent)
 {
+#if 0
 	vui_sdl_context_t *sdl_ctx = (vui_sdl_context_t *) ctx->platform_data;
 
-	// Turns out checking the power state is an expensive operation. Let's
+    // Turns out checking the power state is an expensive operation. Let's
 	// limit checks to once per minute and cache the result.
+
 	Uint32 now = SDL_GetTicks();
 	if (now >= sdl_ctx->last_power_state_check + 60000) {
 		sdl_ctx->last_power_state = (vui_power_state_t) SDL_GetPowerInfo(NULL, percent);
@@ -313,6 +315,9 @@ vui_power_state_t vui_sdl_power_state_handler(vui_context_t *ctx, int *percent)
 	}
 
 	return sdl_ctx->last_power_state;
+#else
+    return (vui_power_state_t) SDL_GetPowerInfo(NULL, percent);
+#endif
 }
 
 void vui_sdl_fullscreen_enabled_handler(vui_context_t *ctx, int enabled, void *userdata)

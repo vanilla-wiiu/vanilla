@@ -92,9 +92,10 @@ static void update_battery_information(vui_context_t *vui, int64_t time)
         switch (power_state) {
         case VUI_POWERSTATE_ERROR:
         case VUI_POWERSTATE_UNKNOWN:
-            // Unknown status
-            status = VANILLA_BATTERY_STATUS_UNKNOWN;
-            break;
+            // Sending an unknown/error state to the Wii U can cause undesirable
+            // side effects (e.g. it will be unable to "update" the gamepad and
+            // will nag the user every boot about it), so instead we just send
+            // it an innocuous "charging" state.
         case VUI_POWERSTATE_NO_BATTERY:
         case VUI_POWERSTATE_CHARGING:
         case VUI_POWERSTATE_CHARGED:
@@ -113,7 +114,7 @@ static void update_battery_information(vui_context_t *vui, int64_t time)
 
         vanilla_set_battery_status(status);
 
-        current_minute = menu_game_ctx.last_power_time;
+        menu_game_ctx.last_power_time = current_minute;
     }
 }
 
