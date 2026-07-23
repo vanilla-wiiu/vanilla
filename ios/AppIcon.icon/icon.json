@@ -1,0 +1,36 @@
+{
+    "fill": {
+        "automatic-gradient": "srgb:0.13333,0.79608,1.00000,1.00000"
+    },
+    "groups": [
+        {
+            "layers": [
+                {
+                    "image-name": "Vanilla.svg",
+                    "name": "Vanilla",
+                    "position": {
+                        "scale": 34.5,
+                        "translation-in-points": [
+                            0,
+                            0
+                        ]
+                    }
+                }
+            ],
+            "shadow": {
+                "kind": "neutral",
+                "opacity": 0.5
+            },
+            "translucency": {
+                "enabled": true,
+                "value": 0.5
+            }
+        }
+    ],
+    "supported-platforms": {
+        "circles": [
+            "watchOS"
+        ],
+        "squares": "shared"
+    }
+}
