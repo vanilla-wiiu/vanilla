@@ -13,7 +13,7 @@ index b6633d9..1b3950c 100644
  static int v4l2request_select_capture_format(AVHWFramesContext *hwfc)
  {
      AVV4L2RequestFramesContext *fctx = hwfc->hwctx;
-@@ -264,6 +268,9 @@ static int v4l2request_select_capture_format(AVHWFramesContext *hwfc)
+@@ -264,6 +268,10 @@ static int v4l2request_select_capture_format(AVHWFramesContext *hwfc)
          .type = type,
      };
 
