@@ -33,6 +33,9 @@ jobs:
           - os: raspberrypizero2w
             arch: aarch64
             artifact: vanilla-raspberrypizero2w-image.zip
+          - os: orangepi_zero3
+            arch: aarch64
+            artifact: vanilla-orangepi_zero3-image.zip
           - os: nintendoswitch
             arch: aarch64
             artifact: vanilla-nintendoswitch-image.zip
@@ -73,7 +76,7 @@ jobs:
         tar czf ${{ matrix.platform.artifact }} -C "${{ github.workspace }}/build" .
 
     - name: Archive (Windows/macOS/Raspberry Pi/Nintendo Switch)
-      if: ${{ matrix.platform.os == 'windows' || matrix.platform.os == 'macos' || matrix.platform.os == 'raspberrypi0w' || matrix.platform.os == 'raspberrypizero2w' || matrix.platform.os == 'nintendoswitch' }}
+      if: ${{ matrix.platform.os == 'windows' || matrix.platform.os == 'macos' || matrix.platform.os == 'raspberrypi0w' || matrix.platform.os == 'raspberrypizero2w' || matrix.platform.os == 'nintendoswitch' || matrix.platform.os == 'orangepi_zero3' }}
       run: |
         cd build
         zip -r ../${{ matrix.platform.artifact }} .

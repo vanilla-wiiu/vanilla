@@ -1,0 +1,14 @@
+#!/bin/sh
+
+export HOME=/root
+export SDL_VIDEODRIVER=KMSDRM
+
+# Wait for DRM device to become available
+while :; do
+    for status in /sys/class/drm/card*-*/status; do
+        if [ -r "$status" ] && grep -qx connected "$status"; then
+            exec /usr/bin/vanilla
+        fi
+    done
+    sleep 1
+done
