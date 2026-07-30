@@ -18,6 +18,13 @@
 #include "ui/ui_anim.h"
 #include "ui/ui_util.h"
 
+#ifdef VANILLA_V4L2REQUEST_AVAILABLE
+#include <fcntl.h>
+#include <sys/ioctl.h>
+#include <unistd.h>
+#include <linux/videodev2.h>
+#endif
+
 static char vpi_toast_string[VPI_TOAST_MAX_LEN];
 static struct timeval vpi_toast_expiry;
 static int vpi_toast_number = 0;
@@ -223,10 +230,49 @@ typedef struct {
 enum HwDecoderType {
     HWDEC_TYPE_NVDEC,
     HWDEC_TYPE_VAAPI,
+    HWDEC_TYPE_V4L2REQUEST,
     HWDEC_TYPE_DRM,
     HWDEC_TYPE_SOFTWARE,
     HWDEC_TYPE_COUNT
 };
+
+#ifdef VANILLA_V4L2REQUEST_AVAILABLE
+static int is_v4l2request_available(void)
+{
+    char path[32];
+    for (int i = 0; i < 64; i++) {
+        snprintf(path, sizeof(path), "/dev/video%d", i);
+        int fd = open(path, O_RDWR | O_NONBLOCK);
+        if (fd < 0) {
+            continue;
+        }
+
+        int found = 0;
+        for (int t = 0; t < 2; t++) {
+            struct v4l2_fmtdesc desc;
+            memset(&desc, 0, sizeof(desc));
+            desc.type = (t == 0) ? V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE
+                                 : V4L2_BUF_TYPE_VIDEO_OUTPUT;
+            for (desc.index = 0; ioctl(fd, VIDIOC_ENUM_FMT, &desc) == 0; desc.index++) {
+                if (desc.pixelformat == V4L2_PIX_FMT_H264_SLICE) {
+                    found = 1;
+                    break;
+                }
+            }
+
+            if (found) {
+                break;
+            }
+        }
+
+        close(fd);
+        if (found) {
+            return 1;
+        }
+    }
+    return 0;
+}
+#endif // VANILLA_V4L2REQUEST_AVAILABLE
 
 void vpi_decode_exit(vpi_decode_state_t *s)
 {
@@ -303,6 +349,8 @@ int vpi_decode_init(vpi_decode_state_t *s)
 {
     int ffmpeg_err;
 
+    // av_log_set_level(AV_LOG_VERBOSE);
+
     // Initialize decoding context, preferring hardware decoding when available
     hwdec_t decoders[HWDEC_TYPE_COUNT];
 
@@ -313,6 +361,10 @@ int vpi_decode_init(vpi_decode_state_t *s)
     decoders[HWDEC_TYPE_VAAPI].name = "VAAPI";
     decoders[HWDEC_TYPE_VAAPI].codec = avcodec_find_decoder(AV_CODEC_ID_H264);
     decoders[HWDEC_TYPE_VAAPI].get_format = vaapi_get_format;
+
+    decoders[HWDEC_TYPE_V4L2REQUEST].name = "V4L2 Request";
+    decoders[HWDEC_TYPE_V4L2REQUEST].codec = avcodec_find_decoder(AV_CODEC_ID_H264);
+    decoders[HWDEC_TYPE_V4L2REQUEST].get_format = drm_get_format;
 
     decoders[HWDEC_TYPE_DRM].name = "DRM";
     decoders[HWDEC_TYPE_DRM].codec = avcodec_find_decoder_by_name("h264_v4l2m2m");
@@ -344,6 +396,15 @@ int vpi_decode_init(vpi_decode_state_t *s)
                 r = open_decoder(s, &decoders[HWDEC_TYPE_VAAPI]);
             }
         }
+
+#ifdef VANILLA_V4L2REQUEST_AVAILABLE
+        if (r != VANILLA_SUCCESS && is_v4l2request_available()) {
+            vpi_decode_exit(s);
+            if ((ffmpeg_err = av_hwdevice_ctx_create(&s->hw_device_ctx, AV_HWDEVICE_TYPE_V4L2REQUEST, NULL, NULL, 0)) >= 0) {
+                r = open_decoder(s, &decoders[HWDEC_TYPE_V4L2REQUEST]);
+            }
+        }
+#endif // VANILLA_V4L2REQUEST_AVAILABLE
 
         // See if we can create a DRM context (Raspberry Pi, et al.)
         if (r != VANILLA_SUCCESS) {

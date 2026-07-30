@@ -403,6 +403,14 @@ target_link_libraries(vanillagui PRIVATE
     ${_vanilla_gui_libs}
 )
 
+if (LINUX)
+    option(VANILLA_BUILD_USE_V4L2REQUEST "Enable V4L2 Request API (Orange Pi/Cedrus)" OFF)
+    if (VANILLA_BUILD_USE_V4L2REQUEST)
+        target_compile_definitions(vanillagui PRIVATE VANILLA_V4L2REQUEST_AVAILABLE)
+        target_link_libraries(vanillagui PRIVATE udev drm)
+    endif()
+endif()
+
 if (APPLE)
 	target_link_libraries(vanillagui PRIVATE "-framework VideoToolbox" "-framework CoreMedia" iconv)
 endif()

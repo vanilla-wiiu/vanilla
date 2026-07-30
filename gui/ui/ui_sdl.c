@@ -82,6 +82,7 @@ typedef struct {
     SDL_Texture *toast_tex;
     struct timeval toast_expiry;
     AVFrame *frame;
+    AVFrame *held_frame; // keeps the displayed dmabuf alive until the next frame replaces it
 	SDL_Texture *pw_tex;
 
 	uint8_t audio_buffer[AUDIO_BUFFER_COUNT][AUDIO_BUFFER_SIZE];
@@ -888,6 +889,7 @@ int vui_init_sdl(vui_context_t *ctx, int fullscreen)
 #endif
 
     sdl_ctx->frame = av_frame_alloc();
+    sdl_ctx->held_frame = av_frame_alloc();
 
 	// Initialize gamepad lookup tables
 	init_gamepad(ctx);
@@ -903,6 +905,7 @@ void vui_close_sdl(vui_context_t *ctx)
     }
 
     av_frame_free(&sdl_ctx->frame);
+    av_frame_free(&sdl_ctx->held_frame);
 
 #ifdef VANILLA_NX_IMU
     vpi_nx_imu_quit();
@@ -1798,7 +1801,14 @@ int get_texture_from_drm_prime_frame(vui_sdl_context_t *sdl_ctx, AVFrame *f)
                 }
             }
 
-            EGLAttrib use_fmt = layer->format == DRM_FORMAT_YUV420 ? DRM_FORMAT_R8 : layer->format;
+            EGLAttrib use_fmt;
+            if (layer->format == DRM_FORMAT_YUV420) {
+                use_fmt = DRM_FORMAT_R8;
+            } else if (layer->format == DRM_FORMAT_NV12) {
+                use_fmt = (image_index == 0) ? DRM_FORMAT_R8 : DRM_FORMAT_GR88;
+            } else {
+                use_fmt = layer->format;
+            }
 
             int w = f->width;
             int h = f->height;
@@ -1966,7 +1976,9 @@ int vui_update_sdl(vui_context_t *vui)
 				get_texture_from_cpu_frame(sdl_ctx, sdl_ctx->frame);
                 break;
             }
-			av_frame_unref(sdl_ctx->frame);
+
+			av_frame_unref(sdl_ctx->held_frame);
+			av_frame_move_ref(sdl_ctx->held_frame, sdl_ctx->frame);
 
             if (sdl_ctx->game_tex) {
                 if (handle_final_blit) {
