@@ -5,6 +5,7 @@
 #include <libavcodec/avcodec.h>
 #include <libavutil/channel_layout.h>
 #include <libavutil/opt.h>
+#include <libavutil/time.h>
 #include <libswscale/swscale.h>
 #include <stdatomic.h>
 #include <stdio.h>
@@ -24,6 +25,9 @@
 #include <unistd.h>
 #include <linux/videodev2.h>
 #endif
+
+#define VPI_DECODE_WAIT_US  20000
+#define VPI_DECODE_POLL_US    500
 
 static char vpi_toast_string[VPI_TOAST_MAX_LEN];
 static struct timeval vpi_toast_expiry;
@@ -708,39 +712,50 @@ void *vpi_event_loop(void *arg)
                 } else {
                     int err;
 
-                    int ret = 1;
+                    int received_any = 0;
+                    int64_t receive_deadline = av_gettime_relative() + VPI_DECODE_WAIT_US;
 
                     // Retrieve frame from decoder
                     while (1) {
                         err = avcodec_receive_frame(s.codec_ctx, s.frame);
+
                         if (err == AVERROR(EAGAIN)) {
-                            // Decoder wants another packet before it can output a frame. Silently exit.
-                            break;
-                        } else if (err < 0) {
-                            vpilog("Failed to receive frame from decoder: %i\n", err);
-                            ret = 0;
-                            break;
-                        } else {
-                            pthread_mutex_lock(&vpi_present_frame_mutex);
-
-                            // Swap refs from decoding_frame to present_frame
-                            av_frame_unref(vpi_present_frame);
-                            av_frame_move_ref(vpi_present_frame, s.frame);
-                            vpi_present_frame->pts = s.frame->pts;
-
-                            if (screenshot_buf[0] != 0) {
-                                // Dump this frame into file
-                                dump_frame_to_file(vpi_present_frame, screenshot_buf);
-                                screenshot_buf[0] = 0;
+                            if (received_any) {
+                                break;
                             }
 
-                            pthread_mutex_unlock(&vpi_present_frame_mutex);
-
-                            // Not thread safe?
-                            if (!vui_game_mode_get(vui)) {
-                                vui_game_mode_set(vui, 1);
-                                vui_audio_set_enabled(vui, 1);
+                            if (av_gettime_relative() >= receive_deadline) {
+                                break;
                             }
+
+                            av_usleep(VPI_DECODE_POLL_US);
+                            continue;
+                        }
+
+                        if (err < 0) {
+                            break;
+                        }
+
+                        received_any = 1;
+
+                        pthread_mutex_lock(&vpi_present_frame_mutex);
+
+                        // Swap refs from decoding_frame to present_frame
+                        av_frame_unref(vpi_present_frame);
+                        av_frame_move_ref(vpi_present_frame, s.frame);
+
+                        if (screenshot_buf[0] != 0) {
+                            // Dump this frame into file
+                            dump_frame_to_file(vpi_present_frame, screenshot_buf);
+                            screenshot_buf[0] = 0;
+                        }
+
+                        pthread_mutex_unlock(&vpi_present_frame_mutex);
+
+                        // Not thread safe?
+                        if (!vui_game_mode_get(vui)) {
+                            vui_game_mode_set(vui, 1);
+                            vui_audio_set_enabled(vui, 1);
                         }
                     }
 
