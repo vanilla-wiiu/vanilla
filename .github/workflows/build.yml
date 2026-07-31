@@ -44,7 +44,7 @@ jobs:
             artifact: vanilla-nintendoswitch-image.zip
     runs-on: ubuntu-24.04
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
       with:
         submodules: recursive
 
@@ -100,7 +100,7 @@ jobs:
         fi
 
     - name: Upload a Build Artifact
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: ${{ matrix.platform.os }} ${{ matrix.platform.arch }}
         path: ${{ matrix.platform.artifact }}
