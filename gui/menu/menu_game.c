@@ -5,11 +5,11 @@
 #include <libavcodec/avcodec.h>
 #include <libavutil/channel_layout.h>
 #include <libavutil/opt.h>
-#include <libavutil/time.h>
 #include <libswscale/swscale.h>
 #include <stdatomic.h>
 #include <stdio.h>
 #include <sys/time.h>
+#include <unistd.h>
 #include <vanilla.h>
 
 #include "config.h"
@@ -25,9 +25,6 @@
 #include <unistd.h>
 #include <linux/videodev2.h>
 #endif
-
-#define VPI_DECODE_WAIT_US  20000
-#define VPI_DECODE_POLL_US    500
 
 static char vpi_toast_string[VPI_TOAST_MAX_LEN];
 static struct timeval vpi_toast_expiry;
@@ -280,6 +277,11 @@ static int is_v4l2request_available(void)
 
 void vpi_decode_exit(vpi_decode_state_t *s)
 {
+    if (s->mutex_init) {
+        pthread_mutex_destroy(&s->mutex);
+        s->mutex_init = 0;
+    }
+
     if (s->frame)
         av_frame_free(&s->frame);
 
@@ -450,6 +452,17 @@ int vpi_decode_init(vpi_decode_state_t *s)
 	}
 
 	s->frame = av_frame_alloc();
+    if (!s->frame) {
+		vpilog("Failed to allocate AVFrame\n");
+		return VANILLA_ERR_GENERIC;
+    }
+
+    if (pthread_mutex_init(&s->mutex, 0) != 0) {
+		vpilog("Failed to init decoder mutex\n");
+		return VANILLA_ERR_GENERIC;
+    }
+
+    s->mutex_init = 1;
 
     return VANILLA_SUCCESS;
 }
@@ -660,13 +673,64 @@ void vpi_game_shutdown()
 
 static pthread_t vpi_event_thread;
 
+void *vpi_decode_loop(void *arg)
+{
+    vpi_decode_state_t *s = (vpi_decode_state_t *) arg;
+    vui_context_t *vui = s->vui;
+    int err;
+
+    pthread_mutex_lock(&s->mutex);
+
+    while (s->thread_running) {
+        err = avcodec_receive_frame(s->codec_ctx, s->frame);
+        if (err == AVERROR(EAGAIN)) {
+            // Wait for either the decoder to finish (Raspberry Pi) or the Wii U
+            // to send us another frame
+            pthread_mutex_unlock(&s->mutex);
+            usleep(5000); // Arbitrary 5ms check
+            pthread_mutex_lock(&s->mutex);
+        } else if (err < 0) {
+            vpilog("Failed to receive frame from decoder: %i\n", err);
+            break;
+        } else {
+            pthread_mutex_lock(&vpi_present_frame_mutex);
+
+            // Swap refs from decoding_frame to present_frame
+            av_frame_unref(vpi_present_frame);
+            av_frame_move_ref(vpi_present_frame, s->frame);
+            vpi_present_frame->pts = s->frame->pts;
+
+            if (screenshot_buf[0] != 0) {
+                // Dump this frame into file
+                dump_frame_to_file(vpi_present_frame, screenshot_buf);
+                screenshot_buf[0] = 0;
+            }
+
+            pthread_mutex_unlock(&vpi_present_frame_mutex);
+
+            // Not thread safe?
+            if (!vui_game_mode_get(vui)) {
+                vui_game_mode_set(vui, 1);
+                vui_audio_set_enabled(vui, 1);
+            }
+        }
+    }
+
+    pthread_mutex_unlock(&s->mutex);
+
+    return 0;
+}
+
 void *vpi_event_loop(void *arg)
 {
     vui_context_t *vui = (vui_context_t *) arg;
-    static int vpi_decode_alloc = 0;
-
-    static vpi_decode_state_t s;
+    int vpi_decode_alloc = 0;
+    pthread_t decode_thread;
     vanilla_event_t event;
+    vpi_decode_state_t s;
+
+    memset(&s, 0, sizeof(s));
+
     while (vpi_game_queued_error != VANILLA_ERR_SHUTDOWN && vanilla_wait_event(&event)) {
         int stop = 0;
 
@@ -675,12 +739,23 @@ void *vpi_event_loop(void *arg)
             if (!vpi_decode_alloc) {
                 int ret = vpi_decode_init(&s);
                 if (ret >= 0) {
+                    s.vui = vui;
                     vpi_decode_alloc = 1;
+
+                    if (pthread_create(&decode_thread, NULL, vpi_decode_loop, &s) == 0) {
+                        s.thread_running = 1;
+                    } else {
+                        vpilog("Failed to create decode thread\n");
+                    }
                 }
             }
 
             if (vpi_decode_alloc) {
-                AVPacket *pkt = s.pkt;
+                AVPacket *pkt;
+
+                pthread_mutex_lock(&s.mutex);
+
+                pkt = s.pkt;
 
                 // Send packet to decoder
                 pkt->data = event.data;
@@ -709,58 +784,9 @@ void *vpi_event_loop(void *arg)
                     // return 0;
 
                     vanilla_request_idr();
-                } else {
-                    int err;
-
-                    int received_any = 0;
-                    int64_t receive_deadline = av_gettime_relative() + VPI_DECODE_WAIT_US;
-
-                    // Retrieve frame from decoder
-                    while (1) {
-                        err = avcodec_receive_frame(s.codec_ctx, s.frame);
-
-                        if (err == AVERROR(EAGAIN)) {
-                            if (received_any) {
-                                break;
-                            }
-
-                            if (av_gettime_relative() >= receive_deadline) {
-                                break;
-                            }
-
-                            av_usleep(VPI_DECODE_POLL_US);
-                            continue;
-                        }
-
-                        if (err < 0) {
-                            break;
-                        }
-
-                        received_any = 1;
-
-                        pthread_mutex_lock(&vpi_present_frame_mutex);
-
-                        // Swap refs from decoding_frame to present_frame
-                        av_frame_unref(vpi_present_frame);
-                        av_frame_move_ref(vpi_present_frame, s.frame);
-
-                        if (screenshot_buf[0] != 0) {
-                            // Dump this frame into file
-                            dump_frame_to_file(vpi_present_frame, screenshot_buf);
-                            screenshot_buf[0] = 0;
-                        }
-
-                        pthread_mutex_unlock(&vpi_present_frame_mutex);
-
-                        // Not thread safe?
-                        if (!vui_game_mode_get(vui)) {
-                            vui_game_mode_set(vui, 1);
-                            vui_audio_set_enabled(vui, 1);
-                        }
-                    }
-
-                    // return ret;
                 }
+
+                pthread_mutex_unlock(&s.mutex);
             }
             break;
         case VANILLA_EVENT_AUDIO:
@@ -797,6 +823,10 @@ void *vpi_event_loop(void *arg)
 	}
 
     if (vpi_decode_alloc) {
+        if (s.thread_running) {
+            s.thread_running = 0;
+            pthread_join(decode_thread, 0);
+        }
         vpi_decode_exit(&s);
         vpi_decode_alloc = 0;
     }

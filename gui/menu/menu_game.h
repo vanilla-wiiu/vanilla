@@ -11,10 +11,14 @@
 #define VPI_TOAST_MAX_LEN 1024
 
 typedef struct {
+    vui_context_t *vui;
     AVCodecContext *codec_ctx;
     AVPacket *pkt;
     AVFrame *frame;
     AVBufferRef *hw_device_ctx;
+    pthread_mutex_t mutex;
+    int mutex_init;
+    int thread_running;
 } vpi_decode_state_t;
 
 extern AVFrame *vpi_present_frame;
