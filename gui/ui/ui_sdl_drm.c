@@ -12,6 +12,10 @@
 
 #include "platform.h"
 
+#ifndef DRM_CAP_ATOMIC_ASYNC_PAGE_FLIP
+#define DRM_CAP_ATOMIC_ASYNC_PAGE_FLIP 0x15
+#endif
+
 #define MAX_HANDLE_CACHE 32
 typedef struct {
     int fd;
