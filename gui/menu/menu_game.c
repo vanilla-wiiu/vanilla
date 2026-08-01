@@ -1,14 +1,18 @@
 #include "menu_game.h"
 
 #include <assert.h>
+#include <limits.h>
 #include <libavformat/avformat.h>
 #include <libavcodec/avcodec.h>
 #include <libavutil/channel_layout.h>
 #include <libavutil/opt.h>
+#include <libavutil/time.h>
 #include <libswscale/swscale.h>
 #include <stdatomic.h>
 #include <stdio.h>
 #include <sys/time.h>
+#include <time.h>
+#include <unistd.h>
 #include <vanilla.h>
 
 #include "config.h"
@@ -29,8 +33,14 @@ static char vpi_toast_string[VPI_TOAST_MAX_LEN];
 static struct timeval vpi_toast_expiry;
 static int vpi_toast_number = 0;
 
+// Arbitrary limits so loops don't go on forever
+static const long VPI_DECODE_POLL_US = 500;
+static const long VPI_DECODE_MAX_POLLS = 40;
+
 AVFrame *vpi_present_frame = 0;
 pthread_mutex_t vpi_present_frame_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t vpi_present_frame_cond = PTHREAD_COND_INITIALIZER;
+uint64_t vpi_present_frame_sequence = 0;
 
 static AVFormatContext *recording_fmt_ctx = 0;
 static AVStream *recording_vstr;
@@ -40,6 +50,8 @@ static char screenshot_buf[4096] = {0};
 
 static const int VIDEO_STREAM_INDEX = 0;
 static const int AUDIO_STREAM_INDEX = 1;
+
+static pthread_t vpi_event_thread;
 
 int vpi_egl_available = 0;
 
@@ -276,14 +288,33 @@ static int is_v4l2request_available(void)
 
 void vpi_decode_exit(vpi_decode_state_t *s)
 {
+    for (size_t i = 0; i < VPI_DECODE_QUEUE_CAPACITY; i++) {
+        av_packet_free(&s->packet_queue[i]);
+    }
+    s->packet_queue_read = 0;
+    s->packet_queue_write = 0;
+    s->packet_queue_count = 0;
+
+    if (s->cond_init) {
+        pthread_cond_destroy(&s->cond);
+        s->cond_init = 0;
+    }
+
+    if (s->mutex_init) {
+        pthread_mutex_destroy(&s->mutex);
+        s->mutex_init = 0;
+    }
+
     if (s->frame)
         av_frame_free(&s->frame);
 
-    if (s->pkt)
-	    av_packet_free(&s->pkt);
-
-    if (vpi_present_frame)
+    pthread_mutex_lock(&vpi_present_frame_mutex);
+    if (vpi_present_frame) {
 	    av_frame_free(&vpi_present_frame);
+        vpi_present_frame_sequence++;
+        pthread_cond_broadcast(&vpi_present_frame_cond);
+    }
+    pthread_mutex_unlock(&vpi_present_frame_mutex);
 
     if (s->codec_ctx)
         avcodec_free_context(&s->codec_ctx);
@@ -427,27 +458,39 @@ int vpi_decode_init(vpi_decode_state_t *s)
         return r;
     }
 
-	AVFrame *decoding_frame = av_frame_alloc();
-    if (!decoding_frame) {
-        vpilog("Failed to allocate AVFrame\n");
-        return VANILLA_ERR_GENERIC;
-    }
-
+    pthread_mutex_lock(&vpi_present_frame_mutex);
 	vpi_present_frame = av_frame_alloc();
+    pthread_mutex_unlock(&vpi_present_frame_mutex);
 	if (!vpi_present_frame) {
 		vpilog("Failed to allocate AVFrame\n");
-		return VANILLA_ERR_GENERIC;
-	}
-
-	s->pkt = av_packet_alloc();
-	if (!s->pkt) {
-		vpilog("Failed to allocate AVPacket\n");
-		return VANILLA_ERR_GENERIC;
+        goto fail;
 	}
 
 	s->frame = av_frame_alloc();
+    if (!s->frame) {
+		vpilog("Failed to allocate AVFrame\n");
+        goto fail;
+    }
+
+    if (pthread_mutex_init(&s->mutex, 0) != 0) {
+		vpilog("Failed to init decoder mutex\n");
+        goto fail;
+    }
+
+    s->mutex_init = 1;
+
+    if (pthread_cond_init(&s->cond, 0) != 0) {
+		vpilog("Failed to init decoder condition variable\n");
+        goto fail;
+    }
+
+    s->cond_init = 1;
 
     return VANILLA_SUCCESS;
+
+fail:
+    vpi_decode_exit(s);
+    return VANILLA_ERR_GENERIC;
 }
 
 int64_t get_recording_timestamp(AVRational timebase)
@@ -654,35 +697,292 @@ void vpi_game_shutdown()
     vpi_game_queued_error = VANILLA_ERR_SHUTDOWN;
 }
 
-static pthread_t vpi_event_thread;
+static void vpi_publish_decoded_frame(vpi_decode_state_t *s)
+{
+    vui_context_t *vui = s->vui;
+
+    pthread_mutex_lock(&vpi_present_frame_mutex);
+
+    // Send frame out to display
+    av_frame_unref(vpi_present_frame);
+    av_frame_move_ref(vpi_present_frame, s->frame);
+    vpi_present_frame_sequence++;
+
+    // If user has requested a screenshot, dump the screenshot to a file
+    if (screenshot_buf[0] != 0) {
+        dump_frame_to_file(vpi_present_frame, screenshot_buf);
+        screenshot_buf[0] = 0;
+    }
+
+    // Alert display that frame is ready
+    pthread_cond_broadcast(&vpi_present_frame_cond);
+    pthread_mutex_unlock(&vpi_present_frame_mutex);
+
+    // Now that we have our first frame, switch UI to game mode if not already
+    // FIXME: Not thread safe? Not a huge deal but might want to fix some day
+    if (!vui_game_mode_get(vui)) {
+        vui_game_mode_set(vui, 1);
+        vui_audio_set_enabled(vui, 1);
+    }
+}
+
+static int vpi_receive_decoded_frames(vpi_decode_state_t *s)
+{
+    int received = 0;
+
+    while (s->thread_running) {
+        // Attempt to receive frames from decoder
+        int err = avcodec_receive_frame(s->codec_ctx, s->frame);
+        if (err == AVERROR(EAGAIN) || err == AVERROR_EOF) {
+            break;
+        }
+        if (err < 0) {
+            // Return unexpected error to caller
+            vpilog("Failed to receive frame from decoder: %s (%i)\n", av_err2str(err), err);
+            return err;
+        }
+
+        // Received a frame, send it out for publishing
+        vpi_publish_decoded_frame(s);
+        received++;
+    }
+
+    return received;
+}
+
+static void vpi_decode_stop(vpi_decode_state_t *s)
+{
+    pthread_mutex_lock(&s->mutex);
+    s->thread_running = 0;
+    pthread_cond_broadcast(&s->cond);
+    pthread_mutex_unlock(&s->mutex);
+}
+
+static AVPacket *vpi_decode_get_next_packet(vpi_decode_state_t *s, int wait)
+{
+    AVPacket *pkt = NULL;
+
+    pthread_mutex_lock(&s->mutex);
+
+    // Wait for incoming frames from console/event loop.
+    while (s->thread_running && s->packet_queue_count == 0) {
+        // Wait infinitely if caller has allowed it
+        if (wait) {
+            pthread_cond_wait(&s->cond, &s->mutex);
+            continue;
+        }
+
+        // Otherwise, only wait for a short time before checking
+        struct timespec deadline;
+        timespec_get(&deadline, TIME_UTC);
+        deadline.tv_nsec += VPI_DECODE_POLL_US * 1000;
+        if (deadline.tv_nsec >= 1000000000) {
+            deadline.tv_sec++;
+            deadline.tv_nsec -= 1000000000;
+        }
+        pthread_cond_timedwait(&s->cond, &s->mutex, &deadline);
+        break;
+    }
+
+    // If we got a new packet, pull it from the queue to return to caller
+    if (s->thread_running && s->packet_queue_count > 0) {
+        pkt = s->packet_queue[s->packet_queue_read];
+        s->packet_queue[s->packet_queue_read] = NULL;
+        s->packet_queue_read = (s->packet_queue_read + 1) % VPI_DECODE_QUEUE_CAPACITY;
+        s->packet_queue_count--;
+
+        // Alert event thread in case it was waiting for queue to free up
+        pthread_cond_broadcast(&s->cond);
+    }
+    pthread_mutex_unlock(&s->mutex);
+
+    return pkt;
+}
+
+static int vpi_decode_drain(vpi_decode_state_t *s,
+                            size_t *outstanding_packets)
+{
+    int received = vpi_receive_decoded_frames(s);
+
+    // Decoder either returned nothing or an error, pass it up to the caller
+    if (received <= 0) {
+        return received;
+    }
+
+    // Received frames, substract from outstanding_packets
+    size_t frame_count = (size_t) received;
+
+    if (*outstanding_packets > frame_count) {
+        *outstanding_packets -= frame_count;
+    } else {
+        *outstanding_packets = 0;
+    }
+
+    return received;
+}
+
+static int vpi_decode_submit_packet(vpi_decode_state_t *s, AVPacket *pkt,
+                                    size_t *outstanding_packets)
+{
+    int err = AVERROR_EXIT;
+
+    for (int poll = 0; s->thread_running; poll++) {
+        err = avcodec_send_packet(s->codec_ctx, pkt);
+        if (err != AVERROR(EAGAIN) || poll >= VPI_DECODE_MAX_POLLS) {
+            break;
+        }
+
+        int received = vpi_decode_drain(s, outstanding_packets);
+        if (received < 0) {
+            return received;
+        }
+        if (received == 0) {
+            av_usleep(VPI_DECODE_POLL_US);
+        }
+    }
+
+    if (!s->thread_running) {
+        return AVERROR_EXIT;
+    }
+    if (err < 0) {
+        vpilog("Failed to send packet to decoder: %s (%i)\n",
+               av_err2str(err), err);
+        vanilla_request_idr();
+        return 0;
+    }
+
+    (*outstanding_packets)++;
+    return 1;
+}
+
+void *vpi_decode_loop(void *arg)
+{
+    vpi_decode_state_t *s = (vpi_decode_state_t *) arg;
+    size_t outstanding_packets = 0;
+    int idle_output_polls = 0;
+
+    while (s->thread_running) {
+        // Wait for a packet from the event loop/console
+        AVPacket *pkt = vpi_decode_get_next_packet(s, outstanding_packets == 0);
+
+        // If we got a packet, submit it to the decoder
+        if (pkt) {
+            int submitted = vpi_decode_submit_packet(s, pkt, &outstanding_packets);
+            av_packet_free(&pkt);
+
+            // If there was an error, break
+            if (submitted < 0) {
+                break;
+            }
+            if (submitted > 0) {
+                idle_output_polls = 0;
+            }
+        } else if (!s->thread_running) {
+            break;
+        }
+
+        int received = vpi_decode_drain(s, &outstanding_packets);
+        if (received < 0) {
+            break;
+        }
+        if (received > 0) {
+            idle_output_polls = 0;
+        } else if (outstanding_packets > 0 && ++idle_output_polls >= VPI_DECODE_MAX_POLLS) {
+            outstanding_packets = 0;
+            idle_output_polls = 0;
+        }
+    }
+
+    vpi_decode_stop(s);
+
+    return NULL;
+}
+
+static int vpi_decode_enqueue(vpi_decode_state_t *s,
+                              const uint8_t *data, size_t size)
+{
+    // Allocate new packet
+    AVPacket *pkt = av_packet_alloc();
+    if (!pkt) {
+        return AVERROR(ENOMEM);
+    }
+
+    // Allocate data buffers
+    int err = av_new_packet(pkt, (int) size);
+    if (err < 0) {
+        av_packet_free(&pkt);
+        return err;
+    }
+
+    // Copy data into packet and set timestamps (which some decoders may need)
+    memcpy(pkt->data, data, size);
+    pkt->pts = av_gettime_relative();
+    pkt->dts = pkt->pts;
+
+    // Acquire lock
+    pthread_mutex_lock(&s->mutex);
+
+    // If decoder thread is at max capacity, wait until it's processed a few more
+    while (s->thread_running && s->packet_queue_count == VPI_DECODE_QUEUE_CAPACITY) {
+        pthread_cond_wait(&s->cond, &s->mutex);
+    }
+
+    // Since we may have waited earlier, one last check before we queue this frame up
+    if (!s->thread_running) {
+        pthread_mutex_unlock(&s->mutex);
+        av_packet_free(&pkt);
+        return AVERROR_EXIT;
+    }
+
+    // Queue frame up for decoder and signal
+    s->packet_queue[s->packet_queue_write] = pkt;
+    s->packet_queue_write = (s->packet_queue_write + 1) % VPI_DECODE_QUEUE_CAPACITY;
+    s->packet_queue_count++;
+    pthread_cond_signal(&s->cond);
+    pthread_mutex_unlock(&s->mutex);
+
+    return 0;
+}
 
 void *vpi_event_loop(void *arg)
 {
     vui_context_t *vui = (vui_context_t *) arg;
-    static int vpi_decode_alloc = 0;
-
-    static vpi_decode_state_t s;
+    int vpi_decode_alloc = 0;
+    pthread_t decode_thread;
     vanilla_event_t event;
+    vpi_decode_state_t s;
+
+    memset(&s, 0, sizeof(s));
+
     while (vpi_game_queued_error != VANILLA_ERR_SHUTDOWN && vanilla_wait_event(&event)) {
         int stop = 0;
 
         switch (event.type) {
         case VANILLA_EVENT_VIDEO:
+            // If decoder context/thread is not set up, set up now
             if (!vpi_decode_alloc) {
                 int ret = vpi_decode_init(&s);
                 if (ret >= 0) {
-                    vpi_decode_alloc = 1;
+                    s.vui = vui;
+                    s.thread_running = 1;
+
+                    if (pthread_create(&decode_thread, NULL, vpi_decode_loop, &s) == 0) {
+                        vpi_decode_alloc = 1;
+                    } else {
+                        vpilog("Failed to create decode thread\n");
+                        vpi_decode_stop(&s);
+                        vpi_decode_exit(&s);
+                    }
                 }
             }
 
             if (vpi_decode_alloc) {
-                AVPacket *pkt = s.pkt;
-
-                // Send packet to decoder
-                pkt->data = event.data;
-                pkt->size = event.size;
-
+                // If we're recording, create a packet from data and send to muxer
                 if (recording_fmt_ctx) {
+                    AVPacket *pkt = av_packet_alloc();
+
+                    pkt->data = event.data;
+                    pkt->size = event.size;
                     pkt->stream_index = VIDEO_STREAM_INDEX;
 
                     int64_t ts = get_recording_timestamp(recording_vstr->time_base);
@@ -692,59 +992,15 @@ void *vpi_event_loop(void *arg)
 
                     av_interleaved_write_frame(recording_fmt_ctx, pkt);
 
-                    // av_interleaved_write_frame() eventually calls av_packet_unref(),
-                    // so we must put the references back in
-                    pkt->data = event.data;
-                    pkt->size = event.size;
+                    av_packet_free(&pkt);
                 }
 
-                int err = avcodec_send_packet(s.codec_ctx, pkt);
-
+                // Send data to decoder thread
+                int err = vpi_decode_enqueue(&s, event.data, event.size);
                 if (err < 0) {
-                    vpilog("Failed to send packet to decoder: %s (%i)\n", av_err2str(err), err);
-                    // return 0;
-
+                    vpilog("Failed to queue packet for decoder: %s (%i)\n",
+                           av_err2str(err), err);
                     vanilla_request_idr();
-                } else {
-                    int err;
-
-                    int ret = 1;
-
-                    // Retrieve frame from decoder
-                    while (1) {
-                        err = avcodec_receive_frame(s.codec_ctx, s.frame);
-                        if (err == AVERROR(EAGAIN)) {
-                            // Decoder wants another packet before it can output a frame. Silently exit.
-                            break;
-                        } else if (err < 0) {
-                            vpilog("Failed to receive frame from decoder: %i\n", err);
-                            ret = 0;
-                            break;
-                        } else {
-                            pthread_mutex_lock(&vpi_present_frame_mutex);
-
-                            // Swap refs from decoding_frame to present_frame
-                            av_frame_unref(vpi_present_frame);
-                            av_frame_move_ref(vpi_present_frame, s.frame);
-                            vpi_present_frame->pts = s.frame->pts;
-
-                            if (screenshot_buf[0] != 0) {
-                                // Dump this frame into file
-                                dump_frame_to_file(vpi_present_frame, screenshot_buf);
-                                screenshot_buf[0] = 0;
-                            }
-
-                            pthread_mutex_unlock(&vpi_present_frame_mutex);
-
-                            // Not thread safe?
-                            if (!vui_game_mode_get(vui)) {
-                                vui_game_mode_set(vui, 1);
-                                vui_audio_set_enabled(vui, 1);
-                            }
-                        }
-                    }
-
-                    // return ret;
                 }
             }
             break;
@@ -779,9 +1035,11 @@ void *vpi_event_loop(void *arg)
         }
 
 		vanilla_free_event(&event);
-	}
+    }
 
     if (vpi_decode_alloc) {
+        vpi_decode_stop(&s);
+        pthread_join(decode_thread, 0);
         vpi_decode_exit(&s);
         vpi_decode_alloc = 0;
     }

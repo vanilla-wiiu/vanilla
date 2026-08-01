@@ -1,6 +1,7 @@
 #include "ui_sdl.h"
 
 #include <stdatomic.h>
+#include <errno.h>
 #include <math.h>
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_hints.h>
@@ -9,6 +10,7 @@
 #include <SDL_power.h>
 #include <SDL_ttf.h>
 #include <pthread.h>
+#include <time.h>
 #include <vanilla.h>
 #include <libavutil/hwcontext.h>
 #include <unistd.h>
@@ -83,6 +85,7 @@ typedef struct {
     struct timeval toast_expiry;
     AVFrame *frame;
     AVFrame *held_frame; // keeps the displayed dmabuf alive until the next frame replaces it
+    uint64_t present_frame_sequence;
 	SDL_Texture *pw_tex;
 
 	uint8_t audio_buffer[AUDIO_BUFFER_COUNT][AUDIO_BUFFER_SIZE];
@@ -1917,10 +1920,12 @@ int vui_update_sdl(vui_context_t *vui)
         main_tex = sdl_ctx->layer_data[0];
     } else {
         pthread_mutex_lock(&vpi_present_frame_mutex);
-		if (vpi_present_frame && vpi_present_frame->format != -1) {
+		if (vpi_present_frame
+            && sdl_ctx->present_frame_sequence != vpi_present_frame_sequence
+            && vpi_present_frame->format != -1) {
 			av_frame_move_ref(sdl_ctx->frame, vpi_present_frame);
-            sdl_ctx->frame->pts = vpi_present_frame->pts;
 		}
+        sdl_ctx->present_frame_sequence = vpi_present_frame_sequence;
         pthread_mutex_unlock(&vpi_present_frame_mutex);
 
 		if (sdl_ctx->frame->format != -1) {
@@ -1934,10 +1939,22 @@ int vui_update_sdl(vui_context_t *vui)
                 // this is provided as an option only.
                 if (vpi_config.fast_drm) {
                     if (!drm_ctx) {
-                        vui_sdl_drm_initialize(&drm_ctx, sdl_ctx->window);
+                        if (vui_sdl_drm_initialize(&drm_ctx,
+                                                   sdl_ctx->window)) {
+                            // Blank screen so DRM doesn't appear to render over UI
+                            SDL_SetRenderTarget(renderer, NULL);
+                            SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+                            SDL_RenderClear(renderer);
+                            SDL_RenderPresent(renderer);
+                        }
                     }
-                    vui_sdl_drm_present(drm_ctx, sdl_ctx->frame);
-                    handle_final_blit = 0;
+                    if (drm_ctx &&
+                        vui_sdl_drm_present(drm_ctx, sdl_ctx->frame)) {
+                        handle_final_blit = 0;
+                    } else {
+                        get_texture_from_drm_prime_frame(sdl_ctx,
+                                                         sdl_ctx->frame);
+                    }
                 } else {
                     get_texture_from_drm_prime_frame(sdl_ctx, sdl_ctx->frame);
                 }
@@ -2082,15 +2099,15 @@ int vui_update_sdl(vui_context_t *vui)
             dst_rect->y = 0;
             dst_rect->w = tex_w;
             dst_rect->h = tex_h;
-        } else if ((int64_t)out_w * tex_h > (int64_t)out_h * tex_w) {
+        } else if ((uint64_t)out_w * tex_h > (uint64_t)out_h * tex_w) {
             dst_rect->h = out_h;
             dst_rect->y = 0;
-            dst_rect->w = out_h * tex_w / tex_h;
+            dst_rect->w = (uint64_t)out_h * tex_w / tex_h;
             dst_rect->x = (out_w - dst_rect->w) / 2;
         } else {
             dst_rect->w = out_w;
             dst_rect->x = 0;
-            dst_rect->h = out_w * tex_h / tex_w;
+            dst_rect->h = (uint64_t)out_w * tex_h / tex_w;
             dst_rect->y = (out_h - dst_rect->h) / 2;
         }
 
@@ -2107,10 +2124,33 @@ int vui_update_sdl(vui_context_t *vui)
     const Uint32 target = 5; // No need to update faster than 200Hz (gamepad polls at 180Hz, but this is easier to calculate)
     Uint32 frame_delta = SDL_GetTicks() - last_update_time;
     if (frame_delta < target) {
-        SDL_Delay(target - frame_delta);
+        Uint32 wait_ms = target - frame_delta;
+        if (vui->game_mode) {
+            struct timespec deadline;
+            timespec_get(&deadline, TIME_UTC);
+            deadline.tv_nsec += (long) wait_ms * 1000000;
+            if (deadline.tv_nsec >= 1000000000) {
+                deadline.tv_sec++;
+                deadline.tv_nsec -= 1000000000;
+            }
+
+            pthread_mutex_lock(&vpi_present_frame_mutex);
+            while (sdl_ctx->present_frame_sequence == vpi_present_frame_sequence) {
+                int err = pthread_cond_timedwait(
+                    &vpi_present_frame_cond,
+                    &vpi_present_frame_mutex,
+                    &deadline
+                );
+                if (err == ETIMEDOUT) {
+                    break;
+                }
+            }
+            pthread_mutex_unlock(&vpi_present_frame_mutex);
+        } else {
+            SDL_Delay(wait_ms);
+        }
     }
     last_update_time = SDL_GetTicks();
 
     return !vui->quit;
 }
-
