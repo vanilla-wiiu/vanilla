@@ -4,25 +4,35 @@
 #include <libavcodec/avcodec.h>
 #include <libavutil/frame.h>
 #include <pthread.h>
+#include <stdint.h>
+#include <stdatomic.h>
 #include <sys/time.h>
 
 #include "ui/ui.h"
 
 #define VPI_TOAST_MAX_LEN 1024
+#define VPI_DECODE_QUEUE_CAPACITY 8
 
 typedef struct {
     vui_context_t *vui;
     AVCodecContext *codec_ctx;
-    AVPacket *pkt;
     AVFrame *frame;
     AVBufferRef *hw_device_ctx;
+    AVPacket *packet_queue[VPI_DECODE_QUEUE_CAPACITY];
+    size_t packet_queue_read;
+    size_t packet_queue_write;
+    size_t packet_queue_count;
     pthread_mutex_t mutex;
+    pthread_cond_t cond;
     int mutex_init;
-    int thread_running;
+    int cond_init;
+    _Atomic int thread_running;
 } vpi_decode_state_t;
 
 extern AVFrame *vpi_present_frame;
 extern pthread_mutex_t vpi_present_frame_mutex;
+extern pthread_cond_t vpi_present_frame_cond;
+extern uint64_t vpi_present_frame_sequence;
 extern int vpi_egl_available;
 
 void vpi_menu_game(vui_context_t *vui, void *v);

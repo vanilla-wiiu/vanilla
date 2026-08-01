@@ -50,10 +50,11 @@ int main(int argc, const char **argv)
 
     int ret = 1;
 
+    AVPacket *pkt = av_packet_alloc();
     int64_t pts = 0;
 
     while (1) {
-        err = av_read_frame(fmt_ctx, s.pkt);
+        err = av_read_frame(fmt_ctx, pkt);
         if (err < 0) {
             if (err == AVERROR_EOF) {
                 ret = 0;
@@ -63,18 +64,18 @@ int main(int argc, const char **argv)
             break;
         }
 
-        if (s.pkt->stream_index != 0) {
+        if (pkt->stream_index != 0) {
             continue;
         }
 
         // Retrieve frame from decoder
-        s.pkt->pts = pts++;
-        err = avcodec_send_packet(s.codec_ctx, s.pkt);
+        pkt->pts = pts++;
+        err = avcodec_send_packet(s.codec_ctx, pkt);
         if (err < 0) {
             fprintf(stderr, "avcodec_send_packet: %i\n", err);
             break;
         }
-        printf("    Sent: %li\n", s.pkt->pts);
+        printf("    Sent: %li\n", pkt->pts);
 
         const int64_t interval = 500; // Arbitrary time to wait for a new frame
         const int64_t wait = av_gettime_relative();
@@ -103,6 +104,7 @@ int main(int argc, const char **argv)
     }
 
 fail:
+    av_packet_free(&pkt);
     vpi_decode_exit(&s);
 
     return ret;
