@@ -1,0 +1,6 @@
+--- a/Makefile
++++ b/Makefile
+@@ -121 +121,2 @@
+-ccflags-y += -DGIT_COMMIT=$(shell git --git-dir=$(src)/.git rev-parse HEAD)
++RTW89_GIT_COMMIT ?= unknown
++ccflags-y += -DGIT_COMMIT=$(RTW89_GIT_COMMIT)

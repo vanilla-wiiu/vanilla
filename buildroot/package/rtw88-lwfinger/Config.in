@@ -1,0 +1,10 @@
+comment "rtw88-lwfinger needs a Linux kernel to be built"
+	depends on !BR2_LINUX_KERNEL
+
+config BR2_PACKAGE_RTW88_LWFINGER
+	bool "rtw88-lwfinger"
+	depends on BR2_LINUX_KERNEL
+	help
+	  Realtek rtw88 drivers
+
+	  https://github.com/lwfinger/rtw88
