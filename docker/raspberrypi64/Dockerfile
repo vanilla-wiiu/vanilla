@@ -40,11 +40,11 @@ ENV FORCE_UNSAFE_CONFIGURE=1
 
 # Build everything except for Vanilla
 COPY buildroot /vanilla/buildroot
-RUN make -C /buildroot O=/build BR2_EXTERNAL=/vanilla/buildroot vanilla_raspberrypizero2w_64_defconfig && \
+RUN make -C /buildroot O=/build BR2_EXTERNAL=/vanilla/buildroot vanilla_raspberrypi_64_defconfig && \
     /buildroot/utils/config --file /build/.config -d BR2_PACKAGE_VANILLA && \
     make -C /buildroot O=/build && \
     /buildroot/utils/config --file /build/.config -e BR2_PACKAGE_VANILLA && \
     /buildroot/utils/config --file /build/.config -e BR2_PACKAGE_VANILLA_USE_LOCAL && \
     /buildroot/utils/config --file /build/.config --set-str BR2_PACKAGE_VANILLA_LOCAL_PATH /vanilla
 
-ENTRYPOINT [ "/vanilla/docker/raspberrypizero2w/build.sh" ]
+ENTRYPOINT [ "/vanilla/docker/raspberrypi64/build.sh" ]

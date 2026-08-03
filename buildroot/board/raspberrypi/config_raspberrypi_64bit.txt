@@ -1,6 +1,3 @@
-start_file=start.elf
-fixup_file=fixup.dat
-
 kernel=Image
 
 # To use an external initramfs file
