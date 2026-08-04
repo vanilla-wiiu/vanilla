@@ -47,6 +47,7 @@ RUN make -C /buildroot O=/build BR2_EXTERNAL=/vanilla/buildroot vanilla_raspberr
     /buildroot/utils/config --file /build/.config -e BR2_PACKAGE_VANILLA && \
     /buildroot/utils/config --file /build/.config -e BR2_PACKAGE_VANILLA_USE_LOCAL && \
     /buildroot/utils/config --file /build/.config --set-str BR2_PACKAGE_VANILLA_LOCAL_PATH /vanilla && \
-    make -C /buildroot O=/build olddefconfig
+    make -C /buildroot O=/build olddefconfig && \
+    rm -rf /buildroot/dl /build/images/sdcard.img /build/images/rootfs.* /build/images/*.vfat
 
 ENTRYPOINT [ "/vanilla/docker/raspberrypi64/build.sh" ]

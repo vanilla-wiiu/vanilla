@@ -6,6 +6,9 @@ on:
   pull_request:
     paths-ignore:
     - 'README.md'
+permissions:
+  contents: write
+  packages: write
 jobs:
   build:
     strategy:
@@ -30,9 +33,9 @@ jobs:
           - os: raspberrypi0w
             arch: armv6l
             artifact: vanilla-raspberrypi0w-image.zip
-          - os: raspberrypizero2w
+          - os: raspberrypi64
             arch: aarch64
-            artifact: vanilla-raspberrypizero2w-image.zip
+            artifact: vanilla-raspberrypi64-image.zip
           - os: orangepi_zero2w
             arch: aarch64
             artifact: vanilla-orangepi_zero2w-image.zip
@@ -54,6 +57,26 @@ jobs:
 
     - uses: docker/setup-buildx-action@v3
 
+    # Every image's Docker build is slow to produce from scratch (buildroot images
+    # compile a full embedded Linux; others pull large cross toolchains), so
+    # BuildKit imports a layer cache published to GHCR (seeded from a host as
+    # documented in docker/README.md). On a cache hit the expensive layers are reused,
+    # not re-executed. A Dockerfile/context edit is a natural cache miss, so PRs
+    # still build and test the change.
+    - name: Log in to GHCR
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Registry cache reference
+      id: cache
+      shell: bash
+      run: |
+        owner=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+        echo "ref=ghcr.io/$owner/vanilla-${{ matrix.platform.os }}-${{ matrix.platform.arch }}:buildcache" >> "$GITHUB_OUTPUT"
+
     - name: Build Docker image
       uses: docker/build-push-action@v6
       with:
@@ -63,8 +86,10 @@ jobs:
             ARCH=${{ matrix.platform.arch }}
         tags: vanilla-${{ matrix.platform.os }}-${{ matrix.platform.arch }}
         load: true
-        cache-from: type=gha,scope=vanilla-${{ matrix.platform.os }}-${{ matrix.platform.arch }}
-        cache-to: type=gha,scope=vanilla-${{ matrix.platform.os }}-${{ matrix.platform.arch }},mode=max
+        cache-from: type=registry,ref=${{ steps.cache.outputs.ref }}
+        # Refresh the shared cache only when publishing from master on the canonical
+        # repo; PRs (including forks) read the cache but never write it.
+        cache-to: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/master' && github.repository == 'vanilla-wiiu/vanilla') && format('type=registry,ref={0},mode=max', steps.cache.outputs.ref) || '' }}
 
     - name: Run Docker container
       run: |
@@ -79,7 +104,7 @@ jobs:
         tar czf ${{ matrix.platform.artifact }} -C "${{ github.workspace }}/build" .
 
     - name: Archive (Windows/macOS/Raspberry Pi/Nintendo Switch)
-      if: ${{ matrix.platform.os == 'windows' || matrix.platform.os == 'macos' || matrix.platform.os == 'raspberrypi0w' || matrix.platform.os == 'raspberrypizero2w' || matrix.platform.os == 'nintendoswitch' || matrix.platform.os == 'orangepi_zero3' || matrix.platform.os == 'orangepi_zero2w' }}
+      if: ${{ matrix.platform.os == 'windows' || matrix.platform.os == 'macos' || matrix.platform.os == 'raspberrypi0w' || matrix.platform.os == 'raspberrypi64' || matrix.platform.os == 'nintendoswitch' || matrix.platform.os == 'orangepi_zero3' || matrix.platform.os == 'orangepi_zero2w' }}
       run: |
         cd build
         zip -r ../${{ matrix.platform.artifact }} .
