@@ -54,12 +54,14 @@ COPY buildroot/package/x11r7/* /buildroot/package/x11r7/xserver_xorg-server/
 COPY buildroot /vanilla/buildroot
 RUN make -C /buildroot O=/build BR2_EXTERNAL=/vanilla/buildroot vanilla_nintendoswitch_defconfig && \
     /buildroot/utils/config --file /build/.config -d BR2_PACKAGE_VANILLA && \
+    make -C /buildroot O=/build olddefconfig && \
     make -C /buildroot O=/build && \
     /buildroot/utils/config --file /build/.config -e BR2_PACKAGE_VANILLA && \
     /buildroot/utils/config --file /build/.config -d BR2_PACKAGE_VANILLA_USE_VAAPI && \
     /buildroot/utils/config --file /build/.config -d BR2_PACKAGE_VANILLA_USE_DRM && \
     /buildroot/utils/config --file /build/.config -e BR2_PACKAGE_VANILLA_USE_NX_IMU && \
     /buildroot/utils/config --file /build/.config -e BR2_PACKAGE_VANILLA_USE_LOCAL && \
-    /buildroot/utils/config --file /build/.config --set-str BR2_PACKAGE_VANILLA_LOCAL_PATH /vanilla
+    /buildroot/utils/config --file /build/.config --set-str BR2_PACKAGE_VANILLA_LOCAL_PATH /vanilla && \
+    make -C /buildroot O=/build olddefconfig
 
 ENTRYPOINT [ "/vanilla/docker/nintendoswitch/build.sh" ]
