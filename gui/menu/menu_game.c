@@ -774,7 +774,7 @@ static AVPacket *vpi_decode_get_next_packet(vpi_decode_state_t *s, int wait)
 
         // Otherwise, only wait for a short time before checking
         struct timespec deadline;
-        timespec_get(&deadline, TIME_UTC);
+        clock_gettime(CLOCK_REALTIME, &deadline);
         deadline.tv_nsec += VPI_DECODE_POLL_US * 1000;
         if (deadline.tv_nsec >= 1000000000) {
             deadline.tv_sec++;

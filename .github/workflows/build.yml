@@ -57,12 +57,6 @@ jobs:
 
     - uses: docker/setup-buildx-action@v3
 
-    # Every image's Docker build is slow to produce from scratch (buildroot images
-    # compile a full embedded Linux; others pull large cross toolchains), so
-    # BuildKit imports a layer cache published to GHCR (seeded from a host as
-    # documented in docker/README.md). On a cache hit the expensive layers are reused,
-    # not re-executed. A Dockerfile/context edit is a natural cache miss, so PRs
-    # still build and test the change.
     - name: Log in to GHCR
       uses: docker/login-action@v3
       with:
@@ -87,8 +81,6 @@ jobs:
         tags: vanilla-${{ matrix.platform.os }}-${{ matrix.platform.arch }}
         load: true
         cache-from: type=registry,ref=${{ steps.cache.outputs.ref }}
-        # Refresh the shared cache only when publishing from master on the canonical
-        # repo; PRs (including forks) read the cache but never write it.
         cache-to: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/master' && github.repository == 'vanilla-wiiu/vanilla') && format('type=registry,ref={0},mode=max', steps.cache.outputs.ref) || '' }}
 
     - name: Run Docker container

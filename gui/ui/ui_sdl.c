@@ -2127,7 +2127,7 @@ int vui_update_sdl(vui_context_t *vui)
         Uint32 wait_ms = target - frame_delta;
         if (vui->game_mode) {
             struct timespec deadline;
-            timespec_get(&deadline, TIME_UTC);
+            clock_gettime(CLOCK_REALTIME, &deadline);
             deadline.tv_nsec += (long) wait_ms * 1000000;
             if (deadline.tv_nsec >= 1000000000) {
                 deadline.tv_sec++;
