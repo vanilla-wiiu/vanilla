@@ -4,15 +4,20 @@
 #include <errno.h>
 #include <linux/if_ether.h>
 #include <linux/if_packet.h>
+#include <linux/nl80211.h>
 #include <net/if.h>
 #include <net/if_arp.h>
+#include <netlink/attr.h>
+#include <netlink/genl/ctrl.h>
+#include <netlink/genl/genl.h>
+#include <netlink/msg.h>
+#include <netlink/netlink.h>
 #include <openssl/evp.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
-#include <sys/wait.h>
 #include <unistd.h>
 
 #include "wpa.h"
@@ -206,78 +211,115 @@ static int set_interface_down(const char *ifname)
     return set_interface_up_state(ifname, 0);
 }
 
-static void log_command_failure(const char * const args[], int status)
+typedef int (*Nl80211AddAttrs)(struct nl_msg *msg, void *data);
+
+static int nl80211_send(
+    const char *ifname,
+    enum nl80211_commands command,
+    const char *description,
+    Nl80211AddAttrs add_attrs,
+    void *data)
 {
-    char command[256] = {0};
-    size_t offset = 0;
-
-    for (int i = 0; args[i]; i++) {
-        int written = snprintf(command + offset, sizeof(command) - offset,
-            "%s%s", i ? " " : "", args[i]);
-        if (written < 0 || (size_t) written >= sizeof(command) - offset) {
-            break;
-        }
-        offset += written;
-    }
-
-    if (WIFEXITED(status)) {
-        nlprint("Wii U WOWL: command failed (%d): %s", WEXITSTATUS(status), command);
-    } else if (WIFSIGNALED(status)) {
-        nlprint("Wii U WOWL: command killed by signal %d: %s", WTERMSIG(status), command);
-    } else {
-        nlprint("Wii U WOWL: command failed: %s", command);
-    }
-}
-
-static int run_command(const char * const args[])
-{
-    pid_t pid = fork();
-    if (pid < 0) {
-        nlprint("Wii U WOWL: failed to fork command: %i", errno);
+    unsigned int ifindex = if_nametoindex(ifname);
+    if (!ifindex) {
+        nlprint("Wii U WOWL: failed to resolve interface index for %s: %i",
+            ifname, errno);
         return -1;
     }
 
-    if (pid == 0) {
-        execvp(args[0], (char * const *) args);
-        _exit(127);
-    }
-
-    int status = 0;
-    if (waitpid(pid, &status, 0) < 0) {
-        nlprint("Wii U WOWL: failed to wait for command: %i", errno);
+    struct nl_sock *skt = nl_socket_alloc();
+    if (!skt) {
+        nlprint("Wii U WOWL: failed to allocate netlink socket");
         return -1;
     }
 
-    if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
-        log_command_failure(args, status);
+    int ret = genl_connect(skt);
+    if (ret < 0) {
+        nlprint("Wii U WOWL: failed to connect generic netlink socket: %s",
+            nl_geterror(ret));
+        nl_socket_free(skt);
+        return -1;
+    }
+
+    int nl80211_id = genl_ctrl_resolve(skt, "nl80211");
+    if (nl80211_id < 0) {
+        nlprint("Wii U WOWL: failed to resolve nl80211 family: %s",
+            nl_geterror(nl80211_id));
+        nl_socket_free(skt);
+        return -1;
+    }
+
+    struct nl_msg *msg = nlmsg_alloc();
+    if (!msg) {
+        nlprint("Wii U WOWL: failed to allocate nl80211 message");
+        nl_socket_free(skt);
+        return -1;
+    }
+
+    if (!genlmsg_put(msg, 0, 0, nl80211_id, 0, 0, command, 0)
+        || nla_put_u32(msg, NL80211_ATTR_IFINDEX, ifindex) < 0
+        || add_attrs(msg, data) < 0) {
+        nlprint("Wii U WOWL: failed to build nl80211 %s request for %s",
+            description, ifname);
+        nlmsg_free(msg);
+        nl_socket_free(skt);
+        return -1;
+    }
+
+    ret = nl_send_auto_complete(skt, msg);
+    nlmsg_free(msg);
+    if (ret < 0) {
+        nlprint("Wii U WOWL: failed to send nl80211 %s request for %s: %s",
+            description, ifname, nl_geterror(ret));
+        nl_socket_free(skt);
+        return -1;
+    }
+
+    ret = nl_wait_for_ack(skt);
+    nl_socket_free(skt);
+    if (ret < 0) {
+        nlprint("Wii U WOWL: nl80211 %s request failed for %s: %s",
+            description, ifname, nl_geterror(ret));
         return -1;
     }
 
     return 0;
 }
 
-//TODO: replace iw cli calls with libnl
-static int iw_set_type(const char *ifname, const char *type)
+static int nl80211_add_interface_type(struct nl_msg *msg, void *data)
 {
-    const char *args[] = {"iw", "dev", ifname, "set", "type", type, NULL};
-    if (run_command(args) < 0) {
+    const enum nl80211_iftype *iftype = data;
+    return nla_put_u32(msg, NL80211_ATTR_IFTYPE, *iftype);
+}
+
+static int nl80211_add_frequency(struct nl_msg *msg, void *data)
+{
+    const uint32_t *frequency = data;
+    return nla_put_u32(msg, NL80211_ATTR_WIPHY_FREQ, *frequency);
+}
+
+static int nl80211_set_interface_type(
+    const char *ifname,
+    enum nl80211_iftype iftype,
+    const char *name)
+{
+    if (nl80211_send(ifname, NL80211_CMD_SET_INTERFACE, "set interface type",
+            nl80211_add_interface_type, &iftype) < 0) {
         return -1;
     }
 
-    nlprint("Wii U WOWL: iw set %s type %s", ifname, type);
+    nlprint("Wii U WOWL: nl80211 set %s type %s", ifname, name);
     return 0;
 }
 
-static int iw_set_frequency(const char *ifname, uint32_t frequency)
+static int nl80211_set_frequency(const char *ifname, uint32_t frequency)
 {
-    char frequency_arg[16];
-    snprintf(frequency_arg, sizeof(frequency_arg), "%u", frequency);
-    const char *args[] = {"iw", "dev", ifname, "set", "freq", frequency_arg, NULL};
-    if (run_command(args) < 0) {
+    if (nl80211_send(ifname, NL80211_CMD_SET_WIPHY, "set frequency",
+            nl80211_add_frequency, &frequency) < 0) {
         return -1;
     }
 
-    nlprint("Wii U WOWL: iw tuned %s to %u MHz", ifname, frequency);
+    nlprint("Wii U WOWL: nl80211 tuned %s to %u MHz", ifname, frequency);
     return 0;
 }
 
@@ -660,7 +702,7 @@ int wiiu_wowl_try_wake(const char *ifname, const vanilla_connection_t *connectio
             nlprint("Wii U WOWL: temporarily brought %s down for channel control", ifname);
         }
 
-        if (iw_set_type(ifname, "monitor") < 0) {
+        if (nl80211_set_interface_type(ifname, NL80211_IFTYPE_MONITOR, "monitor") < 0) {
             if (restore_base_up) {
                 set_interface_up(ifname);
             }
@@ -672,7 +714,7 @@ int wiiu_wowl_try_wake(const char *ifname, const vanilla_connection_t *connectio
 
         unsigned char type_check_mac[WIIU_WOWL_DA_LEN];
         if (get_interface_info(tx_ifname, type_check_mac, &tx_arphrd) < 0) {
-            iw_set_type(ifname, "station");
+            nl80211_set_interface_type(ifname, NL80211_IFTYPE_STATION, "station");
             if (restore_base_up) {
                 set_interface_up(ifname);
             }
@@ -681,16 +723,16 @@ int wiiu_wowl_try_wake(const char *ifname, const vanilla_connection_t *connectio
 
         nlprint("Wii U WOWL: temporarily set %s to monitor mode", ifname);
         if (set_interface_up(ifname) < 0) {
-            iw_set_type(ifname, "station");
+            nl80211_set_interface_type(ifname, NL80211_IFTYPE_STATION, "station");
             if (restore_base_up) {
                 set_interface_up(ifname);
             }
             return -1;
         }
 
-        if (iw_set_frequency(tx_ifname, connection->wifi_frequency) < 0) {
+        if (nl80211_set_frequency(tx_ifname, connection->wifi_frequency) < 0) {
             set_interface_down(ifname);
-            iw_set_type(ifname, "station");
+            nl80211_set_interface_type(ifname, NL80211_IFTYPE_STATION, "station");
             if (restore_base_up) {
                 set_interface_up(ifname);
             }
@@ -709,7 +751,7 @@ int wiiu_wowl_try_wake(const char *ifname, const vanilla_connection_t *connectio
             return -1;
         }
 
-        if (iw_set_frequency(tx_ifname, connection->wifi_frequency) < 0) {
+        if (nl80211_set_frequency(tx_ifname, connection->wifi_frequency) < 0) {
             return -1;
         }
     }
@@ -727,7 +769,7 @@ int wiiu_wowl_try_wake(const char *ifname, const vanilla_connection_t *connectio
 
     if (restore_station_type) {
         set_interface_down(ifname);
-        iw_set_type(ifname, "station");
+        nl80211_set_interface_type(ifname, NL80211_IFTYPE_STATION, "station");
         nlprint("Wii U WOWL: restored %s to station mode", ifname);
     }
     if (restore_base_up) {
