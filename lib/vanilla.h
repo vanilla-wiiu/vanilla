@@ -111,6 +111,8 @@ typedef struct { unsigned char psk[32]; } vanilla_psk_t;
 typedef struct {
     vanilla_bssid_t bssid;
     vanilla_psk_t psk;
+    uint32_t wifi_frequency;
+    uint8_t region;
 } vanilla_connection_t;
 typedef struct {
     int status;
@@ -122,6 +124,7 @@ typedef struct {
  * Start listening for gamepad commands
  */
 int vanilla_start(uint32_t server_address, vanilla_bssid_t bssid, vanilla_psk_t psk);
+int vanilla_start_connection(uint32_t server_address, vanilla_connection_t connection);
 int vanilla_sync(uint16_t code, uint32_t server_address);
 
 void vanilla_set_wireless_interface(const char *intf);

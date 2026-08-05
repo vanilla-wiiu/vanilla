@@ -9,6 +9,7 @@
 #include <pthread.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <string.h>
 
 #include "gamepad.h"
@@ -258,7 +259,7 @@ void handle_command_packet(gamepad_context_t *info, int skt, CmdHeader *request)
         switch (request->query_type)
         {
         default:
-            // vanilla_log("[Command] Unhandled request command: %u", request->query_type);
+            vanilla_log("[Command] Unhandled request command: %u", request->query_type);
             break;
         }
         break;

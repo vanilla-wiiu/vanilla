@@ -26,6 +26,7 @@
 #include "dhcp/dhcpc.h"
 #include "util.h"
 #include "vanilla.h"
+#include "wiiu_wowl.h"
 #include "wpa.h"
 
 #ifdef USE_LIBNM
@@ -64,6 +65,8 @@ struct sync_args {
     uint16_t code;
     unsigned char bssid[6];
     unsigned char psk[32];
+    uint32_t wifi_frequency;
+    uint8_t region;
     void *(*start_routine)(void *);
     struct wpa_ctrl *ctrl;
     int local;
@@ -780,6 +783,16 @@ void bytes_to_str(unsigned char *data, size_t data_size, const char *separator, 
     }
 }
 
+static uint32_t parse_scan_result_frequency(const char *line)
+{
+    char bssid[18];
+    unsigned int frequency = 0;
+    if (sscanf(line, "%17s %u", bssid, &frequency) != 2) {
+        return 0;
+    }
+    return frequency;
+}
+
 int create_connect_config(const char *filename, unsigned char *bssid, unsigned char *psk)
 {
     FILE *out_file = fopen(filename, "w");
@@ -883,6 +896,7 @@ void *sync_with_console_internal(void *data)
                 // Make copy of bssid for later
                 strncpy(bssid, line, sizeof(bssid));
                 bssid[17] = '\0';
+                uint32_t scan_frequency = parse_scan_result_frequency(line);
 
                 char wps_buf[100];
                 snprintf(wps_buf, sizeof(wps_buf), "WPS_PIN %.*s %04d5678", 17, bssid, args->code);
@@ -956,6 +970,7 @@ void *sync_with_console_internal(void *data)
 
                         // Convert BSSID from string to bytes
                         str_to_bytes(bssid, 1, cmd.connection.bssid.bssid, sizeof(cmd.connection.bssid.bssid));
+                        cmd.connection.wifi_frequency = scan_frequency;
 
                         sendto(args->skt, &cmd, sizeof(cmd.control_code) + sizeof(cmd.connection), 0, (const struct sockaddr *) &args->client, args->client_size);
 
@@ -1061,6 +1076,13 @@ void *vanilla_connect_to_console(void *data)
     args->wireless_config = get_wireless_connect_config_filename();
 
     create_connect_config(args->wireless_config, args->bssid, args->psk);
+
+    vanilla_connection_t connection = {0};
+    memcpy(connection.bssid.bssid, args->bssid, sizeof(connection.bssid.bssid));
+    memcpy(connection.psk.psk, args->psk, sizeof(connection.psk.psk));
+    connection.wifi_frequency = args->wifi_frequency;
+    connection.region = args->region;
+    wiiu_wowl_try_wake(args->wireless_interface, &connection);
 
     return wpa_setup_environment(args);
 }
@@ -1226,6 +1248,8 @@ void pipe_listen(int local, const char *wireless_interface, const char *log_file
                 } else {
                     memcpy(args->bssid, cmd.connection.bssid.bssid, sizeof(cmd.connection.bssid.bssid));
                     memcpy(args->psk, cmd.connection.psk.psk, sizeof(cmd.connection.psk.psk));
+                    args->wifi_frequency = cmd.connection.wifi_frequency;
+                    args->region = cmd.connection.region;
                     args->start_routine = vanilla_connect_to_console;
                 }
 

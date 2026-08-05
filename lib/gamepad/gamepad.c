@@ -253,8 +253,7 @@ void sync_internal(thread_data_t *data)
                 break;
             } else if (recv_cmd.control_code == VANILLA_PIPE_CC_SYNC_SUCCESS) {
                 syncdata.status = VANILLA_SUCCESS;
-                syncdata.data.bssid = recv_cmd.connection.bssid;
-                syncdata.data.psk = recv_cmd.connection.psk;
+                syncdata.data = recv_cmd.connection;
                 break;
             } else if (recv_cmd.control_code == VANILLA_PIPE_CC_PING) {
                 // Pipe is still responsive but hasn't found anything yet
@@ -324,12 +323,13 @@ void connect_as_gamepad_internal(thread_data_t *data)
     vanilla_pipe_command_t cmd;
     cmd.control_code = VANILLA_PIPE_CC_CONNECT;
 
-    cmd.connection.bssid = data->bssid;
-    cmd.connection.psk = data->psk;
+    cmd.connection = data->connection;
 
     // Connect to backend pipe
     ret = connect_to_backend(&pipe_cc_skt, &cmd, sizeof(cmd.control_code) + sizeof(cmd.connection));
     if (ret == VANILLA_SUCCESS) {
+        info.connection = data->connection;
+
         // Wait for backend to be available
         vanilla_pipe_command_t connected_state;
         ret = VANILLA_ERR_NO_CONNECTION;

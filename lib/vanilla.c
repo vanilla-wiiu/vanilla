@@ -82,7 +82,7 @@ exit:
     return 0;
 }
 
-int vanilla_start_internal(uint32_t server_address, vanilla_bssid_t bssid, vanilla_psk_t psk, thread_start_t thread_start, void *thread_data)
+int vanilla_start_internal(uint32_t server_address, vanilla_connection_t connection, thread_start_t thread_start, void *thread_data)
 {
     if (pthread_mutex_trylock(&main_mutex) == 0) {
         pthread_t other;
@@ -91,8 +91,7 @@ int vanilla_start_internal(uint32_t server_address, vanilla_bssid_t bssid, vanil
         data->server_address = server_address;
         data->thread_start = thread_start;
         data->thread_data = thread_data;
-        data->bssid = bssid;
-        data->psk = psk;
+        data->connection = connection;
 
         // Lock event loop mutex so it can't be set to active until we're ready
         pthread_mutex_lock(&event_loop.mutex);
@@ -119,7 +118,17 @@ int vanilla_start_internal(uint32_t server_address, vanilla_bssid_t bssid, vanil
 
 int vanilla_start(uint32_t server_address, vanilla_bssid_t bssid, vanilla_psk_t psk)
 {
-    return vanilla_start_internal(server_address, bssid, psk, connect_as_gamepad_internal, 0);
+    vanilla_connection_t connection;
+    memset(&connection, 0, sizeof(connection));
+    connection.bssid = bssid;
+    connection.psk = psk;
+    connection.region = VANILLA_REGION_AMERICA;
+    return vanilla_start_connection(server_address, connection);
+}
+
+int vanilla_start_connection(uint32_t server_address, vanilla_connection_t connection)
+{
+    return vanilla_start_internal(server_address, connection, connect_as_gamepad_internal, 0);
 }
 
 void vanilla_stop()
@@ -200,7 +209,9 @@ void vanilla_set_battery_status(int battery_status)
 
 int vanilla_sync(uint16_t code, uint32_t server_address)
 {
-    return vanilla_start_internal(server_address, (vanilla_bssid_t){.bssid = {0}}, (vanilla_psk_t){.psk = {0}}, sync_internal, (void *) (uintptr_t) code);
+    vanilla_connection_t connection;
+    memset(&connection, 0, sizeof(connection));
+    return vanilla_start_internal(server_address, connection, sync_internal, (void *) (uintptr_t) code);
 }
 
 int vanilla_install_polkit(uint32_t server_address)

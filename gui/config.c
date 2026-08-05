@@ -66,6 +66,10 @@ void vpi_config_save()
         xmlTextWriterWriteElement(writer, BAD_CAST "bssid", BAD_CAST buf);
         hex_to_string(buf, entry->psk.psk, sizeof(vanilla_psk_t));
         xmlTextWriterWriteElement(writer, BAD_CAST "psk", BAD_CAST buf);
+        if (entry->wifi_frequency) {
+            sprintf(buf, "%u", entry->wifi_frequency);
+            xmlTextWriterWriteElement(writer, BAD_CAST "frequency", BAD_CAST buf);
+        }
         xmlTextWriterEndElement(writer); // console
     }
     xmlTextWriterEndElement(writer); // consoles
@@ -212,14 +216,21 @@ void vpi_config_init()
                         console = child->children;
                         while (console) {
                             if (console->type == XML_ELEMENT_NODE && !strcmp((const char *) console->name, "console")) {
+                                memset(entry, 0, sizeof(*entry));
                                 xmlNodePtr console_info = console->children;
                                 while (console_info) {
+                                    if (console_info->type != XML_ELEMENT_NODE || !console_info->children) {
+                                        console_info = console_info->next;
+                                        continue;
+                                    }
                                     if (!strcmp((const char *) console_info->name, "name")) {
                                         vui_strncpy(entry->name, (const char *) console_info->children->content, sizeof(entry->name));
                                     } else if (!strcmp((const char *) console_info->name, "bssid")) {
                                         string_to_hex(entry->bssid.bssid, sizeof(entry->bssid), (const char *) console_info->children->content);
                                     } else if (!strcmp((const char *) console_info->name, "psk")) {
                                         string_to_hex(entry->psk.psk, sizeof(entry->psk), (const char *) console_info->children->content);
+                                    } else if (!strcmp((const char *) console_info->name, "frequency")) {
+                                        entry->wifi_frequency = (uint32_t) strtoul((const char *) console_info->children->content, 0, 10);
                                     }
                                     console_info = console_info->next;
                                 }
