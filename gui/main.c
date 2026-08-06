@@ -1,3 +1,4 @@
+#include <errno.h>
 #include <stdio.h>
 #include <string.h>
 #include <vanilla.h>
@@ -21,9 +22,12 @@ void display_cli_help(const char **argv);
 
 int SDL_main(int argc, const char **argv)
 {
+    int ret = 1;
+
     // Determine whether we're overriding the fullscreen setting in the config
     int override_fs = -1;
     int force_swdec = 0;
+    long autoconnect = -1;
 
 	for (int i = 1, consumed; i < argc; i += consumed) {
 		consumed = -1;
@@ -36,6 +40,21 @@ int SDL_main(int argc, const char **argv)
         } else if (!strcmp(argv[i], "-s") || !strcmp(argv[i], "--swdec")) {
             force_swdec = 1;
             consumed = 1;
+        } else if (!strcmp(argv[i], "-a") || !strcmp(argv[i], "--autoconnect")) {
+            if (i + 1 >= argc) {
+                vpilog("%s requires an argument\n", argv[i]);
+                return 1;
+            }
+
+            const char *s_acId = argv[i+1];
+            char *endptr;
+            autoconnect = strtol(s_acId, &endptr, 10);
+            if (errno == ERANGE || endptr == s_acId || *endptr != '\0' || autoconnect < 0) {
+                vpilog("\"%s\" was not a valid argument for %s\n", s_acId, argv[i]);
+                return 1;
+            }
+
+            consumed = 2;
 		} else if (!strcmp(argv[i], "-h") || !strcmp(argv[i], "--help")) {
 			display_cli_help(argv);
 			return 0;
@@ -51,7 +70,12 @@ int SDL_main(int argc, const char **argv)
 
     // Load config
     vpi_config_init();
+    if (autoconnect >= vpi_config.connected_console_count) {
+        vpilog("Console %li does not exist for auto-connection\n", autoconnect);
+        goto exit_config;
+    }
 
+    vpi_config.autoconnect = autoconnect;
     vpi_config.force_software_decode |= force_swdec;
 
 #ifndef VANILLA_GUI_ENABLE_WINDOWED
@@ -68,7 +92,6 @@ int SDL_main(int argc, const char **argv)
     vui_context_t *vui = vui_alloc(SCREEN_WIDTH, SCREEN_HEIGHT);
 
     // Initialize SDL2
-    int ret = 1;
     if (vui_init_sdl(vui, vpi_config.fullscreen)) {
         vpilog("Failed to initialize VUI\n");
         goto exit;
@@ -89,6 +112,7 @@ exit:
 
     vui_free(vui);
 
+exit_config:
     vpi_config_free();
 
     return ret;
@@ -100,5 +124,10 @@ void display_cli_help(const char **argv) {
 	vpilog("    -w, --window        Run Vanilla in a window (overrides config)\n");
 	vpilog("    -f, --fullscreen    Run Vanilla full screen (overrides config)\n");
 	vpilog("    -s, --swdec         Force software decoding (overrides config)\n");
+	vpilog("    -a <id>,\n");
+    vpilog("    --autoconnect <id>  Auto-connect to a console on startup\n");
+    vpilog("                        (<id> is the index of the console in the\n");
+    vpilog("                        menu, e.g. 0 is the first console, 1 is\n");
+    vpilog("                        the second, etc.)\n");
 	vpilog("    -h, --help          Show this help message\n");
 }

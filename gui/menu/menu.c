@@ -23,8 +23,12 @@ void vpi_menu_init(vui_context_t *vui)
 	// Set microphone callback
 	vui_mic_callback_set(vui, vpi_mic_callback, 0);
 
-    // Start with main menu
-    vpi_menu_main(vui, 0);
+    if (vpi_config.autoconnect != -1) {
+        vpi_menu_game(vui, (void *)(intptr_t) vpi_config.autoconnect);
+    } else {
+        // Start with main menu
+        vpi_menu_main(vui, 0);
+    }
 }
 
 void get_valid_filename(const char *fmt, char *abs_buf, size_t size_abs_buf, const char *preferred_dir)
