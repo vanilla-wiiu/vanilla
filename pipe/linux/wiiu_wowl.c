@@ -62,7 +62,6 @@
 #define WIIU_WOWL_NET_PATTERN_PLAINTEXT_OFFSET \
     (WIIU_WOWL_NET_PATTERN_OFFSET - WIIU_WOWL_ETH_HEADER_LEN)
 #define WIIU_WOWL_PAIRING_SSID_LENGTH 16
-#define WIIU_WOWL_KEY_SEED 0
 #define WIIU_WOWL_COUNTRY_LEN 2
 
 #ifndef ARPHRD_IEEE80211
@@ -112,8 +111,8 @@ static void region_country_code(uint8_t region, unsigned char country[WIIU_WOWL_
         break;
     case VANILLA_REGION_AMERICA:
     default:
-        country[0] = 'U';
-        country[1] = 'S';
+        country[0] = 'Q';
+        country[1] = '2';
         break;
     }
 }
@@ -121,6 +120,7 @@ static void region_country_code(uint8_t region, unsigned char country[WIIU_WOWL_
 static void derive_sta1_wowl_key(
     unsigned char key[WIIU_WOWL_KEY_LEN],
     uint8_t region,
+    uint8_t seed,
     const unsigned char wake_token[WIIU_WOWL_DA_LEN],
     const unsigned char source_mac[WIIU_WOWL_DA_LEN])
 {
@@ -136,11 +136,16 @@ static void derive_sta1_wowl_key(
     memcpy(raw + 4, wake_token, WIIU_WOWL_DA_LEN);
     memcpy(raw + 10, source_mac, WIIU_WOWL_DA_LEN);
 
-    uint8_t prev = WIIU_WOWL_KEY_SEED;
+    uint8_t prev = seed;
     for (int i = WIIU_WOWL_KEY_LEN - 1; i >= 0; i--) {
         prev ^= raw[i];
         key[i] = prev;
     }
+}
+
+static uint8_t seed_from_psk(const vanilla_psk_t *psk)
+{
+    return psk->psk[sizeof(psk->psk) - 1] & 0x0f;
 }
 
 static int get_interface_info(const char *ifname, unsigned char mac[WIIU_WOWL_DA_LEN], int *arphrd)
@@ -890,9 +895,12 @@ int wiiu_wowl_try_wake(const char *ifname, const vanilla_connection_t *connectio
     region_country_code(connection->region, country);
 
     unsigned char wowl_key[WIIU_WOWL_KEY_LEN];
-    derive_sta1_wowl_key(wowl_key, connection->region, connection->bssid.bssid, iface_mac);
-    nlprint("Wii U WOWL: using region %u country %c%c for key derivation",
-        connection->region, country[0], country[1]);
+    uint8_t seed = seed_from_psk(&connection->psk);
+    nlprint("Wii U WOWL: My seed is: %x", seed);
+    derive_sta1_wowl_key(wowl_key, connection->region, seed,
+        connection->bssid.bssid, iface_mac);
+    nlprint("Wii U WOWL: using region %u country %c%c seed 0x%x for key derivation",
+        connection->region, country[0], country[1], seed);
 
     int ret = sweep_wake_frequencies(tx_ifname, tx_arphrd, connection->wifi_frequency,
         wowl_key, connection->bssid.bssid, iface_mac);
