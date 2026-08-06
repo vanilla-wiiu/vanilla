@@ -63,10 +63,19 @@ static struct {
 
 static _Atomic int vpi_game_queued_error = VANILLA_SUCCESS;
 
+void vpi_menu_game_exit(vui_context_t *vui, void *v)
+{
+    if (vpi_config.autoconnect == -1) {
+        vpi_menu_main(vui, v);
+    } else {
+        vpi_menu_do_quit(vui, v);
+    }
+}
+
 void back_to_main_menu(vui_context_t *vui, int button, void *v)
 {
     int layer = (intptr_t) v;
-    vui_transition_fade_layer_out(vui, layer, vpi_menu_main, (void *) (intptr_t) 1);
+    vui_transition_fade_layer_out(vui, layer, vpi_menu_game_exit, (void *) (intptr_t) 1);
 }
 
 void show_error(vui_context_t *vui, void *v)
@@ -96,7 +105,7 @@ void cancel_connect(vui_context_t *vui, int button, void *v)
 {
     int layer = (intptr_t) v;
     vanilla_stop();
-    vui_transition_fade_layer_out(vui, layer, vpi_menu_main, 0);
+    vui_transition_fade_layer_out(vui, layer, vpi_menu_game_exit, 0);
 }
 
 static void update_battery_information(vui_context_t *vui, int64_t time)
@@ -1069,7 +1078,7 @@ void vpi_display_update(vui_context_t *vui, int64_t time, void *v)
         if (vpi_game_queued_error != VANILLA_ERR_SHUTDOWN) {
             show_error(vui, (void*)(intptr_t) vpi_game_queued_error);
         } else {
-            vpi_menu_main(vui, 0);
+            vpi_menu_game_exit(vui, 0);
         }
         vpi_game_queued_error = VANILLA_SUCCESS;
     }

@@ -187,6 +187,7 @@ void vpi_config_init()
     vpi_config.fullscreen = 1;
     vpi_config_reset_default_controls_internal();
     vpi_config.cursor_in_fullscreen = 0;
+    vpi_config.autoconnect = -1;
 
     // Load from file
     char config_fn[1024];

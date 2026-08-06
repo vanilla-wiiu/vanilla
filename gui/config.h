@@ -33,6 +33,7 @@ typedef struct {
     int cursor_in_fullscreen;
     int fast_drm;
     int force_software_decode;
+    int autoconnect;
 } vpi_config_t;
 
 extern vpi_config_t vpi_config;
