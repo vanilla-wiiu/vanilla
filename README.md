@@ -1,7 +1,9 @@
 # Vanilla
+> [!CAUTION]
+> This is a **work-in-progress** software clone of the Wii U gamepad. No warranty is provided and everything should be considered **alpha** at best.
 
-This is a **work-in-progress** software clone of the Wii U gamepad. No warranty is provided and everything should be considered **alpha** at best.
-
+> [!NOTE]
+> Vanilla currently supports most main features of the Wii U Gamepad. To view supported and planned features click [here](#supported-features).
 <p align="center">
     <img src="https://raw.githubusercontent.com/vanilla-wiiu/vanilla/master/images/screenshot3.png">
     <br>
@@ -10,6 +12,16 @@ This is a **work-in-progress** software clone of the Wii U gamepad. No warranty 
     </a>
 </p>
 
+## Supported Features
+- Video Streaming
+- Button Inputs
+- Touchscreen Controls
+- Motion Controls
+### Planned Features
+- Webcam
+- NFC Reader
+- IR Emitter
+- Sensor Bar
 ## Usage/Installing
 
 Official builds are provided for all supported platforms on the [Releases](https://github.com/vanilla-wiiu/vanilla/releases) page. Most users are recommended to use these.
