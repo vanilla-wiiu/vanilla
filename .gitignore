@@ -1,4 +1,5 @@
 build/
+result
 .vscode/
 .directory
 .cache/
