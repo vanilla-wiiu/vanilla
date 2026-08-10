@@ -5,6 +5,9 @@
 #include <libgen.h>
 #include <linux/version.h>
 #include <net/if.h>
+#include <linux/nl80211.h>
+#include <netlink/genl/ctrl.h>
+#include <netlink/genl/genl.h>
 #include <netlink/route/addr.h>
 #include <pthread.h>
 #include <signal.h>
@@ -474,6 +477,67 @@ exit:
     return ret;
 }
 
+int nl80211_set_power_save(struct nl_sock *nl, int nl80211_id, int ifindex, int ps_state)
+{
+    struct nl_msg *msg = nlmsg_alloc();
+    if (!msg) {
+        return -1;
+    }
+
+    genlmsg_put(msg, NL_AUTO_PORT, NL_AUTO_SEQ, nl80211_id, 0, 0, NL80211_CMD_SET_POWER_SAVE, 0);
+    nla_put_u32(msg, NL80211_ATTR_IFINDEX, ifindex);
+    nla_put_u32(msg, NL80211_ATTR_PS_STATE, ps_state);
+
+    int ret = nl_send_auto_complete(nl, msg);
+    nlmsg_free(msg);
+    if (ret < 0) {
+        return ret;
+    }
+
+    return nl_wait_for_ack(nl);
+}
+
+int nl80211_get_power_save_cb(struct nl_msg *msg, void *arg)
+{
+    struct genlmsghdr *gnlh = nlmsg_data(nlmsg_hdr(msg));
+    struct nlattr *attrs[NL80211_ATTR_MAX + 1];
+
+    if (nla_parse(attrs, NL80211_ATTR_MAX, genlmsg_attrdata(gnlh, 0), genlmsg_attrlen(gnlh, 0), NULL) == 0) {
+        if (attrs[NL80211_ATTR_PS_STATE]) {
+            *((int *) arg) = nla_get_u32(attrs[NL80211_ATTR_PS_STATE]);
+        }
+    }
+
+    return NL_SKIP;
+}
+
+int nl80211_get_power_save(struct nl_sock *nl, int nl80211_id, int ifindex, int *ps_state)
+{
+    struct nl_msg *msg = nlmsg_alloc();
+    if (!msg) {
+        return -1;
+    }
+
+    genlmsg_put(msg, NL_AUTO_PORT, NL_AUTO_SEQ, nl80211_id, 0, 0, NL80211_CMD_GET_POWER_SAVE, 0);
+    nla_put_u32(msg, NL80211_ATTR_IFINDEX, ifindex);
+
+    *ps_state = -1;
+    nl_socket_modify_cb(nl, NL_CB_VALID, NL_CB_CUSTOM, nl80211_get_power_save_cb, ps_state);
+
+    int ret = nl_send_auto_complete(nl, msg);
+    nlmsg_free(msg);
+    if (ret < 0) {
+        return ret;
+    }
+
+    ret = nl_recvmsgs_default(nl);
+    if (ret < 0) {
+        return ret;
+    }
+
+    return (*ps_state == -1) ? -1 : 0;
+}
+
 void *do_relay(void *data)
 {
     relay_ports *ports = (relay_ports *) data;
@@ -804,6 +868,7 @@ int create_connect_config(const char *filename, unsigned char *bssid, unsigned c
     static const char *template =
         "ctrl_interface=/var/run/wpa_supplicant_drc\n"
         "ap_scan=1\n"
+        "scan_cur_freq=1\n"
         "\n"
         "network={\n"
         "	scan_ssid=1\n"
@@ -1223,6 +1288,31 @@ void pipe_listen(int local, const char *wireless_interface, const char *log_file
     }
 #endif
 
+    // Disable power saving because the Wii U seems to hate that
+    struct nl_sock *ps_nl = NULL;
+    int ps_prev_state = -1;
+    int ps_ifindex = if_nametoindex(wireless_interface);
+    if (ps_ifindex) {
+        ps_nl = nl_socket_alloc();
+        if (ps_nl && nl_connect(ps_nl, NETLINK_GENERIC) == 0) {
+            int nl80211_id = genl_ctrl_resolve(ps_nl, "nl80211");
+            if (nl80211_id < 0) {
+                nlprint("FAILED TO RESOLVE NL80211 FAMILY: %i", nl80211_id);
+            } else {
+                nl80211_get_power_save(ps_nl, nl80211_id, ps_ifindex, &ps_prev_state);
+                if (ps_prev_state != NL80211_PS_DISABLED) {
+                    if (nl80211_set_power_save(ps_nl, nl80211_id, ps_ifindex, NL80211_PS_DISABLED) == 0) {
+                        nlprint("TEMPORARILY DISABLED WI-FI POWER SAVING ON %s", wireless_interface);
+                    } else {
+                        nlprint("FAILED TO DISABLE WI-FI POWER SAVING ON %s", wireless_interface);
+                    }
+                }
+            }
+        } else {
+            nlprint("FAILED TO CONNECT TO NETLINK FOR POWER SAVE");
+        }
+    }
+
     while (main_loop) {
         pthread_mutex_unlock(&main_loop_mutex);
 
@@ -1327,6 +1417,20 @@ die_and_close_nmcli:
 		// Restore iwd
 		nlprint("STEAM DECK: SETTING WIFI BACKEND TO IWD");
 		run_process_and_read_stdout((const char *[]) {"steamos-wifi-set-backend", "iwd", NULL}, 0, 0);
+	}
+
+	// Restore previous Wi-Fi power saving state
+	if (ps_nl) {
+		if (ps_prev_state != -1 && ps_prev_state != NL80211_PS_DISABLED) {
+			int nl80211_id = genl_ctrl_resolve(ps_nl, "nl80211");
+			if (nl80211_id >= 0 && nl80211_set_power_save(ps_nl, nl80211_id, ps_ifindex, ps_prev_state) == 0) {
+				nlprint("RESTORED WI-FI POWER SAVING ON %s", wireless_interface);
+			} else {
+				nlprint("FAILED TO RESTORE WI-FI POWER SAVING ON %s", wireless_interface);
+			}
+		}
+		nl_close(ps_nl);
+		nl_socket_free(ps_nl);
 	}
 }
 
