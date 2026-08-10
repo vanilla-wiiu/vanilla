@@ -63,6 +63,16 @@
     (WIIU_WOWL_NET_PATTERN_OFFSET - WIIU_WOWL_ETH_HEADER_LEN)
 #define WIIU_WOWL_PAIRING_SSID_LENGTH 16
 #define WIIU_WOWL_COUNTRY_LEN 2
+#define WIIU_WOWL_CCMP_AAD_LEN 24
+#define WIIU_WOWL_CCMP_NONCE_LEN 13
+#define WIIU_WOWL_MAC_STR_LEN 18
+#define WIIU_WOWL_FRAME_MAX_LEN \
+    (WIIU_WOWL_RADIOTAP_MAX_LEN \
+        + WIIU_WOWL_80211_QOS_HDR_LEN \
+        + WIIU_WOWL_CCMP_HEADER_LEN \
+        + WIIU_WOWL_PLAINTEXT_LEN \
+        + WIIU_WOWL_CCMP_MIC_LEN)
+#define WIIU_WOWL_ARRAY_SIZE(array) (sizeof(array) / sizeof((array)[0]))
 
 #ifndef ARPHRD_IEEE80211
 #define ARPHRD_IEEE80211 801
@@ -89,6 +99,14 @@ static void put_le16(unsigned char *out, uint16_t value)
 {
     out[0] = value & 0xff;
     out[1] = value >> 8;
+}
+
+static void put_le32(unsigned char *out, uint32_t value)
+{
+    out[0] = value & 0xff;
+    out[1] = (value >> 8) & 0xff;
+    out[2] = (value >> 16) & 0xff;
+    out[3] = (value >> 24) & 0xff;
 }
 
 static void format_mac(const unsigned char mac[WIIU_WOWL_DA_LEN], char *out, size_t out_size)
@@ -148,6 +166,12 @@ static uint8_t seed_from_psk(const vanilla_psk_t *psk)
     return psk->psk[sizeof(psk->psk) - 1] & 0x0f;
 }
 
+static void init_ifreq(struct ifreq *ifr, const char *ifname)
+{
+    memset(ifr, 0, sizeof(*ifr));
+    snprintf(ifr->ifr_name, sizeof(ifr->ifr_name), "%s", ifname);
+}
+
 static int get_interface_info(const char *ifname, unsigned char mac[WIIU_WOWL_DA_LEN], int *arphrd)
 {
     int skt = socket(AF_INET, SOCK_DGRAM, 0);
@@ -157,8 +181,7 @@ static int get_interface_info(const char *ifname, unsigned char mac[WIIU_WOWL_DA
     }
 
     struct ifreq ifr;
-    memset(&ifr, 0, sizeof(ifr));
-    snprintf(ifr.ifr_name, sizeof(ifr.ifr_name), "%s", ifname);
+    init_ifreq(&ifr, ifname);
 
     if (ioctl(skt, SIOCGIFHWADDR, &ifr) < 0) {
         nlprint("Wii U WOWL: failed to read %s hardware address: %i", ifname, errno);
@@ -181,8 +204,7 @@ static int get_interface_flags(const char *ifname, short *flags)
     }
 
     struct ifreq ifr;
-    memset(&ifr, 0, sizeof(ifr));
-    snprintf(ifr.ifr_name, sizeof(ifr.ifr_name), "%s", ifname);
+    init_ifreq(&ifr, ifname);
 
     if (ioctl(skt, SIOCGIFFLAGS, &ifr) < 0) {
         nlprint("Wii U WOWL: failed to read %s flags: %i", ifname, errno);
@@ -209,8 +231,7 @@ static int set_interface_up_state(const char *ifname, int up)
     }
 
     struct ifreq ifr;
-    memset(&ifr, 0, sizeof(ifr));
-    snprintf(ifr.ifr_name, sizeof(ifr.ifr_name), "%s", ifname);
+    init_ifreq(&ifr, ifname);
     ifr.ifr_flags = up ? (flags | IFF_UP) : (flags & ~IFF_UP);
 
     if (ioctl(skt, SIOCSIFFLAGS, &ifr) < 0) {
@@ -460,10 +481,7 @@ static size_t build_radiotap_header(
     case WIIU_WOWL_RADIOTAP_LEGACY: {
         uint32_t present = WIIU_WOWL_RADIOTAP_RATE_PRESENT
             | WIIU_WOWL_RADIOTAP_TX_FLAGS_PRESENT;
-        frame[4] = present & 0xff;
-        frame[5] = (present >> 8) & 0xff;
-        frame[6] = (present >> 16) & 0xff;
-        frame[7] = (present >> 24) & 0xff;
+        put_le32(frame + 4, present);
         frame[8] = WIIU_WOWL_RADIOTAP_RATE_6MBPS;
         put_le16(frame + 10, WIIU_WOWL_RADIOTAP_TX_FLAGS_NOACK);
         break;
@@ -471,10 +489,7 @@ static size_t build_radiotap_header(
     case WIIU_WOWL_RADIOTAP_MCS0: {
         uint32_t present = WIIU_WOWL_RADIOTAP_TX_FLAGS_PRESENT
             | WIIU_WOWL_RADIOTAP_MCS_PRESENT;
-        frame[4] = present & 0xff;
-        frame[5] = (present >> 8) & 0xff;
-        frame[6] = (present >> 16) & 0xff;
-        frame[7] = (present >> 24) & 0xff;
+        put_le32(frame + 4, present);
         put_le16(frame + 8, WIIU_WOWL_RADIOTAP_TX_FLAGS_NOACK);
         frame[10] = WIIU_WOWL_RADIOTAP_MCS_KNOWN;
         frame[11] = 0; // 20 MHz, long GI.
@@ -490,7 +505,7 @@ static size_t build_radiotap_header(
 }
 
 static void build_ccmp_aad(
-    unsigned char aad[24],
+    unsigned char aad[WIIU_WOWL_CCMP_AAD_LEN],
     const unsigned char hdr[WIIU_WOWL_80211_QOS_HDR_LEN])
 {
     uint16_t fc = hdr[0] | (hdr[1] << 8);
@@ -511,10 +526,10 @@ static void build_ccmp_aad(
 }
 
 static void build_ccmp_nonce(
-    unsigned char nonce[13],
+    unsigned char nonce[WIIU_WOWL_CCMP_NONCE_LEN],
     const unsigned char src[WIIU_WOWL_DA_LEN])
 {
-    memset(nonce, 0, 13);
+    memset(nonce, 0, WIIU_WOWL_CCMP_NONCE_LEN);
     nonce[0] = WIIU_WOWL_QOS_TID;
     memcpy(nonce + 1, src, WIIU_WOWL_DA_LEN);
     nonce[12] = WIIU_WOWL_CCMP_PN & 0xff;
@@ -522,7 +537,7 @@ static void build_ccmp_nonce(
 
 static int encrypt_ccmp(
     const unsigned char key[WIIU_WOWL_KEY_LEN],
-    const unsigned char nonce[13],
+    const unsigned char nonce[WIIU_WOWL_CCMP_NONCE_LEN],
     const unsigned char *aad,
     size_t aad_len,
     const unsigned char *plaintext,
@@ -543,7 +558,7 @@ static int encrypt_ccmp(
     if (EVP_EncryptInit_ex(ctx, EVP_aes_128_ccm(), NULL, NULL, NULL) != 1) {
         goto exit;
     }
-    if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_CCM_SET_IVLEN, 13, NULL) != 1) {
+    if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_CCM_SET_IVLEN, WIIU_WOWL_CCMP_NONCE_LEN, NULL) != 1) {
         goto exit;
     }
     if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_CCM_SET_TAG, WIIU_WOWL_CCMP_MIC_LEN, NULL) != 1) {
@@ -600,8 +615,8 @@ static size_t build_wake_frame(
     }
 
     unsigned char hdr[WIIU_WOWL_80211_QOS_HDR_LEN];
-    unsigned char aad[24];
-    unsigned char nonce[13];
+    unsigned char aad[WIIU_WOWL_CCMP_AAD_LEN];
+    unsigned char nonce[WIIU_WOWL_CCMP_NONCE_LEN];
     unsigned char plaintext[WIIU_WOWL_PLAINTEXT_LEN];
     unsigned char ccmp[WIIU_WOWL_CCMP_HEADER_LEN];
     unsigned char ciphertext[WIIU_WOWL_PLAINTEXT_LEN];
@@ -638,6 +653,62 @@ static size_t build_wake_frame(
     return offset;
 }
 
+static int send_wake_frame(
+    int skt,
+    const struct sockaddr_ll *addr,
+    enum WowlRadiotapMode radiotap_mode,
+    const unsigned char key[WIIU_WOWL_KEY_LEN],
+    const unsigned char dst[WIIU_WOWL_DA_LEN],
+    const unsigned char src[WIIU_WOWL_DA_LEN],
+    int frame_index,
+    int *last_errno)
+{
+    unsigned char frame[WIIU_WOWL_FRAME_MAX_LEN];
+    size_t frame_len = build_wake_frame(frame, sizeof(frame), radiotap_mode,
+        key, dst, src, frame_index);
+
+    if (!frame_len) {
+        return -1;
+    }
+
+    ssize_t written = sendto(skt, frame, frame_len, 0,
+        (const struct sockaddr *) addr, sizeof(*addr));
+    if (written != (ssize_t) frame_len) {
+        *last_errno = errno;
+        return 0;
+    }
+
+    return 1;
+}
+
+static int send_wake_burst(
+    int skt,
+    const struct sockaddr_ll *addr,
+    enum WowlRadiotapMode radiotap_mode,
+    const unsigned char key[WIIU_WOWL_KEY_LEN],
+    const unsigned char dst[WIIU_WOWL_DA_LEN],
+    const unsigned char src[WIIU_WOWL_DA_LEN],
+    int start_index,
+    int frame_count,
+    int *sent,
+    int *last_errno)
+{
+    for (int i = 0; i < frame_count && !is_interrupted(); i++) {
+        int result = send_wake_frame(skt, addr, radiotap_mode, key, dst, src,
+            start_index + i, last_errno);
+        if (result < 0) {
+            return -1;
+        }
+        if (result > 0) {
+            (*sent)++;
+        }
+
+        usleep(WIIU_WOWL_TX_GAP_US);
+    }
+
+    return 0;
+}
+
 static int inject_wake_frames(
     const char *ifname,
     int arphrd,
@@ -660,8 +731,8 @@ static int inject_wake_frames(
         return -1;
     }
 
-    char dst_str[18];
-    char src_str[18];
+    char dst_str[WIIU_WOWL_MAC_STR_LEN];
+    char src_str[WIIU_WOWL_MAC_STR_LEN];
     format_mac(dst, dst_str, sizeof(dst_str));
     format_mac(src, src_str, sizeof(src_str));
     nlprint("Wii U WOWL: injecting Broadcom net-pattern wake frame on %s: dst=%s src=%s pn=%u mcs0=%u legacy=%u",
@@ -683,56 +754,23 @@ static int inject_wake_frames(
     addr.sll_halen = WIIU_WOWL_DA_LEN;
     memcpy(addr.sll_addr, dst, WIIU_WOWL_DA_LEN);
 
-    unsigned char frame[WIIU_WOWL_RADIOTAP_MAX_LEN
-        + WIIU_WOWL_80211_QOS_HDR_LEN
-        + WIIU_WOWL_CCMP_HEADER_LEN
-        + WIIU_WOWL_PLAINTEXT_LEN
-        + WIIU_WOWL_CCMP_MIC_LEN];
-
     int sent = 0;
     int last_errno = 0;
     if (radiotap_mode == WIIU_WOWL_RADIOTAP_LEGACY) {
-        for (int i = 0; i < WIIU_WOWL_TX_MCS0_COUNT && !is_interrupted(); i++) {
-            size_t frame_len = build_wake_frame(frame, sizeof(frame), WIIU_WOWL_RADIOTAP_MCS0,
-                key, dst, src, i);
-
-            if (!frame_len) {
-                close(skt);
-                return -1;
-            }
-
-            ssize_t written = sendto(skt, frame, frame_len, 0,
-                (const struct sockaddr *) &addr, sizeof(addr));
-            if (written == (ssize_t) frame_len) {
-                sent++;
-            } else {
-                last_errno = errno;
-            }
-
-            usleep(WIIU_WOWL_TX_GAP_US);
-        }
-    }
-
-    for (int i = 0; i < WIIU_WOWL_TX_COUNT && !is_interrupted(); i++) {
-        int frame_index = i
-            + (radiotap_mode == WIIU_WOWL_RADIOTAP_LEGACY ? WIIU_WOWL_TX_MCS0_COUNT : 0);
-        size_t frame_len = build_wake_frame(frame, sizeof(frame), radiotap_mode,
-            key, dst, src, frame_index);
-
-        if (!frame_len) {
+        if (send_wake_burst(skt, &addr, WIIU_WOWL_RADIOTAP_MCS0, key, dst, src,
+                0, WIIU_WOWL_TX_MCS0_COUNT, &sent, &last_errno) < 0) {
             close(skt);
             return -1;
         }
+    }
 
-        ssize_t written = sendto(skt, frame, frame_len, 0,
-            (const struct sockaddr *) &addr, sizeof(addr));
-        if (written == (ssize_t) frame_len) {
-            sent++;
-        } else {
-            last_errno = errno;
-        }
-
-        usleep(WIIU_WOWL_TX_GAP_US);
+    int start_index = radiotap_mode == WIIU_WOWL_RADIOTAP_LEGACY
+        ? WIIU_WOWL_TX_MCS0_COUNT
+        : 0;
+    if (send_wake_burst(skt, &addr, radiotap_mode, key, dst, src,
+            start_index, WIIU_WOWL_TX_COUNT, &sent, &last_errno) < 0) {
+        close(skt);
+        return -1;
     }
 
     close(skt);
@@ -782,8 +820,7 @@ static int sweep_wake_frequencies(
 {
     int sent_any = 0;
     int tried_preferred = 0;
-    size_t frequency_count = sizeof(wiiu_wowl_sweep_frequencies)
-        / sizeof(wiiu_wowl_sweep_frequencies[0]);
+    size_t frequency_count = WIIU_WOWL_ARRAY_SIZE(wiiu_wowl_sweep_frequencies);
 
     if (preferred_frequency) {
         nlprint("Wii U WOWL: sweeping %zu 5GHz wake channels, preferred %u MHz first",
@@ -896,7 +933,6 @@ int wiiu_wowl_try_wake(const char *ifname, const vanilla_connection_t *connectio
 
     unsigned char wowl_key[WIIU_WOWL_KEY_LEN];
     uint8_t seed = seed_from_psk(&connection->psk);
-    nlprint("Wii U WOWL: My seed is: %x", seed);
     derive_sta1_wowl_key(wowl_key, connection->region, seed,
         connection->bssid.bssid, iface_mac);
     nlprint("Wii U WOWL: using region %u country %c%c seed 0x%x for key derivation",
