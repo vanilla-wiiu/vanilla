@@ -47,7 +47,8 @@ void create_sockaddr(sockaddr_u *addr, size_t *size, in_addr_t inaddr, uint16_t 
         if (delete)
             unlink(addr->un.sun_path);
 
-        if (size) *size = sizeof(struct sockaddr_un);
+        if (size)
+            *size = sizeof(struct sockaddr_un);
     } else {
 #endif
         memset(&addr->in, 0, sizeof(addr->in));
@@ -55,7 +56,8 @@ void create_sockaddr(sockaddr_u *addr, size_t *size, in_addr_t inaddr, uint16_t 
         addr->in.sin_port = htons(port);
         addr->in.sin_addr.s_addr = inaddr;
 
-        if (size) *size = sizeof(struct sockaddr_in);
+        if (size)
+            *size = sizeof(struct sockaddr_in);
 #ifndef _WIN32
     }
 #endif
@@ -72,10 +74,11 @@ void send_to_sockaddr(int fd, const void *data, size_t data_size, const sockaddr
 {
     ssize_t sent = sendto(fd, data, data_size, 0, (const struct sockaddr *) sockaddr, sockaddr_size);
     if (sent == -1) {
-		int err = skterr();
-		if (err != 111) { // 111 is connection refused, occurs if we lose connection, but we'll already know that for other reasons so we don't need to spam the console with this error
-			vanilla_log("Failed to send to Wii U socket: fd: %d, errno: %i", fd, skterr());
-		}
+        int err = skterr();
+        if (err != 111) { // 111 is connection refused, occurs if we lose connection, but we'll already know that for
+                          // other reasons so we don't need to spam the console with this error
+            vanilla_log("Failed to send to Wii U socket: fd: %d, errno: %i", fd, skterr());
+        }
     }
 }
 
@@ -306,7 +309,7 @@ int install_polkit_internal(thread_data_t *data, int install)
         close(pipe_cc_skt);
     }
 
-	return ret;
+    return ret;
 }
 
 void connect_as_gamepad_internal(thread_data_t *data)
@@ -358,11 +361,16 @@ void connect_as_gamepad_internal(thread_data_t *data)
 
     if (ret == VANILLA_SUCCESS) {
         // Open all required sockets
-        if (create_socket(&info.socket_vid, PORT_VID, 0) != VANILLA_SUCCESS) goto exit_pipe;
-        if (create_socket(&info.socket_msg, PORT_MSG, 0) != VANILLA_SUCCESS) goto exit_vid;
-        if (create_socket(&info.socket_hid, PORT_HID, 0) != VANILLA_SUCCESS) goto exit_msg;
-        if (create_socket(&info.socket_aud, PORT_AUD, 0) != VANILLA_SUCCESS) goto exit_hid;
-        if (create_socket(&info.socket_cmd, PORT_CMD, 0) != VANILLA_SUCCESS) goto exit_aud;
+        if (create_socket(&info.socket_vid, PORT_VID, 0) != VANILLA_SUCCESS)
+            goto exit_pipe;
+        if (create_socket(&info.socket_msg, PORT_MSG, 0) != VANILLA_SUCCESS)
+            goto exit_vid;
+        if (create_socket(&info.socket_hid, PORT_HID, 0) != VANILLA_SUCCESS)
+            goto exit_msg;
+        if (create_socket(&info.socket_aud, PORT_AUD, 0) != VANILLA_SUCCESS)
+            goto exit_hid;
+        if (create_socket(&info.socket_cmd, PORT_CMD, 0) != VANILLA_SUCCESS)
+            goto exit_aud;
 
         pthread_t video_thread, audio_thread, input_thread, msg_thread, cmd_thread;
 
@@ -375,9 +383,9 @@ void connect_as_gamepad_internal(thread_data_t *data)
         pthread_create(&cmd_thread, NULL, listen_command, &info);
 
 #ifndef __APPLE__
-		// macOS has a different implementation that requires this to be called
-		// from the thread. Since thread name is only really important for
-		// profiling, and that mostly happens on Linux, we just don't bother.
+        // macOS has a different implementation that requires this to be called
+        // from the thread. Since thread name is only really important for
+        // profiling, and that mostly happens on Linux, we just don't bother.
         pthread_setname_np(video_thread, "vanilla-video");
         pthread_setname_np(audio_thread, "vanilla-audio");
         pthread_setname_np(input_thread, "vanilla-input");
@@ -440,41 +448,42 @@ exit:
 
 int acquire_event(event_loop_t *loop, vanilla_event_t **event)
 {
-	int ret = VANILLA_SUCCESS;
+    int ret = VANILLA_SUCCESS;
 
     pthread_mutex_lock(&loop->mutex);
 
-	// Prevent rollover by skipping oldest event if necessary
-	if (loop->new_index == loop->used_index + VANILLA_MAX_EVENT_COUNT) {
-		vanilla_free_event(&loop->events[loop->used_index % VANILLA_MAX_EVENT_COUNT]);
-		vanilla_log("SKIPPED EVENT TO PREVENT ROLLOVER (%lu > %lu + %lu)", loop->new_index, loop->used_index, VANILLA_MAX_EVENT_COUNT);
-		loop->used_index++;
-	}
+    // Prevent rollover by skipping oldest event if necessary
+    if (loop->new_index == loop->used_index + VANILLA_MAX_EVENT_COUNT) {
+        vanilla_free_event(&loop->events[loop->used_index % VANILLA_MAX_EVENT_COUNT]);
+        vanilla_log("SKIPPED EVENT TO PREVENT ROLLOVER (%lu > %lu + %lu)", loop->new_index, loop->used_index,
+                    VANILLA_MAX_EVENT_COUNT);
+        loop->used_index++;
+    }
 
-	vanilla_event_t *ev = &loop->events[loop->new_index % VANILLA_MAX_EVENT_COUNT];
+    vanilla_event_t *ev = &loop->events[loop->new_index % VANILLA_MAX_EVENT_COUNT];
 
-	assert(!ev->data);
+    assert(!ev->data);
 
-	ev->data = get_event_buffer();
-	// if (!ev->data) {
-	// 	vanilla_log("OUT OF MEMORY FOR NEW EVENTS");
-	// 	ret = VANILLA_ERR_OUT_OF_MEMORY;
-	// }
+    ev->data = get_event_buffer();
+    // if (!ev->data) {
+    // 	vanilla_log("OUT OF MEMORY FOR NEW EVENTS");
+    // 	ret = VANILLA_ERR_OUT_OF_MEMORY;
+    // }
 
-	*event = ev;
+    *event = ev;
 
-	return ret;
+    return ret;
 }
 
 int release_event(event_loop_t *loop)
 {
-	loop->new_index++;
+    loop->new_index++;
 
     pthread_cond_broadcast(&loop->waitcond);
 
     // } else {
-    //     vanilla_log("FAILED TO PUSH EVENT: wanted %lu, only had %lu. This is a bug, please report to developers.", size, EVENT_BUFFER_SIZE);
-    //     ret = VANILLA_ERR_INVALID_ARGUMENT;
+    //     vanilla_log("FAILED TO PUSH EVENT: wanted %lu, only had %lu. This is a bug, please report to developers.",
+    //     size, EVENT_BUFFER_SIZE); ret = VANILLA_ERR_INVALID_ARGUMENT;
     // }
 
 exit:
@@ -485,20 +494,20 @@ exit:
 
 int push_event(event_loop_t *loop, int type, const void *data, size_t size)
 {
-	vanilla_event_t *ev;
+    vanilla_event_t *ev;
 
     int ret = acquire_event(loop, &ev);
-	if (ret != VANILLA_SUCCESS) {
-		return ret;
-	}
+    if (ret != VANILLA_SUCCESS) {
+        return ret;
+    }
 
-	ev->type = type;
-	memcpy(ev->data, data, size);
-	ev->size = size;
+    ev->type = type;
+    memcpy(ev->data, data, size);
+    ev->size = size;
 
-	ret = release_event(loop);
+    ret = release_event(loop);
 
-	return ret;
+    return ret;
 }
 
 int get_event(event_loop_t *loop, vanilla_event_t *event, int wait)
@@ -544,8 +553,8 @@ void *get_event_buffer()
             buf = EVENT_BUFFER_ARENA[i];
             EVENT_BUFFER_ARENA[i] = NULL;
             break;
-    }
         }
+    }
     pthread_mutex_unlock(&event_buffer_mutex);
 
     return buf;

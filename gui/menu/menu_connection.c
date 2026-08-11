@@ -30,7 +30,7 @@ static char detected_wireless_interfaces[256][256];
 static int intf_start = 0;
 static int intf_buttons[MAX_WIRELESS_ENTRIES];
 
-static const char *checkmark = 0;//"checkmark.svg";
+static const char *checkmark = 0; //"checkmark.svg";
 
 static vui_callback_t g_continue_callback = 0;
 static void *g_continue_callback_data = 0;
@@ -95,7 +95,8 @@ static void intf_pressed(vui_context_t *vui, int button, void *v)
     for (int i = 0; i < MAX_WIRELESS_ENTRIES; i++) {
         if (button == intf_buttons[i]) {
             vpi_config.server_address = VANILLA_ADDRESS_LOCAL;
-            vui_strncpy(vpi_config.wireless_interface, detected_wireless_interfaces[intf_start + i], sizeof(vpi_config.wireless_interface));
+            vui_strncpy(vpi_config.wireless_interface, detected_wireless_interfaces[intf_start + i],
+                        sizeof(vpi_config.wireless_interface));
             vpi_config.connection_setup = 1;
             vpi_stop_pipe();
             vpi_config_save();
@@ -135,18 +136,22 @@ static void local_connection_menu(vui_context_t *vui, void *v)
     vpi_menu_create_background(vui, bglayer, &bkg_rect, &margin);
 
     const int lbl_margin = margin * 6;
-    vui_label_create(vui, bkg_rect.x + lbl_margin, bkg_rect.y + lbl_margin, bkg_rect.w - lbl_margin - lbl_margin, bkg_rect.h - lbl_margin - lbl_margin, lang(VPI_LANG_LOCAL_CONNECTION_HELP), vui_color_create(1,1,1,1), VUI_FONT_SIZE_NORMAL, fglayer);
+    vui_label_create(vui, bkg_rect.x + lbl_margin, bkg_rect.y + lbl_margin, bkg_rect.w - lbl_margin - lbl_margin,
+                     bkg_rect.h - lbl_margin - lbl_margin, lang(VPI_LANG_LOCAL_CONNECTION_HELP),
+                     vui_color_create(1, 1, 1, 1), VUI_FONT_SIZE_NORMAL, fglayer);
 
     // Detect wireless interfaces
     memset(detected_wireless_interfaces, 0, sizeof(detected_wireless_interfaces));
     populate_wireless_intf();
 
-    const int button_w = bkg_rect.w/2;
-    const int button_h = BTN_SZ*2/3;
-    const int button_x = bkg_rect.x+bkg_rect.w/2-button_w/2;
-    const int button_y = bkg_rect.y+bkg_rect.h*2/5;
+    const int button_w = bkg_rect.w / 2;
+    const int button_h = BTN_SZ * 2 / 3;
+    const int button_x = bkg_rect.x + bkg_rect.w / 2 - button_w / 2;
+    const int button_y = bkg_rect.y + bkg_rect.h * 2 / 5;
     for (int i = 0; i < MAX_WIRELESS_ENTRIES; i++) {
-        intf_buttons[i] = vui_button_create(vui, button_x, button_y+button_h*i, button_w, button_h, "intf", 0, VUI_BUTTON_STYLE_BUTTON, fglayer, intf_pressed, (void *) (intptr_t) fglayer);
+        intf_buttons[i] =
+            vui_button_create(vui, button_x, button_y + button_h * i, button_w, button_h, "intf", 0,
+                              VUI_BUTTON_STYLE_BUTTON, fglayer, intf_pressed, (void *) (intptr_t) fglayer);
     }
 
     update_wireless_buttons(vui);
@@ -188,11 +193,13 @@ static void via_server_connection_menu(vui_context_t *vui, void *v)
     vpi_menu_create_background(vui, bglayer, &bkg_rect, &margin);
 
     const int lbl_margin = margin * 6;
-    vui_label_create(vui, bkg_rect.x + lbl_margin, bkg_rect.y + lbl_margin, bkg_rect.w - lbl_margin - lbl_margin, bkg_rect.h - lbl_margin - lbl_margin, lang(VPI_LANG_SERVER_CONNECTION_HELP), vui_color_create(1,1,1,1), VUI_FONT_SIZE_NORMAL, fglayer);
+    vui_label_create(vui, bkg_rect.x + lbl_margin, bkg_rect.y + lbl_margin, bkg_rect.w - lbl_margin - lbl_margin,
+                     bkg_rect.h - lbl_margin - lbl_margin, lang(VPI_LANG_SERVER_CONNECTION_HELP),
+                     vui_color_create(1, 1, 1, 1), VUI_FONT_SIZE_NORMAL, fglayer);
 
-    const int textedit_w = bkg_rect.w/2;
+    const int textedit_w = bkg_rect.w / 2;
     const int textedit_h = vui_get_font_height(vui, VUI_FONT_SIZE_NORMAL);
-    const int textedit_x = bkg_rect.x + bkg_rect.w/2 - textedit_w/2;
+    const int textedit_x = bkg_rect.x + bkg_rect.w / 2 - textedit_w / 2;
 
     const char *ip_text;
     if (vpi_config.server_address == VANILLA_ADDRESS_LOCAL) {
@@ -203,12 +210,15 @@ static void via_server_connection_menu(vui_context_t *vui, void *v)
         ip_text = inet_ntoa(in);
     }
 
-    ip_textedit = vui_textedit_create(vui, textedit_x, bkg_rect.y + bkg_rect.h * 3 / 7, textedit_w, textedit_h, ip_text, VUI_FONT_SIZE_NORMAL, 0, fglayer);
+    ip_textedit = vui_textedit_create(vui, textedit_x, bkg_rect.y + bkg_rect.h * 3 / 7, textedit_w, textedit_h, ip_text,
+                                      VUI_FONT_SIZE_NORMAL, 0, fglayer);
 
-    error_lbl = vui_label_create(vui, textedit_x, bkg_rect.y + bkg_rect.h * 4 / 7, textedit_w, BTN_SZ, "Invalid IP address", vui_color_create(1,0,0,1), VUI_FONT_SIZE_SMALL, fglayer);
+    error_lbl = vui_label_create(vui, textedit_x, bkg_rect.y + bkg_rect.h * 4 / 7, textedit_w, BTN_SZ,
+                                 "Invalid IP address", vui_color_create(1, 0, 0, 1), VUI_FONT_SIZE_SMALL, fglayer);
     vui_label_update_visible(vui, error_lbl, 0);
 
-    vui_button_create(vui, textedit_x, bkg_rect.y + bkg_rect.h * 5 / 7, textedit_w, BTN_SZ, lang(VPI_LANG_OK_BTN), 0, VUI_BUTTON_STYLE_BUTTON, fglayer, check_ip_address, (void *) (intptr_t) fglayer);
+    vui_button_create(vui, textedit_x, bkg_rect.y + bkg_rect.h * 5 / 7, textedit_w, BTN_SZ, lang(VPI_LANG_OK_BTN), 0,
+                      VUI_BUTTON_STYLE_BUTTON, fglayer, check_ip_address, (void *) (intptr_t) fglayer);
 
     vpi_menu_create_back_button(vui, fglayer, return_to_connection, (void *) (intptr_t) fglayer);
 
@@ -221,7 +231,8 @@ void connection_btn_pressed(vui_context_t *vui, int btn, void *v)
     vui_transition_fade_layer_out(vui, fglayer, cb, 0);
 }
 
-void vpi_menu_connection_and_return_to(vui_context_t *vui, int fade_fglayer, vui_callback_t success_callback, void *success_data, vui_callback_t fail_callback, void *fail_data)
+void vpi_menu_connection_and_return_to(vui_context_t *vui, int fade_fglayer, vui_callback_t success_callback,
+                                       void *success_data, vui_callback_t fail_callback, void *fail_data)
 {
     vui_reset(vui);
 
@@ -233,16 +244,18 @@ void vpi_menu_connection_and_return_to(vui_context_t *vui, int fade_fglayer, vui
     vpi_menu_create_background(vui, bglayer, &bkg_rect, &margin);
 
     const int lbl_margin = margin * 6;
-    vui_label_create(vui, bkg_rect.x + lbl_margin, bkg_rect.y + lbl_margin, bkg_rect.w - lbl_margin - lbl_margin, bkg_rect.h - lbl_margin - lbl_margin, lang(VPI_LANG_CONNECTION_HELP_1), vui_color_create(1,1,1,1), VUI_FONT_SIZE_NORMAL, fglayer);
+    vui_label_create(vui, bkg_rect.x + lbl_margin, bkg_rect.y + lbl_margin, bkg_rect.w - lbl_margin - lbl_margin,
+                     bkg_rect.h - lbl_margin - lbl_margin, lang(VPI_LANG_CONNECTION_HELP_1),
+                     vui_color_create(1, 1, 1, 1), VUI_FONT_SIZE_NORMAL, fglayer);
 
-    const int btn_w = bkg_rect.w/2;
+    const int btn_w = bkg_rect.w / 2;
     const int btn_y = bkg_rect.y + bkg_rect.h * 2 / 4;
-    const int btn_x = bkg_rect.x + bkg_rect.w/2 - btn_w/2;
+    const int btn_x = bkg_rect.x + bkg_rect.w / 2 - btn_w / 2;
 
     int is_local = vpi_config.server_address == VANILLA_ADDRESS_LOCAL;
     int is_via_server = vpi_config.server_address != VANILLA_ADDRESS_LOCAL;
 
-    const int lbl2_width = bkg_rect.w*2/3;
+    const int lbl2_width = bkg_rect.w * 2 / 3;
     const char *lbl2_txt;
 
 #ifdef VANILLA_PIPE_AVAILABLE
@@ -252,10 +265,15 @@ void vpi_menu_connection_and_return_to(vui_context_t *vui, int fade_fglayer, vui
     is_local = 0;
 #endif
 
-    vui_label_create(vui, bkg_rect.x + bkg_rect.w/2 - lbl2_width/2, bkg_rect.y + lbl_margin + bkg_rect.h/8, lbl2_width, bkg_rect.h - lbl_margin - lbl_margin, lbl2_txt, vui_color_create(0.66f,0.66f,0.66f,1), VUI_FONT_SIZE_SMALL, fglayer);
+    vui_label_create(vui, bkg_rect.x + bkg_rect.w / 2 - lbl2_width / 2, bkg_rect.y + lbl_margin + bkg_rect.h / 8,
+                     lbl2_width, bkg_rect.h - lbl_margin - lbl_margin, lbl2_txt,
+                     vui_color_create(0.66f, 0.66f, 0.66f, 1), VUI_FONT_SIZE_SMALL, fglayer);
 
-    int local_btn = vui_button_create(vui, btn_x, btn_y, btn_w, BTN_SZ, lang(VPI_LANG_LOCAL), is_local ? checkmark : 0, VUI_BUTTON_STYLE_BUTTON, fglayer, connection_btn_pressed, local_connection_menu);
-    int via_server_btn = vui_button_create(vui, btn_x, btn_y + BTN_SZ, btn_w, BTN_SZ, lang(VPI_LANG_VIA_SERVER), is_via_server ? checkmark : 0, VUI_BUTTON_STYLE_BUTTON, fglayer, connection_btn_pressed, via_server_connection_menu);
+    int local_btn = vui_button_create(vui, btn_x, btn_y, btn_w, BTN_SZ, lang(VPI_LANG_LOCAL), is_local ? checkmark : 0,
+                                      VUI_BUTTON_STYLE_BUTTON, fglayer, connection_btn_pressed, local_connection_menu);
+    int via_server_btn = vui_button_create(vui, btn_x, btn_y + BTN_SZ, btn_w, BTN_SZ, lang(VPI_LANG_VIA_SERVER),
+                                           is_via_server ? checkmark : 0, VUI_BUTTON_STYLE_BUTTON, fglayer,
+                                           connection_btn_pressed, via_server_connection_menu);
 
     vui_button_update_checkable(vui, local_btn, 1);
     vui_button_update_checkable(vui, via_server_btn, 1);

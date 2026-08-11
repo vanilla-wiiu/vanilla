@@ -41,13 +41,18 @@ void vpi_menu_rename(vui_context_t *vui, void *v)
 
     const int textedit_w = bkg_rect.w / 2;
     const int textedit_h = vui_get_font_height(vui, VUI_FONT_SIZE_NORMAL);
-    textedit = vui_textedit_create(vui, bkg_rect.x + bkg_rect.w/2 - textedit_w/2, bkg_rect.y + bkg_rect.h * 1 / 3, textedit_w, textedit_h, vpi_config.connected_console_entries[console].name, VUI_FONT_SIZE_NORMAL, 0, fglayer);
+    textedit = vui_textedit_create(vui, bkg_rect.x + bkg_rect.w / 2 - textedit_w / 2, bkg_rect.y + bkg_rect.h * 1 / 3,
+                                   textedit_w, textedit_h, vpi_config.connected_console_entries[console].name,
+                                   VUI_FONT_SIZE_NORMAL, 0, fglayer);
 
     static const int ok_btn_w = BTN_SZ * 3;
     static const int cancel_btn_w = BTN_SZ * 3;
 
-    vui_button_create(vui, bkg_rect.x + bkg_rect.w/2 - (ok_btn_w + cancel_btn_w)/2, bkg_rect.y + bkg_rect.h * 3 / 4, ok_btn_w, BTN_SZ, lang(VPI_LANG_OK_BTN), 0, VUI_BUTTON_STYLE_BUTTON, fglayer, commit_rename, v);
-    vui_button_create(vui, bkg_rect.x + bkg_rect.w/2 - (ok_btn_w + cancel_btn_w)/2 + ok_btn_w, bkg_rect.y + bkg_rect.h * 3 / 4, cancel_btn_w, BTN_SZ, lang(VPI_LANG_CANCEL_BTN), 0, VUI_BUTTON_STYLE_BUTTON, fglayer, vpi_menu_rename_return_to_edit, v);
+    vui_button_create(vui, bkg_rect.x + bkg_rect.w / 2 - (ok_btn_w + cancel_btn_w) / 2, bkg_rect.y + bkg_rect.h * 3 / 4,
+                      ok_btn_w, BTN_SZ, lang(VPI_LANG_OK_BTN), 0, VUI_BUTTON_STYLE_BUTTON, fglayer, commit_rename, v);
+    vui_button_create(vui, bkg_rect.x + bkg_rect.w / 2 - (ok_btn_w + cancel_btn_w) / 2 + ok_btn_w,
+                      bkg_rect.y + bkg_rect.h * 3 / 4, cancel_btn_w, BTN_SZ, lang(VPI_LANG_CANCEL_BTN), 0,
+                      VUI_BUTTON_STYLE_BUTTON, fglayer, vpi_menu_rename_return_to_edit, v);
 
     vui_transition_fade_layer_in(vui, fglayer, 0, 0);
 }

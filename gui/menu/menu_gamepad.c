@@ -2,12 +2,12 @@
 
 #include "config.h"
 #include "lang.h"
+#include "lib/vanilla.h"
 #include "menu/menu.h"
 #include "menu/menu_common.h"
 #include "menu/menu_settings.h"
 #include "ui/ui_anim.h"
 #include "ui/ui_keyboard.h"
-#include "lib/vanilla.h"
 
 #define MAIN_MENU_ENTRIES 3
 
@@ -85,7 +85,8 @@ static void update_button_icons(vui_context_t *ctx)
 static void animate_button(vui_context_t *ctx, int64_t time, void *userdata)
 {
     if (active_bind_button.ui_button != -1) {
-        vui_button_update_icon_mod(ctx, active_bind_button.ui_button, ((time / 500000) % 2 == 1) ? gICON_COLOUR : 0xFFFF0000);
+        vui_button_update_icon_mod(ctx, active_bind_button.ui_button,
+                                   ((time / 500000) % 2 == 1) ? gICON_COLOUR : 0xFFFF0000);
     }
 }
 
@@ -110,7 +111,7 @@ static void listen_key_binding(vui_context_t *ctx, int key, void *userdata)
 
 static void vpi_bind_callback(vui_context_t *ctx, int button, void *userdata)
 {
-    active_bind_button.button = (int) (intptr_t)userdata;
+    active_bind_button.button = (int) (intptr_t) userdata;
     active_bind_button.ui_button = button;
     vui_set_key_listener(ctx, listen_key_binding, cancel_key_listen, userdata);
 }
@@ -125,7 +126,8 @@ static void vpi_default_keyboard_bindings(vui_context_t *ctx, int button, void *
 static int create_key_bind_button(vui_context_t *vui, int vanilla_btn, int x, int y, int w, int h, int layer)
 {
     const char *button_icon = vui_get_keyicon_from_scancode(find_current_keybind(vui, vanilla_btn));
-    int button = vui_button_create(vui, x, y, w, h, NULL, button_icon, VUI_BUTTON_STYLE_BUTTON, layer, vpi_bind_callback, (void *) (intptr_t) vanilla_btn);
+    int button = vui_button_create(vui, x, y, w, h, NULL, button_icon, VUI_BUTTON_STYLE_BUTTON, layer,
+                                   vpi_bind_callback, (void *) (intptr_t) vanilla_btn);
     vui_button_update_font_size(vui, button, VUI_FONT_SIZE_SMALL);
     set_default_button_icon_mod(vui, button);
     map_buttons[map_button_count] = button;
@@ -159,15 +161,22 @@ void vpi_menu_key_bindings_more(vui_context_t *vui, void *v)
         img_x += img_w * 5;
 
         // Special Action Buttons
-        create_key_bind_button(vui, VPI_ACTION_TOGGLE_RECORDING, img_x + img_w + padding, img_y + padding + (img_w * btn_offset), btn_w, btn_h, layer);
-        vui_image_create(vui, img_x, img_y + padding + (img_h * btn_offset++), img_w, img_h, "recording_icon.svg", layer);
-        create_key_bind_button(vui, VPI_ACTION_TOGGLE_FULLSCREEN, img_x + img_w + padding, img_y + padding + (img_w * btn_offset), btn_w, btn_h, layer);
-        vui_image_create(vui, img_x, img_y + padding + (img_h * btn_offset++), img_w, img_h, "fullscreen_icon.svg", layer);
-        create_key_bind_button(vui, VPI_ACTION_SCREENSHOT, img_x + img_w + padding, img_y + padding + (img_w * btn_offset), btn_w, btn_h, layer);
-        vui_image_create(vui, img_x, img_y + padding + (img_h * btn_offset++), img_w, img_h, "screenshot_icon.svg", layer);
+        create_key_bind_button(vui, VPI_ACTION_TOGGLE_RECORDING, img_x + img_w + padding,
+                               img_y + padding + (img_w * btn_offset), btn_w, btn_h, layer);
+        vui_image_create(vui, img_x, img_y + padding + (img_h * btn_offset++), img_w, img_h, "recording_icon.svg",
+                         layer);
+        create_key_bind_button(vui, VPI_ACTION_TOGGLE_FULLSCREEN, img_x + img_w + padding,
+                               img_y + padding + (img_w * btn_offset), btn_w, btn_h, layer);
+        vui_image_create(vui, img_x, img_y + padding + (img_h * btn_offset++), img_w, img_h, "fullscreen_icon.svg",
+                         layer);
+        create_key_bind_button(vui, VPI_ACTION_SCREENSHOT, img_x + img_w + padding,
+                               img_y + padding + (img_w * btn_offset), btn_w, btn_h, layer);
+        vui_image_create(vui, img_x, img_y + padding + (img_h * btn_offset++), img_w, img_h, "screenshot_icon.svg",
+                         layer);
     }
 
-    vui_button_create(vui, 0, SCREEN_HEIGHT - BTN_SZ, BTN_SZ, BTN_SZ, lang(VPI_LANG_RESET), 0, VUI_BUTTON_STYLE_CORNER, layer, vpi_default_keyboard_bindings, NULL);
+    vui_button_create(vui, 0, SCREEN_HEIGHT - BTN_SZ, BTN_SZ, BTN_SZ, lang(VPI_LANG_RESET), 0, VUI_BUTTON_STYLE_CORNER,
+                      layer, vpi_default_keyboard_bindings, NULL);
 
     vpi_menu_create_back_button(vui, layer, transition_to_keybinds, (void *) (intptr_t) layer);
 
@@ -200,8 +209,10 @@ void vpi_menu_key_bindings(vui_context_t *vui, void *v)
         // SHOULDER BUTTONS
         create_key_bind_button(vui, VANILLA_BTN_ZL, img_x, img_y - btn_height * 2, btn_width, btn_height, layer);
         create_key_bind_button(vui, VANILLA_BTN_L, img_x, img_y - btn_height, btn_width, btn_height, layer);
-        create_key_bind_button(vui, VANILLA_BTN_ZR, img_x + img_w - btn_width, img_y - btn_height * 2, btn_width, btn_height, layer);
-        create_key_bind_button(vui, VANILLA_BTN_R, img_x + img_w - btn_width, img_y - btn_height, btn_width, btn_height, layer);
+        create_key_bind_button(vui, VANILLA_BTN_ZR, img_x + img_w - btn_width, img_y - btn_height * 2, btn_width,
+                               btn_height, layer);
+        create_key_bind_button(vui, VANILLA_BTN_R, img_x + img_w - btn_width, img_y - btn_height, btn_width, btn_height,
+                               layer);
 
         const int dpad_x_ref = img_w / 4 - btn_width / 2;
         const int dpad_y_ref = img_y + img_h * 8 / 8;
@@ -212,30 +223,48 @@ void vpi_menu_key_bindings(vui_context_t *vui, void *v)
         const int abxy_y_ref = dpad_y_ref;
 
         // LSTICK
-        create_key_bind_button(vui, VANILLA_AXIS_L_UP, dpad_x_ref, l_stick_y_ref - btn_height * 1.5, btn_width, btn_height, layer);
-        create_key_bind_button(vui, VANILLA_AXIS_L_DOWN, dpad_x_ref, l_stick_y_ref + btn_height / 2, btn_width, btn_height, layer);
-        create_key_bind_button(vui, VANILLA_AXIS_L_LEFT, dpad_x_ref - btn_width, l_stick_y_ref - btn_height / 2, btn_width, btn_height, layer);
-        create_key_bind_button(vui, VANILLA_AXIS_L_RIGHT, dpad_x_ref + btn_width, l_stick_y_ref - btn_height / 2, btn_width, btn_height, layer);
-        create_key_bind_button(vui, VANILLA_BTN_L3, dpad_x_ref, l_stick_y_ref - btn_height / 2, btn_width, btn_height, layer);
+        create_key_bind_button(vui, VANILLA_AXIS_L_UP, dpad_x_ref, l_stick_y_ref - btn_height * 1.5, btn_width,
+                               btn_height, layer);
+        create_key_bind_button(vui, VANILLA_AXIS_L_DOWN, dpad_x_ref, l_stick_y_ref + btn_height / 2, btn_width,
+                               btn_height, layer);
+        create_key_bind_button(vui, VANILLA_AXIS_L_LEFT, dpad_x_ref - btn_width, l_stick_y_ref - btn_height / 2,
+                               btn_width, btn_height, layer);
+        create_key_bind_button(vui, VANILLA_AXIS_L_RIGHT, dpad_x_ref + btn_width, l_stick_y_ref - btn_height / 2,
+                               btn_width, btn_height, layer);
+        create_key_bind_button(vui, VANILLA_BTN_L3, dpad_x_ref, l_stick_y_ref - btn_height / 2, btn_width, btn_height,
+                               layer);
 
         // DPAD
-        create_key_bind_button(vui, VANILLA_BTN_UP, dpad_x_ref, dpad_y_ref - btn_height * 1.5, btn_width, btn_height, layer);
-        create_key_bind_button(vui, VANILLA_BTN_DOWN, dpad_x_ref, dpad_y_ref + btn_height / 2, btn_width, btn_height, layer);
-        create_key_bind_button(vui, VANILLA_BTN_LEFT, dpad_x_ref - btn_width, dpad_y_ref - btn_height / 2, btn_width, btn_height, layer);
-        create_key_bind_button(vui, VANILLA_BTN_RIGHT, dpad_x_ref + btn_width, dpad_y_ref - btn_height / 2, btn_width, btn_height, layer);
+        create_key_bind_button(vui, VANILLA_BTN_UP, dpad_x_ref, dpad_y_ref - btn_height * 1.5, btn_width, btn_height,
+                               layer);
+        create_key_bind_button(vui, VANILLA_BTN_DOWN, dpad_x_ref, dpad_y_ref + btn_height / 2, btn_width, btn_height,
+                               layer);
+        create_key_bind_button(vui, VANILLA_BTN_LEFT, dpad_x_ref - btn_width, dpad_y_ref - btn_height / 2, btn_width,
+                               btn_height, layer);
+        create_key_bind_button(vui, VANILLA_BTN_RIGHT, dpad_x_ref + btn_width, dpad_y_ref - btn_height / 2, btn_width,
+                               btn_height, layer);
 
         // RSTICK
-        create_key_bind_button(vui, VANILLA_AXIS_R_UP, abxy_x_ref, l_stick_y_ref - btn_height * 1.5, btn_width, btn_height, layer);
-        create_key_bind_button(vui, VANILLA_AXIS_R_DOWN, abxy_x_ref, l_stick_y_ref + btn_height / 2, btn_width, btn_height, layer);
-        create_key_bind_button(vui, VANILLA_AXIS_R_LEFT, abxy_x_ref - btn_width, l_stick_y_ref - btn_height / 2, btn_width, btn_height, layer);
-        create_key_bind_button(vui, VANILLA_AXIS_R_RIGHT, abxy_x_ref + btn_width, l_stick_y_ref - btn_height / 2, btn_width, btn_height, layer);
-        create_key_bind_button(vui, VANILLA_BTN_R3, abxy_x_ref, l_stick_y_ref - btn_height / 2, btn_width, btn_height, layer);
+        create_key_bind_button(vui, VANILLA_AXIS_R_UP, abxy_x_ref, l_stick_y_ref - btn_height * 1.5, btn_width,
+                               btn_height, layer);
+        create_key_bind_button(vui, VANILLA_AXIS_R_DOWN, abxy_x_ref, l_stick_y_ref + btn_height / 2, btn_width,
+                               btn_height, layer);
+        create_key_bind_button(vui, VANILLA_AXIS_R_LEFT, abxy_x_ref - btn_width, l_stick_y_ref - btn_height / 2,
+                               btn_width, btn_height, layer);
+        create_key_bind_button(vui, VANILLA_AXIS_R_RIGHT, abxy_x_ref + btn_width, l_stick_y_ref - btn_height / 2,
+                               btn_width, btn_height, layer);
+        create_key_bind_button(vui, VANILLA_BTN_R3, abxy_x_ref, l_stick_y_ref - btn_height / 2, btn_width, btn_height,
+                               layer);
 
         // ABXY
-        create_key_bind_button(vui, VANILLA_BTN_X, abxy_x_ref, abxy_y_ref - btn_height * 1.5, btn_width, btn_height, layer);
-        create_key_bind_button(vui, VANILLA_BTN_B, abxy_x_ref, abxy_y_ref + btn_height / 2, btn_width, btn_height, layer);
-        create_key_bind_button(vui, VANILLA_BTN_Y, abxy_x_ref - btn_width, abxy_y_ref - btn_height / 2, btn_width, btn_height, layer);
-        create_key_bind_button(vui, VANILLA_BTN_A, abxy_x_ref + btn_width, abxy_y_ref - btn_height / 2, btn_width, btn_height, layer);
+        create_key_bind_button(vui, VANILLA_BTN_X, abxy_x_ref, abxy_y_ref - btn_height * 1.5, btn_width, btn_height,
+                               layer);
+        create_key_bind_button(vui, VANILLA_BTN_B, abxy_x_ref, abxy_y_ref + btn_height / 2, btn_width, btn_height,
+                               layer);
+        create_key_bind_button(vui, VANILLA_BTN_Y, abxy_x_ref - btn_width, abxy_y_ref - btn_height / 2, btn_width,
+                               btn_height, layer);
+        create_key_bind_button(vui, VANILLA_BTN_A, abxy_x_ref + btn_width, abxy_y_ref - btn_height / 2, btn_width,
+                               btn_height, layer);
 
         const int plus_minus_x_ref = img_w + btn_width * 3.5;
 
@@ -244,15 +273,20 @@ void vpi_menu_key_bindings(vui_context_t *vui, void *v)
         const int plus_minus_y_ref = img_y + img_h - btn_height / 4;
 
         create_key_bind_button(vui, VANILLA_BTN_PLUS, plus_minus_x_ref, plus_minus_y_ref, btn_width, btn_height, layer);
-        create_key_bind_button(vui, VANILLA_BTN_MINUS, plus_minus_x_ref, plus_minus_y_ref + btn_height, btn_width, btn_height, layer);
+        create_key_bind_button(vui, VANILLA_BTN_MINUS, plus_minus_x_ref, plus_minus_y_ref + btn_height, btn_width,
+                               btn_height, layer);
 
-        create_key_bind_button(vui, VANILLA_BTN_HOME, img_w - btn_width / 2, home_tv_y_ref, btn_width, btn_height, layer);
-        create_key_bind_button(vui, VANILLA_BTN_TV, img_w + btn_width * 1.5, home_tv_y_ref, btn_width, btn_height, layer);
+        create_key_bind_button(vui, VANILLA_BTN_HOME, img_w - btn_width / 2, home_tv_y_ref, btn_width, btn_height,
+                               layer);
+        create_key_bind_button(vui, VANILLA_BTN_TV, img_w + btn_width * 1.5, home_tv_y_ref, btn_width, btn_height,
+                               layer);
     }
 
-    vui_button_create(vui, 0, SCREEN_HEIGHT - BTN_SZ, BTN_SZ, BTN_SZ, lang(VPI_LANG_RESET), 0, VUI_BUTTON_STYLE_CORNER, layer, vpi_default_keyboard_bindings, NULL);
+    vui_button_create(vui, 0, SCREEN_HEIGHT - BTN_SZ, BTN_SZ, BTN_SZ, lang(VPI_LANG_RESET), 0, VUI_BUTTON_STYLE_CORNER,
+                      layer, vpi_default_keyboard_bindings, NULL);
 
-    vui_button_create(vui, SCREEN_WIDTH - BTN_SZ, 0, BTN_SZ, BTN_SZ, lang(VPI_LANG_MORE), 0, VUI_BUTTON_STYLE_CORNER, layer, tranisiton_to_key_bindings_more, (void *) (intptr_t) layer);
+    vui_button_create(vui, SCREEN_WIDTH - BTN_SZ, 0, BTN_SZ, BTN_SZ, lang(VPI_LANG_MORE), 0, VUI_BUTTON_STYLE_CORNER,
+                      layer, tranisiton_to_key_bindings_more, (void *) (intptr_t) layer);
     vpi_menu_create_back_button(vui, layer, return_to_gamepad, (void *) (intptr_t) layer);
 
     update_button_icons(vui);
@@ -274,11 +308,15 @@ void vpi_menu_gamepad(vui_context_t *vui, void *v)
     int list_item_width = SCREEN_WIDTH - BTN_SZ - BTN_SZ;
     int list_item_height = (SCREEN_HEIGHT - BTN_SZ - BTN_SZ) / MAIN_MENU_ENTRIES;
 
-    int swap_abxy_button = vui_button_create(vui, BTN_SZ, BTN_SZ + list_item_height * 0, list_item_width, list_item_height, lang(VPI_LANG_SWAP_ABXY_BUTTONS), NULL, VUI_BUTTON_STYLE_LIST, layer, vpi_menu_toggle_swap_abxy, 0);
+    int swap_abxy_button = vui_button_create(vui, BTN_SZ, BTN_SZ + list_item_height * 0, list_item_width,
+                                             list_item_height, lang(VPI_LANG_SWAP_ABXY_BUTTONS), NULL,
+                                             VUI_BUTTON_STYLE_LIST, layer, vpi_menu_toggle_swap_abxy, 0);
     vui_button_update_checkable(vui, swap_abxy_button, 1);
     vui_button_update_checked(vui, swap_abxy_button, vpi_config.swap_abxy);
 
-    int keyboard_bind_button = vui_button_create(vui, BTN_SZ, BTN_SZ + list_item_height * 1, list_item_width, list_item_height, lang(VPI_LANG_KEYBOARD_CONTROLS), NULL, VUI_BUTTON_STYLE_LIST, layer, transition_to_keybinds, (void *)(intptr_t)layer);
+    int keyboard_bind_button = vui_button_create(
+        vui, BTN_SZ, BTN_SZ + list_item_height * 1, list_item_width, list_item_height, lang(VPI_LANG_KEYBOARD_CONTROLS),
+        NULL, VUI_BUTTON_STYLE_LIST, layer, transition_to_keybinds, (void *) (intptr_t) layer);
 
     // Back button
     vpi_menu_create_back_button(vui, layer, return_to_settings, (void *) (intptr_t) layer);

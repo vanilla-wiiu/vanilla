@@ -18,19 +18,21 @@ void vpi_menu_create_background(vui_context_t *vui, int layer, vui_rect_t *bkg_r
     int scrw, scrh;
     vui_get_screen_size(vui, &scrw, &scrh);
 
-    int m = scrw/75;
+    int m = scrw / 75;
     *margin = m;
     bkg_rect->x = m;
     bkg_rect->y = m;
-    bkg_rect->w = scrw-m-m;
-    bkg_rect->h = scrh-m-m;
+    bkg_rect->w = scrw - m - m;
+    bkg_rect->h = scrh - m - m;
 
-    vui_rect_create(vui, bkg_rect->x, bkg_rect->y, bkg_rect->w, bkg_rect->h, scrh*1/10, vui_color_create(0, 0, 0, 0.66f), layer);
+    vui_rect_create(vui, bkg_rect->x, bkg_rect->y, bkg_rect->w, bkg_rect->h, scrh * 1 / 10,
+                    vui_color_create(0, 0, 0, 0.66f), layer);
 }
 
 void vpi_menu_create_back_button(vui_context_t *vui, int layer, vui_button_callback_t action, void *action_data)
 {
-    int cbtn = vui_button_create(vui, 0, 0, BTN_SZ, BTN_SZ, lang(VPI_LANG_BACK), 0, VUI_BUTTON_STYLE_CORNER, layer, action, action_data);
+    int cbtn = vui_button_create(vui, 0, 0, BTN_SZ, BTN_SZ, lang(VPI_LANG_BACK), 0, VUI_BUTTON_STYLE_CORNER, layer,
+                                 action, action_data);
     vui_button_set_cancel(vui, cbtn);
 }
 
@@ -60,7 +62,8 @@ void vpi_menu_exit_pipe_thunk(vui_context_t *vui, void *data)
     vpi_menu_main(vui, (void *) (intptr_t) 1);
 }
 
-void jump_to_connection_setup(vui_context_t *vui, int fade_fglayer, vui_callback_t success_action, void *success_data, vui_callback_t cancel_action, void *cancel_data)
+void jump_to_connection_setup(vui_context_t *vui, int fade_fglayer, vui_callback_t success_action, void *success_data,
+                              vui_callback_t cancel_action, void *cancel_data)
 {
     struct vpi_menu_start_pipe_data *p = malloc(sizeof(struct vpi_menu_start_pipe_data));
     p->success_action = success_action;
@@ -70,7 +73,8 @@ void jump_to_connection_setup(vui_context_t *vui, int fade_fglayer, vui_callback
     vpi_menu_connection_and_return_to(vui, fade_fglayer, vpi_menu_start_pipe_thunk, p, vpi_menu_exit_pipe_thunk, p);
 }
 
-void vpi_menu_start_pipe(vui_context_t *vui, int fade_fglayer, vui_callback_t success_action, void *success_data, vui_callback_t cancel_action, void *cancel_data)
+void vpi_menu_start_pipe(vui_context_t *vui, int fade_fglayer, vui_callback_t success_action, void *success_data,
+                         vui_callback_t cancel_action, void *cancel_data)
 {
     if (!vpi_config.connection_setup) {
         jump_to_connection_setup(vui, fade_fglayer, success_action, success_data, cancel_action, cancel_data);
@@ -80,8 +84,8 @@ void vpi_menu_start_pipe(vui_context_t *vui, int fade_fglayer, vui_callback_t su
         if (r == VANILLA_SUCCESS) {
             success_action(vui, success_data);
 #ifdef VANILLA_POLKIT_AVAILABLE
-		} else if (r == VANILLA_REQUIRES_PASSWORD_HANDLING) {
-			vpi_menu_sudo(vui, success_action, success_data, cancel_action, cancel_data, fade_fglayer);
+        } else if (r == VANILLA_REQUIRES_PASSWORD_HANDLING) {
+            vpi_menu_sudo(vui, success_action, success_data, cancel_action, cancel_data, fade_fglayer);
 #endif
         } else {
             if (cancel_action) {
@@ -99,7 +103,8 @@ void vpi_menu_start_pipe(vui_context_t *vui, int fade_fglayer, vui_callback_t su
     }
 }
 
-int vpi_menu_show_error(vui_context_t *vui, int status, int fade_fglayer, vui_button_callback_t ok_action, void *ok_data)
+int vpi_menu_show_error(vui_context_t *vui, int status, int fade_fglayer, vui_button_callback_t ok_action,
+                        void *ok_data)
 {
     vui_reset(vui);
 
@@ -111,13 +116,16 @@ int vpi_menu_show_error(vui_context_t *vui, int status, int fade_fglayer, vui_bu
 
     int fglayer = vui_layer_create(vui);
 
-    vui_label_create(vui, bkg_rect.x, bkg_rect.y + bkg_rect.h/4, bkg_rect.w, bkg_rect.h, lang(VPI_LANG_SYNC_FAILED), vui_color_create(1,1,1,1), VUI_FONT_SIZE_NORMAL, fglayer);
+    vui_label_create(vui, bkg_rect.x, bkg_rect.y + bkg_rect.h / 4, bkg_rect.w, bkg_rect.h, lang(VPI_LANG_SYNC_FAILED),
+                     vui_color_create(1, 1, 1, 1), VUI_FONT_SIZE_NORMAL, fglayer);
 
     char buf[20];
     snprintf(buf, sizeof(buf), "%i", status);
-    vui_label_create(vui, bkg_rect.x, bkg_rect.y + bkg_rect.h/2, bkg_rect.w, bkg_rect.h, buf, vui_color_create(1,0,0,1), VUI_FONT_SIZE_SMALL, fglayer);
+    vui_label_create(vui, bkg_rect.x, bkg_rect.y + bkg_rect.h / 2, bkg_rect.w, bkg_rect.h, buf,
+                     vui_color_create(1, 0, 0, 1), VUI_FONT_SIZE_SMALL, fglayer);
 
-    vui_button_create(vui, bkg_rect.x + bkg_rect.w/2 - BTN_SZ, bkg_rect.y + bkg_rect.h * 3 / 4, BTN_SZ*2, BTN_SZ, lang(VPI_LANG_OK_BTN), 0, VUI_BUTTON_STYLE_BUTTON, fglayer, ok_action, ok_data);
+    vui_button_create(vui, bkg_rect.x + bkg_rect.w / 2 - BTN_SZ, bkg_rect.y + bkg_rect.h * 3 / 4, BTN_SZ * 2, BTN_SZ,
+                      lang(VPI_LANG_OK_BTN), 0, VUI_BUTTON_STYLE_BUTTON, fglayer, ok_action, ok_data);
 
     if (fade_fglayer)
         vui_transition_fade_layer_in(vui, fglayer, 0, 0);

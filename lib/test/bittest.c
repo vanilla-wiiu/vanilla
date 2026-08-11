@@ -142,7 +142,7 @@ int full_test()
 {
     const char *expected = "\x67\x64\x00\x20\xAC\x2B\x40\x6C\x1E\xF3\x68";
 
-    //uint8_t buffer[0xB];
+    // uint8_t buffer[0xB];
     uint8_t buffer[0x100];
     size_t size = generate_sps_params(buffer, sizeof(buffer));
 
@@ -162,7 +162,7 @@ int full_test()
         printf("FAIL\n");
         return 1;
     }*/
-   return 0;
+    return 0;
 }
 
 int main()
@@ -170,7 +170,7 @@ int main()
     if (simple()) {
         return 1;
     }
-    
+
     if (simple_double()) {
         return 1;
     }
@@ -186,7 +186,7 @@ int main()
     if (complex_exp_golomb()) {
         return 1;
     }
-    
+
     if (full_test()) {
         return 1;
     }

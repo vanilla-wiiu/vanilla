@@ -1,19 +1,19 @@
 #include "ui_sdl.h"
 
-#include <stdatomic.h>
-#include <errno.h>
-#include <math.h>
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_hints.h>
 #include <SDL2/SDL_syswm.h>
 #include <SDL_image.h>
 #include <SDL_power.h>
 #include <SDL_ttf.h>
-#include <pthread.h>
-#include <time.h>
-#include <vanilla.h>
+#include <errno.h>
 #include <libavutil/hwcontext.h>
+#include <math.h>
+#include <pthread.h>
+#include <stdatomic.h>
+#include <time.h>
 #include <unistd.h>
+#include <vanilla.h>
 
 #ifdef VANILLA_HAS_EGL
 #include <SDL2/SDL_egl.h>
@@ -21,17 +21,16 @@
 #include <SDL2/SDL_opengles2.h>
 #endif // #ifdef VANILLA_HAS_EGL
 
-
 #ifdef VANILLA_DRM_AVAILABLE
-#include <libavutil/hwcontext_drm.h>
-#include <drm_fourcc.h>
 #include "ui_sdl_drm.h"
+#include <drm_fourcc.h>
+#include <libavutil/hwcontext_drm.h>
 #endif // VANILLA_DRM_AVAILABLE
 
 #ifdef VANILLA_CUDA_AVAILABLE
-#include <libavutil/hwcontext_cuda.h>
-#include <cuda_runtime.h>
 #include <cuda_gl_interop.h>
+#include <cuda_runtime.h>
+#include <libavutil/hwcontext_cuda.h>
 #endif // VANILLA_CUDA_AVAILABLE
 
 #include "config.h"
@@ -45,7 +44,7 @@
 #include "platform_nx_imu.h"
 #endif
 
-#define MIN(a,b) (((a)<(b))?(a):(b))
+#define MIN(a, b) (((a) < (b)) ? (a) : (b))
 #define PW_CHAR_SIZE 20
 #define PW_CHAR_PAD 2
 #define AUDIO_BUFFER_SIZE 1664 // Wii U never deviates from this so we can hardcode it
@@ -86,17 +85,17 @@ typedef struct {
     AVFrame *frame;
     AVFrame *held_frame; // keeps the displayed dmabuf alive until the next frame replaces it
     uint64_t present_frame_sequence;
-	SDL_Texture *pw_tex;
+    SDL_Texture *pw_tex;
 
-	uint8_t audio_buffer[AUDIO_BUFFER_COUNT][AUDIO_BUFFER_SIZE];
+    uint8_t audio_buffer[AUDIO_BUFFER_COUNT][AUDIO_BUFFER_SIZE];
 
     _Atomic size_t audio_wseq;
     _Atomic size_t audio_rseq;
 
-	Uint32 last_power_state_check;
-	vui_power_state_t last_power_state;
+    Uint32 last_power_state_check;
+    vui_power_state_t last_power_state;
 
-	uint16_t last_vibration_state;
+    uint16_t last_vibration_state;
 } vui_sdl_context_t;
 
 #ifdef VANILLA_CUDA_AVAILABLE
@@ -110,7 +109,7 @@ static int vibrate = 0;
 
 void init_gamepad(vui_context_t *ctx)
 {
-	vibrate = 0;
+    vibrate = 0;
 
     // Set up default keys/buttons/axes
     ctx->default_button_map[SDL_CONTROLLER_BUTTON_A] = VANILLA_BTN_A;
@@ -180,25 +179,26 @@ void find_valid_controller(vui_sdl_context_t *sdl_ctx)
     int controller = -1;
     int steam_virtual_gamepad_index = -1;
 
-	vpilog("Looking for game controllers...\n");
-	for (int i = 0; i < SDL_NumJoysticks(); i++) {
+    vpilog("Looking for game controllers...\n");
+    for (int i = 0; i < SDL_NumJoysticks(); i++) {
         SDL_JoystickGUID guid = SDL_JoystickGetDeviceGUID(i);
         char guid_str[64];
         SDL_JoystickGetGUIDString(guid, guid_str, sizeof(guid_str));
 
         // Ignore left and right joycon devices
-        if (!strcmp(guid_str, "0600c2f47e0500000620000000000000") || !strcmp(guid_str, "060091737e0500000720000000000000")) {
+        if (!strcmp(guid_str, "0600c2f47e0500000620000000000000") ||
+            !strcmp(guid_str, "060091737e0500000720000000000000")) {
             continue;
         }
 
         const char *ctrl_name = SDL_GameControllerNameForIndex(i);
-		vpilog("  Found %i: %s\n", i, ctrl_name);
+        vpilog("  Found %i: %s\n", i, ctrl_name);
         if (ctrl_name != NULL && !strcmp(ctrl_name, "Steam Virtual Gamepad")) {
             steam_virtual_gamepad_index = i;
         } else if (controller == -1) {
             controller = i;
         }
-	}
+    }
 
     SDL_GameController *steam_virtual_gamepad = NULL;
     SDL_GameController *c = NULL;
@@ -234,12 +234,12 @@ void find_valid_controller(vui_sdl_context_t *sdl_ctx)
 
 void vui_sdl_audio_handler(const void *data, size_t size, void *userdata)
 {
-	vui_sdl_context_t *sdl_ctx = (vui_sdl_context_t *) userdata;
+    vui_sdl_context_t *sdl_ctx = (vui_sdl_context_t *) userdata;
 
-	if (!sdl_ctx->audio) {
-		// Buffers will not have been initialized, so return before we try using them
-		return;
-	}
+    if (!sdl_ctx->audio) {
+        // Buffers will not have been initialized, so return before we try using them
+        return;
+    }
 
     // static Uint32 last_call = 0;
     // Uint32 now = SDL_GetTicks();
@@ -257,10 +257,10 @@ void vui_sdl_vibrate_handler(uint8_t vibrate, void *userdata)
     vui_sdl_context_t *sdl_ctx = (vui_sdl_context_t *) userdata;
     if (sdl_ctx->controller) {
         uint16_t amount = vibrate ? 0xFFFF : 0;
-		if (sdl_ctx->last_vibration_state != amount) {
-			SDL_GameControllerRumble(sdl_ctx->controller, amount, amount, 0);
-			sdl_ctx->last_vibration_state = amount;
-		}
+        if (sdl_ctx->last_vibration_state != amount) {
+            SDL_GameControllerRumble(sdl_ctx->controller, amount, amount, 0);
+            sdl_ctx->last_vibration_state = amount;
+        }
     }
 }
 
@@ -334,12 +334,10 @@ void vui_sdl_fullscreen_enabled_handler(vui_context_t *ctx, int enabled, void *u
 
 void vui_sdl_get_key_mapping_handler(vui_context_t *ctx, int vanilla_btn, void *userdata)
 {
-
 }
 
 void vui_sdl_set_key_mapping_handler(vui_context_t *ctx, int vanilla_btn, int key, void *userdata)
 {
-
 }
 
 void vui_sdl_audio_set_enabled(vui_context_t *ctx, int enabled, void *userdata)
@@ -353,12 +351,12 @@ void vui_sdl_mic_set_enabled(vui_context_t *ctx, int enabled, void *userdata)
 {
     vui_sdl_context_t *sdl_ctx = (vui_sdl_context_t *) userdata;
 
-	SDL_PauseAudioDevice(sdl_ctx->mic, !enabled);
+    SDL_PauseAudioDevice(sdl_ctx->mic, !enabled);
 }
 
 void audio_callback(void *userdata, Uint8 *stream, int len)
 {
-	vui_sdl_context_t *sdl_ctx = (vui_sdl_context_t *) userdata;
+    vui_sdl_context_t *sdl_ctx = (vui_sdl_context_t *) userdata;
 
     // static Uint32 last_call = 0;
     // Uint32 now = SDL_GetTicks();
@@ -383,32 +381,32 @@ void audio_callback(void *userdata, Uint8 *stream, int len)
 
 void mic_callback(void *userdata, Uint8 *stream, int len)
 {
-	vui_context_t *ctx = (vui_context_t *) userdata;
-	vui_sdl_context_t *sdl_ctx = (vui_sdl_context_t *) ctx->platform_data;
+    vui_context_t *ctx = (vui_context_t *) userdata;
+    vui_sdl_context_t *sdl_ctx = (vui_sdl_context_t *) ctx->platform_data;
 
-	if (!ctx->mic_callback) {
-		return;
-	}
+    if (!ctx->mic_callback) {
+        return;
+    }
 
-	if (sdl_ctx->mic_resampler) {
-		// We open the mic at the same rate as playback (48kHz) to avoid
-		// reconfiguring the shared Tegra audio clock domain, then resample
-		// down to the 16kHz the Wii U expects.
-		SDL_AudioStreamPut(sdl_ctx->mic_resampler, stream, len);
-		int avail;
-		while ((avail = SDL_AudioStreamAvailable(sdl_ctx->mic_resampler)) > 0) {
-			uint8_t buf[2048];
-			int chunk = avail < (int) sizeof(buf) ? avail : (int) sizeof(buf);
-			int got = SDL_AudioStreamGet(sdl_ctx->mic_resampler, buf, chunk);
-			if (got > 0) {
-				ctx->mic_callback(ctx->mic_callback_data, buf, got);
-			} else {
-				break;
-			}
-		}
-	} else {
-		ctx->mic_callback(ctx->mic_callback_data, stream, len);
-	}
+    if (sdl_ctx->mic_resampler) {
+        // We open the mic at the same rate as playback (48kHz) to avoid
+        // reconfiguring the shared Tegra audio clock domain, then resample
+        // down to the 16kHz the Wii U expects.
+        SDL_AudioStreamPut(sdl_ctx->mic_resampler, stream, len);
+        int avail;
+        while ((avail = SDL_AudioStreamAvailable(sdl_ctx->mic_resampler)) > 0) {
+            uint8_t buf[2048];
+            int chunk = avail < (int) sizeof(buf) ? avail : (int) sizeof(buf);
+            int got = SDL_AudioStreamGet(sdl_ctx->mic_resampler, buf, chunk);
+            if (got > 0) {
+                ctx->mic_callback(ctx->mic_callback_data, buf, got);
+            } else {
+                break;
+            }
+        }
+    } else {
+        ctx->mic_callback(ctx->mic_callback_data, stream, len);
+    }
 }
 
 int vui_sdl_event_thread(void *data)
@@ -418,251 +416,263 @@ int vui_sdl_event_thread(void *data)
 
     SDL_Event ev;
     // while (!vui->quit) {
-        // while (SDL_WaitEventTimeout(&ev, 100)) {
-        while (SDL_PollEvent(&ev)) {
-            switch (ev.type) {
-            case SDL_QUIT:
-                vanilla_stop();
-                vui_quit(vui);
-                return 0;
-            case SDL_MOUSEMOTION:
-            case SDL_MOUSEBUTTONDOWN:
-            case SDL_MOUSEBUTTONUP:
-            {
-                // Ensure dst_rect is initialized
-                SDL_Rect *dst_rect = &sdl_ctx->dst_rect;
-                if (dst_rect->w > 0 && dst_rect->h > 0) {
-                    // Translate screen coords to logical coords
-                    int tr_x, tr_y;
-                    tr_x = (ev.button.x - dst_rect->x) * vui->screen_width / dst_rect->w;
-                    tr_y = (ev.button.y - dst_rect->y) * vui->screen_height / dst_rect->h;
+    // while (SDL_WaitEventTimeout(&ev, 100)) {
+    while (SDL_PollEvent(&ev)) {
+        switch (ev.type) {
+        case SDL_QUIT:
+            vanilla_stop();
+            vui_quit(vui);
+            return 0;
+        case SDL_MOUSEMOTION:
+        case SDL_MOUSEBUTTONDOWN:
+        case SDL_MOUSEBUTTONUP: {
+            // Ensure dst_rect is initialized
+            SDL_Rect *dst_rect = &sdl_ctx->dst_rect;
+            if (dst_rect->w > 0 && dst_rect->h > 0) {
+                // Translate screen coords to logical coords
+                int tr_x, tr_y;
+                tr_x = (ev.button.x - dst_rect->x) * vui->screen_width / dst_rect->w;
+                tr_y = (ev.button.y - dst_rect->y) * vui->screen_height / dst_rect->h;
 
-                    if (vui->game_mode) {
-                        // In game mode, pass clicks directly to Vanilla
-                        int x, y;
-                        if (ev.button.button == SDL_BUTTON_LEFT && (ev.type == SDL_MOUSEBUTTONDOWN || ev.type == SDL_MOUSEMOTION)) {
-                            x = tr_x;
-                            y = tr_y;
-                        } else {
-                            x = -1;
-                            y = -1;
-                        }
-                        vanilla_set_touch(x, y);
+                if (vui->game_mode) {
+                    // In game mode, pass clicks directly to Vanilla
+                    int x, y;
+                    if (ev.button.button == SDL_BUTTON_LEFT &&
+                        (ev.type == SDL_MOUSEBUTTONDOWN || ev.type == SDL_MOUSEMOTION)) {
+                        x = tr_x;
+                        y = tr_y;
                     } else {
-                        // Otherwise, handle ourselves
-                        if (ev.type == SDL_MOUSEBUTTONDOWN)
-                            vui_process_mousedown(vui, tr_x, tr_y);
-                        else if (ev.type == SDL_MOUSEBUTTONUP)
-                            vui_process_mouseup(vui, tr_x, tr_y);
-
-                        if (vui->active_textedit != -1 && (ev.type == SDL_MOUSEBUTTONDOWN || ev.type == SDL_MOUSEMOTION) && ev.button.button == SDL_BUTTON_LEFT) {
-                            // Put cursor in correct position
-                            vui_textedit_t *edit = &vui->textedits[vui->active_textedit];
-                            TTF_Font *font = get_font(sdl_ctx, edit->size);
-
-                            // Determine best location for new cursor
-                            int rel_x = tr_x - edit->x;
-                            char tmp[MAX_BUTTON_TEXT];
-                            int new_cursor = 0;
-                            int diff = rel_x;
-                            size_t len = 0;
-                            char *src = edit->text;
-                            while (*src != 0) {
-                                src = vui_utf8_advance(src);
-
-                                size_t len = src - edit->text;
-                                strncpy(tmp, edit->text, len);
-                                tmp[len] = 0;
-
-                                int tw;
-                                TTF_SizeUTF8(font, tmp, &tw, 0);
-
-                                int this_diff = abs(tw - rel_x);
-                                if (this_diff < diff) {
-                                    diff = this_diff;
-                                    new_cursor++;
-                                } else {
-                                    break;
-                                }
-                            }
-
-                            vui_textedit_set_cursor(vui, vui->active_textedit, new_cursor);
-                        }
+                        x = -1;
+                        y = -1;
                     }
-                }
-                break;
-            }
-            case SDL_CONTROLLERDEVICEADDED:
-                // Attempt to find controller if one doesn't exist already
-                if (!sdl_ctx->controller) {
-                    find_valid_controller(sdl_ctx);
-                }
-                break;
-            case SDL_CONTROLLERDEVICEREMOVED:
-                // Handle current controller being removed
-                if ((sdl_ctx->controller && ev.cdevice.which == SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(sdl_ctx->controller)))
-                    || (sdl_ctx->controller_gyros && ev.cdevice.which == SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(sdl_ctx->controller_gyros)))) {
-                    if (sdl_ctx->controller) {
-                        SDL_GameControllerClose(sdl_ctx->controller);
-                        sdl_ctx->controller = NULL;
-                    }
-                    if (sdl_ctx->controller_gyros) {
-                        SDL_GameControllerClose(sdl_ctx->controller_gyros);
-                        sdl_ctx->controller_gyros = NULL;
-                    }
-                    find_valid_controller(sdl_ctx);
-                }
-                break;
-            case SDL_CONTROLLERBUTTONDOWN:
-            case SDL_CONTROLLERBUTTONUP:
-                if (sdl_ctx->controller && ev.cdevice.which == SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(sdl_ctx->controller))) {
-                    int btn_idx = ev.cbutton.button;
-                    int vanilla_btn;
+                    vanilla_set_touch(x, y);
+                } else {
+                    // Otherwise, handle ourselves
+                    if (ev.type == SDL_MOUSEBUTTONDOWN)
+                        vui_process_mousedown(vui, tr_x, tr_y);
+                    else if (ev.type == SDL_MOUSEBUTTONUP)
+                        vui_process_mouseup(vui, tr_x, tr_y);
 
-                    // First try to read from config. If unmapped, fallback to default.
-                    vanilla_btn = vpi_config.buttonmap[btn_idx];
-                    if (vanilla_btn == VPI_CONFIG_UNMAPPED) {
-                        vanilla_btn = vui->default_button_map[btn_idx];
-                    }
+                    if (vui->active_textedit != -1 && (ev.type == SDL_MOUSEBUTTONDOWN || ev.type == SDL_MOUSEMOTION) &&
+                        ev.button.button == SDL_BUTTON_LEFT) {
+                        // Put cursor in correct position
+                        vui_textedit_t *edit = &vui->textedits[vui->active_textedit];
+                        TTF_Font *font = get_font(sdl_ctx, edit->size);
 
-                    if (vanilla_btn != -1) {
-                        if (vanilla_btn > VPI_ACTION_START_INDEX) {
-                            if (ev.cbutton.state == SDL_PRESSED) {
-                                vpi_menu_action(vui, (vpi_extra_action_t) vanilla_btn);
-                            }
-                        } else {
-                            // Handle ABXY swap
-                            if (vpi_config.swap_abxy) {
-                                switch (vanilla_btn) {
-                                case VANILLA_BTN_A: vanilla_btn = VANILLA_BTN_B; break;
-                                case VANILLA_BTN_B: vanilla_btn = VANILLA_BTN_A; break;
-                                case VANILLA_BTN_X: vanilla_btn = VANILLA_BTN_Y; break;
-                                case VANILLA_BTN_Y: vanilla_btn = VANILLA_BTN_X; break;
-                                }
-                            }
+                        // Determine best location for new cursor
+                        int rel_x = tr_x - edit->x;
+                        char tmp[MAX_BUTTON_TEXT];
+                        int new_cursor = 0;
+                        int diff = rel_x;
+                        size_t len = 0;
+                        char *src = edit->text;
+                        while (*src != 0) {
+                            src = vui_utf8_advance(src);
 
-                            if (vui->game_mode) {
-                                vanilla_set_button(vanilla_btn, ev.cbutton.state == SDL_PRESSED ? INT16_MAX : 0);
-                            } else if (ev.cbutton.state == SDL_PRESSED) {
-                                vui_process_keydown(vui, vanilla_btn);
+                            size_t len = src - edit->text;
+                            strncpy(tmp, edit->text, len);
+                            tmp[len] = 0;
+
+                            int tw;
+                            TTF_SizeUTF8(font, tmp, &tw, 0);
+
+                            int this_diff = abs(tw - rel_x);
+                            if (this_diff < diff) {
+                                diff = this_diff;
+                                new_cursor++;
                             } else {
-                                vui_process_keyup(vui, vanilla_btn);
+                                break;
                             }
                         }
+
+                        vui_textedit_set_cursor(vui, vui->active_textedit, new_cursor);
                     }
                 }
-                break;
-            case SDL_CONTROLLERAXISMOTION:
-                if (sdl_ctx->controller && ev.cdevice.which == SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(sdl_ctx->controller))) {
-                    int axis_idx = ev.caxis.axis;
-                    int vanilla_axis;
-
-                    // First try to read from config. If unmapped, fallback to default.
-                    vanilla_axis = vpi_config.axismap[axis_idx];
-                    if (vanilla_axis == VPI_CONFIG_UNMAPPED) {
-                        vanilla_axis = vui->default_axis_map[ev.caxis.axis];
-                    }
-
-                    Sint16 axis_value = ev.caxis.value;
-                    if (vanilla_axis != -1) {
-                        if (vui->game_mode) {
-                            vanilla_set_button(vanilla_axis, axis_value);
-                        } else if (vanilla_axis == SDL_CONTROLLER_AXIS_LEFTX) {
-                            if (axis_value < 0)
-                                vui_process_keydown(vui, VANILLA_AXIS_L_LEFT);
-                            else if (axis_value > 0)
-                                vui_process_keydown(vui, VANILLA_AXIS_L_RIGHT);
-                            else {
-                                vui_process_keyup(vui, VANILLA_AXIS_L_LEFT);
-                                vui_process_keyup(vui, VANILLA_AXIS_L_RIGHT);
-                            }
-                        } else if (vanilla_axis == SDL_CONTROLLER_AXIS_LEFTY) {
-                            if (axis_value < 0)
-                                vui_process_keydown(vui, VANILLA_AXIS_L_UP);
-                            else if (axis_value > 0)
-                                vui_process_keydown(vui, VANILLA_AXIS_L_DOWN);
-                            else {
-                                vui_process_keyup(vui, VANILLA_AXIS_L_UP);
-                                vui_process_keyup(vui, VANILLA_AXIS_L_DOWN);
-                            }
-                        }
-                    }
+            }
+            break;
+        }
+        case SDL_CONTROLLERDEVICEADDED:
+            // Attempt to find controller if one doesn't exist already
+            if (!sdl_ctx->controller) {
+                find_valid_controller(sdl_ctx);
+            }
+            break;
+        case SDL_CONTROLLERDEVICEREMOVED:
+            // Handle current controller being removed
+            if ((sdl_ctx->controller &&
+                 ev.cdevice.which == SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(sdl_ctx->controller))) ||
+                (sdl_ctx->controller_gyros && ev.cdevice.which == SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(
+                                                                      sdl_ctx->controller_gyros)))) {
+                if (sdl_ctx->controller) {
+                    SDL_GameControllerClose(sdl_ctx->controller);
+                    sdl_ctx->controller = NULL;
                 }
-                break;
-            case SDL_CONTROLLERSENSORUPDATE:
-                if (ev.csensor.sensor == SDL_SENSOR_ACCEL) {
-                    vanilla_set_button(VANILLA_SENSOR_ACCEL_X, pack_float(ev.csensor.data[0]));
-                    vanilla_set_button(VANILLA_SENSOR_ACCEL_Y, pack_float(ev.csensor.data[1]));
-                    vanilla_set_button(VANILLA_SENSOR_ACCEL_Z, pack_float(ev.csensor.data[2]));
-                } else if (ev.csensor.sensor == SDL_SENSOR_GYRO) {
-                    vanilla_set_button(VANILLA_SENSOR_GYRO_PITCH, pack_float(ev.csensor.data[0]));
-                    vanilla_set_button(VANILLA_SENSOR_GYRO_YAW, pack_float(ev.csensor.data[1]));
-                    vanilla_set_button(VANILLA_SENSOR_GYRO_ROLL, pack_float(ev.csensor.data[2]));
+                if (sdl_ctx->controller_gyros) {
+                    SDL_GameControllerClose(sdl_ctx->controller_gyros);
+                    sdl_ctx->controller_gyros = NULL;
                 }
-                break;
-            case SDL_KEYDOWN:
-            case SDL_KEYUP:
-            {
-                if (vui->key_override_handler) {
-                    if (ev.key.keysym.scancode == SDL_SCANCODE_ESCAPE) {
-                        vui->key_override_cancel_handler(vui, vui->key_override_handler_data);
-                    } else {
-                        vui->key_override_handler(vui, ev.key.keysym.scancode, vui->key_override_handler_data);
-                    }
-                } else if (vui->active_textedit == -1) {
-                    int key_idx = ev.key.keysym.scancode;
-                    int vanilla_btn;
+                find_valid_controller(sdl_ctx);
+            }
+            break;
+        case SDL_CONTROLLERBUTTONDOWN:
+        case SDL_CONTROLLERBUTTONUP:
+            if (sdl_ctx->controller &&
+                ev.cdevice.which == SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(sdl_ctx->controller))) {
+                int btn_idx = ev.cbutton.button;
+                int vanilla_btn;
 
-                    // First try to read from config. If unmapped, fallback to default.
-                    vanilla_btn = vpi_config.keymap[key_idx];
-                    if (vanilla_btn == VPI_CONFIG_UNMAPPED) {
-                        vanilla_btn = vui->default_key_map[key_idx];
-                    }
+                // First try to read from config. If unmapped, fallback to default.
+                vanilla_btn = vpi_config.buttonmap[btn_idx];
+                if (vanilla_btn == VPI_CONFIG_UNMAPPED) {
+                    vanilla_btn = vui->default_button_map[btn_idx];
+                }
 
+                if (vanilla_btn != -1) {
                     if (vanilla_btn > VPI_ACTION_START_INDEX) {
-                        if (ev.type == SDL_KEYDOWN)
+                        if (ev.cbutton.state == SDL_PRESSED) {
                             vpi_menu_action(vui, (vpi_extra_action_t) vanilla_btn);
-                    } else if (vanilla_btn != -1) {
+                        }
+                    } else {
+                        // Handle ABXY swap
+                        if (vpi_config.swap_abxy) {
+                            switch (vanilla_btn) {
+                            case VANILLA_BTN_A:
+                                vanilla_btn = VANILLA_BTN_B;
+                                break;
+                            case VANILLA_BTN_B:
+                                vanilla_btn = VANILLA_BTN_A;
+                                break;
+                            case VANILLA_BTN_X:
+                                vanilla_btn = VANILLA_BTN_Y;
+                                break;
+                            case VANILLA_BTN_Y:
+                                vanilla_btn = VANILLA_BTN_X;
+                                break;
+                            }
+                        }
+
                         if (vui->game_mode) {
-                            vanilla_set_button(vanilla_btn, ev.type == SDL_KEYDOWN ? INT16_MAX : 0);
-                        } else if (ev.type == SDL_KEYDOWN) {
+                            vanilla_set_button(vanilla_btn, ev.cbutton.state == SDL_PRESSED ? INT16_MAX : 0);
+                        } else if (ev.cbutton.state == SDL_PRESSED) {
                             vui_process_keydown(vui, vanilla_btn);
                         } else {
                             vui_process_keyup(vui, vanilla_btn);
                         }
                     }
-                } else if (ev.type == SDL_KEYDOWN) {
-                    switch (ev.key.keysym.scancode) {
-                    case SDL_SCANCODE_BACKSPACE:
-                        vui_textedit_backspace(vui, vui->active_textedit);
-                        break;
-                    case SDL_SCANCODE_LEFT:
-                        vui_textedit_move_cursor(vui, vui->active_textedit, -1);
-                        break;
-                    case SDL_SCANCODE_RIGHT:
-                        vui_textedit_move_cursor(vui, vui->active_textedit, 1);
-                        break;
-                    case SDL_SCANCODE_HOME:
-                        vui_textedit_move_cursor(vui, vui->active_textedit, -MAX_BUTTON_TEXT);
-                        break;
-                    case SDL_SCANCODE_END:
-                        vui_textedit_move_cursor(vui, vui->active_textedit, MAX_BUTTON_TEXT);
-                        break;
-                    case SDL_SCANCODE_DELETE:
-                        vui_textedit_del(vui, vui->active_textedit);
-                        break;
+                }
+            }
+            break;
+        case SDL_CONTROLLERAXISMOTION:
+            if (sdl_ctx->controller &&
+                ev.cdevice.which == SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(sdl_ctx->controller))) {
+                int axis_idx = ev.caxis.axis;
+                int vanilla_axis;
+
+                // First try to read from config. If unmapped, fallback to default.
+                vanilla_axis = vpi_config.axismap[axis_idx];
+                if (vanilla_axis == VPI_CONFIG_UNMAPPED) {
+                    vanilla_axis = vui->default_axis_map[ev.caxis.axis];
+                }
+
+                Sint16 axis_value = ev.caxis.value;
+                if (vanilla_axis != -1) {
+                    if (vui->game_mode) {
+                        vanilla_set_button(vanilla_axis, axis_value);
+                    } else if (vanilla_axis == SDL_CONTROLLER_AXIS_LEFTX) {
+                        if (axis_value < 0)
+                            vui_process_keydown(vui, VANILLA_AXIS_L_LEFT);
+                        else if (axis_value > 0)
+                            vui_process_keydown(vui, VANILLA_AXIS_L_RIGHT);
+                        else {
+                            vui_process_keyup(vui, VANILLA_AXIS_L_LEFT);
+                            vui_process_keyup(vui, VANILLA_AXIS_L_RIGHT);
+                        }
+                    } else if (vanilla_axis == SDL_CONTROLLER_AXIS_LEFTY) {
+                        if (axis_value < 0)
+                            vui_process_keydown(vui, VANILLA_AXIS_L_UP);
+                        else if (axis_value > 0)
+                            vui_process_keydown(vui, VANILLA_AXIS_L_DOWN);
+                        else {
+                            vui_process_keyup(vui, VANILLA_AXIS_L_UP);
+                            vui_process_keyup(vui, VANILLA_AXIS_L_DOWN);
+                        }
                     }
                 }
-                break;
             }
-            case SDL_TEXTINPUT:
-                vui_textedit_input(vui, vui->active_textedit, ev.text.text);
-                break;
-            case SDL_TEXTEDITING:
-                vpilog("text editing!\n");
-                break;
+            break;
+        case SDL_CONTROLLERSENSORUPDATE:
+            if (ev.csensor.sensor == SDL_SENSOR_ACCEL) {
+                vanilla_set_button(VANILLA_SENSOR_ACCEL_X, pack_float(ev.csensor.data[0]));
+                vanilla_set_button(VANILLA_SENSOR_ACCEL_Y, pack_float(ev.csensor.data[1]));
+                vanilla_set_button(VANILLA_SENSOR_ACCEL_Z, pack_float(ev.csensor.data[2]));
+            } else if (ev.csensor.sensor == SDL_SENSOR_GYRO) {
+                vanilla_set_button(VANILLA_SENSOR_GYRO_PITCH, pack_float(ev.csensor.data[0]));
+                vanilla_set_button(VANILLA_SENSOR_GYRO_YAW, pack_float(ev.csensor.data[1]));
+                vanilla_set_button(VANILLA_SENSOR_GYRO_ROLL, pack_float(ev.csensor.data[2]));
             }
+            break;
+        case SDL_KEYDOWN:
+        case SDL_KEYUP: {
+            if (vui->key_override_handler) {
+                if (ev.key.keysym.scancode == SDL_SCANCODE_ESCAPE) {
+                    vui->key_override_cancel_handler(vui, vui->key_override_handler_data);
+                } else {
+                    vui->key_override_handler(vui, ev.key.keysym.scancode, vui->key_override_handler_data);
+                }
+            } else if (vui->active_textedit == -1) {
+                int key_idx = ev.key.keysym.scancode;
+                int vanilla_btn;
+
+                // First try to read from config. If unmapped, fallback to default.
+                vanilla_btn = vpi_config.keymap[key_idx];
+                if (vanilla_btn == VPI_CONFIG_UNMAPPED) {
+                    vanilla_btn = vui->default_key_map[key_idx];
+                }
+
+                if (vanilla_btn > VPI_ACTION_START_INDEX) {
+                    if (ev.type == SDL_KEYDOWN)
+                        vpi_menu_action(vui, (vpi_extra_action_t) vanilla_btn);
+                } else if (vanilla_btn != -1) {
+                    if (vui->game_mode) {
+                        vanilla_set_button(vanilla_btn, ev.type == SDL_KEYDOWN ? INT16_MAX : 0);
+                    } else if (ev.type == SDL_KEYDOWN) {
+                        vui_process_keydown(vui, vanilla_btn);
+                    } else {
+                        vui_process_keyup(vui, vanilla_btn);
+                    }
+                }
+            } else if (ev.type == SDL_KEYDOWN) {
+                switch (ev.key.keysym.scancode) {
+                case SDL_SCANCODE_BACKSPACE:
+                    vui_textedit_backspace(vui, vui->active_textedit);
+                    break;
+                case SDL_SCANCODE_LEFT:
+                    vui_textedit_move_cursor(vui, vui->active_textedit, -1);
+                    break;
+                case SDL_SCANCODE_RIGHT:
+                    vui_textedit_move_cursor(vui, vui->active_textedit, 1);
+                    break;
+                case SDL_SCANCODE_HOME:
+                    vui_textedit_move_cursor(vui, vui->active_textedit, -MAX_BUTTON_TEXT);
+                    break;
+                case SDL_SCANCODE_END:
+                    vui_textedit_move_cursor(vui, vui->active_textedit, MAX_BUTTON_TEXT);
+                    break;
+                case SDL_SCANCODE_DELETE:
+                    vui_textedit_del(vui, vui->active_textedit);
+                    break;
+                }
+            }
+            break;
         }
+        case SDL_TEXTINPUT:
+            vui_textedit_input(vui, vui->active_textedit, ev.text.text);
+            break;
+        case SDL_TEXTEDITING:
+            vpilog("text editing!\n");
+            break;
+        }
+    }
     // }
 
     return 0;
@@ -686,7 +696,8 @@ int vui_init_window(vui_context_t *ctx, vui_sdl_context_t *sdl_ctx, Uint32 windo
         win_h = ctx->screen_height;
     }
 
-    sdl_ctx->window = SDL_CreateWindow("Vanilla", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, win_w, win_h, window_flags);
+    sdl_ctx->window =
+        SDL_CreateWindow("Vanilla", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, win_w, win_h, window_flags);
     if (!sdl_ctx->window) {
         vpilog("Failed to CreateWindow: %s\n", SDL_GetError());
         return -1;
@@ -703,12 +714,12 @@ int vui_init_window(vui_context_t *ctx, vui_sdl_context_t *sdl_ctx, Uint32 windo
 
 int vui_init_sdl(vui_context_t *ctx, int fullscreen)
 {
-	// Enable Steam Deck gyroscopes even while Steam is open and in gaming mode
-	// SDL_SetHintWithPriority("SDL_GAMECONTROLLER_ALLOW_STEAM_VIRTUAL_GAMEPAD", "0", SDL_HINT_OVERRIDE);
-	SDL_SetHintWithPriority(SDL_HINT_GAMECONTROLLER_IGNORE_DEVICES, "", SDL_HINT_OVERRIDE);
+    // Enable Steam Deck gyroscopes even while Steam is open and in gaming mode
+    // SDL_SetHintWithPriority("SDL_GAMECONTROLLER_ALLOW_STEAM_VIRTUAL_GAMEPAD", "0", SDL_HINT_OVERRIDE);
+    SDL_SetHintWithPriority(SDL_HINT_GAMECONTROLLER_IGNORE_DEVICES, "", SDL_HINT_OVERRIDE);
 
-	// Force EGL when using X11 so that VAAPI works
-	SDL_SetHint(SDL_HINT_VIDEO_X11_FORCE_EGL, "1");
+    // Force EGL when using X11 so that VAAPI works
+    SDL_SetHint(SDL_HINT_VIDEO_X11_FORCE_EGL, "1");
 
     // Enable linear filtering
     SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "linear");
@@ -735,9 +746,7 @@ int vui_init_sdl(vui_context_t *ctx, int fullscreen)
     if (!strcmp(driver, "x11") || !strcmp(driver, "wayland")) {
         SDL_RendererInfo info;
         SDL_GetRenderDriverInfo(0, &info);
-        if (!strcmp(info.name, "opengl")
-            || !strcmp(info.name, "opengles")
-            || !strcmp(info.name, "opengles2")) {
+        if (!strcmp(info.name, "opengl") || !strcmp(info.name, "opengles") || !strcmp(info.name, "opengles2")) {
             // This saves a small amount of time on the EGL check below because
             // SDL will fail on the earlier CreateWindow call rather than the
             // later CreateRenderer call.
@@ -750,7 +759,7 @@ int vui_init_sdl(vui_context_t *ctx, int fullscreen)
     if (vui_init_window(ctx, sdl_ctx, window_flags) != 0) {
         // Re-attempt without EGL (X11/NVIDIA do not support this)
         vpilog("Trying again without forcing EGL...\n");
-	    SDL_SetHint(SDL_HINT_VIDEO_X11_FORCE_EGL, "0");
+        SDL_SetHint(SDL_HINT_VIDEO_X11_FORCE_EGL, "0");
         vpi_egl_available = 0;
 
         // Determine if we created a window, destroy it if so
@@ -778,25 +787,26 @@ int vui_init_sdl(vui_context_t *ctx, int fullscreen)
     desired.freq = 48000;
     desired.format = AUDIO_S16LSB;
     desired.channels = 2;
-	desired.callback = audio_callback;
-	desired.userdata = sdl_ctx;
-    desired.samples = AUDIO_BUFFER_SIZE / 2 / 2; // Buffer size (bytes) divided by 2 channels (stereo) divided by 2 bytes per sample (16-bit)
+    desired.callback = audio_callback;
+    desired.userdata = sdl_ctx;
+    desired.samples = AUDIO_BUFFER_SIZE / 2 /
+                      2; // Buffer size (bytes) divided by 2 channels (stereo) divided by 2 bytes per sample (16-bit)
 
     sdl_ctx->audio = SDL_OpenAudioDevice(NULL, 0, &desired, &obtained, 0);
     if (sdl_ctx->audio) {
         // vpilog("obtained.samples = %u\n", obtained.samples);
 
-		// Set up buffers
+        // Set up buffers
         atomic_store(&sdl_ctx->audio_wseq, 0);
         atomic_store(&sdl_ctx->audio_rseq, 0);
 
-		// Set up handler for audio submitted from VPI to VUI
+        // Set up handler for audio submitted from VPI to VUI
         ctx->audio_handler = vui_sdl_audio_handler;
         ctx->audio_handler_data = sdl_ctx;
 
-		// Set up handler for enabling audio
-		ctx->audio_enabled_handler = vui_sdl_audio_set_enabled;
-		ctx->audio_enabled_handler_data = sdl_ctx;
+        // Set up handler for enabling audio
+        ctx->audio_enabled_handler = vui_sdl_audio_set_enabled;
+        ctx->audio_enabled_handler_data = sdl_ctx;
     } else {
         vpilog("Failed to open audio device\n");
     }
@@ -810,25 +820,23 @@ int vui_init_sdl(vui_context_t *ctx, int fullscreen)
     mic_desired.freq = 48000;
     mic_desired.format = AUDIO_S16LSB;
     mic_desired.callback = mic_callback;
-	mic_desired.userdata = ctx;
+    mic_desired.userdata = ctx;
     mic_desired.channels = 1;
     sdl_ctx->mic = SDL_OpenAudioDevice(NULL, 1, &mic_desired, NULL, 0);
     if (sdl_ctx->mic) {
-		sdl_ctx->mic_resampler = SDL_NewAudioStream(
-			AUDIO_S16LSB, 1, 48000,
-			AUDIO_S16LSB, 1, 16000);
-		if (!sdl_ctx->mic_resampler) {
-			vpilog("Failed to create mic resampler: %s\n", SDL_GetError());
-		}
-		ctx->mic_enabled_handler = vui_sdl_mic_set_enabled;
-		ctx->mic_enabled_handler_data = sdl_ctx;
-	} else {
-		vpilog("Failed to open microphone device\n");
-	}
+        sdl_ctx->mic_resampler = SDL_NewAudioStream(AUDIO_S16LSB, 1, 48000, AUDIO_S16LSB, 1, 16000);
+        if (!sdl_ctx->mic_resampler) {
+            vpilog("Failed to create mic resampler: %s\n", SDL_GetError());
+        }
+        ctx->mic_enabled_handler = vui_sdl_mic_set_enabled;
+        ctx->mic_enabled_handler_data = sdl_ctx;
+    } else {
+        vpilog("Failed to open microphone device\n");
+    }
 
     ctx->vibrate_handler = vui_sdl_vibrate_handler;
     ctx->vibrate_handler_data = sdl_ctx;
-	sdl_ctx->last_vibration_state = 0;
+    sdl_ctx->last_vibration_state = 0;
 
     ctx->font_height_handler = vui_sdl_font_height_handler;
     ctx->font_height_handler_data = sdl_ctx;
@@ -836,8 +844,8 @@ int vui_init_sdl(vui_context_t *ctx, int fullscreen)
     ctx->text_open_handler = vui_sdl_text_open_handler;
 
     ctx->power_state_handler = vui_sdl_power_state_handler;
-	sdl_ctx->last_power_state_check = 0;
-	sdl_ctx->last_power_state = VUI_POWERSTATE_UNKNOWN;
+    sdl_ctx->last_power_state_check = 0;
+    sdl_ctx->last_power_state = VUI_POWERSTATE_UNKNOWN;
 
     ctx->fullscreen_enabled_handler = vui_sdl_fullscreen_enabled_handler;
 
@@ -871,12 +879,12 @@ int vui_init_sdl(vui_context_t *ctx, int fullscreen)
     TTF_SetFontWrappedAlign(sdl_ctx->sysfont_small, TTF_WRAPPED_ALIGN_CENTER);
     TTF_SetFontWrappedAlign(sdl_ctx->sysfont_tiny, TTF_WRAPPED_ALIGN_CENTER);
 
-	sdl_ctx->game_tex = 0;
+    sdl_ctx->game_tex = 0;
 
     sdl_ctx->background = 0;
     sdl_ctx->last_shown_toast = 0;
     sdl_ctx->toast_tex = 0;
-	sdl_ctx->pw_tex = 0;
+    sdl_ctx->pw_tex = 0;
     memset(sdl_ctx->layer_data, 0, sizeof(sdl_ctx->layer_data));
     memset(sdl_ctx->label_data, 0, sizeof(sdl_ctx->label_data));
     memset(sdl_ctx->button_cache, 0, sizeof(sdl_ctx->button_cache));
@@ -894,8 +902,8 @@ int vui_init_sdl(vui_context_t *ctx, int fullscreen)
     sdl_ctx->frame = av_frame_alloc();
     sdl_ctx->held_frame = av_frame_alloc();
 
-	// Initialize gamepad lookup tables
-	init_gamepad(ctx);
+    // Initialize gamepad lookup tables
+    init_gamepad(ctx);
 
     return 0;
 }
@@ -918,26 +926,27 @@ void vui_close_sdl(vui_context_t *ctx)
         SDL_GameControllerClose(sdl_ctx->controller);
     }
 
-	if (sdl_ctx->audio) {
-		SDL_CloseAudioDevice(sdl_ctx->audio);
-	}
+    if (sdl_ctx->audio) {
+        SDL_CloseAudioDevice(sdl_ctx->audio);
+    }
 
-	if (sdl_ctx->mic) {
-		SDL_CloseAudioDevice(sdl_ctx->mic);
-	}
+    if (sdl_ctx->mic) {
+        SDL_CloseAudioDevice(sdl_ctx->mic);
+    }
 
-	if (sdl_ctx->mic_resampler) {
-		SDL_FreeAudioStream(sdl_ctx->mic_resampler);
-		sdl_ctx->mic_resampler = NULL;
-	}
+    if (sdl_ctx->mic_resampler) {
+        SDL_FreeAudioStream(sdl_ctx->mic_resampler);
+        sdl_ctx->mic_resampler = NULL;
+    }
 
-	if (sdl_ctx->pw_tex) {
-		SDL_DestroyTexture(sdl_ctx->pw_tex);
-		sdl_ctx->pw_tex = 0;
-	}
+    if (sdl_ctx->pw_tex) {
+        SDL_DestroyTexture(sdl_ctx->pw_tex);
+        sdl_ctx->pw_tex = 0;
+    }
 
     SDL_DestroyTexture(sdl_ctx->toast_tex);
-    if (sdl_ctx->game_tex) SDL_DestroyTexture(sdl_ctx->game_tex);
+    if (sdl_ctx->game_tex)
+        SDL_DestroyTexture(sdl_ctx->game_tex);
     SDL_DestroyTexture(sdl_ctx->background);
 
     for (int i = 0; i < MAX_BUTTON_COUNT; i++) {
@@ -964,7 +973,7 @@ void vui_close_sdl(vui_context_t *ctx)
 
     TTF_Quit();
 
-	SDL_CloseAudioDevice(sdl_ctx->audio);
+    SDL_CloseAudioDevice(sdl_ctx->audio);
 
     SDL_DestroyRenderer(sdl_ctx->renderer);
 
@@ -982,13 +991,7 @@ float lerp(float a, float b, float f)
 
 void vui_sdl_set_render_color(SDL_Renderer *renderer, vui_color_t color)
 {
-    SDL_SetRenderDrawColor(
-        renderer,
-        color.r * 0xFF,
-        color.g * 0xFF,
-        color.b * 0xFF,
-        color.a * 0xFF
-    );
+    SDL_SetRenderDrawColor(renderer, color.r * 0xFF, color.g * 0xFF, color.b * 0xFF, color.a * 0xFF);
 }
 
 SDL_Texture *vui_sdl_load_texture(SDL_Renderer *renderer, const char *filename)
@@ -1003,17 +1006,18 @@ float calculate_x_inset(float y, float h, float radius)
     float x_inset = 0;
     if (y < radius) {
         float yb = y - radius;
-        x_inset = radius - sqrtf(radius*radius - yb*yb);
+        x_inset = radius - sqrtf(radius * radius - yb * yb);
     } else {
         if (y >= h - radius) {
             float yb = (h - y) - radius;
-            x_inset = radius - sqrtf(radius*radius - yb*yb);
+            x_inset = radius - sqrtf(radius * radius - yb * yb);
         }
     }
     return x_inset;
 }
 
-void determine_color_for_gradient(int y, int h, uint8_t *r, uint8_t *g, uint8_t *b, const float *position, const uint8_t *colors, size_t count)
+void determine_color_for_gradient(int y, int h, uint8_t *r, uint8_t *g, uint8_t *b, const float *position,
+                                  const uint8_t *colors, size_t count)
 {
     float yf = y / (float) h;
     for (size_t j = 1; j < count; j++) {
@@ -1046,6 +1050,7 @@ void vui_sdl_draw_button(vui_context_t *vui, vui_sdl_context_t *sdl_ctx, vui_but
     rect.w = btn->w * msaa;
     rect.h = btn->h * msaa;
 
+    // clang-format off
     // static const float button_x_gradient_positions[] = {
     //     0.0f,
     //     0.1f,
@@ -1086,6 +1091,7 @@ void vui_sdl_draw_button(vui_context_t *vui, vui_sdl_context_t *sdl_ctx, vui_but
         0x4D, 0xCF, 0x00,
         0x64, 0xCD, 0x3D,
     };
+    // clang-format on
 
     int scrw, scrh;
     vui_get_screen_size(vui, &scrw, &scrh);
@@ -1093,7 +1099,9 @@ void vui_sdl_draw_button(vui_context_t *vui, vui_sdl_context_t *sdl_ctx, vui_but
     // Load icon if exists
     int icon_x;
     int icon_y;
-    int icon_size = btn->style == VUI_BUTTON_STYLE_CORNER ? rect.h * 1 / 3 : btn->font_size == VUI_FONT_SIZE_SMALL ? rect.h : rect.h * 2 / 4;
+    int icon_size = btn->style == VUI_BUTTON_STYLE_CORNER   ? rect.h * 1 / 3
+                    : btn->font_size == VUI_FONT_SIZE_SMALL ? rect.h
+                                                            : rect.h * 2 / 4;
     SDL_Texture *icon = 0;
     if (btn->icon[0]) {
         icon = vui_sdl_load_texture(sdl_ctx->renderer, btn->icon);
@@ -1126,12 +1134,8 @@ void vui_sdl_draw_button(vui_context_t *vui, vui_sdl_context_t *sdl_ctx, vui_but
 
         // Determine color
         uint8_t lr, lg, lb;
-        determine_color_for_gradient(
-            y, rect.h, &lr, &lg, &lb,
-            button_y_gradient_positions,
-            button_y_gradient_colors,
-            sizeof(button_y_gradient_positions)/sizeof(float)
-        );
+        determine_color_for_gradient(y, rect.h, &lr, &lg, &lb, button_y_gradient_positions, button_y_gradient_colors,
+                                     sizeof(button_y_gradient_positions) / sizeof(float));
 
         // Handle rounded corners
         float x_inset = 0;
@@ -1140,12 +1144,12 @@ void vui_sdl_draw_button(vui_context_t *vui, vui_sdl_context_t *sdl_ctx, vui_but
             x_inset = w_inset = calculate_x_inset(y, rect.h, btn_radius);
         } else {
             float inset_y = y;
-            if (btn->y < scrh/2) {
+            if (btn->y < scrh / 2) {
                 inset_y += rect.h;
             }
 
-            float hor_inset = calculate_x_inset(inset_y, rect.h*2, rect.h);
-            if (btn->x < scrw/2) {
+            float hor_inset = calculate_x_inset(inset_y, rect.h * 2, rect.h);
+            if (btn->x < scrw / 2) {
                 w_inset = hor_inset;
             } else {
                 x_inset = hor_inset;
@@ -1157,12 +1161,10 @@ void vui_sdl_draw_button(vui_context_t *vui, vui_sdl_context_t *sdl_ctx, vui_but
             uint8_t clr, clg, clb;
             int lim = btn_radius + btn_radius;
 
-            determine_color_for_gradient(
-                y, rect.h, &clr, &clg, &clb,
-                button_y_gradient_positions,
-                btn->checked ? button_checked_y_gradient_colors : button_checkable_y_gradient_colors,
-                sizeof(button_y_gradient_positions)/sizeof(float)
-            );
+            determine_color_for_gradient(y, rect.h, &clr, &clg, &clb, button_y_gradient_positions,
+                                         btn->checked ? button_checked_y_gradient_colors
+                                                      : button_checkable_y_gradient_colors,
+                                         sizeof(button_y_gradient_positions) / sizeof(float));
 
             SDL_SetRenderDrawColor(sdl_ctx->renderer, clr, clg, clb, 0xFF);
             SDL_RenderDrawLineF(sdl_ctx->renderer, rect.x + x_inset, coord, rect.x + lim - 1, coord);
@@ -1197,17 +1199,16 @@ void vui_sdl_draw_button(vui_context_t *vui, vui_sdl_context_t *sdl_ctx, vui_but
         // Adjust text rect if icon exists
         if (icon) {
             if (btn->style == VUI_BUTTON_STYLE_CORNER) {
-                text_rect.y = rect.y + rect.h/2 - (msaa_scaled_text_h + icon_size + btn_padding)/2;
-                icon_x = rect.x + rect.w/2 - icon_size/2;
+                text_rect.y = rect.y + rect.h / 2 - (msaa_scaled_text_h + icon_size + btn_padding) / 2;
+                icon_x = rect.x + rect.w / 2 - icon_size / 2;
                 icon_y = text_rect.y + msaa_scaled_text_h + btn_padding;
             } else {
                 const int total_width = icon_size + btn_padding + msaa_scaled_text_w;
-                icon_x = rect.x + rect.w/2 - total_width/2;
-                icon_y = rect.y + rect.h/2 - icon_size/2;
+                icon_x = rect.x + rect.w / 2 - total_width / 2;
+                icon_y = rect.y + rect.h / 2 - icon_size / 2;
                 text_rect.x = icon_x + icon_size + btn_padding;
             }
-        }
-        else {
+        } else {
             if (btn->style == VUI_BUTTON_STYLE_CORNER) {
                 // we apply the formula of the circle quarter centroid
                 // https://www.efunda.com/math/areas/CircleQuarter.cfm
@@ -1223,8 +1224,8 @@ void vui_sdl_draw_button(vui_context_t *vui, vui_sdl_context_t *sdl_ctx, vui_but
                 float cx = rect.x + (btn->x < scrw / 2 ? off_w : (rect.w - off_w));
                 float cy = rect.y + (btn->y < scrh / 2 ? off_h : (rect.h - off_h));
 
-                text_rect.x = (int)(cx - msaa_scaled_text_w * 0.5f);
-                text_rect.y = (int)(cy - msaa_scaled_text_h * 0.5f);
+                text_rect.x = (int) (cx - msaa_scaled_text_w * 0.5f);
+                text_rect.y = (int) (cy - msaa_scaled_text_h * 0.5f);
             }
         }
 
@@ -1232,8 +1233,8 @@ void vui_sdl_draw_button(vui_context_t *vui, vui_sdl_context_t *sdl_ctx, vui_but
         SDL_DestroyTexture(texture);
         SDL_FreeSurface(surface);
     } else {
-        icon_x = rect.x + rect.w/2 - icon_size/2;
-        icon_y = rect.y + rect.h/2 - icon_size/2;
+        icon_x = rect.x + rect.w / 2 - icon_size / 2;
+        icon_y = rect.y + rect.h / 2 - icon_size / 2;
     }
 
     // Draw icon
@@ -1243,7 +1244,7 @@ void vui_sdl_draw_button(vui_context_t *vui, vui_sdl_context_t *sdl_ctx, vui_but
         icon_rect.x = icon_x;
         icon_rect.y = icon_y;
 
-        if(btn->icon_mod){
+        if (btn->icon_mod) {
             char r = (btn->icon_mod & 0xFF0000) >> sizeof(char) * 8 * 2;
             char g = (btn->icon_mod & 0x00FF00) >> sizeof(char) * 8;
             char b = (btn->icon_mod & 0x0000FF);
@@ -1277,16 +1278,12 @@ void vui_draw_sdl(vui_context_t *ctx, SDL_Renderer *renderer)
     for (int layer = 0; layer < ctx->layers; layer++) {
         if (!sdl_ctx->layer_data[layer]) {
             // Create a new layer here
-            sdl_ctx->layer_data[layer] = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_TARGET, ctx->screen_width, ctx->screen_height);
+            sdl_ctx->layer_data[layer] = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_TARGET,
+                                                           ctx->screen_width, ctx->screen_height);
 
-            SDL_BlendMode bm = SDL_ComposeCustomBlendMode(
-                SDL_BLENDFACTOR_ONE,
-                SDL_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
-                SDL_BLENDOPERATION_ADD,
-                SDL_BLENDFACTOR_ONE,
-                SDL_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
-                SDL_BLENDOPERATION_ADD
-            );
+            SDL_BlendMode bm = SDL_ComposeCustomBlendMode(SDL_BLENDFACTOR_ONE, SDL_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
+                                                          SDL_BLENDOPERATION_ADD, SDL_BLENDFACTOR_ONE,
+                                                          SDL_BLENDFACTOR_ONE_MINUS_SRC_ALPHA, SDL_BLENDOPERATION_ADD);
 
             SDL_SetRenderDrawBlendMode(sdl_ctx->renderer, bm);
             SDL_SetTextureBlendMode(sdl_ctx->layer_data[layer], bm);
@@ -1296,7 +1293,8 @@ void vui_draw_sdl(vui_context_t *ctx, SDL_Renderer *renderer)
         if (layer == 0 && ctx->background_enabled) {
             // Draw background
             if (!sdl_ctx->background) {
-                sdl_ctx->background = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_TARGET, ctx->screen_width, ctx->screen_height);
+                sdl_ctx->background = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_TARGET,
+                                                        ctx->screen_width, ctx->screen_height);
                 SDL_Texture *old_target = SDL_GetRenderTarget(renderer);
                 SDL_SetRenderTarget(renderer, sdl_ctx->background);
                 vui_sdl_draw_background(ctx, renderer);
@@ -1392,7 +1390,7 @@ void vui_draw_sdl(vui_context_t *ctx, SDL_Renderer *renderer)
 
         for (int y = 0; y < bgrect.h; y++) {
             int x_inset = calculate_x_inset(y, bgrect.h, bgrect_pad);
-            int ry = bgrect.y+y;
+            int ry = bgrect.y + y;
             SDL_RenderDrawLine(renderer, bgrect.x + x_inset, ry, bgrect.x + bgrect.w - x_inset, ry);
         }
 
@@ -1403,56 +1401,57 @@ void vui_draw_sdl(vui_context_t *ctx, SDL_Renderer *renderer)
 
         if (edit->text[0]) {
 
-			if (edit->password) {
-				if (!sdl_ctx->pw_tex) {
-					sdl_ctx->pw_tex = vui_sdl_load_texture(sdl_ctx->renderer, "circle_big.svg");
-				}
+            if (edit->password) {
+                if (!sdl_ctx->pw_tex) {
+                    sdl_ctx->pw_tex = vui_sdl_load_texture(sdl_ctx->renderer, "circle_big.svg");
+                }
 
-				uint8_t f = (edit->enabled ? 1 : 0.5f) * 0xFF;
-				SDL_SetTextureAlphaMod(sdl_ctx->pw_tex, f);
-				SDL_SetTextureColorMod(sdl_ctx->pw_tex, f, f, f);
+                uint8_t f = (edit->enabled ? 1 : 0.5f) * 0xFF;
+                SDL_SetTextureAlphaMod(sdl_ctx->pw_tex, f);
+                SDL_SetTextureColorMod(sdl_ctx->pw_tex, f, f, f);
 
-				const char *cc = edit->text;
-				SDL_Rect pwr;
-				pwr.x = rect.x;
-				pwr.y = rect.y + rect.h/2 - PW_CHAR_SIZE/2;
-				pwr.w = PW_CHAR_SIZE;
-				pwr.h = PW_CHAR_SIZE;
-				while (*cc != 0) {
-					SDL_RenderCopy(renderer, sdl_ctx->pw_tex, 0, &pwr);
-					cc++;
-					pwr.x += PW_CHAR_SIZE + PW_CHAR_PAD;
-				}
-			} else {
-				SDL_Surface *surface = TTF_RenderUTF8_Blended(font, edit->text, c);
-				SDL_Texture *texture = SDL_CreateTextureFromSurface(sdl_ctx->renderer, surface);
-				SDL_Rect src;
-				src.x = src.y = 0;
+                const char *cc = edit->text;
+                SDL_Rect pwr;
+                pwr.x = rect.x;
+                pwr.y = rect.y + rect.h / 2 - PW_CHAR_SIZE / 2;
+                pwr.w = PW_CHAR_SIZE;
+                pwr.h = PW_CHAR_SIZE;
+                while (*cc != 0) {
+                    SDL_RenderCopy(renderer, sdl_ctx->pw_tex, 0, &pwr);
+                    cc++;
+                    pwr.x += PW_CHAR_SIZE + PW_CHAR_PAD;
+                }
+            } else {
+                SDL_Surface *surface = TTF_RenderUTF8_Blended(font, edit->text, c);
+                SDL_Texture *texture = SDL_CreateTextureFromSurface(sdl_ctx->renderer, surface);
+                SDL_Rect src;
+                src.x = src.y = 0;
 
-				src.w = surface->w;
-				src.h = surface->h;
+                src.w = surface->w;
+                src.h = surface->h;
 
-				if (src.w > rect.w) {
-					src.w = rect.w;
-				} else {
-					rect.w = src.w;
-				}
+                if (src.w > rect.w) {
+                    src.w = rect.w;
+                } else {
+                    rect.w = src.w;
+                }
 
-				uint8_t f = (edit->enabled ? 1 : 0.5f) * 0xFF;
-				SDL_SetTextureAlphaMod(texture, f);
-				SDL_SetTextureColorMod(texture, f, f, f);
+                uint8_t f = (edit->enabled ? 1 : 0.5f) * 0xFF;
+                SDL_SetTextureAlphaMod(texture, f);
+                SDL_SetTextureColorMod(texture, f, f, f);
 
-				SDL_RenderCopy(renderer, texture, &src, &rect);
+                SDL_RenderCopy(renderer, texture, &src, &rect);
 
-				SDL_FreeSurface(surface);
-				SDL_DestroyTexture(texture);
-			}
+                SDL_FreeSurface(surface);
+                SDL_DestroyTexture(texture);
+            }
         }
 
         if (ctx->active_textedit == i) {
             struct timeval now;
             gettimeofday(&now, 0);
-            time_t diff = (now.tv_sec - ctx->active_textedit_time.tv_sec) * 1000000 + (now.tv_usec - ctx->active_textedit_time.tv_usec);
+            time_t diff = (now.tv_sec - ctx->active_textedit_time.tv_sec) * 1000000 +
+                          (now.tv_usec - ctx->active_textedit_time.tv_usec);
             if ((diff % 1000000) < 500000) {
                 char *copy_end = edit->text;
                 for (int i = 0; i < edit->cursor; i++) {
@@ -1461,20 +1460,20 @@ void vui_draw_sdl(vui_context_t *ctx, SDL_Renderer *renderer)
 
                 size_t len = copy_end - edit->text;
 
-				int cursor_x;
-				if (edit->password) {
-					cursor_x = rect.x + (PW_CHAR_SIZE + PW_CHAR_PAD) * len - PW_CHAR_PAD/2;
-				} else {
-                	char tmp_ate[MAX_BUTTON_TEXT];
-					strncpy(tmp_ate, edit->text, len);
-					tmp_ate[len] = 0;
+                int cursor_x;
+                if (edit->password) {
+                    cursor_x = rect.x + (PW_CHAR_SIZE + PW_CHAR_PAD) * len - PW_CHAR_PAD / 2;
+                } else {
+                    char tmp_ate[MAX_BUTTON_TEXT];
+                    strncpy(tmp_ate, edit->text, len);
+                    tmp_ate[len] = 0;
 
-					int tw;
-					TTF_SizeUTF8(font, tmp_ate, &tw, 0);
-					cursor_x = rect.x + tw;
-				}
-				SDL_SetRenderDrawColor(renderer, c.r, c.g, c.b, c.a);
-				SDL_RenderDrawLine(renderer, cursor_x, rect.y, cursor_x, rect.y + rect.h);
+                    int tw;
+                    TTF_SizeUTF8(font, tmp_ate, &tw, 0);
+                    cursor_x = rect.x + tw;
+                }
+                SDL_SetRenderDrawColor(renderer, c.r, c.g, c.b, c.a);
+                SDL_RenderDrawLine(renderer, cursor_x, rect.y, cursor_x, rect.y + rect.h);
             }
         }
     }
@@ -1491,7 +1490,9 @@ void vui_draw_sdl(vui_context_t *ctx, SDL_Renderer *renderer)
 
         // Check if button needs to be redrawn
         vui_sdl_cached_texture_t *btn_tex = &sdl_ctx->button_cache[i];
-        if (!btn_tex->texture || btn_tex->w != btn->w || btn_tex->h != btn->h || strcmp(btn_tex->text, btn->text) || strcmp(btn_tex->icon, btn->icon) || btn_tex->checked != btn->checked || btn_tex->icon_mod != btn->icon_mod) {
+        if (!btn_tex->texture || btn_tex->w != btn->w || btn_tex->h != btn->h || strcmp(btn_tex->text, btn->text) ||
+            strcmp(btn_tex->icon, btn->icon) || btn_tex->checked != btn->checked ||
+            btn_tex->icon_mod != btn->icon_mod) {
             // Must re-draw texture
             if (btn_tex->texture && (btn_tex->w != btn->w || btn_tex->h != btn->h)) {
                 SDL_DestroyTexture(btn_tex->texture);
@@ -1501,7 +1502,8 @@ void vui_draw_sdl(vui_context_t *ctx, SDL_Renderer *renderer)
             const int MSAA = 2;
 
             if (!btn_tex->texture) {
-                btn_tex->texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_TARGET, btn->w * MSAA, btn->h * MSAA);
+                btn_tex->texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_TARGET,
+                                                     btn->w * MSAA, btn->h * MSAA);
             }
 
             SDL_Texture *old_target = SDL_GetRenderTarget(renderer);
@@ -1614,77 +1616,71 @@ void vui_draw_sdl(vui_context_t *ctx, SDL_Renderer *renderer)
 
 int get_texture_from_cpu_frame(vui_sdl_context_t *sdl_ctx, AVFrame *f)
 {
-	if (!sdl_ctx->game_tex) {
-		sdl_ctx->game_tex = SDL_CreateTexture(
-			sdl_ctx->renderer,
-			SDL_PIXELFORMAT_IYUV,
-			SDL_TEXTUREACCESS_STREAMING,
-			f->width,
-			f->height
-		);
-		if (!sdl_ctx->game_tex) {
-			vpilog("Failed to create texture for CPU frame\n");
-		}
-	}
-	// SDL_SetRenderTarget(sdl_ctx->renderer, sdl_ctx->game_tex);
-	// SDL_SetRenderDrawColor(sdl_ctx->renderer, 0, 0, 0, 0);
-	// SDL_RenderClear(sdl_ctx->renderer);
-	int ret = SDL_UpdateYUVTexture(sdl_ctx->game_tex, NULL,
-						f->data[0], f->linesize[0],
-						f->data[1], f->linesize[1],
-						f->data[2], f->linesize[2]);
-	if (ret != 0) {
-		vpilog("Failed to update YUV texture for CPU frame: %s\n", SDL_GetError());
-		return 0;
-	}
+    if (!sdl_ctx->game_tex) {
+        sdl_ctx->game_tex = SDL_CreateTexture(sdl_ctx->renderer, SDL_PIXELFORMAT_IYUV, SDL_TEXTUREACCESS_STREAMING,
+                                              f->width, f->height);
+        if (!sdl_ctx->game_tex) {
+            vpilog("Failed to create texture for CPU frame\n");
+        }
+    }
+    // SDL_SetRenderTarget(sdl_ctx->renderer, sdl_ctx->game_tex);
+    // SDL_SetRenderDrawColor(sdl_ctx->renderer, 0, 0, 0, 0);
+    // SDL_RenderClear(sdl_ctx->renderer);
+    int ret = SDL_UpdateYUVTexture(sdl_ctx->game_tex, NULL, f->data[0], f->linesize[0], f->data[1], f->linesize[1],
+                                   f->data[2], f->linesize[2]);
+    if (ret != 0) {
+        vpilog("Failed to update YUV texture for CPU frame: %s\n", SDL_GetError());
+        return 0;
+    }
 
-	return 1;
+    return 1;
 }
 
 #ifdef VANILLA_HAS_EGL
 int check_has_EGL_EXT_image_dma_buf_import()
 {
-	// Determine if we have this EGL extension or not
-	const char *egl_extensions = eglQueryString(eglGetCurrentDisplay(), EGL_EXTENSIONS);
-	if (!egl_extensions) {
-		return 0;
-	}
+    // Determine if we have this EGL extension or not
+    const char *egl_extensions = eglQueryString(eglGetCurrentDisplay(), EGL_EXTENSIONS);
+    if (!egl_extensions) {
+        return 0;
+    }
 
-	char *extensions = SDL_strdup(egl_extensions);
-	if (!extensions) {
-		return 0;
-	}
+    char *extensions = SDL_strdup(egl_extensions);
+    if (!extensions) {
+        return 0;
+    }
 
-	char *saveptr, *token;
-	token = SDL_strtokr(extensions, " ", &saveptr);
-	if (!token) {
-		SDL_free(extensions);
-		return 0;
-	}
+    char *saveptr, *token;
+    token = SDL_strtokr(extensions, " ", &saveptr);
+    if (!token) {
+        SDL_free(extensions);
+        return 0;
+    }
 
-	int ret = 0;
-	do {
-		if (SDL_strcmp(token, "EGL_EXT_image_dma_buf_import") == 0
-			|| SDL_strcmp(token, "EGL_EXT_image_dma_buf_import_modifiers") == 0) {
-			ret++;
-		}
-	} while ((token = SDL_strtokr(NULL, " ", &saveptr)) != NULL);
+    int ret = 0;
+    do {
+        if (SDL_strcmp(token, "EGL_EXT_image_dma_buf_import") == 0 ||
+            SDL_strcmp(token, "EGL_EXT_image_dma_buf_import_modifiers") == 0) {
+            ret++;
+        }
+    } while ((token = SDL_strtokr(NULL, " ", &saveptr)) != NULL);
 
-	SDL_free(extensions);
+    SDL_free(extensions);
 
-	return ret == 2;
+    return ret == 2;
 
-	// if (SDL_GL_ExtensionSupported("GL_OES_EGL_image")) {
-	// 	glEGLImageTargetTexture2DOESFunc = (PFNGLEGLIMAGETARGETTEXTURE2DOESPROC)eglGetProcAddress("glEGLImageTargetTexture2DOES");
-	// }
+    // if (SDL_GL_ExtensionSupported("GL_OES_EGL_image")) {
+    // 	glEGLImageTargetTexture2DOESFunc =
+    // (PFNGLEGLIMAGETARGETTEXTURE2DOESPROC)eglGetProcAddress("glEGLImageTargetTexture2DOES");
+    // }
 
-	// glActiveTextureARBFunc = (PFNGLACTIVETEXTUREARBPROC)SDL_GL_GetProcAddress("glActiveTextureARB");
+    // glActiveTextureARBFunc = (PFNGLACTIVETEXTUREARBPROC)SDL_GL_GetProcAddress("glActiveTextureARB");
 
-	// if (has_EGL_EXT_image_dma_buf_import &&
-	// 	glEGLImageTargetTexture2DOESFunc &&
-	// 	glActiveTextureARBFunc) {
-	// 	has_eglCreateImage = true;
-	// }
+    // if (has_EGL_EXT_image_dma_buf_import &&
+    // 	glEGLImageTargetTexture2DOESFunc &&
+    // 	glActiveTextureARBFunc) {
+    // 	has_eglCreateImage = true;
+    // }
 }
 #endif // VANILLA_HAS_EGL
 
@@ -1695,13 +1691,8 @@ int get_texture_from_cuda_frame(vui_cuda_context_t *cuda_ctx, vui_sdl_context_t 
         // Use SHADER_NV12_RA for CUDA frames
         SDL_SetHint("SDL_RENDER_OPENGL_NV12_RG_SHADER", "0");
 
-        sdl_ctx->game_tex = SDL_CreateTexture(
-            sdl_ctx->renderer,
-            SDL_PIXELFORMAT_NV12,
-            SDL_TEXTUREACCESS_STATIC,
-            f->width,
-            f->height
-        );
+        sdl_ctx->game_tex =
+            SDL_CreateTexture(sdl_ctx->renderer, SDL_PIXELFORMAT_NV12, SDL_TEXTUREACCESS_STATIC, f->width, f->height);
 
         if (!sdl_ctx->game_tex) {
             vpilog("Failed to create texture for CUDA frame\n");
@@ -1742,40 +1733,43 @@ int get_texture_from_cuda_frame(vui_cuda_context_t *cuda_ctx, vui_sdl_context_t 
     cudaGraphicsSubResourceGetMappedArray(&arrY, cuda_ctx->resY, 0, 0);
     cudaGraphicsSubResourceGetMappedArray(&arrUV, cuda_ctx->resUV, 0, 0);
 
-    cudaMemcpy2DToArrayAsync(arrY, 0, 0, f->data[0], f->linesize[0], f->width, f->height, cudaMemcpyDeviceToDevice, stream);
-    cudaMemcpy2DToArrayAsync(arrUV, 0, 0, f->data[1], f->linesize[1], f->width, f->height / 2, cudaMemcpyDeviceToDevice, stream);
+    cudaMemcpy2DToArrayAsync(arrY, 0, 0, f->data[0], f->linesize[0], f->width, f->height, cudaMemcpyDeviceToDevice,
+                             stream);
+    cudaMemcpy2DToArrayAsync(arrUV, 0, 0, f->data[1], f->linesize[1], f->width, f->height / 2, cudaMemcpyDeviceToDevice,
+                             stream);
 
     cudaGraphicsUnmapResources(1, &cuda_ctx->resY, stream);
     cudaGraphicsUnmapResources(1, &cuda_ctx->resUV, stream);
 
-	return 1;
+    return 1;
 }
 #endif // VANILLA_CUDA_AVAILABLE
 
 int get_texture_from_drm_prime_frame(vui_sdl_context_t *sdl_ctx, AVFrame *f)
 {
 #ifdef VANILLA_HAS_EGL
-	const AVDRMFrameDescriptor *desc = (const AVDRMFrameDescriptor *)f->data[0];
+    const AVDRMFrameDescriptor *desc = (const AVDRMFrameDescriptor *) f->data[0];
 
-	static PFNGLACTIVETEXTUREARBPROC glActiveTextureARB = NULL;
-	if (!glActiveTextureARB) {
-		glActiveTextureARB = SDL_GL_GetProcAddress("glActiveTextureARB");
-	}
+    static PFNGLACTIVETEXTUREARBPROC glActiveTextureARB = NULL;
+    if (!glActiveTextureARB) {
+        glActiveTextureARB = SDL_GL_GetProcAddress("glActiveTextureARB");
+    }
 
-	static PFNGLEGLIMAGETARGETTEXTURE2DOESPROC glEGLImageTargetTexture2DOES = NULL;
-	if (!glEGLImageTargetTexture2DOES) {
-		glEGLImageTargetTexture2DOES = (PFNGLEGLIMAGETARGETTEXTURE2DOESPROC)eglGetProcAddress("glEGLImageTargetTexture2DOES");
-	}
+    static PFNGLEGLIMAGETARGETTEXTURE2DOESPROC glEGLImageTargetTexture2DOES = NULL;
+    if (!glEGLImageTargetTexture2DOES) {
+        glEGLImageTargetTexture2DOES =
+            (PFNGLEGLIMAGETARGETTEXTURE2DOESPROC) eglGetProcAddress("glEGLImageTargetTexture2DOES");
+    }
 
-	int image_index = 0;
+    int image_index = 0;
     EGLDisplay display = eglGetCurrentDisplay();
 
-	for (int i = 0; i < desc->nb_layers; i++) {
-		const AVDRMLayerDescriptor *layer = &desc->layers[i];
+    for (int i = 0; i < desc->nb_layers; i++) {
+        const AVDRMLayerDescriptor *layer = &desc->layers[i];
 
-		for (int j = 0; j < layer->nb_planes; j++) {
-			const AVDRMPlaneDescriptor *plane = &layer->planes[j];
-			const AVDRMObjectDescriptor *object = &desc->objects[plane->object_index];
+        for (int j = 0; j < layer->nb_planes; j++) {
+            const AVDRMPlaneDescriptor *plane = &layer->planes[j];
+            const AVDRMObjectDescriptor *object = &desc->objects[plane->object_index];
 
             static int has_EGL_EXT_image_dma_buf_import = -1;
             if (has_EGL_EXT_image_dma_buf_import == -1) {
@@ -1783,20 +1777,17 @@ int get_texture_from_drm_prime_frame(vui_sdl_context_t *sdl_ctx, AVFrame *f)
             }
 
             const EGLAttrib EGL_DMA_BUF_PLANE0_MODIFIER_LO_EXT_OR_NONE =
-                has_EGL_EXT_image_dma_buf_import && object->format_modifier != DRM_FORMAT_MOD_INVALID ?
-                    EGL_DMA_BUF_PLANE0_MODIFIER_LO_EXT : EGL_NONE;
+                has_EGL_EXT_image_dma_buf_import && object->format_modifier != DRM_FORMAT_MOD_INVALID
+                    ? EGL_DMA_BUF_PLANE0_MODIFIER_LO_EXT
+                    : EGL_NONE;
 
             if (!sdl_ctx->game_tex) {
                 // Use SHADER_NV12_RG for VAAPI NV12 frames
                 SDL_SetHint("SDL_RENDER_OPENGL_NV12_RG_SHADER", "1");
 
                 sdl_ctx->game_tex = SDL_CreateTexture(
-                    sdl_ctx->renderer,
-                    layer->format == DRM_FORMAT_YUV420 ? SDL_PIXELFORMAT_IYUV : SDL_PIXELFORMAT_NV12,
-                    SDL_TEXTUREACCESS_STATIC,
-                    f->width,
-                    f->height
-                );
+                    sdl_ctx->renderer, layer->format == DRM_FORMAT_YUV420 ? SDL_PIXELFORMAT_IYUV : SDL_PIXELFORMAT_NV12,
+                    SDL_TEXTUREACCESS_STATIC, f->width, f->height);
 
                 if (!sdl_ctx->game_tex) {
                     vpilog("Failed to create texture for DRM PRIME frame\n");
@@ -1820,6 +1811,7 @@ int get_texture_from_drm_prime_frame(vui_sdl_context_t *sdl_ctx, AVFrame *f)
                 h /= 2;
             }
 
+            // clang-format off
             EGLAttrib attr[] = {
                 EGL_LINUX_DRM_FOURCC_EXT, 					use_fmt,
                 EGL_WIDTH,									w,
@@ -1831,27 +1823,29 @@ int get_texture_from_drm_prime_frame(vui_sdl_context_t *sdl_ctx, AVFrame *f)
                 EGL_DMA_BUF_PLANE0_MODIFIER_HI_EXT,			(object->format_modifier >> 32) & 0xFFFFFFFF,
                 EGL_NONE
             };
+            // clang-format on
 
             EGLImage image = eglCreateImage(display, EGL_NO_CONTEXT, EGL_LINUX_DMA_BUF_EXT, 0, attr);
             if (image == EGL_NO_IMAGE) {
-                vpilog("Failed to create EGLImage: 0x%x (display: %p, layer %i, plane %i)\n", eglGetError(), display, i, j);
+                vpilog("Failed to create EGLImage: 0x%x (display: %p, layer %i, plane %i)\n", eglGetError(), display, i,
+                       j);
                 return 0;
             }
 
-			SDL_GL_BindTexture(sdl_ctx->game_tex, 0, 0);
-			glActiveTextureARB(GL_TEXTURE0_ARB + image_index);
-			glEGLImageTargetTexture2DOES(GL_TEXTURE_2D, image);
-			image_index++;
-			SDL_GL_UnbindTexture(sdl_ctx->game_tex);
+            SDL_GL_BindTexture(sdl_ctx->game_tex, 0, 0);
+            glActiveTextureARB(GL_TEXTURE0_ARB + image_index);
+            glEGLImageTargetTexture2DOES(GL_TEXTURE_2D, image);
+            image_index++;
+            SDL_GL_UnbindTexture(sdl_ctx->game_tex);
 
             eglDestroyImage(display, image);
-		}
-	}
+        }
+    }
 
-	return 1;
+    return 1;
 #else
-	vpilog("No EGL support to display VAAPI texture\n");
-	return 0;
+    vpilog("No EGL support to display VAAPI texture\n");
+    return 0;
 #endif
 }
 
@@ -1887,8 +1881,10 @@ int vui_update_sdl(vui_context_t *vui)
 #endif // VANILLA_DRM_AVAILABLE
 #ifdef VANILLA_CUDA_AVAILABLE
         if (cuda_ctx) {
-            if (cuda_ctx->resY) cudaGraphicsUnregisterResource(cuda_ctx->resY);
-            if (cuda_ctx->resUV) cudaGraphicsUnregisterResource(cuda_ctx->resUV);
+            if (cuda_ctx->resY)
+                cudaGraphicsUnregisterResource(cuda_ctx->resY);
+            if (cuda_ctx->resUV)
+                cudaGraphicsUnregisterResource(cuda_ctx->resUV);
             free(cuda_ctx);
             cuda_ctx = NULL;
         }
@@ -1898,21 +1894,22 @@ int vui_update_sdl(vui_context_t *vui)
         vui_draw_sdl(vui, renderer);
 
         // Flatten layers
-		int el[MAX_BUTTON_COUNT];
-		int el_count = 0;
-		for (int i = 0; i < vui->layers; i++) {
-			if (vui->layer_enabled[i]) {
-				el[el_count] = i;
-				el_count++;
-			}
-		}
+        int el[MAX_BUTTON_COUNT];
+        int el_count = 0;
+        for (int i = 0; i < vui->layers; i++) {
+            if (vui->layer_enabled[i]) {
+                el[el_count] = i;
+                el_count++;
+            }
+        }
 
         for (int i = el_count - 1; i > 0; i--) {
-            SDL_Texture *bg = sdl_ctx->layer_data[el[i-1]];
+            SDL_Texture *bg = sdl_ctx->layer_data[el[i - 1]];
             SDL_Texture *fg = sdl_ctx->layer_data[el[i]];
 
             SDL_SetRenderTarget(renderer, bg);
-            SDL_SetTextureColorMod(fg, vui->layer_opacity[i] * 0xFF, vui->layer_opacity[i] * 0xFF, vui->layer_opacity[i] * 0xFF);
+            SDL_SetTextureColorMod(fg, vui->layer_opacity[i] * 0xFF, vui->layer_opacity[i] * 0xFF,
+                                   vui->layer_opacity[i] * 0xFF);
             SDL_SetTextureAlphaMod(fg, vui->layer_opacity[i] * 0xFF);
             SDL_RenderCopy(renderer, fg, NULL, NULL);
         }
@@ -1920,18 +1917,16 @@ int vui_update_sdl(vui_context_t *vui)
         main_tex = sdl_ctx->layer_data[0];
     } else {
         pthread_mutex_lock(&vpi_present_frame_mutex);
-		if (vpi_present_frame
-            && sdl_ctx->present_frame_sequence != vpi_present_frame_sequence
-            && vpi_present_frame->format != -1) {
-			av_frame_move_ref(sdl_ctx->frame, vpi_present_frame);
-		}
+        if (vpi_present_frame && sdl_ctx->present_frame_sequence != vpi_present_frame_sequence &&
+            vpi_present_frame->format != -1) {
+            av_frame_move_ref(sdl_ctx->frame, vpi_present_frame);
+        }
         sdl_ctx->present_frame_sequence = vpi_present_frame_sequence;
         pthread_mutex_unlock(&vpi_present_frame_mutex);
 
-		if (sdl_ctx->frame->format != -1) {
+        if (sdl_ctx->frame->format != -1) {
             switch (sdl_ctx->frame->format) {
-            case AV_PIX_FMT_DRM_PRIME:
-            {
+            case AV_PIX_FMT_DRM_PRIME: {
 #ifdef VANILLA_DRM_AVAILABLE
                 // For very low powered systems, we can save a little time by
                 // skipping SDL2 entirely and rendering straight to DRM. However,
@@ -1939,8 +1934,7 @@ int vui_update_sdl(vui_context_t *vui)
                 // this is provided as an option only.
                 if (vpi_config.fast_drm) {
                     if (!drm_ctx) {
-                        if (vui_sdl_drm_initialize(&drm_ctx,
-                                                   sdl_ctx->window)) {
+                        if (vui_sdl_drm_initialize(&drm_ctx, sdl_ctx->window)) {
                             // Blank screen so DRM doesn't appear to render over UI
                             SDL_SetRenderTarget(renderer, NULL);
                             SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
@@ -1948,12 +1942,10 @@ int vui_update_sdl(vui_context_t *vui)
                             SDL_RenderPresent(renderer);
                         }
                     }
-                    if (drm_ctx &&
-                        vui_sdl_drm_present(drm_ctx, sdl_ctx->frame)) {
+                    if (drm_ctx && vui_sdl_drm_present(drm_ctx, sdl_ctx->frame)) {
                         handle_final_blit = 0;
                     } else {
-                        get_texture_from_drm_prime_frame(sdl_ctx,
-                                                         sdl_ctx->frame);
+                        get_texture_from_drm_prime_frame(sdl_ctx, sdl_ctx->frame);
                     }
                 } else {
                     get_texture_from_drm_prime_frame(sdl_ctx, sdl_ctx->frame);
@@ -1961,8 +1953,7 @@ int vui_update_sdl(vui_context_t *vui)
 #endif // VANILLA_DRM_AVAILABLE
                 break;
             }
-            case AV_PIX_FMT_CUDA:
-            {
+            case AV_PIX_FMT_CUDA: {
 #ifdef VANILLA_CUDA_AVAILABLE
                 if (!cuda_ctx) {
                     cuda_ctx = malloc(sizeof(vui_cuda_context_t));
@@ -1973,29 +1964,28 @@ int vui_update_sdl(vui_context_t *vui)
 #endif // VANILLA_CUDA_AVAILABLE
                 break;
             }
-            case AV_PIX_FMT_VAAPI:
-			{
-				AVFrame *drm = av_frame_alloc();
-				if (drm) {
-					drm->format = AV_PIX_FMT_DRM_PRIME;
-					if (av_hwframe_map(drm, sdl_ctx->frame, 0) >= 0) {
-						get_texture_from_drm_prime_frame(sdl_ctx, drm);
-					} else {
-						vpilog("Failed to map DRM PRIME frame from VAAPI\n");
-					}
-					av_frame_free(&drm);
-				} else {
-					vpilog("Failed to allocate DRM PRIME frame from VAAPI\n");
-				}
+            case AV_PIX_FMT_VAAPI: {
+                AVFrame *drm = av_frame_alloc();
+                if (drm) {
+                    drm->format = AV_PIX_FMT_DRM_PRIME;
+                    if (av_hwframe_map(drm, sdl_ctx->frame, 0) >= 0) {
+                        get_texture_from_drm_prime_frame(sdl_ctx, drm);
+                    } else {
+                        vpilog("Failed to map DRM PRIME frame from VAAPI\n");
+                    }
+                    av_frame_free(&drm);
+                } else {
+                    vpilog("Failed to allocate DRM PRIME frame from VAAPI\n");
+                }
                 break;
-			}
+            }
             case AV_PIX_FMT_YUV420P:
-				get_texture_from_cpu_frame(sdl_ctx, sdl_ctx->frame);
+                get_texture_from_cpu_frame(sdl_ctx, sdl_ctx->frame);
                 break;
             }
 
-			av_frame_unref(sdl_ctx->held_frame);
-			av_frame_move_ref(sdl_ctx->held_frame, sdl_ctx->frame);
+            av_frame_unref(sdl_ctx->held_frame);
+            av_frame_move_ref(sdl_ctx->held_frame, sdl_ctx->frame);
 
             if (sdl_ctx->game_tex) {
                 if (handle_final_blit) {
@@ -2006,7 +1996,7 @@ int vui_update_sdl(vui_context_t *vui)
                     main_tex = sdl_ctx->game_tex;
                 }
             }
-		} else {
+        } else {
             // Didn't get a frame, nothing to be done
             handle_final_blit = 0;
         }
@@ -2024,17 +2014,19 @@ int vui_update_sdl(vui_context_t *vui)
 
             sdl_ctx->last_shown_toast = cur_toast;
 
-            const int toast_w = vui->screen_width/2;
+            const int toast_w = vui->screen_width / 2;
 
             SDL_Color c;
             c.r = c.g = c.b = 0x40;
             c.a = 0xFF;
 
-            SDL_Surface *surface = TTF_RenderUTF8_Blended_Wrapped(sdl_ctx->sysfont_small, toast_str, c, toast_w - TOAST_PADDING - TOAST_PADDING);
+            SDL_Surface *surface = TTF_RenderUTF8_Blended_Wrapped(sdl_ctx->sysfont_small, toast_str, c,
+                                                                  toast_w - TOAST_PADDING - TOAST_PADDING);
             SDL_Texture *texture = SDL_CreateTextureFromSurface(renderer, surface);
 
             const int toast_h = surface->h + TOAST_PADDING + TOAST_PADDING;
-            sdl_ctx->toast_tex = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_TARGET, toast_w, toast_h);
+            sdl_ctx->toast_tex =
+                SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_TARGET, toast_w, toast_h);
             SDL_SetTextureBlendMode(sdl_ctx->toast_tex, SDL_BLENDMODE_BLEND);
 
             SDL_SetRenderTarget(renderer, sdl_ctx->toast_tex);
@@ -2070,14 +2062,15 @@ int vui_update_sdl(vui_context_t *vui)
             dst_rect.w = toast_w;
             dst_rect.h = toast_h;
             dst_rect.y = vui->screen_height - dst_rect.h - TOAST_PADDING - TOAST_PADDING;
-            dst_rect.x = vui->screen_width/2 - toast_w/2;
+            dst_rect.x = vui->screen_width / 2 - toast_w / 2;
 
             SDL_RenderCopy(renderer, sdl_ctx->toast_tex, 0, &dst_rect);
 
             // Handle expiry
             struct timeval now;
             gettimeofday(&now, 0);
-            if (now.tv_sec*1000000+now.tv_usec >= sdl_ctx->toast_expiry.tv_sec*1000000+sdl_ctx->toast_expiry.tv_usec) {
+            if (now.tv_sec * 1000000 + now.tv_usec >=
+                sdl_ctx->toast_expiry.tv_sec * 1000000 + sdl_ctx->toast_expiry.tv_usec) {
                 SDL_DestroyTexture(sdl_ctx->toast_tex);
                 sdl_ctx->toast_tex = 0;
             }
@@ -2099,15 +2092,15 @@ int vui_update_sdl(vui_context_t *vui)
             dst_rect->y = 0;
             dst_rect->w = tex_w;
             dst_rect->h = tex_h;
-        } else if ((uint64_t)out_w * tex_h > (uint64_t)out_h * tex_w) {
+        } else if ((uint64_t) out_w * tex_h > (uint64_t) out_h * tex_w) {
             dst_rect->h = out_h;
             dst_rect->y = 0;
-            dst_rect->w = (uint64_t)out_h * tex_w / tex_h;
+            dst_rect->w = (uint64_t) out_h * tex_w / tex_h;
             dst_rect->x = (out_w - dst_rect->w) / 2;
         } else {
             dst_rect->w = out_w;
             dst_rect->x = 0;
-            dst_rect->h = (uint64_t)out_w * tex_h / tex_w;
+            dst_rect->h = (uint64_t) out_w * tex_h / tex_w;
             dst_rect->y = (out_h - dst_rect->h) / 2;
         }
 
@@ -2121,7 +2114,8 @@ int vui_update_sdl(vui_context_t *vui)
     }
 
     // Frame limiter to save CPU cycles
-    const Uint32 target = 5; // No need to update faster than 200Hz (gamepad polls at 180Hz, but this is easier to calculate)
+    const Uint32 target =
+        5; // No need to update faster than 200Hz (gamepad polls at 180Hz, but this is easier to calculate)
     Uint32 frame_delta = SDL_GetTicks() - last_update_time;
     if (frame_delta < target) {
         Uint32 wait_ms = target - frame_delta;
@@ -2136,11 +2130,7 @@ int vui_update_sdl(vui_context_t *vui)
 
             pthread_mutex_lock(&vpi_present_frame_mutex);
             while (sdl_ctx->present_frame_sequence == vpi_present_frame_sequence) {
-                int err = pthread_cond_timedwait(
-                    &vpi_present_frame_cond,
-                    &vpi_present_frame_mutex,
-                    &deadline
-                );
+                int err = pthread_cond_timedwait(&vpi_present_frame_cond, &vpi_present_frame_mutex, &deadline);
                 if (err == ETIMEDOUT) {
                     break;
                 }

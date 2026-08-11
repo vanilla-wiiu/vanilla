@@ -1,7 +1,7 @@
 #ifndef VANILLA_PI_UI_KEYBOARD_H
 #define VANILLA_PI_UI_KEYBOARD_H
 
-enum VUIKeyboardIcons{
+enum VUIKeyboardIcons {
     VUI_KEYBOARD_ICON_A = 0,
     VUI_KEYBOARD_ICON_B,
     VUI_KEYBOARD_ICON_C,

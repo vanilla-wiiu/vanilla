@@ -9,10 +9,22 @@ void vui_strncpy(char *dst, const char *src, size_t max_dst_size);
 size_t vui_utf8_cp_len(const char *s);
 char *vui_utf8_advance(char *s);
 
-static inline int intmin(int a, int b) { return a < b ? a : b; }
-static inline int intmax(int a, int b) { return a > b ? a : b; }
-static inline int64_t int64min(int64_t a, int64_t b) { return a < b ? a : b; }
-static inline int64_t int64max(int64_t a, int64_t b) { return a > b ? a : b; }
+static inline int intmin(int a, int b)
+{
+    return a < b ? a : b;
+}
+static inline int intmax(int a, int b)
+{
+    return a > b ? a : b;
+}
+static inline int64_t int64min(int64_t a, int64_t b)
+{
+    return a < b ? a : b;
+}
+static inline int64_t int64max(int64_t a, int64_t b)
+{
+    return a > b ? a : b;
+}
 
 static inline int32_t pack_float(float f)
 {

@@ -66,13 +66,13 @@ uint16_t crc16(const void *data, size_t len)
 
 size_t get_millis()
 {
-    size_t            ms; // Milliseconds
-    size_t          s;  // Seconds
+    size_t ms; // Milliseconds
+    size_t s;  // Seconds
     struct timespec spec;
 
     clock_gettime(CLOCK_REALTIME, &spec);
 
-    s  = spec.tv_sec;
+    s = spec.tv_sec;
     ms = round(spec.tv_nsec / 1.0e6); // Convert nanoseconds to milliseconds
     if (ms > 999) {
         s++;

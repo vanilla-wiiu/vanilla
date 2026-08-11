@@ -90,12 +90,14 @@ const char *VUI_KEYBOARD_ICONS[VUI_KEYBOARD_ICON_COUNT] = {
     "keys/keyboard_page_up.svg",
     "keys/keyboard_page_down.svg",
     "keys/keyboard_tilde.svg",
-    "keys/keyboard_space.svg"
+    "keys/keyboard_space.svg",
 };
 
-const char *vui_get_keyicon_from_scancode(int scancode) {
+const char *vui_get_keyicon_from_scancode(int scancode)
+{
     int icon_index = -1;
 
+    // clang-format off
     switch (scancode) {
         case SDL_SCANCODE_A: icon_index = VUI_KEYBOARD_ICON_A; break;
         case SDL_SCANCODE_B: icon_index = VUI_KEYBOARD_ICON_B; break;
@@ -204,6 +206,7 @@ const char *vui_get_keyicon_from_scancode(int scancode) {
         default:
             return NULL;
     }
+    // clang-format on
 
     if (icon_index >= 0 && icon_index < VUI_KEYBOARD_ICON_COUNT) {
         return VUI_KEYBOARD_ICONS[icon_index];

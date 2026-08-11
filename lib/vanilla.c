@@ -82,7 +82,8 @@ exit:
     return 0;
 }
 
-int vanilla_start_internal(uint32_t server_address, vanilla_bssid_t bssid, vanilla_psk_t psk, thread_start_t thread_start, void *thread_data)
+int vanilla_start_internal(uint32_t server_address, vanilla_bssid_t bssid, vanilla_psk_t psk,
+                           thread_start_t thread_start, void *thread_data)
 {
     if (pthread_mutex_trylock(&main_mutex) == 0) {
         pthread_t other;
@@ -200,21 +201,22 @@ void vanilla_set_battery_status(int battery_status)
 
 int vanilla_sync(uint16_t code, uint32_t server_address)
 {
-    return vanilla_start_internal(server_address, (vanilla_bssid_t){.bssid = {0}}, (vanilla_psk_t){.psk = {0}}, sync_internal, (void *) (uintptr_t) code);
+    return vanilla_start_internal(server_address, (vanilla_bssid_t){.bssid = {0}}, (vanilla_psk_t){.psk = {0}},
+                                  sync_internal, (void *) (uintptr_t) code);
 }
 
 int vanilla_install_polkit(uint32_t server_address)
 {
-	thread_data_t data;
-	data.server_address = server_address;
-	return install_polkit_internal(&data, 1);
+    thread_data_t data;
+    data.server_address = server_address;
+    return install_polkit_internal(&data, 1);
 }
 
 int vanilla_uninstall_polkit(uint32_t server_address)
 {
-	thread_data_t data;
-	data.server_address = server_address;
-	return install_polkit_internal(&data, 0);
+    thread_data_t data;
+    data.server_address = server_address;
+    return install_polkit_internal(&data, 0);
 }
 
 int vanilla_poll_event(vanilla_event_t *event)

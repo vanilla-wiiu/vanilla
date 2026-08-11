@@ -14,8 +14,8 @@
 #include <unistd.h>
 
 #include "gamepad.h"
-#include "vanilla.h"
 #include "util.h"
+#include "vanilla.h"
 
 static unsigned char queued_audio[8192];
 static size_t queued_audio_start = 0;
@@ -27,7 +27,7 @@ int send_audio_packet(const void *data, size_t len)
 {
     pthread_mutex_lock(&queued_audio_mutex);
 
-	for (size_t i = 0; i < len; ) {
+    for (size_t i = 0; i < len;) {
         size_t phys = queued_audio_end % sizeof(queued_audio);
         size_t max_write = MIN(sizeof(queued_audio) - phys, len - i);
         memcpy(queued_audio + phys, ((const unsigned char *) data) + i, max_write);
@@ -35,13 +35,13 @@ int send_audio_packet(const void *data, size_t len)
         i += max_write;
         queued_audio_end += max_write;
 
-		// Skip start ahead if necessary
-		if (queued_audio_end > queued_audio_start + sizeof(queued_audio)) {
-			queued_audio_start = queued_audio_end - sizeof(queued_audio);
-		}
+        // Skip start ahead if necessary
+        if (queued_audio_end > queued_audio_start + sizeof(queued_audio)) {
+            queued_audio_start = queued_audio_end - sizeof(queued_audio);
+        }
     }
 
-	pthread_cond_broadcast(&queued_audio_cond);
+    pthread_cond_broadcast(&queued_audio_cond);
 
     pthread_mutex_unlock(&queued_audio_mutex);
 
@@ -51,81 +51,81 @@ int send_audio_packet(const void *data, size_t len)
 static void *handle_queued_audio(void *data)
 {
     // Mic only ever sends 512 bytes at a time
-	const size_t MIC_PAYLOAD_SIZE = 512;
+    const size_t MIC_PAYLOAD_SIZE = 512;
 
-	gamepad_context_t *ctx = (gamepad_context_t *) data;
+    gamepad_context_t *ctx = (gamepad_context_t *) data;
 
     pthread_mutex_lock(&queued_audio_mutex);
 
-	while (!is_interrupted()) {
-		while (!is_interrupted() && queued_audio_end < (queued_audio_start + MIC_PAYLOAD_SIZE)) {
-			// Wait for more data
-			pthread_cond_wait(&queued_audio_cond, &queued_audio_mutex);
-		}
+    while (!is_interrupted()) {
+        while (!is_interrupted() && queued_audio_end < (queued_audio_start + MIC_PAYLOAD_SIZE)) {
+            // Wait for more data
+            pthread_cond_wait(&queued_audio_cond, &queued_audio_mutex);
+        }
 
-		if (is_interrupted()) {
-			break;
-		}
+        if (is_interrupted()) {
+            break;
+        }
 
-		AudioPacket ap;
+        AudioPacket ap;
 
-		// Copy data into our packet
-		for (size_t i = 0; i < MIC_PAYLOAD_SIZE; ) {
-			size_t phys = queued_audio_start % sizeof(queued_audio);
-			size_t max_write = MIN(sizeof(queued_audio) - phys, MIC_PAYLOAD_SIZE - i);
-			memcpy(ap.payload + i, queued_audio + phys, max_write);
+        // Copy data into our packet
+        for (size_t i = 0; i < MIC_PAYLOAD_SIZE;) {
+            size_t phys = queued_audio_start % sizeof(queued_audio);
+            size_t max_write = MIN(sizeof(queued_audio) - phys, MIC_PAYLOAD_SIZE - i);
+            memcpy(ap.payload + i, queued_audio + phys, max_write);
 
-			i += max_write;
-			queued_audio_start += max_write;
-		}
+            i += max_write;
+            queued_audio_start += max_write;
+        }
 
-		// Don't need access to the buffer while we set up the packet
-		pthread_mutex_unlock(&queued_audio_mutex);
+        // Don't need access to the buffer while we set up the packet
+        pthread_mutex_unlock(&queued_audio_mutex);
 
-		// Set up remaining default parameters
-		ap.format = 6;
-		ap.mono = 1;
-		ap.vibrate = 0;
-		ap.type = TYPE_AUDIO; // Audio data
-		ap.timestamp = 0; // Gamepad actually sends no timestamp
-		ap.payload_size = MIC_PAYLOAD_SIZE;
+        // Set up remaining default parameters
+        ap.format = 6;
+        ap.mono = 1;
+        ap.vibrate = 0;
+        ap.type = TYPE_AUDIO; // Audio data
+        ap.timestamp = 0;     // Gamepad actually sends no timestamp
+        ap.payload_size = MIC_PAYLOAD_SIZE;
 
-		static unsigned int seq_id = 0;
-		ap.seq_id = seq_id++;
+        static unsigned int seq_id = 0;
+        ap.seq_id = seq_id++;
 
-		// Reverse bits on params
-		ap.format = reverse_bits(ap.format, 3);
-		ap.seq_id = reverse_bits(ap.seq_id, 10);
-		ap.payload_size = reverse_bits(ap.payload_size, 16);//ntohs(ap.payload_size);
-		// ap.timestamp = reverse_bits(ap.timestamp, 32); // Not necessary because timestamp is 0
+        // Reverse bits on params
+        ap.format = reverse_bits(ap.format, 3);
+        ap.seq_id = reverse_bits(ap.seq_id, 10);
+        ap.payload_size = reverse_bits(ap.payload_size, 16); // ntohs(ap.payload_size);
+        // ap.timestamp = reverse_bits(ap.timestamp, 32); // Not necessary because timestamp is 0
 
-		// Further reverse bits
-		unsigned char *bytes = (unsigned char *) &ap;
-		const size_t header_sz = sizeof(AudioPacket) - sizeof(ap.payload);
-		for (int i = 0; i < 4; i++) { // 4 instead of 8 because ap.timestamp == 0
-			bytes[i] = (unsigned char) reverse_bits(bytes[i], 8);
-		}
+        // Further reverse bits
+        unsigned char *bytes = (unsigned char *) &ap;
+        const size_t header_sz = sizeof(AudioPacket) - sizeof(ap.payload);
+        for (int i = 0; i < 4; i++) { // 4 instead of 8 because ap.timestamp == 0
+            bytes[i] = (unsigned char) reverse_bits(bytes[i], 8);
+        }
 
-		// Console expects 512 bytes every 16 ms so make sure we achieve that interval
-		static struct timeval last;
-		struct timeval now;
-		gettimeofday(&now, 0);
-		long diff = (now.tv_sec - last.tv_sec) * 1000000 + (now.tv_usec - last.tv_usec);
-		static const long target_delta = 16000;
-		if (diff < target_delta) {
-			usleep(target_delta - diff);
-		}
-		gettimeofday(&last, 0);
+        // Console expects 512 bytes every 16 ms so make sure we achieve that interval
+        static struct timeval last;
+        struct timeval now;
+        gettimeofday(&now, 0);
+        long diff = (now.tv_sec - last.tv_sec) * 1000000 + (now.tv_usec - last.tv_usec);
+        static const long target_delta = 16000;
+        if (diff < target_delta) {
+            usleep(target_delta - diff);
+        }
+        gettimeofday(&last, 0);
 
-		// Send packet to console
-		send_to_console(ctx->socket_aud, &ap, header_sz + MIC_PAYLOAD_SIZE, PORT_AUD);
+        // Send packet to console
+        send_to_console(ctx->socket_aud, &ap, header_sz + MIC_PAYLOAD_SIZE, PORT_AUD);
 
-    	pthread_mutex_lock(&queued_audio_mutex);
-	}
+        pthread_mutex_lock(&queued_audio_mutex);
+    }
 
     pthread_mutex_unlock(&queued_audio_mutex);
 
-	return 0;
+    return 0;
 }
 
 void handle_audio_packet(gamepad_context_t *ctx, unsigned char *data, size_t len)
@@ -173,12 +173,12 @@ void *listen_audio(void *x)
     queued_audio_start = 0;
     queued_audio_end = 0;
 
-	pthread_t mic_thread;
-	int mic_thread_created = 1;
-	if (pthread_create(&mic_thread, 0, handle_queued_audio, info) != 0) {
-		vanilla_log("Failed to create mic thread");
-		mic_thread_created = 0;
-	}
+    pthread_t mic_thread;
+    int mic_thread_created = 1;
+    if (pthread_create(&mic_thread, 0, handle_queued_audio, info) != 0) {
+        vanilla_log("Failed to create mic thread");
+        mic_thread_created = 0;
+    }
 
     do {
         size = recv(info->socket_aud, data, sizeof(data), 0);
@@ -187,13 +187,13 @@ void *listen_audio(void *x)
         }
     } while (!is_interrupted());
 
-	if (mic_thread_created) {
-		// Tell thread to exit
-    	pthread_mutex_lock(&queued_audio_mutex);
-		pthread_cond_broadcast(&queued_audio_cond);
-    	pthread_mutex_unlock(&queued_audio_mutex);
-		pthread_join(mic_thread, 0);
-	}
+    if (mic_thread_created) {
+        // Tell thread to exit
+        pthread_mutex_lock(&queued_audio_mutex);
+        pthread_cond_broadcast(&queued_audio_cond);
+        pthread_mutex_unlock(&queued_audio_mutex);
+        pthread_join(mic_thread, 0);
+    }
 
     pthread_exit(NULL);
 

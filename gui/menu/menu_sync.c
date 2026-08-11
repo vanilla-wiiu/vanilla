@@ -1,8 +1,8 @@
 #include "menu_sync.h"
 
 #include <math.h>
-#include <stdio.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <vanilla.h>
@@ -60,27 +60,31 @@ void vpi_sync_show_error(vui_context_t *vui, void *data)
 
 int intpow(int x, unsigned int p)
 {
-    if (p == 0) return 1;
-    if (p == 1) return x;
+    if (p == 0)
+        return 1;
+    if (p == 1)
+        return x;
 
-    int tmp = intpow(x, p/2);
-    if (p%2 == 0) return tmp * tmp;
-    else return x * tmp * tmp;
+    int tmp = intpow(x, p / 2);
+    if (p % 2 == 0)
+        return tmp * tmp;
+    else
+        return x * tmp * tmp;
 }
 
 void sync_animation_step(vui_context_t *ctx, int64_t time, void *userdata)
 {
     int64_t m = int64min((sin(time * 0.000004) * 0.5 + 0.5) * DOT_COUNT, DOT_COUNT - 1);
-	for (int i = 0; i < DOT_COUNT; i++) {
-		const char *file = (i == m) ? "circle_big.svg" : "circle_small.svg";
-		vui_image_update(ctx, dots[i], file);
-	}
+    for (int i = 0; i < DOT_COUNT; i++) {
+        const char *file = (i == m) ? "circle_big.svg" : "circle_small.svg";
+        vui_image_update(ctx, dots[i], file);
+    }
 
     // Poll Vanilla for sync status
     vanilla_event_t event;
     while (vanilla_poll_event(&event)) {
         if (event.type == VANILLA_EVENT_ERROR) {
-            int err = * (int *) event.data;
+            int err = *(int *) event.data;
 
             // Transition to error screen showing error code
             vui_transition_fade_layer_out(ctx, sync_fglayer, vpi_sync_show_error, (void *) (intptr_t) err);
@@ -94,7 +98,8 @@ void sync_animation_step(vui_context_t *ctx, int64_t time, void *userdata)
             int found = -1;
 
             for (uint8_t i = 0; i < vpi_config.connected_console_count; i++) {
-                if (!memcmp(vpi_config.connected_console_entries[i].bssid.bssid, sync->data.bssid.bssid, sizeof(vanilla_bssid_t))) {
+                if (!memcmp(vpi_config.connected_console_entries[i].bssid.bssid, sync->data.bssid.bssid,
+                            sizeof(vanilla_bssid_t))) {
                     // We don't bother checking PSK because BSSID is already unique and the PSK should not have changed
                     found = i;
                     break;
@@ -142,26 +147,30 @@ void start_syncing(vui_context_t *vui, void *v)
     int margin;
     vpi_menu_create_background(vui, bglayer, &bkg_rect, &margin);
 
-    vui_label_create(vui, bkg_rect.x, bkg_rect.y + bkg_rect.h*1/5, bkg_rect.w, bkg_rect.h, lang(VPI_LANG_SYNC_CONNECTING), vui_color_create(1,1,1,1), VUI_FONT_SIZE_NORMAL, sync_fglayer);
+    vui_label_create(vui, bkg_rect.x, bkg_rect.y + bkg_rect.h * 1 / 5, bkg_rect.w, bkg_rect.h,
+                     lang(VPI_LANG_SYNC_CONNECTING), vui_color_create(1, 1, 1, 1), VUI_FONT_SIZE_NORMAL, sync_fglayer);
 
     uint16_t code = 0;
     for (int i = 0; i < SYNC_BTN_COUNT; i++) {
         code += sync_str[i] * intpow(10, SYNC_BTN_COUNT - 1 - i);
     }
 
-	const int DOT_SIZE = 32;
-	const int DOT_PADDING = 16;
-	const int DOT_WIDTH = DOT_SIZE*DOT_COUNT + DOT_PADDING*(DOT_COUNT-1);
-	const int DOT_X = bkg_rect.x + bkg_rect.w/2 - DOT_WIDTH/2;
-	const int DOT_Y = bkg_rect.y + bkg_rect.h*2/5;
-	for (int i = 0; i < DOT_COUNT; i++) {
-		dots[i] = vui_image_create(vui, DOT_X + (DOT_SIZE + DOT_PADDING) * i, DOT_Y, DOT_SIZE, DOT_SIZE, "", sync_fglayer);
-	}
+    const int DOT_SIZE = 32;
+    const int DOT_PADDING = 16;
+    const int DOT_WIDTH = DOT_SIZE * DOT_COUNT + DOT_PADDING * (DOT_COUNT - 1);
+    const int DOT_X = bkg_rect.x + bkg_rect.w / 2 - DOT_WIDTH / 2;
+    const int DOT_Y = bkg_rect.y + bkg_rect.h * 2 / 5;
+    for (int i = 0; i < DOT_COUNT; i++) {
+        dots[i] =
+            vui_image_create(vui, DOT_X + (DOT_SIZE + DOT_PADDING) * i, DOT_Y, DOT_SIZE, DOT_SIZE, "", sync_fglayer);
+    }
 
-    // int progress_lbl = vui_label_create(vui, bkg_rect.x, , bkg_rect.w, bkg_rect.h, "", vui_color_create(1,1,1,1), VUI_FONT_SIZE_NORMAL, sync_fglayer);
+    // int progress_lbl = vui_label_create(vui, bkg_rect.x, , bkg_rect.w, bkg_rect.h, "", vui_color_create(1,1,1,1),
+    // VUI_FONT_SIZE_NORMAL, sync_fglayer);
     sync_animation_step(vui, 0, 0);
 
-    vui_button_create(vui, bkg_rect.x + bkg_rect.w/2 - BTN_SZ*3/2, bkg_rect.y + bkg_rect.h * 3 / 4, BTN_SZ*3, BTN_SZ, lang(VPI_LANG_CANCEL_BTN), 0, VUI_BUTTON_STYLE_BUTTON, sync_fglayer, cancel_sync, 0);
+    vui_button_create(vui, bkg_rect.x + bkg_rect.w / 2 - BTN_SZ * 3 / 2, bkg_rect.y + bkg_rect.h * 3 / 4, BTN_SZ * 3,
+                      BTN_SZ, lang(VPI_LANG_CANCEL_BTN), 0, VUI_BUTTON_STYLE_BUTTON, sync_fglayer, cancel_sync, 0);
 
     int ret = vanilla_sync(code, vpi_config.server_address);
     if (ret == VANILLA_SUCCESS) {
@@ -197,9 +206,12 @@ void sync_btn_clicked(vui_context_t *vui, int button, void *data)
     if (append != -1) {
         sync_str[sync_str_len] = append;
 
-        const int icon_space = sync_entry_rect.w/4;
+        const int icon_space = sync_entry_rect.w / 4;
         const int icon_w = intmin(icon_space, sync_entry_rect.h);
-        sync_entry_images[sync_str_len] = vui_image_create(vui, sync_entry_rect.x + icon_space * sync_str_len + icon_space/2 - icon_w/2, sync_entry_rect.y + sync_entry_rect.h / 2 - icon_w/2, icon_w, icon_w, suit_icons_white[sync_str[sync_str_len]], sync_fglayer);
+        sync_entry_images[sync_str_len] =
+            vui_image_create(vui, sync_entry_rect.x + icon_space * sync_str_len + icon_space / 2 - icon_w / 2,
+                             sync_entry_rect.y + sync_entry_rect.h / 2 - icon_w / 2, icon_w, icon_w,
+                             suit_icons_white[sync_str[sync_str_len]], sync_fglayer);
 
         sync_str_len++;
 
@@ -229,7 +241,8 @@ void bksp_btn_clicked(vui_context_t *vui, int button, void *data)
 
 void create_sync_btn(vui_context_t *vui, int x, int data, int layer, int origin_x, int origin_y)
 {
-    int btn = vui_button_create(vui, origin_x + BTN_SZ * x, origin_y, BTN_SZ, BTN_SZ, 0, suit_icons_black[data], VUI_BUTTON_STYLE_BUTTON, layer, sync_btn_clicked, 0);
+    int btn = vui_button_create(vui, origin_x + BTN_SZ * x, origin_y, BTN_SZ, BTN_SZ, 0, suit_icons_black[data],
+                                VUI_BUTTON_STYLE_BUTTON, layer, sync_btn_clicked, 0);
     sync_btns[data] = btn;
 }
 
@@ -255,13 +268,17 @@ void vpi_menu_sync_start(vui_context_t *vui, void *d)
     vui_get_screen_size(vui, &scrw, &scrh);
 
     const int lbl_margin = margin * 3;
-    vui_label_create(vui, bkg_rect.x + lbl_margin, bkg_rect.y + lbl_margin, bkg_rect.w - lbl_margin - lbl_margin, bkg_rect.h - lbl_margin - lbl_margin, lang(VPI_LANG_SYNC_HELP_1), vui_color_create(1,1,1,1), VUI_FONT_SIZE_NORMAL, sync_fglayer);
+    vui_label_create(vui, bkg_rect.x + lbl_margin, bkg_rect.y + lbl_margin, bkg_rect.w - lbl_margin - lbl_margin,
+                     bkg_rect.h - lbl_margin - lbl_margin, lang(VPI_LANG_SYNC_HELP_1), vui_color_create(1, 1, 1, 1),
+                     VUI_FONT_SIZE_NORMAL, sync_fglayer);
 
-    const int lbl2_width = scrw/2;
-    vui_label_create(vui, scrw/2 - lbl2_width/2, bkg_rect.y + lbl_margin + scrh/5, lbl2_width, bkg_rect.h - lbl_margin - lbl_margin, lang(VPI_LANG_SYNC_HELP_2), vui_color_create(0.66f,0.66f,0.66f,1), VUI_FONT_SIZE_SMALL, sync_fglayer);
+    const int lbl2_width = scrw / 2;
+    vui_label_create(vui, scrw / 2 - lbl2_width / 2, bkg_rect.y + lbl_margin + scrh / 5, lbl2_width,
+                     bkg_rect.h - lbl_margin - lbl_margin, lang(VPI_LANG_SYNC_HELP_2),
+                     vui_color_create(0.66f, 0.66f, 0.66f, 1), VUI_FONT_SIZE_SMALL, sync_fglayer);
 
     // Create 4 symbol buttons
-    const int sync_btn_x = scrw/2 - (BTN_SZ*SYNC_BTN_COUNT)/2;
+    const int sync_btn_x = scrw / 2 - (BTN_SZ * SYNC_BTN_COUNT) / 2;
     const int sync_btn_y = scrh - BTN_SZ - margin * 3;
 
     // Gamepad swaps 1 and 2 for some reason (probably obfuscation)
@@ -276,14 +293,19 @@ void vpi_menu_sync_start(vui_context_t *vui, void *d)
     sync_entry_rect.w = BTN_SZ * 3;
     sync_entry_rect.h = BTN_SZ * 3 / 4;
     sync_entry_rect.x = sync_btn_x;
-    sync_entry_rect.y = entry_y + BTN_SZ/2 - sync_entry_rect.h/2;
-    vui_rect_create(vui, sync_entry_rect.x, sync_entry_rect.y, sync_entry_rect.w, sync_entry_rect.h, 5, vui_color_create(0,0,0,0.66f), sync_fglayer);
+    sync_entry_rect.y = entry_y + BTN_SZ / 2 - sync_entry_rect.h / 2;
+    vui_rect_create(vui, sync_entry_rect.x, sync_entry_rect.y, sync_entry_rect.w, sync_entry_rect.h, 5,
+                    vui_color_create(0, 0, 0, 0.66f), sync_fglayer);
 
     // Create backspace button
-    sync_bksp_btn = vui_button_create(vui, sync_btn_x + BTN_SZ * 3, sync_entry_rect.y, BTN_SZ, sync_entry_rect.h, 0, "backspace_black.svg", VUI_BUTTON_STYLE_BUTTON, sync_fglayer, bksp_btn_clicked, 0);
+    sync_bksp_btn =
+        vui_button_create(vui, sync_btn_x + BTN_SZ * 3, sync_entry_rect.y, BTN_SZ, sync_entry_rect.h, 0,
+                          "backspace_black.svg", VUI_BUTTON_STYLE_BUTTON, sync_fglayer, bksp_btn_clicked, 0);
 
-    int back_btn_h = scrh/6;
-    sync_cancel_btn = vui_button_create(vui, 0, scrh-back_btn_h, scrw/4, back_btn_h, lang(VPI_LANG_CANCEL_BTN), 0, VUI_BUTTON_STYLE_CORNER, sync_fglayer, vpi_sync_menu_back_action, (void *) (intptr_t) sync_bglayer);
+    int back_btn_h = scrh / 6;
+    sync_cancel_btn = vui_button_create(vui, 0, scrh - back_btn_h, scrw / 4, back_btn_h, lang(VPI_LANG_CANCEL_BTN), 0,
+                                        VUI_BUTTON_STYLE_CORNER, sync_fglayer, vpi_sync_menu_back_action,
+                                        (void *) (intptr_t) sync_bglayer);
 
     vui_transition_fade_layer_in(vui, d ? sync_fglayer : sync_bglayer, 0, 0);
 

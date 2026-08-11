@@ -36,7 +36,7 @@ typedef struct {
 
 typedef struct {
     uint8_t control_code;
-    union{
+    union {
         vanilla_pipe_sync_info_t sync;
         vanilla_connection_t connection;
         vanilla_pipe_status_info_t status;

@@ -15,16 +15,16 @@
 
 void vpi_mic_callback(void *userdata, const uint8_t *data, size_t len)
 {
-	vanilla_send_audio(data, len);
+    vanilla_send_audio(data, len);
 }
 
 void vpi_menu_init(vui_context_t *vui)
 {
-	// Set microphone callback
-	vui_mic_callback_set(vui, vpi_mic_callback, 0);
+    // Set microphone callback
+    vui_mic_callback_set(vui, vpi_mic_callback, 0);
 
     if (vpi_config.autoconnect != -1) {
-        vpi_menu_game(vui, (void *)(intptr_t) vpi_config.autoconnect);
+        vpi_menu_game(vui, (void *) (intptr_t) vpi_config.autoconnect);
     } else {
         // Start with main menu
         vpi_menu_main(vui, 0);
@@ -45,15 +45,13 @@ void get_valid_filename(const char *fmt, char *abs_buf, size_t size_abs_buf, con
 void vpi_menu_action(vui_context_t *vui, vpi_extra_action_t action)
 {
     switch (action) {
-    case VPI_ACTION_SCREENSHOT:
-    {
+    case VPI_ACTION_SCREENSHOT: {
         char ss_fn[4096];
         get_valid_filename("Screenshot-%04i.png", ss_fn, sizeof(ss_fn), vpi_config.recording_dir);
         vpi_decode_screenshot(ss_fn);
         break;
     }
-    case VPI_ACTION_TOGGLE_RECORDING:
-    {
+    case VPI_ACTION_TOGGLE_RECORDING: {
         int recording = vpi_decode_is_recording();
         if (!recording) {
             char mov_fn[4096];
@@ -64,8 +62,7 @@ void vpi_menu_action(vui_context_t *vui, vpi_extra_action_t action)
         }
         break;
     }
-    case VPI_ACTION_DISCONNECT:
-    {
+    case VPI_ACTION_DISCONNECT: {
         if (vui_game_mode_get(vui)) {
             // Send shutdown signal
             vpi_game_shutdown();
@@ -75,8 +72,7 @@ void vpi_menu_action(vui_context_t *vui, vpi_extra_action_t action)
         }
         break;
     }
-    case VPI_ACTION_TOGGLE_FULLSCREEN:
-    {
+    case VPI_ACTION_TOGGLE_FULLSCREEN: {
         vpi_config.fullscreen = !vpi_config.fullscreen;
         vpi_config_save();
         vui_set_fullscreen(vui, vpi_config.fullscreen);
