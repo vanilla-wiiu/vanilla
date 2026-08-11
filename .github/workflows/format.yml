@@ -1,0 +1,31 @@
+name: Format check
+on:
+  pull_request:
+    paths: 
+      - 'gui/**.c'
+      - 'gui/**.h'
+      - 'lib/**.c'
+      - 'lib/**.h'
+      - 'pipe/**.c'
+      - 'pipe/**.h'
+
+jobs:
+  cpp-linter:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: cpp-linter/cpp-linter-action@v2
+        id: linter
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          version: '18'
+          style: 'file' # Use .clang-format config file.
+          tidy-checks: '-*' # disable clang-tidy checks.
+          ignore: pipe/linux/dhcp|pipe/linux/hostap|lib/hostap
+          format-review: 'true'
+          lines-changed-only: 'true'
+
+      - name: Fail fast?!
+        if: steps.linter.outputs.clang-format-checks-failed > 0
+        run: exit 1
