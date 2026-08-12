@@ -3,7 +3,8 @@
 #include "config.h"
 #include "lang.h"
 #include "menu_common.h"
-#include "menu_settings.h"
+#include "menu_game.h"
+#include "menu_edit.h"
 #include "ui/ui_anim.h"
 
 // The Wii U only supports the first 3 regions, so we ignore the rest of them
@@ -12,29 +13,41 @@
 static int bglayer;
 static int fglayer;
 static int region_btns[MAX_REGIONS];
+static int console;
 
-static void return_to_settings(vui_context_t *vui, int btn, void *v)
+static void return_to_edit(vui_context_t *vui, int btn, void *v)
 {
-    vui_transition_fade_layer_out(vui, bglayer, vpi_menu_settings, 0);
+    vui_transition_fade_layer_out(vui, fglayer, vpi_menu_edit_return, v);
 }
 
 static void region_clicked(vui_context_t *vui, int btn, void *v)
 {
     int reg = (intptr_t) v;
 
-    vpi_config.region = reg;
+    vpi_console_entry_t *entry;
+    if (console == -1)
+        entry = vpi_config.connected_console_entries + vpi_config.connected_console_count - 1;
+    else
+        entry = vpi_config.connected_console_entries + console;
+
+    entry->region = reg;
     vpi_config_save();
 
     for (int i = 0; i < MAX_REGIONS; i++) {
         int b = region_btns[i];
-        vui_button_update_checked(vui, b, vpi_config.region == i);
+        vui_button_update_checked(vui, b, entry->region == i);
     }
 
-    return_to_settings(vui, btn, 0);
+    if (console == -1)
+        vui_transition_fade_layer_out(vui, fglayer, vpi_menu_game, (void *) (intptr_t) vpi_config.connected_console_count - 1);
+    else
+        return_to_edit(vui, btn, (void *) (intptr_t) console);
 }
 
 void vpi_menu_region(vui_context_t *vui, void *v)
 {
+    console = (intptr_t) v;
+
     vui_reset(vui);
 
     bglayer = vui_layer_create(vui);
@@ -55,15 +68,22 @@ void vpi_menu_region(vui_context_t *vui, void *v)
     const int btn_y = bkg_rect.y + bkg_rect.h * 13 / 32;
     const int btn_x = bkg_rect.x + bkg_rect.w/2 - btn_w/2;
 
+    vpi_console_entry_t *entry;
+    if (console == -1)
+        entry = vpi_config.connected_console_entries + vpi_config.connected_console_count - 1;
+    else
+        entry = vpi_config.connected_console_entries + console;
+
     for (int i = 0; i < MAX_REGIONS; i++) {
         int b = vui_button_create(vui, btn_x, btn_y + BTN_SZ * i, btn_w, BTN_SZ, lang(VPI_LANG_REGION_JAPAN + i), 0, VUI_BUTTON_STYLE_BUTTON, fglayer, region_clicked, (void *) (intptr_t) i);
         vui_button_update_checkable(vui, b, 1);
-        vui_button_update_checked(vui, b, vpi_config.region == i);
+        vui_button_update_checked(vui, b, entry->region == i);
         region_btns[i] = b;
     }
 
     // Back button
-    vpi_menu_create_back_button(vui, fglayer, return_to_settings, (void *) (intptr_t) bglayer);
+    if (console != -1)
+        vpi_menu_create_back_button(vui, fglayer, return_to_edit, v);
     
-    vui_transition_fade_layer_in(vui, bglayer, 0, 0);
+    vui_transition_fade_layer_in(vui, fglayer, 0, 0);
 }
