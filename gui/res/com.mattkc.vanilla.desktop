@@ -7,3 +7,4 @@ Icon=com.mattkc.vanilla_rounded
 Terminal=false
 Type=Application
 Categories=Game
+StartupWMClass=vanilla
