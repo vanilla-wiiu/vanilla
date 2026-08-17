@@ -19,6 +19,7 @@
 #include "lang.h"
 #include "menu_common.h"
 #include "menu_main.h"
+#include "menu_nfc.h"
 #include "ui/ui_anim.h"
 #include "ui/ui_util.h"
 
@@ -1095,6 +1096,11 @@ void vpi_menu_game_start(vui_context_t *vui, void *v)
 
     // Set initial values
     vanilla_set_region(vpi_config.region);
+
+    // Set NFC backend
+    if (vpi_config.nfc_backend < nfc_num_backends) {
+        vanilla_set_nfc_backend(nfc_backends[vpi_config.nfc_backend]);
+    }
 
     vpi_console_entry_t *entry = vpi_config.connected_console_entries + console;
     int r = vanilla_start(vpi_config.server_address, entry->bssid, entry->psk);

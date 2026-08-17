@@ -21,6 +21,7 @@ extern "C" {
 #define VANILLA_ERR_SHUTDOWN            -9
 #define VANILLA_ERR_CONNECTED           -10
 #define VANILLA_ERR_DISCONNECTED        -11
+#define VANILLA_ERR_TIMEOUT             -12
 
 static const uint32_t VANILLA_ADDRESS_LOCAL = 0xFFFFFFFF;
 
@@ -118,6 +119,63 @@ typedef struct {
 } vanilla_sync_event_t;
 #pragma pack(pop)
 
+typedef struct
+{
+    uint8_t protocol;
+    uint8_t uid_size;
+    uint8_t uid[10];
+} VanillaNfcDiscoverData;
+
+typedef struct
+{
+    uint8_t uid[7];
+    uint8_t uid_mask[7];
+    uint32_t command_timeout;
+    uint8_t num_ranges;
+    struct {
+        uint8_t start;
+        uint8_t end;
+    } ranges[4];
+    uint8_t perform_pwd_auth;
+} VanillaNfcReadT2TParams;
+
+typedef struct
+{
+    uint8_t version[8];
+    uint8_t data[0x3A0];
+    uint8_t signature[0x20];
+} VanillaNfcReadT2TData;
+
+typedef struct
+{
+    uint8_t expected_version[8];
+    uint8_t uid[7];
+    uint8_t uid_mask[7];
+    uint32_t command_timeout;
+    uint8_t num_ranges;
+    struct {
+        uint8_t address;
+        uint8_t size;
+        uint8_t data[0xF0];
+    } ranges[4];
+    uint8_t perform_pwd_auth;
+    uint8_t perform_activation;
+    uint8_t activation_address;
+    uint8_t deactivation_data[4];
+    uint8_t activation_data[4];
+} VanillaNfcWriteT2TParams;
+
+typedef struct
+{
+    int (*init)(void);
+    int (*shutdown)(void);
+    int (*discover)(uint16_t timeout, uint8_t tech_mask, VanillaNfcDiscoverData *data);
+    void (*abort_discover)(void);
+
+    uint8_t (*read_t2t)(const VanillaNfcReadT2TParams *params, VanillaNfcReadT2TData *data);
+    uint8_t (*write_t2t)(const VanillaNfcWriteT2TParams *params);
+} VanillaNfcBackend;
+
 /**
  * Start listening for gamepad commands
  */
@@ -202,6 +260,11 @@ size_t vanilla_generate_h264_header(void *data, size_t size);
  * Send microphone audio
  */
 void vanilla_send_audio(const void *data, size_t size);
+
+/**
+ * Set NFC backend
+ */
+void vanilla_set_nfc_backend(const VanillaNfcBackend* backend);
 
 #if defined(__cplusplus)
 }

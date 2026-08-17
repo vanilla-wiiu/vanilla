@@ -33,6 +33,7 @@ typedef struct {
     int fast_drm;
     int force_software_decode;
     int autoconnect;
+    int nfc_backend;
 } vpi_config_t;
 
 extern vpi_config_t vpi_config;

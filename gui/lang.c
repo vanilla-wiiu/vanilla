@@ -58,7 +58,11 @@ static const char *lang_str[__VPI_LANG_T_COUNT] = {
     "Reset",
     "Full Screen",
     "Hardware Decoding",
-    "Cursor In Full Screen"
+    "Cursor In Full Screen",
+    "NFC Settings",
+    "Select NFC backend",
+    "File Backend",
+    "libnfc Backend",
 };
 
 const char *lang(vpi_lang_t id)

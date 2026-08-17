@@ -40,6 +40,7 @@
 #include "platform.h"
 #include "ui_priv.h"
 #include "ui_util.h"
+#include "nfc/nfc_file.h"
 
 #ifdef VANILLA_NX_IMU
 #include "platform_nx_imu.h"
@@ -660,6 +661,10 @@ int vui_sdl_event_thread(void *data)
                 break;
             case SDL_TEXTEDITING:
                 vpilog("text editing!\n");
+                break;
+            case SDL_DROPFILE:
+                vpilog("file dropped\n");
+                nfc_file_touch_tag(ev.drop.file);
                 break;
             }
         }
