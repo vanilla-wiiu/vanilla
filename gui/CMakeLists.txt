@@ -297,6 +297,10 @@ list(APPEND VANILLA_GUI_SRC
 )
 
 if (LINUX)
+    list(APPEND VANILLA_GUI_SRC
+        ui/ui_sdl_linux.c
+    )
+
     # Link with DRM if available
     option(VANILLA_BUILD_USE_DRM "Enable DRM video output" ON)
     if (VANILLA_BUILD_USE_DRM)

@@ -45,6 +45,12 @@
 #include "platform_nx_imu.h"
 #endif
 
+#if defined(ANDROID) || defined(__ANDROID__)
+// TODO
+#elif defined(__linux__)
+#include "ui_sdl_linux.h"
+#endif
+
 #define MIN(a,b) (((a)<(b))?(a):(b))
 #define PW_CHAR_SIZE 20
 #define PW_CHAR_PAD 2
@@ -330,6 +336,24 @@ void vui_sdl_fullscreen_enabled_handler(vui_context_t *ctx, int enabled, void *u
 
     SDL_SetWindowFullscreen(sdl_ctx->window, enabled ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0);
     SDL_ShowCursor(vpi_config.cursor_in_fullscreen || !enabled);
+}
+
+void vui_sdl_brightness_set_handler(vui_context_t *ctx, float brightness, void *userdata)
+{
+    vpilog("SETTING BRIGHTNESS TO %.1f\n", brightness);
+
+    vui_sdl_context_t *sdl_ctx = (vui_sdl_context_t *) ctx->platform_data;
+
+#if defined(ANDROID) || defined(__ANDROID__)
+    // TODO
+#elif defined(__linux__)
+    if (vui_sdl_linux_set_brightness(brightness) == 0) {
+        return;
+    }
+#endif
+
+    // Fallback
+    SDL_SetWindowBrightness(sdl_ctx->window, brightness);
 }
 
 void vui_sdl_get_key_mapping_handler(vui_context_t *ctx, int vanilla_btn, void *userdata)
@@ -840,6 +864,8 @@ int vui_init_sdl(vui_context_t *ctx, int fullscreen)
 	sdl_ctx->last_power_state = VUI_POWERSTATE_UNKNOWN;
 
     ctx->fullscreen_enabled_handler = vui_sdl_fullscreen_enabled_handler;
+
+    ctx->brightness_set_handler = vui_sdl_brightness_set_handler;
 
     if (TTF_Init()) {
         vpilog("Failed to TTF_Init\n");
@@ -1894,30 +1920,6 @@ int vui_update_sdl(vui_context_t *vui)
         }
 #endif // VANILLA_CUDA_AVAILABLE
 
-        // Draw vui to a custom texture
-        vui_draw_sdl(vui, renderer);
-
-        // Flatten layers
-		int el[MAX_BUTTON_COUNT];
-		int el_count = 0;
-		for (int i = 0; i < vui->layers; i++) {
-			if (vui->layer_enabled[i]) {
-				el[el_count] = i;
-				el_count++;
-			}
-		}
-
-        for (int i = el_count - 1; i > 0; i--) {
-            SDL_Texture *bg = sdl_ctx->layer_data[el[i-1]];
-            SDL_Texture *fg = sdl_ctx->layer_data[el[i]];
-
-            SDL_SetRenderTarget(renderer, bg);
-            SDL_SetTextureColorMod(fg, vui->layer_opacity[i] * 0xFF, vui->layer_opacity[i] * 0xFF, vui->layer_opacity[i] * 0xFF);
-            SDL_SetTextureAlphaMod(fg, vui->layer_opacity[i] * 0xFF);
-            SDL_RenderCopy(renderer, fg, NULL, NULL);
-        }
-
-        main_tex = sdl_ctx->layer_data[0];
     } else {
         pthread_mutex_lock(&vpi_present_frame_mutex);
 		if (vpi_present_frame
@@ -2013,78 +2015,115 @@ int vui_update_sdl(vui_context_t *vui)
     }
 
     if (handle_final_blit) {
-        // Draw toast on screen if necessary
-        const int TOAST_PADDING = 12;
-        int cur_toast;
-        vpi_get_toast(&cur_toast, 0, 0, 0);
-        if (cur_toast != sdl_ctx->last_shown_toast) {
-            // Get toast information
-            char toast_str[VPI_TOAST_MAX_LEN];
-            vpi_get_toast(&cur_toast, toast_str, sizeof(toast_str), &sdl_ctx->toast_expiry);
+        // Draw vui to a custom texture
+        if (!vui->game_mode) {
+            vui_draw_sdl(vui, renderer);
 
-            sdl_ctx->last_shown_toast = cur_toast;
+            // Flatten layers
+            {
+                int el[MAX_BUTTON_COUNT];
+                int el_count = 0;
+                for (int i = 0; i < vui->layers; i++) {
+                    if (vui->layer_enabled[i]) {
+                        el[el_count] = i;
+                        el_count++;
+                    }
+                }
 
-            const int toast_w = vui->screen_width/2;
+                for (int i = el_count - 1; i > 0; i--) {
+                    SDL_Texture *bg = sdl_ctx->layer_data[el[i-1]];
+                    SDL_Texture *fg = sdl_ctx->layer_data[el[i]];
 
-            SDL_Color c;
-            c.r = c.g = c.b = 0x40;
-            c.a = 0xFF;
+                    SDL_SetRenderTarget(renderer, bg);
+                    SDL_SetTextureColorMod(fg, vui->layer_opacity[i] * 0xFF, vui->layer_opacity[i] * 0xFF, vui->layer_opacity[i] * 0xFF);
+                    SDL_SetTextureAlphaMod(fg, vui->layer_opacity[i] * 0xFF);
+                    SDL_RenderCopy(renderer, fg, NULL, NULL);
+                }
 
-            SDL_Surface *surface = TTF_RenderUTF8_Blended_Wrapped(sdl_ctx->sysfont_small, toast_str, c, toast_w - TOAST_PADDING - TOAST_PADDING);
-            SDL_Texture *texture = SDL_CreateTextureFromSurface(renderer, surface);
-
-            const int toast_h = surface->h + TOAST_PADDING + TOAST_PADDING;
-            sdl_ctx->toast_tex = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_TARGET, toast_w, toast_h);
-            SDL_SetTextureBlendMode(sdl_ctx->toast_tex, SDL_BLENDMODE_BLEND);
-
-            SDL_SetRenderTarget(renderer, sdl_ctx->toast_tex);
-            SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
-            SDL_RenderClear(renderer);
-
-            SDL_SetRenderDrawColor(renderer, 0xFF, 0xFF, 0xFF, 0xF0);
-            const int TOAST_BORDER_RADIUS = TOAST_PADDING;
-            for (int y = 0; y < toast_h; y++) {
-                const int x_inset = calculate_x_inset(y, toast_h, TOAST_BORDER_RADIUS);
-                SDL_RenderDrawLine(renderer, x_inset, y, toast_w - x_inset, y);
+                if (vui->game_mode) {
+                    // TODO: Composite onto game texture
+                    // SDL_SetRenderTarget(renderer, main_tex);
+                    // SDL_RenderCopy(renderer, sdl_ctx->layer_data[0], NULL, NULL);
+                } else {
+                    // Just return our texture
+                    main_tex = sdl_ctx->layer_data[0];
+                }
             }
-
-            SDL_Rect dst_rect;
-            dst_rect.x = dst_rect.y = TOAST_PADDING;
-            dst_rect.w = surface->w;
-            dst_rect.h = surface->h;
-            SDL_RenderCopy(renderer, texture, 0, &dst_rect);
-
-            SDL_DestroyTexture(texture);
-            SDL_FreeSurface(surface);
         }
-        if (sdl_ctx->toast_tex) {
-            // Draw toast to screen
-            SDL_SetRenderTarget(renderer, main_tex);
 
-            // Get texture size
-            int toast_w, toast_h;
-            SDL_QueryTexture(sdl_ctx->toast_tex, 0, 0, &toast_w, &toast_h);
+        // Draw toast on screen if necessary
+        {
+            const int TOAST_PADDING = 12;
+            int cur_toast;
+            vpi_get_toast(&cur_toast, 0, 0, 0);
+            if (cur_toast != sdl_ctx->last_shown_toast) {
+                // Get toast information
+                char toast_str[VPI_TOAST_MAX_LEN];
+                vpi_get_toast(&cur_toast, toast_str, sizeof(toast_str), &sdl_ctx->toast_expiry);
 
-            // Calculate dst rect
-            SDL_Rect dst_rect;
-            dst_rect.w = toast_w;
-            dst_rect.h = toast_h;
-            dst_rect.y = vui->screen_height - dst_rect.h - TOAST_PADDING - TOAST_PADDING;
-            dst_rect.x = vui->screen_width/2 - toast_w/2;
+                sdl_ctx->last_shown_toast = cur_toast;
 
-            SDL_RenderCopy(renderer, sdl_ctx->toast_tex, 0, &dst_rect);
+                const int toast_w = vui->screen_width/2;
 
-            // Handle expiry
-            struct timeval now;
-            gettimeofday(&now, 0);
-            if (now.tv_sec*1000000+now.tv_usec >= sdl_ctx->toast_expiry.tv_sec*1000000+sdl_ctx->toast_expiry.tv_usec) {
-                SDL_DestroyTexture(sdl_ctx->toast_tex);
-                sdl_ctx->toast_tex = 0;
+                SDL_Color c;
+                c.r = c.g = c.b = 0x40;
+                c.a = 0xFF;
+
+                SDL_Surface *surface = TTF_RenderUTF8_Blended_Wrapped(sdl_ctx->sysfont_small, toast_str, c, toast_w - TOAST_PADDING - TOAST_PADDING);
+                SDL_Texture *texture = SDL_CreateTextureFromSurface(renderer, surface);
+
+                const int toast_h = surface->h + TOAST_PADDING + TOAST_PADDING;
+                sdl_ctx->toast_tex = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_TARGET, toast_w, toast_h);
+                SDL_SetTextureBlendMode(sdl_ctx->toast_tex, SDL_BLENDMODE_BLEND);
+
+                SDL_SetRenderTarget(renderer, sdl_ctx->toast_tex);
+                SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
+                SDL_RenderClear(renderer);
+
+                SDL_SetRenderDrawColor(renderer, 0xFF, 0xFF, 0xFF, 0xF0);
+                const int TOAST_BORDER_RADIUS = TOAST_PADDING;
+                for (int y = 0; y < toast_h; y++) {
+                    const int x_inset = calculate_x_inset(y, toast_h, TOAST_BORDER_RADIUS);
+                    SDL_RenderDrawLine(renderer, x_inset, y, toast_w - x_inset, y);
+                }
+
+                SDL_Rect dst_rect;
+                dst_rect.x = dst_rect.y = TOAST_PADDING;
+                dst_rect.w = surface->w;
+                dst_rect.h = surface->h;
+                SDL_RenderCopy(renderer, texture, 0, &dst_rect);
+
+                SDL_DestroyTexture(texture);
+                SDL_FreeSurface(surface);
+            }
+            if (sdl_ctx->toast_tex) {
+                // Draw toast to screen
+                SDL_SetRenderTarget(renderer, main_tex);
+
+                // Get texture size
+                int toast_w, toast_h;
+                SDL_QueryTexture(sdl_ctx->toast_tex, 0, 0, &toast_w, &toast_h);
+
+                // Calculate dst rect
+                SDL_Rect dst_rect;
+                dst_rect.w = toast_w;
+                dst_rect.h = toast_h;
+                dst_rect.y = vui->screen_height - dst_rect.h - TOAST_PADDING - TOAST_PADDING;
+                dst_rect.x = vui->screen_width/2 - toast_w/2;
+
+                SDL_RenderCopy(renderer, sdl_ctx->toast_tex, 0, &dst_rect);
+
+                // Handle expiry
+                struct timeval now;
+                gettimeofday(&now, 0);
+                if (now.tv_sec*1000000+now.tv_usec >= sdl_ctx->toast_expiry.tv_sec*1000000+sdl_ctx->toast_expiry.tv_usec) {
+                    SDL_DestroyTexture(sdl_ctx->toast_tex);
+                    sdl_ctx->toast_tex = 0;
+                }
             }
         }
 
         // Calculate our destination rectangle
-
         SDL_SetRenderTarget(renderer, NULL);
 
         int out_w, out_h;

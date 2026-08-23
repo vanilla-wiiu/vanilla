@@ -182,4 +182,9 @@ vui_power_state_t vui_power_state_get(vui_context_t *ctx, int *percent);
 void vui_mic_enabled_set(vui_context_t *ctx, int enabled);
 void vui_mic_callback_set(vui_context_t *ctx, vui_mic_callback_t callback, void *userdata);
 
+/**
+ * Miscellaneous functions
+ */
+void vui_brightness_set(vui_context_t *ctx, float brightness); // Expects brightness between 0.0f and 1.0f
+
 #endif // VANILLA_PI_UI_H

@@ -97,6 +97,7 @@ int SDL_main(int argc, const char **argv)
         goto exit;
     }
 
+    vui_brightness_set(vui, vpi_config.screen_brightness);
     vpi_menu_init(vui);
 
     while (vui_update_sdl(vui)) {

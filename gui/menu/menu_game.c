@@ -1041,6 +1041,19 @@ void *vpi_event_loop(void *arg)
 		case VANILLA_EVENT_MIC:
 			vui_mic_enabled_set(vui, event.data[0]);
 			break;
+        case VANILLA_EVENT_BRIGHTNESS:
+        {
+            // Clamp to valid values from console
+            uint8_t value = CLAMP(event.data[0], 1, 5);
+
+            // Normalize to 0.0 - 1.0
+            float b = value / 5.0f;
+
+            vpi_config.screen_brightness = b;
+            vpi_config_save();
+            vui_brightness_set(vui, b);
+            break;
+        }
         }
 
 		vanilla_free_event(&event);

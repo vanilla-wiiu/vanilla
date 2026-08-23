@@ -104,6 +104,7 @@ typedef int (*vui_font_height_handler_t)(vui_font_size_t size, void *userdata);
 typedef void (*vui_text_open_handler_t)(vui_context_t *ctx, int textedit, int open, void *userdata);
 typedef vui_power_state_t (*vui_power_state_handler_t)(vui_context_t *ctx, int *percent);
 typedef void (*vui_audio_enabled_handler_t)(vui_context_t *ctx, int enabled, void *userdata);
+typedef void (*vui_brightness_set_handler_t)(vui_context_t *ctx, float value, void *userdata);
 
 typedef struct vui_context_t {
     void *platform_data;
@@ -155,6 +156,8 @@ typedef struct vui_context_t {
 	void *audio_enabled_handler_data;
 	vui_bool_callback_t fullscreen_enabled_handler;
 	void *fullscreen_enabled_handler_data;
+    vui_brightness_set_handler_t brightness_set_handler;
+    void *brightness_set_handler_data;
 
     int default_button_map[VPI_CONFIG_BUTTONMAP_SIZE];
     int default_axis_map[VPI_CONFIG_AXISMAP_SIZE];

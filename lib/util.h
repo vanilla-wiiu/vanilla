@@ -10,6 +10,15 @@
 #define MAX(a,b) (((a)>(b))?(a):(b))
 #define CLAMP(x, min, max) (MIN(MAX(x, min), max))
 
+#if defined(_WIN32)
+// Windows has no htobe32, and is always virtually little-endiam
+#define htobe32(x) htonl(x)
+#elif defined(__APPLE__)
+// macOS has no htobe32
+#include <libkern/OSByteOrder.h>
+#define htobe32(x) OSSwapHostToBigInt32(x)
+#endif // __APPLE__
+
 size_t read_line_from_fd(int fd, char *output, size_t max_output_size);
 size_t read_line_from_file(FILE *file, char *output, size_t max_output_size);
 size_t get_max_path_length();
