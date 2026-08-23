@@ -54,7 +54,7 @@ Extra Vanilla functionality can be accessed through these keyboard shortcuts. On
 
 ### Gameplay
 
-While a controller/gamepad is strongly recommended for the best experience, it is possible to use the keyboard as a fallback. Currently the keys are not remappable, but this is what they are mapped to by default:
+While a controller/gamepad is strongly recommended for the best experience, it is possible to use the keyboard as a fallback. This is the default keyboard mapping, but the keys are remappable in the settings:
 
 | Gamepad Button    | Key           |
 | ----------------- | ------------- |
