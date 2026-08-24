@@ -149,9 +149,9 @@ target_link_libraries(vanilla-pipe PRIVATE
     wpa_client
     pthread
     udhcpc
+    wpa_supplicant_drc
     ${LibNL_LIBRARY}
     ${LibNL_ROUTE_LIBRARY}
     ${LibNL_GENL_LIBRARY}
     ${OPENSSL_LIBRARIES}
-    wpa_supplicant_drc
 )
