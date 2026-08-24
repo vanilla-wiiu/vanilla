@@ -37,6 +37,8 @@
 #endif
 
 #include <utils/common.h>
+
+#include <stdbool.h> // Required by wpa_supplicant_i.h
 #include <wpa_supplicant_i.h>
 
 static const char *wpa_ctrl_interface = "/var/run/wpa_supplicant_drc";
