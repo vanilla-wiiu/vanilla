@@ -102,7 +102,7 @@ ExternalProject_Add(hostap
     DOWNLOAD_COMMAND
         ${CMAKE_COMMAND} -E remove_directory "${HOSTAP_DIR}" &&
         ${CMAKE_COMMAND} -E env --unset=GIT_DIR -- ${GIT_EXECUTABLE} clone https://github.com/vanilla-wiiu/drc-hostap.git "${HOSTAP_DIR}" &&
-        ${CMAKE_COMMAND} -E env --unset=GIT_DIR -- ${GIT_EXECUTABLE} -C "${HOSTAP_DIR}" checkout af1da944765c6d04002584ea0d70c43899a5e6ea
+        ${CMAKE_COMMAND} -E env --unset=GIT_DIR -- ${GIT_EXECUTABLE} -C "${HOSTAP_DIR}" checkout 257096accc39f9c2750a7718ff5751108d15f668
     CONFIGURE_COMMAND ${CMAKE_COMMAND} -E copy_if_different conf/wpa_supplicant.config wpa_supplicant/.config
     BUILD_COMMAND env ${HOSTAP_ENV} make -C wpa_supplicant -j${CMAKE_BUILD_PARALLEL_LEVEL} libwpa_supplicant.a libwpa_client.a
     INSTALL_COMMAND ""
