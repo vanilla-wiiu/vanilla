@@ -41,6 +41,7 @@ typedef struct
     int socket_hid;
     int socket_msg;
     int socket_cmd;
+    vanilla_connection_t connection;
 } gamepad_context_t;
 
 typedef struct thread_data_t thread_data_t;
@@ -51,8 +52,7 @@ typedef struct thread_data_t
     event_loop_t *event_loop;
     thread_start_t thread_start;
     void *thread_data;
-    vanilla_bssid_t bssid;
-    vanilla_psk_t psk;
+    vanilla_connection_t connection;
 } thread_data_t;
 
 typedef union {

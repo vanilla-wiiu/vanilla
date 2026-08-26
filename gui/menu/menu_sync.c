@@ -95,14 +95,17 @@ void sync_animation_step(vui_context_t *ctx, int64_t time, void *userdata)
 
             for (uint8_t i = 0; i < vpi_config.connected_console_count; i++) {
                 if (!memcmp(vpi_config.connected_console_entries[i].bssid.bssid, sync->data.bssid.bssid, sizeof(vanilla_bssid_t))) {
-                    // We don't bother checking PSK because BSSID is already unique and the PSK should not have changed
                     found = i;
+                    vpi_config.connected_console_entries[i].psk = sync->data.psk;
+                    vpi_config.connected_console_entries[i].wifi_frequency = sync->data.wifi_frequency;
+                    vpi_config_save();
                     break;
                 }
             }
 
             if (found == -1) {
                 vpi_console_entry_t console;
+                memset(&console, 0, sizeof(console));
                 if (vpi_config.connected_console_count == 0) {
                     // Most users will only have one Wii U, so for their first
                     // sync, just use "Wii U" instead of "Wii U 1"
@@ -112,6 +115,7 @@ void sync_animation_step(vui_context_t *ctx, int64_t time, void *userdata)
                 }
                 console.bssid = sync->data.bssid;
                 console.psk = sync->data.psk;
+                console.wifi_frequency = sync->data.wifi_frequency;
                 found = vpi_config_add_console(&console);
             }
 

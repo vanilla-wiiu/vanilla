@@ -3,6 +3,7 @@ include(ExternalProject)
 # Add vanilla-pipe executalbe
 add_executable(vanilla-pipe
     main.c
+    wiiu_wowl.c
     wpa.c
 )
 
@@ -22,6 +23,7 @@ if (VANILLA_BUILD_VENDORED)
 	# Build OpenSSL
 	set(OPENSSL_DIR ${CMAKE_CURRENT_BINARY_DIR}/openssl)
 	set(OPENSSL_INSTALL_DIR ${OPENSSL_DIR}/install)
+	set(OPENSSL_INCLUDE_DIR "${OPENSSL_INSTALL_DIR}/include")
 	set(OPENSSL_PROCESSOR ${CMAKE_SYSTEM_PROCESSOR})
 	set(OPENSSL_EXTRA_FLAGS "")
 	if ("${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "arm")
@@ -141,6 +143,7 @@ target_include_directories(vanilla-pipe PRIVATE
     ${HOSTAP_DIR}/wpa_supplicant
     ${CMAKE_SOURCE_DIR}/lib
     ${LibNL_INCLUDE_DIR}
+    ${OPENSSL_INCLUDE_DIR}
 )
 
 # Link our library with the client library

@@ -14,6 +14,7 @@ typedef struct {
     char name[VPI_CONSOLE_MAX_NAME];
     vanilla_bssid_t bssid;
     vanilla_psk_t psk;
+    uint32_t wifi_frequency;
 } vpi_console_entry_t;
 
 typedef struct {

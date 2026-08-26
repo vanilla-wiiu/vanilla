@@ -10,6 +10,7 @@
 #include <libswscale/swscale.h>
 #include <stdatomic.h>
 #include <stdio.h>
+#include <string.h>
 #include <sys/time.h>
 #include <time.h>
 #include <unistd.h>
@@ -1097,7 +1098,14 @@ void vpi_menu_game_start(vui_context_t *vui, void *v)
     vanilla_set_region(vpi_config.region);
 
     vpi_console_entry_t *entry = vpi_config.connected_console_entries + console;
-    int r = vanilla_start(vpi_config.server_address, entry->bssid, entry->psk);
+    vanilla_connection_t connection;
+    memset(&connection, 0, sizeof(connection));
+    connection.bssid = entry->bssid;
+    connection.psk = entry->psk;
+    connection.wifi_frequency = entry->wifi_frequency;
+    connection.region = vpi_config.region;
+
+    int r = vanilla_start_connection(vpi_config.server_address, connection);
     if (r != VANILLA_SUCCESS) {
         show_error(vui, (void*)(intptr_t) r);
     } else {
