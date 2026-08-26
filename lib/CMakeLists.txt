@@ -3,6 +3,7 @@ add_library(libvanilla STATIC
     gamepad/command.c
     gamepad/gamepad.c
     gamepad/input.c
+    gamepad/nfc.c
     gamepad/video.c
     util.c
     vanilla.c

@@ -17,6 +17,7 @@
 #include "gamepad/gamepad.h"
 #include "gamepad/input.h"
 #include "gamepad/video.h"
+#include "gamepad/nfc.h"
 #include "util.h"
 #include "vanilla.h"
 
@@ -259,4 +260,9 @@ void vanilla_send_audio(const void *data, size_t size)
 void vanilla_set_wireless_interface(const char *intf)
 {
     strcpy(wireless_interface, intf);
+}
+
+void vanilla_set_nfc_backend(const VanillaNfcBackend* backend)
+{
+    gamepad_nfc_set_backend(backend);
 }

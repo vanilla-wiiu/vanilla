@@ -274,6 +274,8 @@ list(APPEND VANILLA_GUI_SRC
     #game/game_decode_ffmpeg.c
     # game/game_decode.c
     # game/game_main.c
+    nfc/nfc_file.c
+    nfc/ntag_util.c
     menu/menu.c
     menu/menu_common.c
     menu/menu_connection.c
@@ -283,6 +285,7 @@ list(APPEND VANILLA_GUI_SRC
     menu/menu_gamepad.c
     menu/menu_main.c
     menu/menu_region.c
+    menu/menu_nfc.c
     menu/menu_rename.c
     menu/menu_settings.c
     menu/menu_sync.c
@@ -326,6 +329,9 @@ if (LINUX)
     if (VANILLA_BUILD_USE_VAAPI)
         find_package(VAAPI)
     endif()
+
+    # Check if libnfc is available
+    find_package(LibNFC)
 endif()
 
 if (LINUX OR WIN32)
@@ -340,6 +346,12 @@ if (VANILLA_BUILD_USE_POLKIT)
 	list(APPEND VANILLA_GUI_SRC
 		menu/menu_sudo.c
 		menu/menu_sudo_warning.c
+	)
+endif()
+
+if (LibNFC_FOUND)
+	list(APPEND VANILLA_GUI_SRC
+        nfc/nfc_libnfc.c
 	)
 endif()
 
@@ -452,6 +464,12 @@ endif()
 if (CUDAToolkit_FOUND)
     target_link_libraries(vanillagui PRIVATE CUDA::cudart_static)
     target_compile_definitions(vanillagui PRIVATE VANILLA_CUDA_AVAILABLE)
+endif()
+
+if (LibNFC_FOUND)
+    target_link_libraries(vanillagui PRIVATE ${LIBNFC_LIBRARIES})
+    target_compile_definitions(vanillagui PRIVATE VANILLA_LIBNFC_AVAILABLE)
+    target_include_directories(vanillagui PRIVATE ${LIBNFC_INCLUDE_DIRS})
 endif()
 
 if (VAAPI_FOUND OR DRM_FOUND)

@@ -93,6 +93,9 @@ void vpi_config_save()
     sprintf(buf, "%i", vpi_config.force_software_decode);
     xmlTextWriterWriteElement(writer, BAD_CAST "swdec", BAD_CAST buf);
 
+    sprintf(buf, "%i", vpi_config.nfc_backend);
+    xmlTextWriterWriteElement(writer, BAD_CAST "nfc_backend", BAD_CAST buf);
+
     xmlTextWriterStartElement(writer, BAD_CAST "controls");
     if (vpi_config.keymap) {
         xmlTextWriterStartElement(writer, BAD_CAST "keys");
@@ -184,6 +187,7 @@ void vpi_config_init()
     vpi_config_reset_default_controls_internal();
     vpi_config.cursor_in_fullscreen = 0;
     vpi_config.autoconnect = -1;
+    vpi_config.nfc_backend = 0;
 
     // Load from file
     char config_fn[1024];

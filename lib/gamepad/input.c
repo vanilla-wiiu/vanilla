@@ -64,6 +64,7 @@ pthread_mutex_t button_mtx;
 int32_t current_buttons[VANILLA_BTN_COUNT] = {0};
 int current_touch_x = -1;
 int current_touch_y = -1;
+uint8_t nfc_status = 0;
 
 typedef struct {
     // Big endian
@@ -200,6 +201,29 @@ void set_battery_status(int status)
     pthread_mutex_unlock(&button_mtx);
 }
 
+void set_status_flag(enum StatusFlag flag, uint8_t status)
+{
+    pthread_mutex_lock(&button_mtx);
+    switch (flag) {
+    case STATUS_NFC_INITIALIZED:
+        nfc_status = status ? (nfc_status | 0x2) : (nfc_status & ~0x2);
+        break;
+    case STATUS_NFC_TAG_FOUND:
+        nfc_status = status ? (nfc_status | 0x4) : (nfc_status & ~0x4);
+        break;
+    case STATUS_NFC_COMMAND_DONE:
+        nfc_status = status ? (nfc_status | 0x1) : (nfc_status & ~0x1);
+        break;
+    case STATUS_NFC_MODE:
+        nfc_status = status ? (nfc_status | 0x8) : (nfc_status & ~0x8);
+        break;
+    }
+
+    // TODO other status flags
+
+    pthread_mutex_unlock(&button_mtx);
+}
+
 void send_input(int socket_hid, const sockaddr_u *addr, size_t addr_size)
 {
     InputPacket ip;
@@ -260,6 +284,7 @@ void send_input(int socket_hid, const sockaddr_u *addr, size_t addr_size)
 
     button_mask = 0;
 
+    button_mask |= nfc_status & 0x0F;
     if (current_buttons[VANILLA_BTN_L3]) button_mask |= 0x80;
     if (current_buttons[VANILLA_BTN_R3]) button_mask |= 0x40;
     if (current_buttons[VANILLA_BTN_TV]) button_mask |= 0x20;
