@@ -1,8 +1,8 @@
 #ifndef VANILLA_PI_UI_H
 #define VANILLA_PI_UI_H
 
-#include <stdint.h>
 #include <stddef.h>
+#include <stdint.h>
 
 typedef enum {
     VUI_BUTTON_STYLE_NONE,
@@ -96,7 +96,8 @@ int vui_layer_destroy(vui_context_t *ctx);
 /**
  * Button-related functions
  */
-int vui_button_create(vui_context_t *ctx, int x, int y, int w, int h, const char *text, const char *icon, vui_button_style_t style, int layer, vui_button_callback_t callback, void *callback_data);
+int vui_button_create(vui_context_t *ctx, int x, int y, int w, int h, const char *text, const char *icon,
+                      vui_button_style_t style, int layer, vui_button_callback_t callback, void *callback_data);
 void vui_button_get_geometry(vui_context_t *ctx, int button, int *x, int *y, int *w, int *h);
 int vui_button_get_checked(vui_context_t *ctx, int button);
 void *vui_button_get_click_handler_data(vui_context_t *ctx, int button);
@@ -116,14 +117,16 @@ void vui_button_set_cancel(vui_context_t *ctx, int button);
 /**
  * Label-related functions
  */
-int vui_label_create(vui_context_t *ctx, int x, int y, int w, int h, const char *text, vui_color_t color, vui_font_size_t size, int layer);
+int vui_label_create(vui_context_t *ctx, int x, int y, int w, int h, const char *text, vui_color_t color,
+                     vui_font_size_t size, int layer);
 void vui_label_update_text(vui_context_t *ctx, int label, const char *text);
 void vui_label_update_visible(vui_context_t *ctx, int label, int visible);
 
 /**
  * TextEdit-related functions
  */
-int vui_textedit_create(vui_context_t *ctx, int x, int y, int w, int h, const char *initial_text, vui_font_size_t size, int password, int layer);
+int vui_textedit_create(vui_context_t *ctx, int x, int y, int w, int h, const char *initial_text, vui_font_size_t size,
+                        int password, int layer);
 void vui_textedit_get_text(vui_context_t *ctx, int textedit, char *output, size_t output_size);
 void vui_textedit_update_text(vui_context_t *ctx, int textedit, const char *text);
 void vui_textedit_update_visible(vui_context_t *ctx, int textedit, int visible);
@@ -154,7 +157,8 @@ vui_color_t vui_color_create(float r, float g, float b, float a);
 /**
  * Animation-related functions
  */
-void vui_start_animation(vui_context_t *ctx, int64_t length, vui_anim_step_callback_t step, void *step_data, vui_callback_t complete, void *complete_data);
+void vui_start_animation(vui_context_t *ctx, int64_t length, vui_anim_step_callback_t step, void *step_data,
+                         vui_callback_t complete, void *complete_data);
 void vui_cancel_animation(vui_context_t *ctx);
 int vui_start_passive_animation(vui_context_t *ctx, vui_anim_step_callback_t step, void *step_data);
 
@@ -166,7 +170,8 @@ void vui_process_mouseup(vui_context_t *ctx, int x, int y);
 void vui_process_keydown(vui_context_t *ctx, int button);
 void vui_process_keyup(vui_context_t *ctx, int button);
 void vui_vibrate_set(vui_context_t *ctx, uint8_t val);
-void vui_set_key_listener(vui_context_t *ctx, vui_key_override_t callback, vui_callback_t cancel_callback, void *callback_data);
+void vui_set_key_listener(vui_context_t *ctx, vui_key_override_t callback, vui_callback_t cancel_callback,
+                          void *callback_data);
 void vui_clear_key_listener(vui_context_t *ctx);
 int vui_get_key_mapping(vui_context_t *ctx, int vanilla_button);
 void vui_set_key_mapping(vui_context_t *ctx, int vanilla_button, int keycode);

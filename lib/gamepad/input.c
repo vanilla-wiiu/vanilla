@@ -14,8 +14,8 @@
 #include <unistd.h>
 
 #include "gamepad.h"
-#include "vanilla.h"
 #include "util.h"
+#include "vanilla.h"
 
 #define TOUCHSCREEN_POINTS 10
 
@@ -105,23 +105,23 @@ void set_touch_state(int x, int y)
 
 static inline void int32_to_s24_le(uint8_t out[3], int32_t v)
 {
-    uint32_t u = (uint32_t)v & 0x00FFFFFFu;
+    uint32_t u = (uint32_t) v & 0x00FFFFFFu;
 
-    out[0] = (uint8_t)(u);
-    out[1] = (uint8_t)(u >> 8);
-    out[2] = (uint8_t)(u >> 16);
+    out[0] = (uint8_t) (u);
+    out[1] = (uint8_t) (u >> 8);
+    out[2] = (uint8_t) (u >> 16);
 }
 
 static inline int32_t s24_le_to_int32(const uint8_t in[3])
 {
-    uint32_t u = (uint32_t)in[0] | ((uint32_t)in[1] << 8) | ((uint32_t)in[2] << 16);
+    uint32_t u = (uint32_t) in[0] | ((uint32_t) in[1] << 8) | ((uint32_t) in[2] << 16);
 
     // Sign-extension
     if (u & 0x00800000u) {
         u |= 0xFF000000u;
     }
 
-    return (int32_t)u;
+    return (int32_t) u;
 }
 
 static inline void pack_gyroscope(InputPacketGyroscope *gyro, int32_t yaw, int32_t pitch, int32_t roll)
@@ -172,7 +172,8 @@ int64_t scale_x_touch_value(int64_t v)
 
 int64_t scale_y_touch_value(int64_t v)
 {
-    // Scales 0-854 to 0-4096 with a 5% margin on the bottom and 3% margin on the top (I don't know why, but these values worked best)
+    // Scales 0-854 to 0-4096 with a 5% margin on the bottom and 3% margin on the top (I don't know why, but these
+    // values worked best)
     const int scale_percent = 92;
 
     v *= 4096;
@@ -231,45 +232,67 @@ void send_input(int socket_hid, const sockaddr_u *addr, size_t addr_size)
         ip.touchscreen.points[i].y = pack_touchcoord(&touchscreen[i].y);
     }
 
-    unsigned char *touchscreen_bytes = (unsigned char *)(&ip.touchscreen);
+    unsigned char *touchscreen_bytes = (unsigned char *) (&ip.touchscreen);
     for (int byte = 0; byte < sizeof(ip.touchscreen); byte += 2) {
-        unsigned char first = (unsigned char)reverse_bits(touchscreen_bytes[byte], 8);
-        touchscreen_bytes[byte] = (unsigned char)reverse_bits(touchscreen_bytes[byte + 1], 8);
+        unsigned char first = (unsigned char) reverse_bits(touchscreen_bytes[byte], 8);
+        touchscreen_bytes[byte] = (unsigned char) reverse_bits(touchscreen_bytes[byte + 1], 8);
         touchscreen_bytes[byte + 1] = first;
     }
 
     uint16_t button_mask = 0;
 
-    if (current_buttons[VANILLA_BTN_A]) button_mask |= 0x8000;
-    if (current_buttons[VANILLA_BTN_B]) button_mask |= 0x4000;
-    if (current_buttons[VANILLA_BTN_X]) button_mask |= 0x2000;
-    if (current_buttons[VANILLA_BTN_Y]) button_mask |= 0x1000;
-    if (current_buttons[VANILLA_BTN_L]) button_mask |= 0x0020;
-    if (current_buttons[VANILLA_BTN_R]) button_mask |= 0x0010;
-    if (current_buttons[VANILLA_BTN_ZL]) button_mask |= 0x0080;
-    if (current_buttons[VANILLA_BTN_ZR]) button_mask |= 0x0040;
-    if (current_buttons[VANILLA_BTN_MINUS]) button_mask |= 0x0004;
-    if (current_buttons[VANILLA_BTN_PLUS]) button_mask |= 0x0008;
-    if (current_buttons[VANILLA_BTN_HOME]) button_mask |= 0x0002;
-    if (current_buttons[VANILLA_BTN_LEFT]) button_mask |= 0x800;
-    if (current_buttons[VANILLA_BTN_RIGHT]) button_mask |= 0x400;
-    if (current_buttons[VANILLA_BTN_DOWN]) button_mask |= 0x100;
-    if (current_buttons[VANILLA_BTN_UP]) button_mask |= 0x200;
+    if (current_buttons[VANILLA_BTN_A])
+        button_mask |= 0x8000;
+    if (current_buttons[VANILLA_BTN_B])
+        button_mask |= 0x4000;
+    if (current_buttons[VANILLA_BTN_X])
+        button_mask |= 0x2000;
+    if (current_buttons[VANILLA_BTN_Y])
+        button_mask |= 0x1000;
+    if (current_buttons[VANILLA_BTN_L])
+        button_mask |= 0x0020;
+    if (current_buttons[VANILLA_BTN_R])
+        button_mask |= 0x0010;
+    if (current_buttons[VANILLA_BTN_ZL])
+        button_mask |= 0x0080;
+    if (current_buttons[VANILLA_BTN_ZR])
+        button_mask |= 0x0040;
+    if (current_buttons[VANILLA_BTN_MINUS])
+        button_mask |= 0x0004;
+    if (current_buttons[VANILLA_BTN_PLUS])
+        button_mask |= 0x0008;
+    if (current_buttons[VANILLA_BTN_HOME])
+        button_mask |= 0x0002;
+    if (current_buttons[VANILLA_BTN_LEFT])
+        button_mask |= 0x800;
+    if (current_buttons[VANILLA_BTN_RIGHT])
+        button_mask |= 0x400;
+    if (current_buttons[VANILLA_BTN_DOWN])
+        button_mask |= 0x100;
+    if (current_buttons[VANILLA_BTN_UP])
+        button_mask |= 0x200;
 
     ip.buttons = htons(button_mask);
 
     button_mask = 0;
 
-    if (current_buttons[VANILLA_BTN_L3]) button_mask |= 0x80;
-    if (current_buttons[VANILLA_BTN_R3]) button_mask |= 0x40;
-    if (current_buttons[VANILLA_BTN_TV]) button_mask |= 0x20;
+    if (current_buttons[VANILLA_BTN_L3])
+        button_mask |= 0x80;
+    if (current_buttons[VANILLA_BTN_R3])
+        button_mask |= 0x40;
+    if (current_buttons[VANILLA_BTN_TV])
+        button_mask |= 0x20;
 
     ip.extra_buttons = button_mask;
 
-    ip.stick_left_x = resolve_axis_value(current_buttons[VANILLA_AXIS_L_X], current_buttons[VANILLA_AXIS_L_LEFT], current_buttons[VANILLA_AXIS_L_RIGHT], 0);
-    ip.stick_left_y = resolve_axis_value(current_buttons[VANILLA_AXIS_L_Y], current_buttons[VANILLA_AXIS_L_UP], current_buttons[VANILLA_AXIS_L_DOWN], 1);
-    ip.stick_right_x = resolve_axis_value(current_buttons[VANILLA_AXIS_R_X], current_buttons[VANILLA_AXIS_R_LEFT], current_buttons[VANILLA_AXIS_R_RIGHT], 0);
-    ip.stick_right_y = resolve_axis_value(current_buttons[VANILLA_AXIS_R_Y], current_buttons[VANILLA_AXIS_R_UP], current_buttons[VANILLA_AXIS_R_DOWN], 1);
+    ip.stick_left_x = resolve_axis_value(current_buttons[VANILLA_AXIS_L_X], current_buttons[VANILLA_AXIS_L_LEFT],
+                                         current_buttons[VANILLA_AXIS_L_RIGHT], 0);
+    ip.stick_left_y = resolve_axis_value(current_buttons[VANILLA_AXIS_L_Y], current_buttons[VANILLA_AXIS_L_UP],
+                                         current_buttons[VANILLA_AXIS_L_DOWN], 1);
+    ip.stick_right_x = resolve_axis_value(current_buttons[VANILLA_AXIS_R_X], current_buttons[VANILLA_AXIS_R_LEFT],
+                                          current_buttons[VANILLA_AXIS_R_RIGHT], 0);
+    ip.stick_right_y = resolve_axis_value(current_buttons[VANILLA_AXIS_R_Y], current_buttons[VANILLA_AXIS_R_UP],
+                                          current_buttons[VANILLA_AXIS_R_DOWN], 1);
 
     ip.audio_volume = current_buttons[VANILLA_AXIS_VOLUME];
 
@@ -277,9 +300,12 @@ void send_input(int socket_hid, const sockaddr_u *addr, size_t addr_size)
     ip.accelerometer.y = unpack_float(current_buttons[VANILLA_SENSOR_ACCEL_Y]) * -800;
     ip.accelerometer.z = unpack_float(current_buttons[VANILLA_SENSOR_ACCEL_Z]) * 800;
 
-    int32_t yaw = (unpack_float(current_buttons[VANILLA_SENSOR_GYRO_YAW]) * (180.0f/M_PI)) / ((200.0f * 6.0f) / 154000.0f);
-    int32_t pitch = (unpack_float(current_buttons[VANILLA_SENSOR_GYRO_PITCH]) * (180.0f/M_PI)) / ((200.0f * 6.0f) / 154000.0f);
-    int32_t roll = (unpack_float(current_buttons[VANILLA_SENSOR_GYRO_ROLL]) * (180.0f/M_PI)) / ((200.0f * 6.0f) / 154000.0f);
+    int32_t yaw =
+        (unpack_float(current_buttons[VANILLA_SENSOR_GYRO_YAW]) * (180.0f / M_PI)) / ((200.0f * 6.0f) / 154000.0f);
+    int32_t pitch =
+        (unpack_float(current_buttons[VANILLA_SENSOR_GYRO_PITCH]) * (180.0f / M_PI)) / ((200.0f * 6.0f) / 154000.0f);
+    int32_t roll =
+        (unpack_float(current_buttons[VANILLA_SENSOR_GYRO_ROLL]) * (180.0f / M_PI)) / ((200.0f * 6.0f) / 154000.0f);
     pack_gyroscope(&ip.gyroscope, yaw, pitch, roll);
 
     pthread_mutex_unlock(&button_mtx);

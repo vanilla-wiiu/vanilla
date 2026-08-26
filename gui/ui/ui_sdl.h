@@ -11,9 +11,9 @@ void vui_close_sdl(vui_context_t *ctx);
 
 /**
  * Main loop
- * 
+ *
  * Intended to be called from a semi-infinite loop.
- * 
+ *
  * Returns 1 if the loop should continue, 0 if the loop should exit
  */
 int vui_update_sdl(vui_context_t *ctx);

@@ -5,8 +5,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-typedef struct
-{
+typedef struct {
     // Little endian
     uint16_t packet_type;
     uint16_t query_type;
@@ -15,8 +14,7 @@ typedef struct
 } CmdHeader;
 static_assert(sizeof(CmdHeader) == 0x8);
 
-enum PacketType
-{
+enum PacketType {
     PACKET_TYPE_REQUEST,
     PACKET_TYPE_REQUEST_ACK,
     PACKET_TYPE_RESPONSE,
@@ -24,21 +22,19 @@ enum PacketType
 };
 
 #pragma pack(push, 1)
-typedef struct
-{
+typedef struct {
     uint8_t magic_0x7E;
     uint8_t version;
     uint8_t ids[3];
     uint8_t flags;
     uint8_t service_id;
     uint8_t method_id;
-    uint16_t error_code;            // Big endian
-    uint16_t payload_size;          // Big endian
+    uint16_t error_code;   // Big endian
+    uint16_t payload_size; // Big endian
 } GenericCmdHeader;
 static_assert(sizeof(GenericCmdHeader) == 0xC);
 
-typedef struct
-{
+typedef struct {
     CmdHeader cmd_header;
     GenericCmdHeader generic_cmd_header;
     uint8_t payload[1544];
@@ -82,20 +78,17 @@ struct TimeCommand {
     uint32_t seconds_counter;
 };
 
-typedef struct
-{
+typedef struct {
     CmdHeader cmd_header;
     struct UvcUacCommand uac_uvc;
 } UvcUacPacket;
 
-typedef struct
-{
+typedef struct {
     CmdHeader cmd_header;
     struct TimeCommand time;
 } TimePacket;
 
-typedef struct
-{
+typedef struct {
     uint16_t new_min_x;
     uint16_t new_min_y;
     uint16_t new_max_x;
@@ -107,8 +100,7 @@ typedef struct
     uint16_t crc;
 } TouchPadCalibration;
 
-typedef struct
-{
+typedef struct {
     uint8_t unk00[0x103];
     uint8_t region;
     uint16_t region_crc;
@@ -126,8 +118,7 @@ static_assert(offsetof(EEPROM, second_factory_touchpad_calibration) == 0x1D3);
 static_assert(offsetof(EEPROM, touchpad_calibration) == 0x244);
 static_assert(sizeof(EEPROM) == 0x300);
 
-enum BoardVersion
-{
+enum BoardVersion {
     BOARD_VERSION_DK1,
     BOARD_VERSION_DK1_EP_DK2,
     BOARD_VERSION_DP1,
@@ -145,8 +136,7 @@ enum BoardVersion
     BOARD_VERSION_DKTVMP,
 };
 
-enum ChipVersion
-{
+enum ChipVersion {
     CHIP_VERSION_TS = 0x10,
     CHIP_VERSION_ES1 = 0x20,
     CHIP_VERSION_ES2 = 0x30,
@@ -154,8 +144,7 @@ enum ChipVersion
     CHIP_VERSION_MS01 = 0x41,
 };
 
-typedef struct
-{
+typedef struct {
     uint32_t board_ver;
     uint32_t chip_ver;
     uint32_t run_ver;
@@ -167,15 +156,13 @@ typedef struct
 static_assert(sizeof(SystemInfo) == 0x1C);
 #pragma pack(pop)
 
-enum CommandType
-{
+enum CommandType {
     CMD_GENERIC,
     CMD_UVC_UAC,
     CMD_TIME
 };
 
-enum ServiceID
-{
+enum ServiceID {
     SERVICE_ID_SOFTWARE,
     SERVICE_ID_CONFIG,
     SERVICE_ID_ADMIN,
@@ -184,20 +171,17 @@ enum ServiceID
     SERVICE_ID_PERIPHERAL
 };
 
-enum MethodIDSoftware
-{
+enum MethodIDSoftware {
     METHOD_ID_SOFTWARE_GET_VERSION = 0x0,
     METHOD_ID_SOFTWARE_GET_EXT_ID = 0xa,
 };
 
-enum MethodIDSystem
-{
+enum MethodIDSystem {
     METHOD_ID_SYSTEM_GET_INFO = 0x4,
     METHOD_ID_SYSTEM_POWER = 0x1A,
 };
 
-enum MethodIDPeripheral
-{
+enum MethodIDPeripheral {
     METHOD_ID_PERIPHERAL_EEPROM = 0x6,
     METHOD_ID_PERIPHERAL_UPDATE_EEPROM = 0xC,
     METHOD_ID_PERIPHERAL_SET_REMOCON = 0x18,

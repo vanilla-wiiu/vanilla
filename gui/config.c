@@ -32,9 +32,12 @@ void string_to_hex(unsigned char *output, size_t length, const char *input)
 
 static void vpi_config_reset_default_controls_internal()
 {
-    for (int i = 0; i < VPI_CONFIG_BUTTONMAP_SIZE; i++) vpi_config.buttonmap[i] = VPI_CONFIG_UNMAPPED;
-    for (int i = 0; i < VPI_CONFIG_AXISMAP_SIZE; i++) vpi_config.axismap[i] = VPI_CONFIG_UNMAPPED;
-    for (int i = 0; i < VPI_CONFIG_KEYMAP_SIZE; i++) vpi_config.keymap[i] = VPI_CONFIG_UNMAPPED;
+    for (int i = 0; i < VPI_CONFIG_BUTTONMAP_SIZE; i++)
+        vpi_config.buttonmap[i] = VPI_CONFIG_UNMAPPED;
+    for (int i = 0; i < VPI_CONFIG_AXISMAP_SIZE; i++)
+        vpi_config.axismap[i] = VPI_CONFIG_UNMAPPED;
+    for (int i = 0; i < VPI_CONFIG_KEYMAP_SIZE; i++)
+        vpi_config.keymap[i] = VPI_CONFIG_UNMAPPED;
 }
 
 void vpi_config_save()
@@ -207,7 +210,8 @@ void vpi_config_init()
                         }
 
                         // Allocate memory for console entries
-                        vpi_config.connected_console_entries = malloc(vpi_config.connected_console_count * sizeof(vpi_console_entry_t));
+                        vpi_config.connected_console_entries =
+                            malloc(vpi_config.connected_console_count * sizeof(vpi_console_entry_t));
 
                         vpi_console_entry_t *entry = vpi_config.connected_console_entries;
                         console = child->children;
@@ -216,11 +220,14 @@ void vpi_config_init()
                                 xmlNodePtr console_info = console->children;
                                 while (console_info) {
                                     if (!strcmp((const char *) console_info->name, "name")) {
-                                        vui_strncpy(entry->name, (const char *) console_info->children->content, sizeof(entry->name));
+                                        vui_strncpy(entry->name, (const char *) console_info->children->content,
+                                                    sizeof(entry->name));
                                     } else if (!strcmp((const char *) console_info->name, "bssid")) {
-                                        string_to_hex(entry->bssid.bssid, sizeof(entry->bssid), (const char *) console_info->children->content);
+                                        string_to_hex(entry->bssid.bssid, sizeof(entry->bssid),
+                                                      (const char *) console_info->children->content);
                                     } else if (!strcmp((const char *) console_info->name, "psk")) {
-                                        string_to_hex(entry->psk.psk, sizeof(entry->psk), (const char *) console_info->children->content);
+                                        string_to_hex(entry->psk.psk, sizeof(entry->psk),
+                                                      (const char *) console_info->children->content);
                                     }
                                     console_info = console_info->next;
                                 }
@@ -232,11 +239,13 @@ void vpi_config_init()
                         vpi_config.server_address = strtoul((const char *) child->children->content, 0, 16);
                     } else if (!strcmp((const char *) child->name, "wireless")) {
                         if (child->children) {
-                            vui_strncpy(vpi_config.wireless_interface, (const char *) child->children->content, sizeof(vpi_config.wireless_interface));
+                            vui_strncpy(vpi_config.wireless_interface, (const char *) child->children->content,
+                                        sizeof(vpi_config.wireless_interface));
                         }
                     } else if (!strcmp((const char *) child->name, "recordingdir")) {
                         if (child->children) {
-                            vui_strncpy(vpi_config.recording_dir, (const char *) child->children->content, sizeof(vpi_config.recording_dir));
+                            vui_strncpy(vpi_config.recording_dir, (const char *) child->children->content,
+                                        sizeof(vpi_config.recording_dir));
                         }
                     } else if (!strcmp((const char *) child->name, "connectionsetup")) {
                         vpi_config.connection_setup = atoi((const char *) child->children->content);
@@ -252,7 +261,7 @@ void vpi_config_init()
                         vpi_config.force_software_decode = atoi((const char *) child->children->content);
                     } else if (!strcmp((const char *) child->name, "controls")) {
                         xmlNodePtr section = child->children;
-                        while(section){
+                        while (section) {
                             if (section->type == XML_ELEMENT_NODE) {
                                 if (!strcmp(section->name, "keys")) {
                                     xmlNodePtr key = section->children;
@@ -349,13 +358,16 @@ int vpi_config_add_console(vpi_console_entry_t *entry)
     }
 
     vpi_console_entry_t *old_entries = vpi_config.connected_console_entries;
-    vpi_config.connected_console_entries = malloc((vpi_config.connected_console_count + 1) * sizeof(vpi_console_entry_t));
+    vpi_config.connected_console_entries =
+        malloc((vpi_config.connected_console_count + 1) * sizeof(vpi_console_entry_t));
     if (vpi_config.connected_console_count > 0)
-        memcpy(vpi_config.connected_console_entries, old_entries, vpi_config.connected_console_count * sizeof(vpi_console_entry_t));
+        memcpy(vpi_config.connected_console_entries, old_entries,
+               vpi_config.connected_console_count * sizeof(vpi_console_entry_t));
 
     int index = vpi_config.connected_console_count;
 
-    memcpy(vpi_config.connected_console_entries + vpi_config.connected_console_count, entry, sizeof(vpi_console_entry_t));
+    memcpy(vpi_config.connected_console_entries + vpi_config.connected_console_count, entry,
+           sizeof(vpi_console_entry_t));
     vpi_config.connected_console_count++;
     if (old_entries)
         free(old_entries);
@@ -381,13 +393,15 @@ void vpi_config_remove_console(uint8_t index)
     vpi_console_entry_t *old_entries = vpi_config.connected_console_entries;
 
     if (vpi_config.connected_console_count != 1) {
-        vpi_config.connected_console_entries = malloc((vpi_config.connected_console_count - 1) * sizeof(vpi_console_entry_t));
+        vpi_config.connected_console_entries =
+            malloc((vpi_config.connected_console_count - 1) * sizeof(vpi_console_entry_t));
 
         // Copy first half
         memcpy(vpi_config.connected_console_entries, old_entries, index * sizeof(vpi_console_entry_t));
 
         // Copy second half
-        memcpy(vpi_config.connected_console_entries + index, old_entries + index + 1, (vpi_config.connected_console_count - index - 1) * sizeof(vpi_console_entry_t));
+        memcpy(vpi_config.connected_console_entries + index, old_entries + index + 1,
+               (vpi_config.connected_console_count - index - 1) * sizeof(vpi_console_entry_t));
     }
 
     vpi_config.connected_console_count--;

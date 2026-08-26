@@ -9,7 +9,7 @@
 #define MAX_BUTTON_COUNT 32
 #define MAX_BUTTON_TEXT 512
 
-typedef struct vui_button_t{
+typedef struct vui_button_t {
     int x;
     int y;
     int w;
@@ -55,7 +55,7 @@ typedef struct {
     int visible;
     int enabled;
     int cursor;
-	int password;
+    int password;
 } vui_textedit_t;
 
 typedef struct {
@@ -147,14 +147,14 @@ typedef struct vui_context_t {
     struct timeval active_textedit_time;
     int quit;
     vui_power_state_handler_t power_state_handler;
-	vui_mic_callback_t mic_callback;
-	void *mic_callback_data;
-	vui_audio_enabled_handler_t mic_enabled_handler;
-	void *mic_enabled_handler_data;
-	vui_audio_enabled_handler_t audio_enabled_handler;
-	void *audio_enabled_handler_data;
-	vui_bool_callback_t fullscreen_enabled_handler;
-	void *fullscreen_enabled_handler_data;
+    vui_mic_callback_t mic_callback;
+    void *mic_callback_data;
+    vui_audio_enabled_handler_t mic_enabled_handler;
+    void *mic_enabled_handler_data;
+    vui_audio_enabled_handler_t audio_enabled_handler;
+    void *audio_enabled_handler_data;
+    vui_bool_callback_t fullscreen_enabled_handler;
+    void *fullscreen_enabled_handler_data;
 
     int default_button_map[VPI_CONFIG_BUTTONMAP_SIZE];
     int default_axis_map[VPI_CONFIG_AXISMAP_SIZE];

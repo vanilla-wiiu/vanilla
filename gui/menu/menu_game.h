@@ -4,8 +4,8 @@
 #include <libavcodec/avcodec.h>
 #include <libavutil/frame.h>
 #include <pthread.h>
-#include <stdint.h>
 #include <stdatomic.h>
+#include <stdint.h>
 #include <sys/time.h>
 
 #include "ui/ui.h"

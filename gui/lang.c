@@ -1,5 +1,6 @@
 #include "lang.h"
 
+// clang-format off
 static const char *lang_str[__VPI_LANG_T_COUNT] = {
     "Sync",
     "Connect",
@@ -60,6 +61,7 @@ static const char *lang_str[__VPI_LANG_T_COUNT] = {
     "Hardware Decoding",
     "Cursor In Full Screen"
 };
+// clang-format on
 
 const char *lang(vpi_lang_t id)
 {

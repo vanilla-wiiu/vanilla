@@ -51,7 +51,8 @@ void vpi_menu_main_populate(vui_context_t *vui)
     }
 
     vui_button_update_visible(vui, main_menu_left_arrow_btn, main_menu_current > 0);
-    vui_button_update_visible(vui, main_menu_right_arrow_btn, main_menu_current + MAIN_MENU_ENTRIES < vpi_config.connected_console_count);
+    vui_button_update_visible(vui, main_menu_right_arrow_btn,
+                              main_menu_current + MAIN_MENU_ENTRIES < vpi_config.connected_console_count);
     vui_label_update_visible(vui, main_menu_no_console_lbl, vpi_config.connected_console_count == 0);
     vui_button_update_enabled(vui, main_menu_connect_btn, 0);
     vui_button_update_enabled(vui, main_menu_edit_btn, 0);
@@ -159,29 +160,45 @@ void vpi_menu_main(vui_context_t *vui, void *v)
     int list_item_width = SCREEN_WIDTH - BTN_SZ - BTN_SZ;
     int list_item_height = (SCREEN_HEIGHT - BTN_SZ - BTN_SZ) / MAIN_MENU_ENTRIES;
     for (int i = 0; i < MAIN_MENU_ENTRIES; i++) {
-        main_menu_btns[i] = vui_button_create(vui, BTN_SZ, BTN_SZ + list_item_height * i, list_item_width, list_item_height, NULL, NULL, VUI_BUTTON_STYLE_LIST, console_menu_layer, vpi_menu_main_connect_console, (void *) (intptr_t) i);
+        main_menu_btns[i] = vui_button_create(vui, BTN_SZ, BTN_SZ + list_item_height * i, list_item_width,
+                                              list_item_height, NULL, NULL, VUI_BUTTON_STYLE_LIST, console_menu_layer,
+                                              vpi_menu_main_connect_console, (void *) (intptr_t) i);
         vui_button_update_checkable(vui, main_menu_btns[i], 1);
     }
 
     // Left arrow
-    main_menu_left_arrow_btn = vui_button_create(vui, 0, arrow_y, BTN_SZ, BTN_SZ, "<", NULL, VUI_BUTTON_STYLE_BUTTON, layer, vpi_menu_main_left_arrow, (void *) (intptr_t) console_menu_layer);
+    main_menu_left_arrow_btn =
+        vui_button_create(vui, 0, arrow_y, BTN_SZ, BTN_SZ, "<", NULL, VUI_BUTTON_STYLE_BUTTON, layer,
+                          vpi_menu_main_left_arrow, (void *) (intptr_t) console_menu_layer);
 
     // Right arrow
-    main_menu_right_arrow_btn = vui_button_create(vui, SCREEN_WIDTH-BTN_SZ, arrow_y, BTN_SZ, BTN_SZ, ">", NULL, VUI_BUTTON_STYLE_BUTTON, layer, vpi_menu_main_right_arrow, (void *) (intptr_t) console_menu_layer);
+    main_menu_right_arrow_btn =
+        vui_button_create(vui, SCREEN_WIDTH - BTN_SZ, arrow_y, BTN_SZ, BTN_SZ, ">", NULL, VUI_BUTTON_STYLE_BUTTON,
+                          layer, vpi_menu_main_right_arrow, (void *) (intptr_t) console_menu_layer);
 
     // Sync button
-    vui_button_create(vui, BTN_SZ, SCREEN_HEIGHT-BTN_SZ, (SCREEN_WIDTH-BTN_SZ*2)/2, BTN_SZ, lang(VPI_LANG_SYNC_BTN), NULL, VUI_BUTTON_STYLE_BUTTON, layer, vpi_menu_main_sync_action, (void *) (intptr_t) layer);
+    vui_button_create(vui, BTN_SZ, SCREEN_HEIGHT - BTN_SZ, (SCREEN_WIDTH - BTN_SZ * 2) / 2, BTN_SZ,
+                      lang(VPI_LANG_SYNC_BTN), NULL, VUI_BUTTON_STYLE_BUTTON, layer, vpi_menu_main_sync_action,
+                      (void *) (intptr_t) layer);
 
     // Connect button
-    main_menu_connect_btn = vui_button_create(vui, BTN_SZ + (SCREEN_WIDTH-BTN_SZ*2)/2, SCREEN_HEIGHT-BTN_SZ, (SCREEN_WIDTH-BTN_SZ*2)/2, BTN_SZ, lang(VPI_LANG_CONNECT_BTN), NULL, VUI_BUTTON_STYLE_BUTTON, layer, vpi_menu_main_connect_button_action, NULL);
+    main_menu_connect_btn = vui_button_create(
+        vui, BTN_SZ + (SCREEN_WIDTH - BTN_SZ * 2) / 2, SCREEN_HEIGHT - BTN_SZ, (SCREEN_WIDTH - BTN_SZ * 2) / 2, BTN_SZ,
+        lang(VPI_LANG_CONNECT_BTN), NULL, VUI_BUTTON_STYLE_BUTTON, layer, vpi_menu_main_connect_button_action, NULL);
 
     // Edit/settings corner button
     int corner_btn_sz = BTN_SZ;
-    main_menu_edit_btn = vui_button_create(vui, 0, 0, corner_btn_sz, corner_btn_sz, lang(VPI_LANG_EDIT_BTN), "edit.svg", VUI_BUTTON_STYLE_CORNER, layer, vpi_menu_main_edit_button_action, (void *) (intptr_t) layer);
-    vui_button_create(vui, SCREEN_WIDTH-corner_btn_sz, 0, corner_btn_sz, corner_btn_sz, lang(VPI_LANG_SETTINGS_BTN), "settings.png", VUI_BUTTON_STYLE_CORNER, layer, vpi_menu_main_settings_button_action, (void *) (intptr_t) layer);
+    main_menu_edit_btn =
+        vui_button_create(vui, 0, 0, corner_btn_sz, corner_btn_sz, lang(VPI_LANG_EDIT_BTN), "edit.svg",
+                          VUI_BUTTON_STYLE_CORNER, layer, vpi_menu_main_edit_button_action, (void *) (intptr_t) layer);
+    vui_button_create(vui, SCREEN_WIDTH - corner_btn_sz, 0, corner_btn_sz, corner_btn_sz, lang(VPI_LANG_SETTINGS_BTN),
+                      "settings.png", VUI_BUTTON_STYLE_CORNER, layer, vpi_menu_main_settings_button_action,
+                      (void *) (intptr_t) layer);
 
     // No entries text
-    main_menu_no_console_lbl = vui_label_create(vui, 0, SCREEN_HEIGHT * 2 / 5, SCREEN_WIDTH, SCREEN_HEIGHT, lang(VPI_LANG_NO_CONSOLES_SYNCED), vui_color_create(0,0,0,0.5f), VUI_FONT_SIZE_SMALL, layer);
+    main_menu_no_console_lbl =
+        vui_label_create(vui, 0, SCREEN_HEIGHT * 2 / 5, SCREEN_WIDTH, SCREEN_HEIGHT, lang(VPI_LANG_NO_CONSOLES_SYNCED),
+                         vui_color_create(0, 0, 0, 0.5f), VUI_FONT_SIZE_SMALL, layer);
 
     // Update state of all buttons
     vpi_menu_main_populate(vui);

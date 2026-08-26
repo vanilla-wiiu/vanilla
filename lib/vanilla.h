@@ -2,30 +2,30 @@
 #define VANILLA_SERVER_H
 
 #if defined(__cplusplus)
-extern "C" {
+extern "C"
+{
 #endif
 
 #include <stdarg.h>
 #include <stddef.h>
 #include <stdint.h>
 
-#define VANILLA_SUCCESS                  0
-#define VANILLA_ERR_GENERIC             -1
-#define VANILLA_ERR_UNKNOWN_COMMAND     -2
-#define VANILLA_ERR_INVALID_ARGUMENT    -3
-#define VANILLA_ERR_PIPE_UNRESPONSIVE   -4
-#define VANILLA_ERR_OUT_OF_MEMORY       -5
-#define VANILLA_ERR_BUSY                -6
-#define VANILLA_ERR_BAD_SOCKET          -7
-#define VANILLA_ERR_NO_CONNECTION       -8
-#define VANILLA_ERR_SHUTDOWN            -9
-#define VANILLA_ERR_CONNECTED           -10
-#define VANILLA_ERR_DISCONNECTED        -11
+#define VANILLA_SUCCESS 0
+#define VANILLA_ERR_GENERIC -1
+#define VANILLA_ERR_UNKNOWN_COMMAND -2
+#define VANILLA_ERR_INVALID_ARGUMENT -3
+#define VANILLA_ERR_PIPE_UNRESPONSIVE -4
+#define VANILLA_ERR_OUT_OF_MEMORY -5
+#define VANILLA_ERR_BUSY -6
+#define VANILLA_ERR_BAD_SOCKET -7
+#define VANILLA_ERR_NO_CONNECTION -8
+#define VANILLA_ERR_SHUTDOWN -9
+#define VANILLA_ERR_CONNECTED -10
+#define VANILLA_ERR_DISCONNECTED -11
 
 static const uint32_t VANILLA_ADDRESS_LOCAL = 0xFFFFFFFF;
 
-enum VanillaGamepadButtons
-{
+enum VanillaGamepadButtons {
     VANILLA_BTN_A,
     VANILLA_BTN_B,
     VANILLA_BTN_X,
@@ -66,48 +66,49 @@ enum VanillaGamepadButtons
     VANILLA_BTN_COUNT
 };
 
-enum VanillaEvent
-{
+enum VanillaEvent {
     VANILLA_EVENT_NONE,
     VANILLA_EVENT_VIDEO,
     VANILLA_EVENT_AUDIO,
     VANILLA_EVENT_VIBRATE,
     VANILLA_EVENT_SYNC,
     VANILLA_EVENT_ERROR,
-	VANILLA_EVENT_MIC
+    VANILLA_EVENT_MIC
 };
 
-enum VanillaRegion
-{
-    VANILLA_REGION_JAPAN         = 0,
-    VANILLA_REGION_AMERICA       = 1,
-    VANILLA_REGION_EUROPE        = 2,
-    VANILLA_REGION_CHINA         = 3,
-    VANILLA_REGION_SOUTH_KOREA   = 4,
-    VANILLA_REGION_TAIWAN        = 5,
-    VANILLA_REGION_AUSTRALIA     = 6,
+enum VanillaRegion {
+    VANILLA_REGION_JAPAN = 0,
+    VANILLA_REGION_AMERICA = 1,
+    VANILLA_REGION_EUROPE = 2,
+    VANILLA_REGION_CHINA = 3,
+    VANILLA_REGION_SOUTH_KOREA = 4,
+    VANILLA_REGION_TAIWAN = 5,
+    VANILLA_REGION_AUSTRALIA = 6,
 };
 
 enum VanillaBatteryStatus {
     VANILLA_BATTERY_STATUS_CHARGING = 0,
-    VANILLA_BATTERY_STATUS_UNKNOWN  = 1,
+    VANILLA_BATTERY_STATUS_UNKNOWN = 1,
     VANILLA_BATTERY_STATUS_VERY_LOW = 2,
-    VANILLA_BATTERY_STATUS_LOW      = 3,
-    VANILLA_BATTERY_STATUS_MEDIUM   = 4,
-    VANILLA_BATTERY_STATUS_HIGH     = 5,
-    VANILLA_BATTERY_STATUS_FULL     = 6
+    VANILLA_BATTERY_STATUS_LOW = 3,
+    VANILLA_BATTERY_STATUS_MEDIUM = 4,
+    VANILLA_BATTERY_STATUS_HIGH = 5,
+    VANILLA_BATTERY_STATUS_FULL = 6
 };
 
-typedef struct
-{
+typedef struct {
     int type;
     uint8_t *data;
     size_t size;
 } vanilla_event_t;
 
 #pragma pack(push, 1)
-typedef struct { unsigned char bssid[6]; } vanilla_bssid_t;
-typedef struct { unsigned char psk[32]; } vanilla_psk_t;
+typedef struct {
+    unsigned char bssid[6];
+} vanilla_bssid_t;
+typedef struct {
+    unsigned char psk[32];
+} vanilla_psk_t;
 typedef struct {
     vanilla_bssid_t bssid;
     vanilla_psk_t psk;

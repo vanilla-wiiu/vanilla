@@ -1,7 +1,7 @@
 #include "menu_settings.h"
 
-#include <vanilla.h>
 #include <unistd.h>
+#include <vanilla.h>
 
 #include "config.h"
 #include "lang.h"
@@ -46,40 +46,40 @@ static void thunk_to_quit(vui_context_t *vui, int button, void *v)
 #ifdef VANILLA_POLKIT_AVAILABLE
 static void do_polkit_install(vui_context_t *vui, void *v)
 {
-	int install = (intptr_t) v;
-	if (install) {
-		vanilla_install_polkit(vpi_config.server_address);
-	} else {
-		vanilla_uninstall_polkit(vpi_config.server_address);
-	}
-	vpi_menu_settings(vui, 0);
+    int install = (intptr_t) v;
+    if (install) {
+        vanilla_install_polkit(vpi_config.server_address);
+    } else {
+        vanilla_uninstall_polkit(vpi_config.server_address);
+    }
+    vpi_menu_settings(vui, 0);
 }
 
 static void thunk_to_start_pipe_for_polkit_rule_install(vui_context_t *vui, void *v)
 {
-	vpi_menu_start_pipe(vui, 0, do_polkit_install, v, 0, 0);
+    vpi_menu_start_pipe(vui, 0, do_polkit_install, v, 0, 0);
 }
 
 int tmp_fglayer;
 static void install_polkit_rule_ack(vui_context_t *vui, int button, void *v)
 {
-	vui_transition_fade_layer_out(vui, tmp_fglayer, thunk_to_start_pipe_for_polkit_rule_install, v);
+    vui_transition_fade_layer_out(vui, tmp_fglayer, thunk_to_start_pipe_for_polkit_rule_install, v);
 }
 
 static void install_polkit_rule_cancel(vui_context_t *vui, int button, void *v)
 {
-	vui_transition_fade_layer_out(vui, tmp_fglayer, vpi_menu_settings, 0);
+    vui_transition_fade_layer_out(vui, tmp_fglayer, vpi_menu_settings, 0);
 }
 
 static void install_polkit_rule(vui_context_t *vui, void *v)
 {
     vui_reset(vui);
 
-	tmp_fglayer = vui_layer_create(vui);
+    tmp_fglayer = vui_layer_create(vui);
 
-	vpi_menu_create_sudo_warning(vui, tmp_fglayer, install_polkit_rule_ack, v, install_polkit_rule_cancel, 0);
+    vpi_menu_create_sudo_warning(vui, tmp_fglayer, install_polkit_rule_ack, v, install_polkit_rule_cancel, 0);
 
-	vui_transition_fade_layer_in(vui, tmp_fglayer, 0, 0);
+    vui_transition_fade_layer_in(vui, tmp_fglayer, 0, 0);
 }
 
 static void transition_to_install_polkit_rule(vui_context_t *vui, int button, void *v)
@@ -127,8 +127,8 @@ void vpi_menu_settings(vui_context_t *vui, void *v)
     int scrw, scrh;
     vui_get_screen_size(vui, &scrw, &scrh);
 
-    // Set up settings menu
-    #define SETTINGS_COUNT 10
+// Set up settings menu
+#define SETTINGS_COUNT 10
     int SETTINGS_NAMES[SETTINGS_COUNT];
     vui_button_callback_t SETTINGS_ACTION[SETTINGS_COUNT];
     int buttons[SETTINGS_COUNT];
@@ -155,12 +155,12 @@ void vpi_menu_settings(vui_context_t *vui, void *v)
 #ifdef VANILLA_GUI_ENABLE_WINDOWED
     int FS_SETTING = sc;
     SETTINGS_NAMES[sc] = VPI_LANG_FULLSCREEN;
-	SETTINGS_ACTION[sc] = toggle_fullscreen;
+    SETTINGS_ACTION[sc] = toggle_fullscreen;
     sc++;
 
     int SHOW_CURSOR_IN_FS_BTN = sc;
     SETTINGS_NAMES[sc] = VPI_LANG_CURSOR_IN_FS;
-	SETTINGS_ACTION[sc] = toggle_cursor_in_fullscreen;
+    SETTINGS_ACTION[sc] = toggle_cursor_in_fullscreen;
     sc++;
 #else
     SETTINGS_NAMES[sc] = VPI_LANG_QUIT;
@@ -172,13 +172,13 @@ void vpi_menu_settings(vui_context_t *vui, void *v)
 #ifdef VANILLA_POLKIT_AVAILABLE
     int PW_SKIP_SETTING = sc;
     const int PW_SKIP_ENABLED = access(POLKIT_ACTION_DST, F_OK) == 0;
-	if (PW_SKIP_ENABLED) {
+    if (PW_SKIP_ENABLED) {
         SETTINGS_NAMES[sc] = VPI_LANG_DISABLE_PASSWORD_SKIP;
-		SETTINGS_ACTION[sc] = transition_to_uninstall_polkit_rule;
+        SETTINGS_ACTION[sc] = transition_to_uninstall_polkit_rule;
     } else {
-		SETTINGS_NAMES[sc] = VPI_LANG_ENABLE_PASSWORD_SKIP;
-		SETTINGS_ACTION[sc] = transition_to_install_polkit_rule;
-	}
+        SETTINGS_NAMES[sc] = VPI_LANG_ENABLE_PASSWORD_SKIP;
+        SETTINGS_ACTION[sc] = transition_to_install_polkit_rule;
+    }
     sc++;
 #endif
 
@@ -189,7 +189,7 @@ void vpi_menu_settings(vui_context_t *vui, void *v)
 #ifdef VANILLA_HAS_HWDEC
     int HWDEC_SETTING = sc;
     SETTINGS_NAMES[sc] = VPI_LANG_HWDEC;
-	SETTINGS_ACTION[sc] = toggle_hwdec;
+    SETTINGS_ACTION[sc] = toggle_hwdec;
     sc++;
 #endif
 
@@ -199,14 +199,16 @@ void vpi_menu_settings(vui_context_t *vui, void *v)
     const int COLS = 2;
 
     int btnfw = scrw;
-	int btnw = btnfw / 2;
-	int btnx = scrw/2 - btnfw/2;
-	int btny = BTN_SZ;
-	for (int index = 0; index < sc; index++) {
+    int btnw = btnfw / 2;
+    int btnx = scrw / 2 - btnfw / 2;
+    int btny = BTN_SZ;
+    for (int index = 0; index < sc; index++) {
         int row = index / COLS;
         int col = index % COLS;
-        buttons[index] = vui_button_create(vui, btnx + btnw * col, btny + BTN_SZ * row, btnw, BTN_SZ, lang(SETTINGS_NAMES[index]), 0, VUI_BUTTON_STYLE_BUTTON, fglayer, SETTINGS_ACTION[index], (void *) (intptr_t) fglayer);
-	}
+        buttons[index] =
+            vui_button_create(vui, btnx + btnw * col, btny + BTN_SZ * row, btnw, BTN_SZ, lang(SETTINGS_NAMES[index]), 0,
+                              VUI_BUTTON_STYLE_BUTTON, fglayer, SETTINGS_ACTION[index], (void *) (intptr_t) fglayer);
+    }
 
 #ifdef VANILLA_POLKIT_AVAILABLE
     // Make root password skip button checkable

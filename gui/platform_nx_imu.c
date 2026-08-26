@@ -3,8 +3,8 @@
 #include <errno.h>
 #include <math.h>
 #include <pthread.h>
-#include <stdbool.h>
 #include <stdatomic.h>
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -14,22 +14,22 @@
 #include <iio.h>
 #include <vanilla.h>
 
-#include "ui/ui_util.h"
 #include "platform.h"
+#include "ui/ui_util.h"
 
 // Reads accelerometer and gyroscope from the Switch's onboard IMU using
 // libiio's buffer interface. The raw attribute reads appear broken for
 // the gyro on this kernel, but the buffer interface works correctly
 // (same as iio_oscilloscope uses).
 
-#define BUFFER_SAMPLES   1             // We just need the latest sample
+#define BUFFER_SAMPLES 1 // We just need the latest sample
 
 typedef struct {
     struct iio_device *dev;
     struct iio_buffer *buf;
-    struct iio_channel *ch[3];         // x, y, z channels
+    struct iio_channel *ch[3]; // x, y, z channels
     float scale;
-    float mount[3][3];                 // mount matrix transform
+    float mount[3][3]; // mount matrix transform
     int valid;
 } sensor_t;
 
@@ -43,12 +43,13 @@ static atomic_int s_run = 0;
 static int parse_mount_matrix(const char *s, float out[3][3])
 {
     float m[9];
-    int n = sscanf(s, "%f , %f , %f ; %f , %f , %f ; %f , %f , %f",
-        &m[0], &m[1], &m[2], &m[3], &m[4], &m[5], &m[6], &m[7], &m[8]);
-    if (n != 9) return -1;
+    int n = sscanf(s, "%f , %f , %f ; %f , %f , %f ; %f , %f , %f", &m[0], &m[1], &m[2], &m[3], &m[4], &m[5], &m[6],
+                   &m[7], &m[8]);
+    if (n != 9)
+        return -1;
     for (int i = 0; i < 3; i++) {
         for (int j = 0; j < 3; j++) {
-            out[i][j] = m[3*i + j];
+            out[i][j] = m[3 * i + j];
         }
     }
     return 0;
@@ -57,7 +58,7 @@ static int parse_mount_matrix(const char *s, float out[3][3])
 static void apply_mount_matrix(const float mount[3][3], const float in[3], float out[3])
 {
     for (int i = 0; i < 3; i++) {
-        out[i] = mount[i][0]*in[0] + mount[i][1]*in[1] + mount[i][2]*in[2];
+        out[i] = mount[i][0] * in[0] + mount[i][1] * in[1] + mount[i][2] * in[2];
     }
 }
 
@@ -96,7 +97,7 @@ static int setup_sensor(struct iio_device *dev, const char *ch_prefix, sensor_t 
     if (scale_attr) {
         double scale_val = 0;
         if (iio_channel_attr_read_double(sensor->ch[0], scale_attr, &scale_val) == 0) {
-            sensor->scale = (float)scale_val;
+            sensor->scale = (float) scale_val;
             vpilog("nx-imu: %s scale=%.6g\n", dev_name, sensor->scale);
         }
     }
@@ -127,7 +128,8 @@ static int setup_sensor(struct iio_device *dev, const char *ch_prefix, sensor_t 
 
 static int read_sensor(sensor_t *sensor, float out[3])
 {
-    if (!sensor->valid) return -1;
+    if (!sensor->valid)
+        return -1;
 
     // Refill buffer to get latest samples
     ssize_t ret = iio_buffer_refill(sensor->buf);
@@ -147,8 +149,8 @@ static int read_sensor(sensor_t *sensor, float out[3])
         }
 
         // Data format is le:S16/16 (signed 16-bit little-endian)
-        int16_t sample = *(int16_t *)start;
-        raw[i] = (float)sample * sensor->scale;
+        int16_t sample = *(int16_t *) start;
+        raw[i] = (float) sample * sensor->scale;
     }
 
     // Apply mount matrix transform
@@ -160,11 +162,11 @@ static void publish(const float a[3], const float g[3])
 {
     // Transform from Switch chassis coords to Wii U GamePad coords.
     // Switch upright (screen facing user) should map to GamePad upright.
-    float ax = -a[0];   // Negate X for correct roll
-    float ay = a[2];   // GamePad Y = -Switch Z
-    float az = a[1];   // GamePad Z = -Switch Y
+    float ax = -a[0]; // Negate X for correct roll
+    float ay = a[2];  // GamePad Y = -Switch Z
+    float az = a[1];  // GamePad Z = -Switch Y
 
-    float gx = -g[0];   // Negate X for correct roll
+    float gx = -g[0]; // Negate X for correct roll
     float gy = g[2];
     float gz = g[1];
 
@@ -172,13 +174,12 @@ static void publish(const float a[3], const float g[3])
     vanilla_set_button(VANILLA_SENSOR_ACCEL_Y, pack_float(ay));
     vanilla_set_button(VANILLA_SENSOR_ACCEL_Z, pack_float(az));
     vanilla_set_button(VANILLA_SENSOR_GYRO_PITCH, pack_float(gx));
-    vanilla_set_button(VANILLA_SENSOR_GYRO_YAW,   pack_float(gy));
-    vanilla_set_button(VANILLA_SENSOR_GYRO_ROLL,  pack_float(gz));
+    vanilla_set_button(VANILLA_SENSOR_GYRO_YAW, pack_float(gy));
+    vanilla_set_button(VANILLA_SENSOR_GYRO_ROLL, pack_float(gz));
 
     static int log_throttle = 0;
     if ((++log_throttle % 40) == 1) {
-        vpilog("nx-imu: a=(%.2f %.2f %.2f) m/s^2  g=(%.2f %.2f %.2f) rad/s\n",
-            ax, ay, az, gx, gy, gz);
+        vpilog("nx-imu: a=(%.2f %.2f %.2f) m/s^2  g=(%.2f %.2f %.2f) rad/s\n", ax, ay, az, gx, gy, gz);
     }
 }
 
@@ -195,8 +196,7 @@ static void scan_devices(void)
         const char *name = iio_device_get_name(dev);
         const char *id = iio_device_get_id(dev);
 
-        vpilog("nx-imu: device %u: id=%s name=%s\n",
-            i, id ? id : "(null)", name ? name : "(null)");
+        vpilog("nx-imu: device %u: id=%s name=%s\n", i, id ? id : "(null)", name ? name : "(null)");
 
         // Check for accel device
         if (!s_accel.valid && iio_device_find_channel(dev, "accel_x", false)) {
@@ -230,7 +230,7 @@ static void cleanup_sensor(sensor_t *sensor)
 
 static void *imu_thread(void *arg)
 {
-    (void)arg;
+    (void) arg;
 
     while (atomic_load(&s_run)) {
         float a[3] = {0, 0, 0};

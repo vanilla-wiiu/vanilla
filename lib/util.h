@@ -2,12 +2,12 @@
 #define VANILLA_UTIL_H
 
 #include <stddef.h>
-#include <stdio.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <sys/types.h>
 
-#define MIN(a,b) (((a)<(b))?(a):(b))
-#define MAX(a,b) (((a)>(b))?(a):(b))
+#define MIN(a, b) (((a) < (b)) ? (a) : (b))
+#define MAX(a, b) (((a) > (b)) ? (a) : (b))
 #define CLAMP(x, min, max) (MIN(MAX(x, min), max))
 
 size_t read_line_from_fd(int fd, char *output, size_t max_output_size);
@@ -22,7 +22,7 @@ void uninstall_interrupt_handler();
 size_t get_millis();
 unsigned int reverse_bits(unsigned int b, int bit_count);
 
-uint16_t crc16(const void* data, size_t len);
+uint16_t crc16(const void *data, size_t len);
 
 void print_hex(const void *data, size_t len);
 

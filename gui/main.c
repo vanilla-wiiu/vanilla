@@ -9,8 +9,8 @@
 #include "ui/ui.h"
 #include "ui/ui_sdl.h"
 
-#define SCREEN_WIDTH    854
-#define SCREEN_HEIGHT   480
+#define SCREEN_WIDTH 854
+#define SCREEN_HEIGHT 480
 
 #if !defined(ANDROID) && !defined(_WIN32)
 #define SDL_main main
@@ -29,12 +29,12 @@ int SDL_main(int argc, const char **argv)
     int force_swdec = 0;
     long autoconnect = -1;
 
-	for (int i = 1, consumed; i < argc; i += consumed) {
-		consumed = -1;
-		 if (!strcmp(argv[i], "-w") || !strcmp(argv[i], "--window")) {
-			override_fs = 0;
-			consumed = 1;
-		} else if (!strcmp(argv[i], "-f") || !strcmp(argv[i], "--fullscreen")) {
+    for (int i = 1, consumed; i < argc; i += consumed) {
+        consumed = -1;
+        if (!strcmp(argv[i], "-w") || !strcmp(argv[i], "--window")) {
+            override_fs = 0;
+            consumed = 1;
+        } else if (!strcmp(argv[i], "-f") || !strcmp(argv[i], "--fullscreen")) {
             override_fs = 1;
             consumed = 1;
         } else if (!strcmp(argv[i], "-s") || !strcmp(argv[i], "--swdec")) {
@@ -46,7 +46,7 @@ int SDL_main(int argc, const char **argv)
                 return 1;
             }
 
-            const char *s_acId = argv[i+1];
+            const char *s_acId = argv[i + 1];
             char *endptr;
             autoconnect = strtol(s_acId, &endptr, 10);
             if (errno == ERANGE || endptr == s_acId || *endptr != '\0' || autoconnect < 0) {
@@ -55,16 +55,16 @@ int SDL_main(int argc, const char **argv)
             }
 
             consumed = 2;
-		} else if (!strcmp(argv[i], "-h") || !strcmp(argv[i], "--help")) {
-			display_cli_help(argv);
-			return 0;
-		}
-		if (consumed <= 0) {
-			vpilog("Invalid argument(s): %s\n\n", argv[i]);
-			display_cli_help(argv);
-			return 1;
-		}
-	}
+        } else if (!strcmp(argv[i], "-h") || !strcmp(argv[i], "--help")) {
+            display_cli_help(argv);
+            return 0;
+        }
+        if (consumed <= 0) {
+            vpilog("Invalid argument(s): %s\n\n", argv[i]);
+            display_cli_help(argv);
+            return 1;
+        }
+    }
 
     vanilla_install_logger(vpilog_va);
 
@@ -118,16 +118,17 @@ exit_config:
     return ret;
 }
 
-void display_cli_help(const char **argv) {
-	vpilog("Usage: %s [options]\n\n", argv[0]);
-	vpilog("Options:\n");
-	vpilog("    -w, --window        Run Vanilla in a window (overrides config)\n");
-	vpilog("    -f, --fullscreen    Run Vanilla full screen (overrides config)\n");
-	vpilog("    -s, --swdec         Force software decoding (overrides config)\n");
-	vpilog("    -a <id>,\n");
+void display_cli_help(const char **argv)
+{
+    vpilog("Usage: %s [options]\n\n", argv[0]);
+    vpilog("Options:\n");
+    vpilog("    -w, --window        Run Vanilla in a window (overrides config)\n");
+    vpilog("    -f, --fullscreen    Run Vanilla full screen (overrides config)\n");
+    vpilog("    -s, --swdec         Force software decoding (overrides config)\n");
+    vpilog("    -a <id>,\n");
     vpilog("    --autoconnect <id>  Auto-connect to a console on startup\n");
     vpilog("                        (<id> is the index of the console in the\n");
     vpilog("                        menu, e.g. 0 is the first console, 1 is\n");
     vpilog("                        the second, etc.)\n");
-	vpilog("    -h, --help          Show this help message\n");
+    vpilog("    -h, --help          Show this help message\n");
 }

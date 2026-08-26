@@ -8,11 +8,11 @@
 #include <sys/time.h>
 #include <vanilla.h>
 
+#include "menu/menu.h"
 #include "platform.h"
 #include "ui_anim.h"
 #include "ui_priv.h"
 #include "ui_util.h"
-#include "menu/menu.h"
 
 vui_context_t *vui_alloc(int width, int height)
 {
@@ -28,14 +28,17 @@ vui_context_t *vui_alloc(int width, int height)
     vui->text_open_handler = 0;
     vui->key_override_handler = 0;
     vui->power_state_handler = 0;
-	vui->mic_callback = 0;
-	vui->mic_enabled_handler = 0;
-	vui->audio_enabled_handler = 0;
-	vui->fullscreen_enabled_handler = 0;
+    vui->mic_callback = 0;
+    vui->mic_enabled_handler = 0;
+    vui->audio_enabled_handler = 0;
+    vui->fullscreen_enabled_handler = 0;
     vui->quit = 0;
-    for (int i = 0; i < VPI_CONFIG_KEYMAP_SIZE; i++) vui->default_key_map[i] = -1;
-    for (int i = 0; i < VPI_CONFIG_BUTTONMAP_SIZE; i++) vui->default_button_map[i] = -1;
-    for (int i = 0; i < VPI_CONFIG_AXISMAP_SIZE; i++) vui->default_axis_map[i] = -1;
+    for (int i = 0; i < VPI_CONFIG_KEYMAP_SIZE; i++)
+        vui->default_key_map[i] = -1;
+    for (int i = 0; i < VPI_CONFIG_BUTTONMAP_SIZE; i++)
+        vui->default_button_map[i] = -1;
+    for (int i = 0; i < VPI_CONFIG_AXISMAP_SIZE; i++)
+        vui->default_axis_map[i] = -1;
     vui_reset(vui);
     return vui;
 }
@@ -59,19 +62,21 @@ void vui_reset(vui_context_t *ctx)
     ctx->button_active = -1;
     ctx->layers = 1;
     ctx->layer_opacity[0] = 1;
-	ctx->layer_enabled[0] = 1;
+    ctx->layer_enabled[0] = 1;
     ctx->selected_button = -1;
     ctx->cancel_button = -1;
     ctx->active_textedit = -1;
-	vui_audio_set_enabled(ctx, 0);
+    vui_audio_set_enabled(ctx, 0);
     if (ctx->text_open_handler)
         ctx->text_open_handler(ctx, -1, 0, ctx->text_open_handler_data);
 }
 
 void vui_get_screen_size(vui_context_t *ctx, int *width, int *height)
 {
-    if (width) *width = ctx->screen_width;
-    if (height) *height = ctx->screen_height;
+    if (width)
+        *width = ctx->screen_width;
+    if (height)
+        *height = ctx->screen_height;
 }
 
 void vui_enable_background(vui_context_t *ctx, int enabled)
@@ -90,7 +95,8 @@ void vui_set_fullscreen(vui_context_t *ctx, int enabled)
         ctx->fullscreen_enabled_handler(ctx, enabled, ctx->fullscreen_enabled_handler_data);
 }
 
-int vui_button_create(vui_context_t *ctx, int x, int y, int w, int h, const char *text, const char *icon, vui_button_style_t style, int layer, vui_button_callback_t callback, void *callback_data)
+int vui_button_create(vui_context_t *ctx, int x, int y, int w, int h, const char *text, const char *icon,
+                      vui_button_style_t style, int layer, vui_button_callback_t callback, void *callback_data)
 {
     if (ctx->button_count >= MAX_BUTTON_COUNT) {
         vpilog("Could not create button! Max button count met!\n");
@@ -246,19 +252,19 @@ void vui_select_direction(vui_context_t *ctx, vui_direction_t dir)
         vui_get_screen_size(ctx, &sw, &sh);
         switch (dir) {
         case VUI_DIR_LEFT:
-            cx = sw+sw;
-            cy = sh/2;
+            cx = sw + sw;
+            cy = sh / 2;
             break;
         case VUI_DIR_RIGHT:
             cx = -sw;
-            cy = sh/2;
+            cy = sh / 2;
             break;
         case VUI_DIR_UP:
-            cx = sw/2;
-            cy = sh+sh;
+            cx = sw / 2;
+            cy = sh + sh;
             break;
         case VUI_DIR_DOWN:
-            cx = sw/2;
+            cx = sw / 2;
             cy = -sh;
             break;
         }
@@ -293,7 +299,7 @@ void vui_select_direction(vui_context_t *ctx, vui_direction_t dir)
             int diffx_abs = abs(diffx);
             int diffy_abs = abs(diffy);
 
-            int btn_dist = sqrt(((int64_t)diffx_abs * diffx_abs) + ((int64_t)diffy_abs * diffy_abs));
+            int btn_dist = sqrt(((int64_t) diffx_abs * diffx_abs) + ((int64_t) diffy_abs * diffy_abs));
 
             if (diffx_abs > diffy_abs) {
                 if (diffx > 0) {
@@ -409,7 +415,8 @@ void vui_process_mousedown(vui_context_t *ctx, int x, int y)
         for (int i = 0; i < ctx->textedit_count; i++) {
             vui_textedit_t *edit = &ctx->textedits[i];
 
-            if (edit->visible && edit->enabled && point_inside_textedit(edit, x, y) && ctx->layer_enabled[edit->layer]) {
+            if (edit->visible && edit->enabled && point_inside_textedit(edit, x, y) &&
+                ctx->layer_enabled[edit->layer]) {
                 new_active_textedit = i;
                 break;
             }
@@ -474,7 +481,8 @@ int vui_start_passive_animation(vui_context_t *ctx, vui_anim_step_callback_t ste
     return cur_anim;
 }
 
-void vui_start_animation(vui_context_t *ctx, int64_t length, vui_anim_step_callback_t step, void *step_data, vui_callback_t complete, void *complete_data)
+void vui_start_animation(vui_context_t *ctx, int64_t length, vui_anim_step_callback_t step, void *step_data,
+                         vui_callback_t complete, void *complete_data)
 {
     vui_cancel_animation(ctx);
 
@@ -496,7 +504,8 @@ void vui_update(vui_context_t *ctx)
     gettimeofday(&now, NULL);
 
     if (ctx->animation_enabled) {
-        int64_t diff = (now.tv_sec - ctx->animation.start_time.tv_sec) * 1000000 + (now.tv_usec - ctx->animation.start_time.tv_usec);
+        int64_t diff = (now.tv_sec - ctx->animation.start_time.tv_sec) * 1000000 +
+                       (now.tv_usec - ctx->animation.start_time.tv_usec);
 
         if (diff > ctx->animation.length) {
             diff = ctx->animation.length;
@@ -555,8 +564,8 @@ void vui_audio_push(vui_context_t *ctx, const void *data, size_t size)
 
 void vui_audio_set_enabled(vui_context_t *ctx, int enabled)
 {
-	if (ctx->audio_enabled_handler)
-		ctx->audio_enabled_handler(ctx, enabled, ctx->audio_enabled_handler_data);
+    if (ctx->audio_enabled_handler)
+        ctx->audio_enabled_handler(ctx, enabled, ctx->audio_enabled_handler_data);
 }
 
 void vui_vibrate_set(vui_context_t *ctx, uint8_t val)
@@ -569,7 +578,8 @@ void vui_vibrate_set(vui_context_t *ctx, uint8_t val)
 int vui_get_key_mapping(vui_context_t *ctx, int vanilla_button);
 void vui_set_key_mapping(vui_context_t *ctx, int vanilla_button, int keycode);
 
-void vui_set_key_listener(vui_context_t *ctx, vui_key_override_t callback, vui_callback_t cancel_callback, void *callback_data)
+void vui_set_key_listener(vui_context_t *ctx, vui_key_override_t callback, vui_callback_t cancel_callback,
+                          void *callback_data)
 {
     ctx->key_override_handler = callback;
     ctx->key_override_cancel_handler = cancel_callback;
@@ -643,7 +653,7 @@ int vui_layer_create(vui_context_t *ctx)
 
     // Set layer defaults
     ctx->layer_opacity[cur_layer] = 1.0f;
-	ctx->layer_enabled[cur_layer] = 1;
+    ctx->layer_enabled[cur_layer] = 1;
 
     vui_color_t *layerbg = &ctx->layer_color[cur_layer];
     layerbg->r = 0;
@@ -673,7 +683,7 @@ void vui_layer_set_opacity(vui_context_t *ctx, int layer, float opacity)
 
 void vui_layer_set_enabled(vui_context_t *ctx, int layer, int enabled)
 {
-	ctx->layer_enabled[layer] = enabled;
+    ctx->layer_enabled[layer] = enabled;
 }
 
 vui_color_t vui_color_create(float r, float g, float b, float a)
@@ -691,7 +701,8 @@ void vui_layer_set_bgcolor(vui_context_t *ctx, int layer, vui_color_t color)
     ctx->layer_color[layer] = color;
 }
 
-int vui_label_create(vui_context_t *ctx, int x, int y, int w, int h, const char *text, vui_color_t color, vui_font_size_t size, int layer)
+int vui_label_create(vui_context_t *ctx, int x, int y, int w, int h, const char *text, vui_color_t color,
+                     vui_font_size_t size, int layer)
 {
     if (ctx->label_count == MAX_BUTTON_COUNT) {
         return -1;
@@ -730,7 +741,8 @@ void vui_label_update_visible(vui_context_t *ctx, int index, int visible)
     lbl->visible = visible;
 }
 
-int vui_textedit_create(vui_context_t *ctx, int x, int y, int w, int h, const char *initial_text, vui_font_size_t size, int password, int layer)
+int vui_textedit_create(vui_context_t *ctx, int x, int y, int w, int h, const char *initial_text, vui_font_size_t size,
+                        int password, int layer)
 {
     if (ctx->textedit_count == MAX_BUTTON_COUNT) {
         return -1;
@@ -744,7 +756,7 @@ int vui_textedit_create(vui_context_t *ctx, int x, int y, int w, int h, const ch
     edit->y = y;
     edit->w = w;
     edit->h = h;
-	edit->password = password;
+    edit->password = password;
 
     edit->layer = layer;
     edit->size = size;
@@ -944,7 +956,7 @@ int vui_image_create(vui_context_t *ctx, int x, int y, int w, int h, const char 
     img->w = w;
     img->h = h;
 
-	vui_image_update(ctx, index, image);
+    vui_image_update(ctx, index, image);
 
     img->layer = layer;
 
@@ -1031,13 +1043,13 @@ vui_power_state_t vui_power_state_get(vui_context_t *ctx, int *percent)
 
 void vui_mic_enabled_set(vui_context_t *ctx, int enabled)
 {
-	if (ctx->mic_enabled_handler) {
-		ctx->mic_enabled_handler(ctx, enabled, ctx->mic_enabled_handler_data);
-	}
+    if (ctx->mic_enabled_handler) {
+        ctx->mic_enabled_handler(ctx, enabled, ctx->mic_enabled_handler_data);
+    }
 }
 
 void vui_mic_callback_set(vui_context_t *ctx, vui_mic_callback_t callback, void *userdata)
 {
-	ctx->mic_callback = callback;
-	ctx->mic_callback_data = userdata;
+    ctx->mic_callback = callback;
+    ctx->mic_callback_data = userdata;
 }

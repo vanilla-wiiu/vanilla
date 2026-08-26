@@ -23,8 +23,7 @@ struct wpa_ctrl;
 extern char wireless_interface[];
 
 #define VANILLA_MAX_EVENT_COUNT 100
-typedef struct
-{
+typedef struct {
     vanilla_event_t events[VANILLA_MAX_EVENT_COUNT];
     size_t new_index;
     size_t used_index;
@@ -33,8 +32,7 @@ typedef struct
     pthread_cond_t waitcond;
 } event_loop_t;
 
-typedef struct
-{
+typedef struct {
     event_loop_t *event_loop;
     int socket_vid;
     int socket_aud;
@@ -45,8 +43,7 @@ typedef struct
 
 typedef struct thread_data_t thread_data_t;
 typedef void (*thread_start_t)(thread_data_t *);
-typedef struct thread_data_t
-{
+typedef struct thread_data_t {
     uint32_t server_address;
     event_loop_t *event_loop;
     thread_start_t thread_start;
