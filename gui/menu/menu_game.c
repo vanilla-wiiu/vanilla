@@ -5,6 +5,7 @@
 #include <libavformat/avformat.h>
 #include <libavcodec/avcodec.h>
 #include <libavutil/channel_layout.h>
+#include <libavutil/hwcontext.h>
 #include <libavutil/opt.h>
 #include <libavutil/time.h>
 #include <libswscale/swscale.h>
@@ -21,6 +22,11 @@
 #include "menu_main.h"
 #include "ui/ui_anim.h"
 #include "ui/ui_util.h"
+
+#ifdef ANDROID
+#include <libavutil/hwcontext_mediacodec.h>
+#include "ui/ui_sdl_android.h"
+#endif
 
 #ifdef VANILLA_V4L2REQUEST_AVAILABLE
 #include <fcntl.h>
@@ -242,6 +248,21 @@ static enum AVPixelFormat drm_get_format(struct AVCodecContext *s, const enum AV
     return AV_PIX_FMT_NONE;
 }
 
+#ifdef ANDROID
+static enum AVPixelFormat mediacodec_get_format(struct AVCodecContext *s,
+                                                 const enum AVPixelFormat *fmt)
+{
+    while (*fmt != AV_PIX_FMT_NONE) {
+        if (*fmt == AV_PIX_FMT_MEDIACODEC) {
+            return *fmt;
+        }
+        fmt++;
+    }
+
+    return AV_PIX_FMT_NONE;
+}
+#endif
+
 typedef struct {
     const char *name;
     const AVCodec *codec;
@@ -249,6 +270,9 @@ typedef struct {
 } hwdec_t;
 
 enum HwDecoderType {
+#ifdef ANDROID
+    HWDEC_TYPE_MEDIACODEC,
+#endif
     HWDEC_TYPE_NVDEC,
     HWDEC_TYPE_VAAPI,
     HWDEC_TYPE_V4L2REQUEST,
@@ -356,27 +380,24 @@ int open_decoder(vpi_decode_state_t *s, hwdec_t *dec)
 		s->codec_ctx->get_format = dec->get_format;
 	}
 
-    const int BUILD_AVCC = 0;
-    if (BUILD_AVCC) {
-        uint8_t sps[100], pps[100];
-        uint16_t sps_size = vanilla_generate_sps_params(sps, sizeof(sps));
-        uint16_t pps_size = vanilla_generate_pps_params(pps, sizeof(pps));
-
-        const uint8_t *p_sps = sps;
-        const uint8_t *p_pps = pps;
-
-        s->codec_ctx->extradata = av_malloc(1024);
-        s->codec_ctx->extradata_size = build_avcc(
-            s->codec_ctx->extradata, 1024,
-            &p_sps, &sps_size, 1,
-            &p_pps, &pps_size, 1,
-            4
-        );
+    if (!strcmp(dec->codec->name, "h264_mediacodec")) {
+        // MediaCodec requires the AVCC/SPS/PPS upfront
+        uint8_t header[200];
+        size_t header_size = vanilla_generate_h264_header(header, sizeof(header));
+        s->codec_ctx->extradata = av_mallocz(header_size + AV_INPUT_BUFFER_PADDING_SIZE);
+        if (!s->codec_ctx->extradata) {
+            vpilog("Failed to allocate H.264 extradata\n");
+            return VANILLA_ERR_GENERIC;
+        }
+        memcpy(s->codec_ctx->extradata, header, header_size);
+        s->codec_ctx->extradata_size = (int) header_size;
+        s->codec_ctx->width = 854;
+        s->codec_ctx->height = 480;
     }
 
 	ffmpeg_err = avcodec_open2(s->codec_ctx, dec->codec, NULL);
     if (ffmpeg_err < 0) {
-		vpilog("Failed to open decoder: %i\n", ffmpeg_err);
+		vpilog("Failed to open decoder %s: %s (%i)\n", dec->name, av_err2str(ffmpeg_err), ffmpeg_err);
         return VANILLA_ERR_GENERIC;
 	}
 
@@ -393,6 +414,12 @@ int vpi_decode_init(vpi_decode_state_t *s)
 
     // Initialize decoding context, preferring hardware decoding when available
     hwdec_t decoders[HWDEC_TYPE_COUNT];
+
+#ifdef ANDROID
+    decoders[HWDEC_TYPE_MEDIACODEC].name = "MediaCodec";
+    decoders[HWDEC_TYPE_MEDIACODEC].codec = avcodec_find_decoder_by_name("h264_mediacodec");
+    decoders[HWDEC_TYPE_MEDIACODEC].get_format = mediacodec_get_format;
+#endif
 
     decoders[HWDEC_TYPE_NVDEC].name = "NVDEC";
     decoders[HWDEC_TYPE_NVDEC].codec = avcodec_find_decoder_by_name("h264_cuvid");
@@ -418,6 +445,26 @@ int vpi_decode_init(vpi_decode_state_t *s)
     int r = VANILLA_ERR_GENERIC;
 
     if (!vpi_config.force_software_decode) {
+#ifdef ANDROID
+        // MediaCodec renders decoded buffers directly into the SurfaceTexture
+        // owned by SDL's external OES texture.
+        if (r != VANILLA_SUCCESS && vui_sdl_android_get_video_surface()) {
+            vpi_decode_exit(s);
+            s->hw_device_ctx = av_hwdevice_ctx_alloc(AV_HWDEVICE_TYPE_MEDIACODEC);
+            if (s->hw_device_ctx) {
+                AVHWDeviceContext *device_ctx = (AVHWDeviceContext *) s->hw_device_ctx->data;
+                AVMediaCodecDeviceContext *mediacodec_ctx = (AVMediaCodecDeviceContext *) device_ctx->hwctx;
+                mediacodec_ctx->surface = vui_sdl_android_get_video_surface();
+
+                ffmpeg_err = av_hwdevice_ctx_init(s->hw_device_ctx);
+                if (ffmpeg_err >= 0) {
+                    r = open_decoder(s, &decoders[HWDEC_TYPE_MEDIACODEC]);
+                } else {
+                    vpilog("Failed to initialize MediaCodec device: %s\n", av_err2str(ffmpeg_err));
+                }
+            }
+        }
+#endif
 #ifdef VANILLA_CUDA_AVAILABLE
         // See if we can create an NVDEC context (most NVIDIA GPUs)
         if (r != VANILLA_SUCCESS) {

@@ -37,38 +37,24 @@ static inline int skterr()
 #endif
 }
 
-void create_sockaddr(sockaddr_u *addr, size_t *size, in_addr_t inaddr, uint16_t port, int local, int delete)
+static void create_sockaddr(struct sockaddr_in *addr, size_t *size, in_addr_t inaddr, uint16_t port)
 {
-#ifndef _WIN32
-    if (local) {
-        memset(&addr->un, 0, sizeof(addr->un));
-        addr->un.sun_family = AF_UNIX;
-        snprintf(addr->un.sun_path, sizeof(addr->un.sun_path) - 1, VANILLA_PIPE_LOCAL_SOCKET, port);
-        if (delete)
-            unlink(addr->un.sun_path);
+    memset(addr, 0, sizeof(*addr));
+    addr->sin_family = AF_INET;
+    addr->sin_port = htons(port);
+    addr->sin_addr.s_addr = inaddr;
 
-        if (size) *size = sizeof(struct sockaddr_un);
-    } else {
-#endif
-        memset(&addr->in, 0, sizeof(addr->in));
-        addr->in.sin_family = AF_INET;
-        addr->in.sin_port = htons(port);
-        addr->in.sin_addr.s_addr = inaddr;
-
-        if (size) *size = sizeof(struct sockaddr_in);
-#ifndef _WIN32
-    }
-#endif
+    if (size) *size = sizeof(*addr);
 }
 
-void create_server_sockaddr(sockaddr_u *addr, size_t *size, uint16_t port, int delete)
+void create_server_sockaddr(struct sockaddr_in *addr, size_t *size, uint16_t port)
 {
     // The Wii U always places itself at this address
     in_addr_t ip = (SERVER_ADDRESS == VANILLA_ADDRESS_LOCAL) ? inet_addr("192.168.1.10") : SERVER_ADDRESS;
-    return create_sockaddr(addr, size, ip, port, 0, delete);
+    create_sockaddr(addr, size, ip, port);
 }
 
-void send_to_sockaddr(int fd, const void *data, size_t data_size, const sockaddr_u *sockaddr, size_t sockaddr_size)
+void send_to_sockaddr(int fd, const void *data, size_t data_size, const struct sockaddr_in *sockaddr, size_t sockaddr_size)
 {
     ssize_t sent = sendto(fd, data, data_size, 0, (const struct sockaddr *) sockaddr, sockaddr_size);
     if (sent == -1) {
@@ -81,12 +67,12 @@ void send_to_sockaddr(int fd, const void *data, size_t data_size, const sockaddr
 
 void send_to_console(int fd, const void *data, size_t data_size, uint16_t port)
 {
-    sockaddr_u addr;
+    struct sockaddr_in addr;
     size_t addr_size;
 
     in_port_t console_port = port - 100;
 
-    create_server_sockaddr(&addr, &addr_size, console_port, 0);
+    create_server_sockaddr(&addr, &addr_size, console_port);
 
     send_to_sockaddr(fd, data, data_size, &addr, addr_size);
 }
@@ -106,15 +92,14 @@ void set_socket_rcvtimeo(int skt, uint64_t microseconds)
 
 int create_socket(int *socket_out, in_port_t port, int pipe)
 {
-    sockaddr_u addr;
+    struct sockaddr_in addr;
     size_t addr_size;
 
-    int is_pipe_and_local = (pipe && SERVER_ADDRESS == VANILLA_ADDRESS_LOCAL);
-    int domain = is_pipe_and_local ? AF_UNIX : AF_INET;
+    in_addr_t bind_address = (pipe && SERVER_ADDRESS == VANILLA_ADDRESS_LOCAL) ? htonl(INADDR_LOOPBACK) : INADDR_ANY;
 
-    create_sockaddr(&addr, &addr_size, INADDR_ANY, port, is_pipe_and_local, 1);
+    create_sockaddr(&addr, &addr_size, bind_address, port);
 
-    int skt = socket(domain, SOCK_DGRAM, 0);
+    int skt = socket(AF_INET, SOCK_DGRAM, 0);
     if (skt == -1) {
         vanilla_log("FAILED TO CREATE SOCKET: %i", skterr());
         return VANILLA_ERR_BAD_SOCKET;
@@ -128,20 +113,20 @@ int create_socket(int *socket_out, in_port_t port, int pipe)
 
     // vanilla_log("SUCCESSFULLY BOUND SOCKET %i ON PORT %i", skt, port);
 
-    (*socket_out) = skt;
-
     set_socket_rcvtimeo(skt, 250000);
 
     // int buf_sz = 16777216;
     // setsockopt(skt, SOL_SOCKET, SO_RCVBUF, &buf_sz, sizeof(buf_sz));
     // setsockopt(skt, SOL_SOCKET, SO_SNDBUF, &buf_sz, sizeof(buf_sz));
 
-#if !defined(_WIN32) && !defined(__APPLE__)
+#if !defined(_WIN32) && !defined(__APPLE__) && !defined(ANDROID)
     if (!pipe && SERVER_ADDRESS == VANILLA_ADDRESS_LOCAL) {
         // Bind to wireless device
         setsockopt(skt, SOL_SOCKET, SO_BINDTODEVICE, wireless_interface, strlen(wireless_interface));
     }
 #endif
+
+    (*socket_out) = skt;
 
     // int val = 1000; // microseconds to busy-poll per recv() before sleeping
     // if (setsockopt(skt, SOL_SOCKET, SO_BUSY_POLL, &val, sizeof(val)) < 0) {
@@ -153,20 +138,19 @@ int create_socket(int *socket_out, in_port_t port, int pipe)
 
 int send_pipe_cc(int skt, vanilla_pipe_command_t *cmd, size_t cmd_size, int wait_for_reply)
 {
-    sockaddr_u addr;
+    struct sockaddr_in addr;
     size_t addr_size;
 
-    int pipe_is_local = (SERVER_ADDRESS == VANILLA_ADDRESS_LOCAL);
-    in_addr_t pipe_addr = pipe_is_local ? INADDR_ANY : SERVER_ADDRESS;
+    in_addr_t pipe_addr = (SERVER_ADDRESS == VANILLA_ADDRESS_LOCAL) ? htonl(INADDR_LOOPBACK) : SERVER_ADDRESS;
 
-    create_sockaddr(&addr, &addr_size, pipe_addr, VANILLA_PIPE_CMD_SERVER_PORT, pipe_is_local, 0);
+    create_sockaddr(&addr, &addr_size, pipe_addr, VANILLA_PIPE_CMD_SERVER_PORT);
 
     ssize_t read_size;
     uint8_t recv_cc;
 
     for (int retries = 0; retries < MAX_PIPE_RETRY; retries++) {
         if (sendto(skt, (const char *) cmd, cmd_size, 0, (const struct sockaddr *) &addr, addr_size) == -1) {
-            vanilla_log("Failed to write control code to socket");
+            vanilla_log("Failed to write control code to socket: %i", skterr());
             return 0;
         }
 
@@ -178,8 +162,15 @@ int send_pipe_cc(int skt, vanilla_pipe_command_t *cmd, size_t cmd_size, int wait
         if (recv_cc == VANILLA_PIPE_CC_BIND_ACK) {
             return 1;
         }
+        if (recv_cc == VANILLA_PIPE_CC_BUSY) {
+            return -1;
+        }
 
-        vanilla_log("STILL WAITING FOR REPLY");
+        if (read_size < 0) {
+            vanilla_log("STILL WAITING FOR REPLY: %i", skterr());
+        } else {
+            vanilla_log("UNEXPECTED PIPE REPLY: 0x%02x", recv_cc);
+        }
 
         sleep(1);
     }
@@ -205,7 +196,13 @@ int connect_to_backend(int *socket, vanilla_pipe_command_t *cmd, size_t cmd_size
 
     set_socket_rcvtimeo(pipe_cc_skt, 2000000);
 
-    if (!send_pipe_cc(pipe_cc_skt, cmd, cmd_size, 1)) {
+    int send_result = send_pipe_cc(pipe_cc_skt, cmd, cmd_size, 1);
+    if (send_result < 0) {
+        vanilla_log("PIPE IS BUSY");
+        close(pipe_cc_skt);
+        return VANILLA_ERR_BUSY;
+    }
+    if (!send_result) {
         vanilla_log("FAILED TO BIND TO PIPE");
         close(pipe_cc_skt);
         return VANILLA_ERR_PIPE_UNRESPONSIVE;

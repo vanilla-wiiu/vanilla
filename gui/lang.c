@@ -58,7 +58,8 @@ static const char *lang_str[__VPI_LANG_T_COUNT] = {
     "Reset",
     "Full Screen",
     "Hardware Decoding",
-    "Cursor In Full Screen"
+    "Cursor In Full Screen",
+    "Local connection on Android requires root access."
 };
 
 const char *lang(vpi_lang_t id)

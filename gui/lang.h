@@ -60,6 +60,7 @@ typedef enum {
 	VPI_LANG_FULLSCREEN,
     VPI_LANG_HWDEC,
     VPI_LANG_CURSOR_IN_FS,
+    VPI_LANG_ANDROID_ROOT_REQUIRED,
     __VPI_LANG_T_COUNT
 } vpi_lang_t;
 

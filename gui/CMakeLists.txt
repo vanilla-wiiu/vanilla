@@ -87,6 +87,11 @@ function(compile_ffmpeg _target_name _system_name _system_processor)
             )
         elseif(ANDROID)
             set(FFMPEG_TARGET_OS "android")
+			list(APPEND FFMPEG_CONFIGURE_ARGS
+				--enable-jni
+				--enable-mediacodec
+				--enable-decoder=h264_mediacodec
+			)
 
 			# Get Android platform version (inexplicably apparently there literally isn't a better way to do this)
             string(REPLACE "-" " " _android_platform_args ${ANDROID_PLATFORM})
@@ -296,6 +301,13 @@ list(APPEND VANILLA_GUI_SRC
     ui/ui_keyboard.c
 )
 
+if (ANDROID)
+    list(APPEND VANILLA_GUI_SRC
+        platform_android.c
+        ui/ui_sdl_android.c
+    )
+endif()
+
 if (LINUX)
     # Link with DRM if available
     option(VANILLA_BUILD_USE_DRM "Enable DRM video output" ON)
@@ -386,7 +398,10 @@ target_link_libraries(vanillagui PRIVATE
 if (ANDROID)
     target_link_libraries(vanillagui PRIVATE
         SDL2main
+        android
+        GLESv2
         log
+        mediandk
     )
 endif()
 
@@ -487,19 +502,13 @@ target_include_directories(vanillagui PRIVATE
 )
 
 # Install assets
-if(ANDROID)
-    # Put assets in correct place relative to build
-    add_custom_command(
-        TARGET vanilla POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/assets" "${CMAKE_CURRENT_SOURCE_DIR}/../android/app/src/main/assets"
-    )
-elseif(APPLE)
+if(APPLE)
 	# Put assets in correct place relative to build
     add_custom_command(
         TARGET vanilla POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_directory_if_different "${CMAKE_CURRENT_SOURCE_DIR}/assets" "$<TARGET_FILE_DIR:vanilla>/../Resources/assets"
     )
-else()
+elseif(NOT ANDROID)
     # Put assets in correct place relative to build
     add_custom_command(
         TARGET vanilla POST_BUILD
