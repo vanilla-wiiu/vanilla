@@ -22,6 +22,9 @@ typedef uint32_t in_addr_t;
 #include "menu_settings.h"
 #include "pipemgmt.h"
 #include "platform.h"
+#ifdef ANDROID
+#include "platform_android.h"
+#endif
 #include "ui/ui_anim.h"
 #include "ui/ui_util.h"
 

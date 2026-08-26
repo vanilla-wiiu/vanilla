@@ -159,17 +159,22 @@ int send_pipe_cc(int skt, vanilla_pipe_command_t *cmd, size_t cmd_size, int wait
         }
 
         read_size = recv(skt, &recv_cc, sizeof(recv_cc), 0);
-        if (recv_cc == VANILLA_PIPE_CC_BIND_ACK) {
-            return 1;
-        }
-        if (recv_cc == VANILLA_PIPE_CC_BUSY) {
-            return -1;
-        }
-
-        if (read_size < 0) {
+        if (read_size == sizeof(recv_cc)) {
+            if (recv_cc == VANILLA_PIPE_CC_BIND_ACK) {
+                return 1;
+            }
+            if (recv_cc == VANILLA_PIPE_CC_BUSY) {
+                if (retries == MAX_PIPE_RETRY - 1) {
+                    return -1;
+                }
+                vanilla_log("PIPE BUSY, RETRYING");
+            } else {
+                vanilla_log("UNEXPECTED PIPE REPLY: 0x%02x", recv_cc);
+            }
+        } else if (read_size < 0) {
             vanilla_log("STILL WAITING FOR REPLY: %i", skterr());
         } else {
-            vanilla_log("UNEXPECTED PIPE REPLY: 0x%02x", recv_cc);
+            vanilla_log("UNEXPECTED PIPE REPLY SIZE: %zi", read_size);
         }
 
         sleep(1);

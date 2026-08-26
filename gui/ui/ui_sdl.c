@@ -1682,6 +1682,15 @@ void vui_draw_sdl(vui_context_t *ctx, SDL_Renderer *renderer)
 
 int get_texture_from_cpu_frame(vui_sdl_context_t *sdl_ctx, AVFrame *f)
 {
+#ifdef ANDROID
+    // If we were using the Android texture, but for some reason switched to
+    // software decoding, ensure our game_tex gets correctly recreated
+	if (sdl_ctx->game_tex == sdl_ctx->android_video_tex) {
+		sdl_ctx->game_tex = NULL;
+		sdl_ctx->android_video_ready = 0;
+	}
+#endif
+
 	if (!sdl_ctx->game_tex) {
 		sdl_ctx->game_tex = SDL_CreateTexture(
 			sdl_ctx->renderer,
@@ -2158,11 +2167,15 @@ int vui_update_sdl(vui_context_t *vui)
                     vpilog("MediaCodec produced a frame without an Android video surface\n");
                     break;
                 }
+                if (sdl_ctx->game_tex && sdl_ctx->game_tex != sdl_ctx->android_video_tex) {
+                    SDL_DestroyTexture(sdl_ctx->game_tex);
+                }
+                sdl_ctx->game_tex = sdl_ctx->android_video_tex;
+                sdl_ctx->android_video_ready = 0;
                 if (av_mediacodec_release_buffer(buffer, 1) < 0) {
                     vpilog("Failed to render MediaCodec output buffer\n");
                     break;
                 }
-                sdl_ctx->game_tex = sdl_ctx->android_video_tex;
                 break;
             }
 #endif

@@ -1119,8 +1119,8 @@ void vpi_display_update(vui_context_t *vui, int64_t time, void *v)
         break;
     default:
         // Something went wrong, assume we must fail and report to user
-        pthread_join(vpi_event_thread, 0);
         vanilla_stop();
+        pthread_join(vpi_event_thread, 0);
         if (vpi_game_queued_error != VANILLA_ERR_SHUTDOWN) {
             show_error(vui, (void*)(intptr_t) vpi_game_queued_error);
         } else {

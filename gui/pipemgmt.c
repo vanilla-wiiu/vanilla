@@ -459,14 +459,14 @@ int vpi_start_pipe()
         Dl_info info;
         if (!dladdr((void *) &vpi_start_pipe, &info) || !info.dli_fname) {
             vpilog("Could not get running path of current Android executable\n");
-            return VANILLA_ERR_GENERIC;
+            _exit(1);
         }
 
         // Copy path into our own string
         char our_path[PATH_MAX];
         if (snprintf(our_path, sizeof(our_path), "%s", info.dli_fname) >= sizeof(our_path)) {
             vpilog("Android library path too long - this is a bug, tell maintainers\n");
-            return VANILLA_ERR_GENERIC;
+            _exit(1);
         }
 
         // Get dirname of string and add libvanilla_pipe.so
@@ -474,7 +474,7 @@ int vpi_start_pipe()
         char pipe_path[PATH_MAX];
         if (snprintf(pipe_path, sizeof(pipe_path), "%s/libvanilla_pipe.so", library_dir) >= sizeof(pipe_path)) {
             vpilog("Android pipe path too long - this is a bug, tell maintainers\n");
-            return VANILLA_ERR_GENERIC;
+            _exit(1);
         }
 
         char command[PATH_MAX + 256];
