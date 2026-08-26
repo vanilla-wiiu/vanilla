@@ -27,7 +27,7 @@ An Arch User Repository (AUR) package called `vanilla-wiiu-git` is available for
 - [Nintendo Switch](https://github.com/vanilla-wiiu/vanilla/wiki/Nintendo-Switch)
 - [Steam Deck](https://github.com/vanilla-wiiu/vanilla/wiki/Steam-Deck)
 - [Linux](https://github.com/vanilla-wiiu/vanilla/wiki/Linux-Setup-Guide) (check [Wi-Fi hardware compatibility](https://github.com/vanilla-wiiu/vanilla/wiki/Wireless-Compatibility))
-- [Android](https://github.com/vanilla-wiiu/vanilla/wiki/Android-Setup-Guide) (currently frontend only)
+- [Android](https://github.com/vanilla-wiiu/vanilla/wiki/Android)
 - [Windows](https://github.com/vanilla-wiiu/vanilla/wiki/Windows-Setup-Guide) (currently frontend only)
 - [Raspberry Pi](https://github.com/vanilla-wiiu/vanilla/wiki/Single%E2%80%90Board-Computers) (requires [external Wi-Fi adapter](https://github.com/vanilla-wiiu/vanilla/wiki/Linux-Setup-Guide#raspberry-pi))
 - [Orange Pi](https://github.com/vanilla-wiiu/vanilla/wiki/Single%E2%80%90Board-Computers) (requires [external Wi-Fi adapter](https://github.com/vanilla-wiiu/vanilla/wiki/Linux-Setup-Guide#raspberry-pi))
