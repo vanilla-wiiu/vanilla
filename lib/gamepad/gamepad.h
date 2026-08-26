@@ -11,7 +11,6 @@ typedef uint16_t in_port_t;
 #else
 #include <arpa/inet.h>
 #include <errno.h>
-#include <sys/un.h>
 #endif
 
 #include "vanilla.h"
@@ -55,18 +54,11 @@ typedef struct thread_data_t
     vanilla_psk_t psk;
 } thread_data_t;
 
-typedef union {
-    struct sockaddr_in in;
-#ifndef _WIN32
-    struct sockaddr_un un;
-#endif
-} sockaddr_u;
-
 void sync_internal(thread_data_t *data);
 void connect_as_gamepad_internal(thread_data_t *data);
 int install_polkit_internal(thread_data_t *data, int install);
-void create_server_sockaddr(sockaddr_u *addr, size_t *size, uint16_t port, int delete);
-void send_to_sockaddr(int fd, const void *data, size_t data_size, const sockaddr_u *sockaddr, size_t sockaddr_size);
+void create_server_sockaddr(struct sockaddr_in *addr, size_t *size, uint16_t port);
+void send_to_sockaddr(int fd, const void *data, size_t data_size, const struct sockaddr_in *sockaddr, size_t sockaddr_size);
 void send_to_console(int fd, const void *data, size_t data_size, uint16_t port);
 int push_event(event_loop_t *loop, int type, const void *data, size_t size);
 int get_event(event_loop_t *loop, vanilla_event_t *event, int wait);

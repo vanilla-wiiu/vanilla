@@ -1,4 +1,4 @@
-FROM docker.io/debian:trixie
+FROM docker.io/debian:trixie@sha256:f324c7ff54321e8d9c588493a20244965938ce0aa50bbd1022d38010e9ffc4b1
 
 ARG ARCH=x86_64
 ENV ARCH=${ARCH}

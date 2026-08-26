@@ -27,7 +27,7 @@ An Arch User Repository (AUR) package called `vanilla-wiiu-git` is available for
 - [Nintendo Switch](https://github.com/vanilla-wiiu/vanilla/wiki/Nintendo-Switch)
 - [Steam Deck](https://github.com/vanilla-wiiu/vanilla/wiki/Steam-Deck)
 - [Linux](https://github.com/vanilla-wiiu/vanilla/wiki/Linux-Setup-Guide) (check [Wi-Fi hardware compatibility](https://github.com/vanilla-wiiu/vanilla/wiki/Wireless-Compatibility))
-- [Android](https://github.com/vanilla-wiiu/vanilla/wiki/Android-Setup-Guide) (currently frontend only)
+- [Android](https://github.com/vanilla-wiiu/vanilla/wiki/Android)
 - [Windows](https://github.com/vanilla-wiiu/vanilla/wiki/Windows-Setup-Guide) (currently frontend only)
 - [Raspberry Pi](https://github.com/vanilla-wiiu/vanilla/wiki/Single%E2%80%90Board-Computers) (requires [external Wi-Fi adapter](https://github.com/vanilla-wiiu/vanilla/wiki/Linux-Setup-Guide#raspberry-pi))
 - [Orange Pi](https://github.com/vanilla-wiiu/vanilla/wiki/Single%E2%80%90Board-Computers) (requires [external Wi-Fi adapter](https://github.com/vanilla-wiiu/vanilla/wiki/Linux-Setup-Guide#raspberry-pi))
@@ -90,19 +90,19 @@ Vanilla currently requires the following dependencies:
 
 - **Debian/Ubuntu**
   ```sh
-  apt install build-essential cmake libsdl2-dev libsdl2-image-dev libsdl2-ttf-dev libavformat-dev libavcodec-dev libavutil-dev libswscale-dev libnl-genl-3-dev libnl-route-3-dev libssl-dev libxml2-dev libnm-dev libpolkit-agent-1-dev
+  apt install build-essential cmake libsdl2-dev libsdl2-image-dev libsdl2-ttf-dev libavformat-dev libavcodec-dev libavutil-dev libswscale-dev libnl-genl-3-dev libnl-route-3-dev libxml2-dev libnm-dev libpolkit-agent-1-dev
   ```
 - **Fedora**
   ```sh
-  dnf install libavcodec-free-devel libavutil-free-devel libavfilter-free-devel libnl3-devel SDL2-devel SDL2_image-devel SDL2_ttf-devel openssl-devel make automake gcc gcc-c++ kernel-devel cmake libxml2-devel NetworkManager-libnm-devel polkit-devel
+  dnf install libavcodec-free-devel libavutil-free-devel libavfilter-free-devel libnl3-devel SDL2-devel SDL2_image-devel SDL2_ttf-devel make automake gcc gcc-c++ kernel-devel cmake libxml2-devel NetworkManager-libnm-devel polkit-devel
   ```
 - **Arch**
   ```sh
-  pacman -S base-devel make cmake ffmpeg libnl sdl2 sdl2_image sdl2_ttf libxml2 libnm openssl polkit
+  pacman -S base-devel make cmake ffmpeg libnl sdl2 sdl2_image sdl2_ttf libxml2 libnm polkit
   ```
 - **Alpine/postmarketOS**
   ```sh
-  apk add build-base cmake sdl2-dev sdl2_image-dev sdl2_ttf-dev ffmpeg-dev libnl3-dev libxml2-dev openssl-dev networkmanager-dev polkit-dev
+  apk add build-base cmake sdl2-dev sdl2_image-dev sdl2_ttf-dev ffmpeg-dev libnl3-dev libxml2-dev networkmanager-dev polkit-dev
   ```
 
 The build process is otherwise normal for a CMake program:

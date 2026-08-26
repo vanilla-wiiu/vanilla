@@ -20,8 +20,6 @@
 #define VANILLA_PIPE_CC_UNINSTALL_POLKIT 0x8B
 #define VANILLA_PIPE_CC_QUIT 0x90
 
-#define VANILLA_PIPE_LOCAL_SOCKET "/tmp/vanilla-pipe_%i.sock"
-
 #define POLKIT_ACTION_DST "/usr/share/polkit-1/actions/com.mattkc.vanilla.policy"
 #define POLKIT_RULE_DST "/usr/share/polkit-1/rules.d/com.mattkc.vanilla.rules"
 

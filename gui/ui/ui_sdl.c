@@ -1,7 +1,6 @@
 #include "ui_sdl.h"
 
 #include <stdatomic.h>
-#include <errno.h>
 #include <math.h>
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_hints.h>
@@ -14,6 +13,11 @@
 #include <vanilla.h>
 #include <libavutil/hwcontext.h>
 #include <unistd.h>
+
+#ifdef ANDROID
+#include <libavcodec/mediacodec.h>
+#include "ui_sdl_android.h"
+#endif
 
 #ifdef VANILLA_HAS_EGL
 #include <SDL2/SDL_egl.h>
@@ -57,6 +61,11 @@
 #define AUDIO_BUFFER_SIZE 1664 // Wii U never deviates from this so we can hardcode it
 #define AUDIO_BUFFER_COUNT 4
 
+// Our tick rate is 180Hz, which matches the original gamepad input rate.
+// Our render tick rate is 60Hz (or 1/3 the input tick rate).
+#define VUI_INPUT_TICK_RATE 180
+#define VUI_RENDER_TICK_DIVISOR 3
+
 typedef struct {
     SDL_Texture *texture;
     int w;
@@ -86,12 +95,25 @@ typedef struct {
     SDL_GameController *controller;
     SDL_GameController *controller_gyros;
     SDL_Texture *game_tex;
+#ifdef ANDROID
+    SDL_Texture *android_video_tex;
+    float android_video_transform[16];
+#endif
     int last_shown_toast;
     SDL_Texture *toast_tex;
     struct timeval toast_expiry;
     AVFrame *frame;
     AVFrame *held_frame; // keeps the displayed dmabuf alive until the next frame replaces it
     uint64_t present_frame_sequence;
+    Uint64 update_tick_origin;
+    Uint64 update_tick_frequency;
+    uint64_t update_tick;
+#ifdef VANILLA_DRM_AVAILABLE
+    int fast_drm_active;
+#endif
+#ifdef ANDROID
+    int android_video_ready;
+#endif
 	SDL_Texture *pw_tex;
 
 	uint8_t audio_buffer[AUDIO_BUFFER_COUNT][AUDIO_BUFFER_SIZE];
@@ -685,6 +707,15 @@ int vui_sdl_event_thread(void *data)
             case SDL_TEXTEDITING:
                 vpilog("text editing!\n");
                 break;
+            case SDL_APP_WILLENTERBACKGROUND:
+                // On mobile, if the user is about to switch away from us,
+                // disconnect from the console so it doesn't remain burning up
+                // resources in the background
+                if (vui_game_mode_get(vui)) {
+                    // Send shutdown signal
+                    vpi_game_shutdown();
+                }
+                break;
             }
         }
     // }
@@ -730,6 +761,14 @@ int vui_init_sdl(vui_context_t *ctx, int fullscreen)
 	// Enable Steam Deck gyroscopes even while Steam is open and in gaming mode
 	// SDL_SetHintWithPriority("SDL_GAMECONTROLLER_ALLOW_STEAM_VIRTUAL_GAMEPAD", "0", SDL_HINT_OVERRIDE);
 	SDL_SetHintWithPriority(SDL_HINT_GAMECONTROLLER_IGNORE_DEVICES, "", SDL_HINT_OVERRIDE);
+
+#ifdef ANDROID
+    // Force SDL to use landscape orientations only
+    SDL_SetHint(SDL_HINT_ORIENTATIONS, "LandscapeLeft LandscapeRight");
+
+    // Force opengles2 for hardware decode interoperability
+    SDL_SetHint(SDL_HINT_RENDER_DRIVER, "opengles2");
+#endif
 
 	// Force EGL when using X11 so that VAAPI works
 	SDL_SetHint(SDL_HINT_VIDEO_X11_FORCE_EGL, "1");
@@ -899,6 +938,13 @@ int vui_init_sdl(vui_context_t *ctx, int fullscreen)
 
 	sdl_ctx->game_tex = 0;
 
+#ifdef ANDROID
+    sdl_ctx->android_video_tex = NULL;
+    if (vui_sdl_android_create_video_texture(sdl_ctx->renderer, ctx->screen_width, ctx->screen_height, &sdl_ctx->android_video_tex) < 0) {
+        vpilog("Android hardware decoding unavailable, falling back to software\n");
+    }
+#endif
+
     sdl_ctx->background = 0;
     sdl_ctx->last_shown_toast = 0;
     sdl_ctx->toast_tex = 0;
@@ -963,6 +1009,13 @@ void vui_close_sdl(vui_context_t *ctx)
 	}
 
     SDL_DestroyTexture(sdl_ctx->toast_tex);
+#ifdef ANDROID
+    vui_sdl_android_destroy_video_texture();
+    if (sdl_ctx->game_tex == sdl_ctx->android_video_tex) {
+        sdl_ctx->game_tex = 0;
+    }
+    SDL_DestroyTexture(sdl_ctx->android_video_tex);
+#endif
     if (sdl_ctx->game_tex) SDL_DestroyTexture(sdl_ctx->game_tex);
     SDL_DestroyTexture(sdl_ctx->background);
 
@@ -1296,28 +1349,43 @@ void vui_sdl_draw_background(vui_context_t *ctx, SDL_Renderer *renderer)
     }
 }
 
+static SDL_Texture *vui_sdl_get_layer_texture(vui_context_t *ctx,
+                                               SDL_Renderer *renderer,
+                                               int layer)
+{
+    vui_sdl_context_t *sdl_ctx = (vui_sdl_context_t *) ctx->platform_data;
+    if (sdl_ctx->layer_data[layer]) {
+        return sdl_ctx->layer_data[layer];
+    }
+
+    sdl_ctx->layer_data[layer] = SDL_CreateTexture(
+        renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_TARGET,
+        ctx->screen_width, ctx->screen_height);
+    if (!sdl_ctx->layer_data[layer]) {
+        return NULL;
+    }
+
+    SDL_BlendMode bm = SDL_ComposeCustomBlendMode(
+        SDL_BLENDFACTOR_ONE,
+        SDL_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
+        SDL_BLENDOPERATION_ADD,
+        SDL_BLENDFACTOR_ONE,
+        SDL_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
+        SDL_BLENDOPERATION_ADD
+    );
+
+    SDL_SetRenderDrawBlendMode(renderer, bm);
+    SDL_SetTextureBlendMode(sdl_ctx->layer_data[layer], bm);
+    return sdl_ctx->layer_data[layer];
+}
+
 void vui_draw_sdl(vui_context_t *ctx, SDL_Renderer *renderer)
 {
     vui_sdl_context_t *sdl_ctx = (vui_sdl_context_t *) ctx->platform_data;
 
     for (int layer = 0; layer < ctx->layers; layer++) {
-        if (!sdl_ctx->layer_data[layer]) {
-            // Create a new layer here
-            sdl_ctx->layer_data[layer] = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_TARGET, ctx->screen_width, ctx->screen_height);
-
-            SDL_BlendMode bm = SDL_ComposeCustomBlendMode(
-                SDL_BLENDFACTOR_ONE,
-                SDL_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
-                SDL_BLENDOPERATION_ADD,
-                SDL_BLENDFACTOR_ONE,
-                SDL_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
-                SDL_BLENDOPERATION_ADD
-            );
-
-            SDL_SetRenderDrawBlendMode(sdl_ctx->renderer, bm);
-            SDL_SetTextureBlendMode(sdl_ctx->layer_data[layer], bm);
-        }
-        SDL_SetRenderTarget(renderer, sdl_ctx->layer_data[layer]);
+        SDL_Texture *layer_texture = vui_sdl_get_layer_texture(ctx, renderer, layer);
+        SDL_SetRenderTarget(renderer, layer_texture);
 
         if (layer == 0 && ctx->background_enabled) {
             // Draw background
@@ -1640,6 +1708,15 @@ void vui_draw_sdl(vui_context_t *ctx, SDL_Renderer *renderer)
 
 int get_texture_from_cpu_frame(vui_sdl_context_t *sdl_ctx, AVFrame *f)
 {
+#ifdef ANDROID
+    // If we were using the Android texture, but for some reason switched to
+    // software decoding, ensure our game_tex gets correctly recreated
+	if (sdl_ctx->game_tex == sdl_ctx->android_video_tex) {
+		sdl_ctx->game_tex = NULL;
+		sdl_ctx->android_video_ready = 0;
+	}
+#endif
+
 	if (!sdl_ctx->game_tex) {
 		sdl_ctx->game_tex = SDL_CreateTexture(
 			sdl_ctx->renderer,
@@ -1881,20 +1958,108 @@ int get_texture_from_drm_prime_frame(vui_sdl_context_t *sdl_ctx, AVFrame *f)
 #endif
 }
 
+#ifdef ANDROID
+static SDL_FPoint transform_android_texcoord(const float matrix[16],
+                                             float s, float t)
+{
+    // Flip Y
+    t = 1.0f - t;
+    SDL_FPoint point = {
+        matrix[0] * s + matrix[4] * t + matrix[12],
+        matrix[1] * s + matrix[5] * t + matrix[13]
+    };
+    return point;
+}
+
+static int render_android_video_texture(vui_sdl_context_t *sdl_ctx,
+                                        int width, int height)
+{
+    const float *matrix = sdl_ctx->android_video_transform;
+    const SDL_Color white = { 255, 255, 255, 255 };
+    SDL_Vertex vertices[4] = {
+        { { 0.0f, 0.0f }, white, transform_android_texcoord(matrix, 0.0f, 0.0f) },
+        { { (float) width, 0.0f }, white, transform_android_texcoord(matrix, 1.0f, 0.0f) },
+        { { (float) width, (float) height }, white, transform_android_texcoord(matrix, 1.0f, 1.0f) },
+        { { 0.0f, (float) height }, white, transform_android_texcoord(matrix, 0.0f, 1.0f) }
+    };
+    static const int indices[] = { 0, 1, 2, 0, 2, 3 };
+
+    if (SDL_RenderGeometry(sdl_ctx->renderer, sdl_ctx->android_video_tex, vertices, 4, indices, 6) < 0) {
+        vpilog("Failed to render Android external texture: %s\n", SDL_GetError());
+        return 0;
+    }
+
+    return 1;
+}
+#endif
+
+static Uint64 vui_sdl_tick_deadline(const vui_sdl_context_t *sdl_ctx,
+                                    uint64_t tick)
+{
+    Uint64 whole_seconds = tick / VUI_INPUT_TICK_RATE;
+    Uint64 partial_ticks = tick % VUI_INPUT_TICK_RATE;
+    return sdl_ctx->update_tick_origin
+        + whole_seconds * sdl_ctx->update_tick_frequency
+        + partial_ticks * sdl_ctx->update_tick_frequency
+            / VUI_INPUT_TICK_RATE;
+}
+
+static void vui_sdl_wait_for_next_tick(vui_sdl_context_t *sdl_ctx)
+{
+    sdl_ctx->update_tick++;
+
+    Uint64 now = SDL_GetPerformanceCounter();
+    Uint64 deadline = vui_sdl_tick_deadline(sdl_ctx, sdl_ctx->update_tick);
+    if (now >= deadline) {
+        Uint64 elapsed = now - sdl_ctx->update_tick_origin;
+        uint64_t elapsed_ticks =
+            (elapsed / sdl_ctx->update_tick_frequency) * VUI_INPUT_TICK_RATE
+            + (elapsed % sdl_ctx->update_tick_frequency)
+                * VUI_INPUT_TICK_RATE / sdl_ctx->update_tick_frequency;
+        sdl_ctx->update_tick = elapsed_ticks + 1;
+        deadline = vui_sdl_tick_deadline(sdl_ctx, sdl_ctx->update_tick);
+    }
+
+    pthread_mutex_lock(&vpi_present_frame_mutex);
+    while ((now = SDL_GetPerformanceCounter()) < deadline) {
+        Uint64 remaining = deadline - now;
+        uint64_t wait_ns = remaining * 1000000000ULL
+            / sdl_ctx->update_tick_frequency;
+        if (!wait_ns)
+            wait_ns = 1;
+
+        struct timespec timeout;
+        clock_gettime(CLOCK_REALTIME, &timeout);
+        timeout.tv_sec += wait_ns / 1000000000ULL;
+        timeout.tv_nsec += wait_ns % 1000000000ULL;
+        if (timeout.tv_nsec >= 1000000000L) {
+            timeout.tv_sec++;
+            timeout.tv_nsec -= 1000000000L;
+        }
+
+        pthread_cond_timedwait(&vpi_present_frame_cond, &vpi_present_frame_mutex, &timeout);
+    }
+    pthread_mutex_unlock(&vpi_present_frame_mutex);
+}
+
 // Rendering/main thread
 int vui_update_sdl(vui_context_t *vui)
 {
-    static Uint32 last_update_time = 0;
-
     vui_sdl_event_thread(vui);
 
     vui_sdl_context_t *sdl_ctx = (vui_sdl_context_t *) vui->platform_data;
+
+    if (!sdl_ctx->update_tick_frequency) {
+        sdl_ctx->update_tick_frequency = SDL_GetPerformanceFrequency();
+        sdl_ctx->update_tick_origin = SDL_GetPerformanceCounter();
+    }
+    int render_tick = sdl_ctx->update_tick % VUI_RENDER_TICK_DIVISOR == 0;
 
     SDL_Renderer *renderer = sdl_ctx->renderer;
 
     vui_update(vui);
 
-    SDL_Texture *main_tex;
+    SDL_Texture *main_tex = NULL;
 
 #ifdef VANILLA_DRM_AVAILABLE
     static vanilla_drm_ctx_t *drm_ctx = NULL;
@@ -1903,13 +2068,14 @@ int vui_update_sdl(vui_context_t *vui)
     static vui_cuda_context_t *cuda_ctx = NULL;
 #endif // VANILLA_CUDA_AVAILABLE
 
-    int handle_final_blit = 1;
+    int sdl_frame_ready = 0;
     if (!vui->game_mode) {
 
 #ifdef VANILLA_DRM_AVAILABLE
         if (drm_ctx) {
             vui_sdl_drm_free(&drm_ctx); // will set to null
         }
+        sdl_ctx->fast_drm_active = 0;
 #endif // VANILLA_DRM_AVAILABLE
 #ifdef VANILLA_CUDA_AVAILABLE
         if (cuda_ctx) {
@@ -1920,6 +2086,33 @@ int vui_update_sdl(vui_context_t *vui)
         }
 #endif // VANILLA_CUDA_AVAILABLE
 
+        if (render_tick) {
+            // Draw vui to a custom texture
+            vui_draw_sdl(vui, renderer);
+
+            // Flatten layers
+			int el[MAX_BUTTON_COUNT];
+			int el_count = 0;
+			for (int i = 0; i < vui->layers; i++) {
+				if (vui->layer_enabled[i]) {
+					el[el_count] = i;
+					el_count++;
+				}
+			}
+
+            for (int i = el_count - 1; i > 0; i--) {
+                SDL_Texture *bg = sdl_ctx->layer_data[el[i-1]];
+                SDL_Texture *fg = sdl_ctx->layer_data[el[i]];
+
+                SDL_SetRenderTarget(renderer, bg);
+                SDL_SetTextureColorMod(fg, vui->layer_opacity[i] * 0xFF, vui->layer_opacity[i] * 0xFF, vui->layer_opacity[i] * 0xFF);
+                SDL_SetTextureAlphaMod(fg, vui->layer_opacity[i] * 0xFF);
+                SDL_RenderCopy(renderer, fg, NULL, NULL);
+            }
+
+            main_tex = sdl_ctx->layer_data[0];
+            sdl_frame_ready = main_tex != NULL;
+        }
     } else {
         pthread_mutex_lock(&vpi_present_frame_mutex);
 		if (vpi_present_frame
@@ -1950,14 +2143,15 @@ int vui_update_sdl(vui_context_t *vui)
                             SDL_RenderPresent(renderer);
                         }
                     }
-                    if (drm_ctx &&
-                        vui_sdl_drm_present(drm_ctx, sdl_ctx->frame)) {
-                        handle_final_blit = 0;
+                    if (drm_ctx && vui_sdl_drm_present(drm_ctx, sdl_ctx->frame)) {
+                        sdl_ctx->fast_drm_active = 1;
                     } else {
+                        sdl_ctx->fast_drm_active = 0;
                         get_texture_from_drm_prime_frame(sdl_ctx,
                                                          sdl_ctx->frame);
                     }
                 } else {
+                    sdl_ctx->fast_drm_active = 0;
                     get_texture_from_drm_prime_frame(sdl_ctx, sdl_ctx->frame);
                 }
 #endif // VANILLA_DRM_AVAILABLE
@@ -1991,6 +2185,26 @@ int vui_update_sdl(vui_context_t *vui)
 				}
                 break;
 			}
+#ifdef ANDROID
+            case AV_PIX_FMT_MEDIACODEC:
+            {
+                AVMediaCodecBuffer *buffer = (AVMediaCodecBuffer *) sdl_ctx->frame->data[3];
+                if (!sdl_ctx->android_video_tex || !buffer) {
+                    vpilog("MediaCodec produced a frame without an Android video surface\n");
+                    break;
+                }
+                if (sdl_ctx->game_tex && sdl_ctx->game_tex != sdl_ctx->android_video_tex) {
+                    SDL_DestroyTexture(sdl_ctx->game_tex);
+                }
+                sdl_ctx->game_tex = sdl_ctx->android_video_tex;
+                sdl_ctx->android_video_ready = 0;
+                if (av_mediacodec_release_buffer(buffer, 1) < 0) {
+                    vpilog("Failed to render MediaCodec output buffer\n");
+                    break;
+                }
+                break;
+            }
+#endif
             case AV_PIX_FMT_YUV420P:
 				get_texture_from_cpu_frame(sdl_ctx, sdl_ctx->frame);
                 break;
@@ -1998,59 +2212,51 @@ int vui_update_sdl(vui_context_t *vui)
 
 			av_frame_unref(sdl_ctx->held_frame);
 			av_frame_move_ref(sdl_ctx->held_frame, sdl_ctx->frame);
+        }
 
-            if (sdl_ctx->game_tex) {
-                if (handle_final_blit) {
-                    main_tex = sdl_ctx->layer_data[0];
-                    SDL_SetRenderTarget(renderer, main_tex);
-                    SDL_RenderCopy(renderer, sdl_ctx->game_tex, 0, 0);
-                } else {
-                    main_tex = sdl_ctx->game_tex;
+#ifdef ANDROID
+        /* MediaCodec publishes into SurfaceTexture asynchronously. Poll it at
+         * the input rate, but only draw the retained image on render ticks. */
+        if (sdl_ctx->game_tex == sdl_ctx->android_video_tex
+            && SDL_RenderFlush(renderer) == 0
+            && vui_sdl_android_update_video_texture(
+                sdl_ctx->android_video_transform)) {
+            sdl_ctx->android_video_ready = 1;
+        }
+#endif
+
+        int sdl_handles_final_blit = 1;
+#ifdef VANILLA_DRM_AVAILABLE
+        sdl_handles_final_blit = !sdl_ctx->fast_drm_active;
+#endif
+        if (render_tick && sdl_handles_final_blit) {
+            main_tex = vui_sdl_get_layer_texture(vui, renderer, 0);
+            if (main_tex) {
+                SDL_SetRenderTarget(renderer, main_tex);
+                SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+                SDL_RenderClear(renderer);
+
+                if (sdl_ctx->game_tex) {
+#ifdef ANDROID
+                    if (sdl_ctx->game_tex == sdl_ctx->android_video_tex) {
+                        if (sdl_ctx->android_video_ready) {
+                            render_android_video_texture(
+                                sdl_ctx, vui->screen_width,
+                                vui->screen_height);
+                        }
+                    } else
+#endif
+                    {
+                        SDL_RenderCopy(renderer, sdl_ctx->game_tex, NULL,
+                                       NULL);
+                    }
                 }
+                sdl_frame_ready = 1;
             }
-		} else {
-            // Didn't get a frame, nothing to be done
-            handle_final_blit = 0;
         }
     }
 
-    if (handle_final_blit) {
-        // Draw vui to a custom texture
-        if (!vui->game_mode) {
-            vui_draw_sdl(vui, renderer);
-
-            // Flatten layers
-            {
-                int el[MAX_BUTTON_COUNT];
-                int el_count = 0;
-                for (int i = 0; i < vui->layers; i++) {
-                    if (vui->layer_enabled[i]) {
-                        el[el_count] = i;
-                        el_count++;
-                    }
-                }
-
-                for (int i = el_count - 1; i > 0; i--) {
-                    SDL_Texture *bg = sdl_ctx->layer_data[el[i-1]];
-                    SDL_Texture *fg = sdl_ctx->layer_data[el[i]];
-
-                    SDL_SetRenderTarget(renderer, bg);
-                    SDL_SetTextureColorMod(fg, vui->layer_opacity[i] * 0xFF, vui->layer_opacity[i] * 0xFF, vui->layer_opacity[i] * 0xFF);
-                    SDL_SetTextureAlphaMod(fg, vui->layer_opacity[i] * 0xFF);
-                    SDL_RenderCopy(renderer, fg, NULL, NULL);
-                }
-
-                if (vui->game_mode) {
-                    // TODO: Composite onto game texture
-                    // SDL_SetRenderTarget(renderer, main_tex);
-                    // SDL_RenderCopy(renderer, sdl_ctx->layer_data[0], NULL, NULL);
-                } else {
-                    // Just return our texture
-                    main_tex = sdl_ctx->layer_data[0];
-                }
-            }
-        }
-
+    if (sdl_frame_ready) {
         // Draw toast on screen if necessary
         {
             const int TOAST_PADDING = 12;
@@ -2159,37 +2365,9 @@ int vui_update_sdl(vui_context_t *vui)
         SDL_RenderPresent(renderer);
     }
 
-    // Frame limiter to save CPU cycles
-    const Uint32 target = 5; // No need to update faster than 200Hz (gamepad polls at 180Hz, but this is easier to calculate)
-    Uint32 frame_delta = SDL_GetTicks() - last_update_time;
-    if (frame_delta < target) {
-        Uint32 wait_ms = target - frame_delta;
-        if (vui->game_mode) {
-            struct timespec deadline;
-            clock_gettime(CLOCK_REALTIME, &deadline);
-            deadline.tv_nsec += (long) wait_ms * 1000000;
-            if (deadline.tv_nsec >= 1000000000) {
-                deadline.tv_sec++;
-                deadline.tv_nsec -= 1000000000;
-            }
-
-            pthread_mutex_lock(&vpi_present_frame_mutex);
-            while (sdl_ctx->present_frame_sequence == vpi_present_frame_sequence) {
-                int err = pthread_cond_timedwait(
-                    &vpi_present_frame_cond,
-                    &vpi_present_frame_mutex,
-                    &deadline
-                );
-                if (err == ETIMEDOUT) {
-                    break;
-                }
-            }
-            pthread_mutex_unlock(&vpi_present_frame_mutex);
-        } else {
-            SDL_Delay(wait_ms);
-        }
+    if (!vui->quit) {
+        vui_sdl_wait_for_next_tick(sdl_ctx);
     }
-    last_update_time = SDL_GetTicks();
 
     return !vui->quit;
 }

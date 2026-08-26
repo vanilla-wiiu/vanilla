@@ -19,9 +19,14 @@ else()
     set(vendored_default FALSE)
 endif()
 
+set(vanilla_pipe_default OFF)
+if(LINUX OR ANDROID)
+    set(vanilla_pipe_default ON)
+endif()
+
 OPTION(VANILLA_BUILD_GUI "Build SDL2 GUI app" ON)
 OPTION(VANILLA_BUILD_TESTS "Build unit tests for Vanilla" OFF)
-OPTION(VANILLA_BUILD_PIPE "Build vanilla-pipe for connecting to Wii U (Linux only)" ${LINUX})
+OPTION(VANILLA_BUILD_PIPE "Build vanilla-pipe for connecting to Wii U" ${vanilla_pipe_default})
 OPTION(VANILLA_BUILD_VENDORED "Build Vanilla with \"vendored\" third-party libraries" ${vendored_default})
 
 add_subdirectory(lib)

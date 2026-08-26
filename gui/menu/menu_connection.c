@@ -5,10 +5,14 @@
 typedef uint32_t in_addr_t;
 #else
 #include <arpa/inet.h>
+#ifdef ANDROID
+#include <net/if.h>
+#endif
 #endif
 
 #include <dirent.h>
 #include <errno.h>
+#include <limits.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -17,6 +21,10 @@ typedef uint32_t in_addr_t;
 #include "menu_common.h"
 #include "menu_settings.h"
 #include "pipemgmt.h"
+#include "platform.h"
+#ifdef ANDROID
+#include "platform_android.h"
+#endif
 #include "ui/ui_anim.h"
 #include "ui/ui_util.h"
 
@@ -26,8 +34,10 @@ static int error_lbl;
 static int ip_textedit;
 
 #define MAX_WIRELESS_ENTRIES 4
+static size_t detected_wireless_interface_count = 0;
 static char detected_wireless_interfaces[256][256];
-static int intf_start = 0;
+#define MAX_DETECTED_WIRELESS_INTERFACES (sizeof(detected_wireless_interfaces) / sizeof(detected_wireless_interfaces[0]))
+static int intf_start = 0; // NOTE: Not currently implemented, but may be used for pagination in the future
 static int intf_buttons[MAX_WIRELESS_ENTRIES];
 
 static const char *checkmark = 0;//"checkmark.svg";
@@ -66,13 +76,39 @@ static void return_to_connection(vui_context_t *vui, int btn, void *v)
     vui_transition_fade_layer_out(vui, layer, cb, cb_data);
 }
 
-static void populate_wireless_intf()
+static void add_wireless_interface(const char *intf)
 {
-    // LINUX ONLY:
+    // Sanity checks
+    if (!intf || !intf[0] || detected_wireless_interface_count >= MAX_DETECTED_WIRELESS_INTERFACES) {
+        return;
+    }
+
+    // Ensure interface hasn't already been added
+    for (size_t i = 0; i < detected_wireless_interface_count; i++) {
+        if (!strcmp(detected_wireless_interfaces[i], intf)) {
+            return;
+        }
+    }
+
+    // Add interface
+    vui_strncpy(
+        detected_wireless_interfaces[detected_wireless_interface_count],
+        intf,
+        sizeof(detected_wireless_interfaces[detected_wireless_interface_count]));
+    detected_wireless_interface_count++;
+}
+
+static void populate_wireless_intf(void)
+{
+#ifdef ANDROID
+    static const char *android_prefixes[] = {"wlan", "wifi", "swlan", "mlan", "ath"};
+    static const size_t android_prefix_count = sizeof(android_prefixes) / sizeof(android_prefixes[0]);
+#endif
+
     struct dirent *dir;
     DIR *d = opendir("/sys/class/net");
     char buf[1024];
-    size_t cur = 0;
+    detected_wireless_interface_count = 0;
     if (d) {
         while ((dir = readdir(d)) != 0) {
             const char *intf = dir->d_name;
@@ -80,14 +116,38 @@ static void populate_wireless_intf()
                 snprintf(buf, sizeof(buf), "/sys/class/net/%s/wireless", intf);
                 DIR *wifi_check = opendir(buf);
                 if (wifi_check) {
-                    vui_strncpy(detected_wireless_interfaces[cur], intf, sizeof(detected_wireless_interfaces[cur]));
-                    cur++;
+                    add_wireless_interface(intf);
                     closedir(wifi_check);
+                } else {
+#ifdef ANDROID
+                    // Fallback heuristic approach for Android
+                    for (size_t prefix = 0; prefix < android_prefix_count; prefix++) {
+                        const char *p = android_prefixes[prefix];
+                        if (!strncmp(intf, p, strlen(p))) {
+                            add_wireless_interface(intf);
+                            break;
+                        }
+                    }
+#endif
                 }
             }
         }
         closedir(d);
     }
+
+#ifdef ANDROID
+    // Some Android releases may restrict /sys/class/net altogether. Probe
+    // heuristically.
+    for (size_t prefix = 0; prefix < android_prefix_count; prefix++) {
+        for (unsigned int index = 0; index < 8; index++) {
+            char intf[IF_NAMESIZE];
+            snprintf(intf, sizeof(intf), "%s%u", android_prefixes[prefix], index);
+            if (if_nametoindex(intf)) {
+                add_wireless_interface(intf);
+            }
+        }
+    }
+#endif
 }
 
 static void intf_pressed(vui_context_t *vui, int button, void *v)
@@ -241,6 +301,7 @@ void vpi_menu_connection_and_return_to(vui_context_t *vui, int fade_fglayer, vui
 
     int is_local = vpi_config.server_address == VANILLA_ADDRESS_LOCAL;
     int is_via_server = vpi_config.server_address != VANILLA_ADDRESS_LOCAL;
+    int local_available = 1;
 
     const int lbl2_width = bkg_rect.w*2/3;
     const char *lbl2_txt;
@@ -250,6 +311,15 @@ void vpi_menu_connection_and_return_to(vui_context_t *vui, int fade_fglayer, vui
 #else
     lbl2_txt = lang(VPI_LANG_NO_LOCAL_AVAILABLE);
     is_local = 0;
+    local_available = 0;
+#endif
+
+#ifdef ANDROID
+    if (local_available && !vpi_android_has_root_access()) {
+        lbl2_txt = lang(VPI_LANG_ANDROID_ROOT_REQUIRED);
+        is_local = 0;
+        local_available = 0;
+    }
 #endif
 
     vui_label_create(vui, bkg_rect.x + bkg_rect.w/2 - lbl2_width/2, bkg_rect.y + lbl_margin + bkg_rect.h/8, lbl2_width, bkg_rect.h - lbl_margin - lbl_margin, lbl2_txt, vui_color_create(0.66f,0.66f,0.66f,1), VUI_FONT_SIZE_SMALL, fglayer);
@@ -263,9 +333,7 @@ void vpi_menu_connection_and_return_to(vui_context_t *vui, int fade_fglayer, vui
     vui_button_update_checked(vui, local_btn, is_local);
     vui_button_update_checked(vui, via_server_btn, is_via_server);
 
-#ifndef VANILLA_PIPE_AVAILABLE
-    vui_button_update_enabled(vui, local_btn, 0);
-#endif
+    vui_button_update_enabled(vui, local_btn, local_available);
 
     // Back button
     vpi_menu_create_back_button(vui, fglayer, return_to_settings, (void *) (intptr_t) bglayer);

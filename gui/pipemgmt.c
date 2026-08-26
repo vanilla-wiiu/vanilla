@@ -1,3 +1,5 @@
+#define _GNU_SOURCE
+
 #include "pipemgmt.h"
 
 #ifdef VANILLA_PIPE_AVAILABLE
@@ -14,6 +16,11 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #include <vanilla.h>
+
+#ifdef ANDROID
+#include <dlfcn.h>
+#include <limits.h>
+#endif
 
 #include "config.h"
 #include "platform.h"
@@ -193,7 +200,7 @@ void *vpi_pipe_log_thread(void *data)
             if (buf[buf_read] == '\n') {
                 // Print line and reset
                 buf[buf_read + 1] = '\0';
-                vpilog(buf);
+                vpilog("%s", buf);
 
                 buf_read = 0;
             } else {
@@ -270,9 +277,6 @@ void vpi_cancel_pw()
 		potential_pipe_pid = -1;
 		close(in_pipes[1]);
 		close(err_pipes[0]);
-
-		close(err_pipes[1]);
-		close(in_pipes[0]);
 	}
 	vpi_close_polkit_session();
 }
@@ -290,19 +294,28 @@ int vpi_start_epilog()
 	int ret = VANILLA_ERR_GENERIC;
 
     char ready_buf[500];
-    memset(ready_buf, 0, sizeof(ready_buf));
 
     while (1) {
         size_t read_count = 0;
-        char c;
-        while (read_count < sizeof(ready_buf) && read(err_pipes[0], &c, 1) == 1) {
+        int reached_eof = 0;
+        while (read_count + 1 < sizeof(ready_buf)) {
+            char c;
+            ssize_t read_size = read(err_pipes[0], &c, 1);
+            if (read_size < 0 && errno == EINTR) {
+                continue;
+            }
+            if (read_size != 1) {
+                reached_eof = 1;
+                break;
+            }
             if (c == '\n') {
                 break;
             }
-            ready_buf[read_count] = c;
-            read_count++;
+            ready_buf[read_count++] = c;
         }
-        if (!memcmp(ready_buf, "READY", 5)) {
+        ready_buf[read_count] = 0;
+
+        if (!strcmp(ready_buf, "READY")) {
             ret = VANILLA_SUCCESS;
 
             pipe_input = in_pipes[1];
@@ -313,24 +326,27 @@ int vpi_start_epilog()
             pipe_pid = potential_pipe_pid;
 
             break;
-        } else {
-            // vpilog("GOT INVALID SIGNAL: %.*s\n", sizeof(ready_buf), ready_buf);
-            vpilog("%.*s\n", sizeof(ready_buf), ready_buf);
+        }
 
-            if (potential_pipe_pid != -1) {
-                kill(potential_pipe_pid, SIGKILL);
-                potential_pipe_pid = -1;
-            }
+        if (read_count) {
+            vpilog("%s\n", ready_buf);
+        }
 
-            close(in_pipes[1]);
-            close(err_pipes[0]);
-
+        if (reached_eof) {
             break;
         }
     }
 
-	close(err_pipes[1]);
-	close(in_pipes[0]);
+    if (ret != VANILLA_SUCCESS) {
+        if (potential_pipe_pid != -1) {
+            kill(potential_pipe_pid, SIGKILL);
+            waitpid(potential_pipe_pid, NULL, 0);
+            potential_pipe_pid = -1;
+        }
+
+        close(in_pipes[1]);
+        close(err_pipes[0]);
+    }
 
 #ifdef VANILLA_POLKIT_AVAILABLE
 	vpi_close_polkit_session();
@@ -437,29 +453,69 @@ int vpi_start_pipe()
 
         setsid();
 
-        // Get current working directory
+        // Execute process (this will replace the running code)
+#ifdef ANDROID
+        // HACK: Use dladdr to get the path of us
+        Dl_info info;
+        if (!dladdr((void *) &vpi_start_pipe, &info) || !info.dli_fname) {
+            vpilog("Could not get running path of current Android executable\n");
+            _exit(1);
+        }
+
+        // Copy path into our own string
+        char our_path[PATH_MAX];
+        if (snprintf(our_path, sizeof(our_path), "%s", info.dli_fname) >= sizeof(our_path)) {
+            vpilog("Android library path too long - this is a bug, tell maintainers\n");
+            _exit(1);
+        }
+
+        // Get dirname of string and add libvanilla_pipe.so
+        char *library_dir = dirname(our_path);
+        char pipe_path[PATH_MAX];
+        if (snprintf(pipe_path, sizeof(pipe_path), "%s/libvanilla_pipe.so", library_dir) >= sizeof(pipe_path)) {
+            vpilog("Android pipe path too long - this is a bug, tell maintainers\n");
+            _exit(1);
+        }
+
+        char command[PATH_MAX + 256];
+        snprintf(command, sizeof(command), "exec '%s' -local '%s'", pipe_path, vpi_config.wireless_interface);
+        r = execlp("su", "su", "-c", command, (const char *) 0);
+#else
         char exe[4096];
-        ssize_t link_len = readlink("/proc/self/exe", exe, sizeof(exe));
+        ssize_t link_len = readlink("/proc/self/exe", exe, sizeof(exe) - 1);
+        if (link_len <= 0) {
+            _exit(1);
+        }
         exe[link_len] = 0;
         dirname(exe);
         strcat(exe, "/vanilla-pipe");
 
-        // Execute process (this will replace the running code)
 #ifdef VANILLA_POLKIT_AVAILABLE
         const char *pkexec = "pkexec";
         r = execlp(pkexec, pkexec, exe, "-local", vpi_config.wireless_interface, (const char *) 0);
 #else
-		r = execlp(exe, exe, "-local", vpi_config.wireless_interface, (const char *) 0);
+        r = execlp(exe, exe, "-local", vpi_config.wireless_interface, (const char *) 0);
+#endif
+
 #endif
 
         // Handle failure to execute, use _exit so we don't interfere with the host
         _exit(1);
     } else if (pid < 0) {
         // Fork error
+        close(in_pipes[0]);
+        close(in_pipes[1]);
+        close(err_pipes[0]);
+        close(err_pipes[1]);
         return VANILLA_ERR_GENERIC;
     } else {
         // Continuation of parent
         int ret = VANILLA_ERR_GENERIC;
+
+        // Only the child writes stderr and reads stdin. Closing the parent's
+        // copies here lets startup detect a child that exits before READY.
+        close(err_pipes[1]);
+        close(in_pipes[0]);
 
         struct sigaction sa;
         sa.sa_handler = sigint_handler;
