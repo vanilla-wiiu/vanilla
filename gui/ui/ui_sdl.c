@@ -49,6 +49,12 @@
 #include "platform_nx_imu.h"
 #endif
 
+#if defined(ANDROID) || defined(__ANDROID__)
+// TODO
+#elif defined(__linux__)
+#include "ui_sdl_linux.h"
+#endif
+
 #define MIN(a,b) (((a)<(b))?(a):(b))
 #define PW_CHAR_SIZE 20
 #define PW_CHAR_PAD 2
@@ -187,6 +193,10 @@ void init_gamepad(vui_context_t *ctx)
     ctx->default_key_map[SDL_SCANCODE_F12] = VPI_ACTION_SCREENSHOT;
     ctx->default_key_map[SDL_SCANCODE_F11] = VPI_ACTION_TOGGLE_FULLSCREEN;
     ctx->default_key_map[SDL_SCANCODE_ESCAPE] = VPI_ACTION_DISCONNECT;
+
+    ctx->default_key_map[SDL_SCANCODE_SLEEP] = VPI_ACTION_DISCONNECT; // Nintendo Switch power button
+    ctx->default_key_map[SDL_SCANCODE_VOLUMEUP] = VPI_ACTION_VOLUME_UP;
+    ctx->default_key_map[SDL_SCANCODE_VOLUMEDOWN] = VPI_ACTION_VOLUME_DOWN;
 }
 
 void find_valid_controller(vui_sdl_context_t *sdl_ctx)
@@ -352,6 +362,26 @@ void vui_sdl_fullscreen_enabled_handler(vui_context_t *ctx, int enabled, void *u
 
     SDL_SetWindowFullscreen(sdl_ctx->window, enabled ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0);
     SDL_ShowCursor(vpi_config.cursor_in_fullscreen || !enabled);
+}
+
+void vui_sdl_brightness_set_handler(vui_context_t *ctx, float brightness, void *userdata)
+{
+    vui_sdl_context_t *sdl_ctx = (vui_sdl_context_t *) ctx->platform_data;
+
+    vpilog("SETTING BRIGHTNESS TO %.1f\n", brightness);
+
+#if defined(ANDROID) || defined(__ANDROID__)
+    if (vui_sdl_android_set_brightness(brightness) == 0) {
+        return;
+    }
+#elif defined(__linux__)
+    if (vui_sdl_linux_set_brightness(brightness) == 0) {
+        return;
+    }
+#endif
+
+    // Fallback
+    SDL_SetWindowBrightness(sdl_ctx->window, brightness);
 }
 
 void vui_sdl_get_key_mapping_handler(vui_context_t *ctx, int vanilla_btn, void *userdata)
@@ -537,7 +567,7 @@ int vui_sdl_event_thread(void *data)
                 break;
             case SDL_CONTROLLERBUTTONDOWN:
             case SDL_CONTROLLERBUTTONUP:
-                if (sdl_ctx->controller && ev.cdevice.which == SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(sdl_ctx->controller))) {
+            if (sdl_ctx->controller && ev.cdevice.which == SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(sdl_ctx->controller))) {
                     int btn_idx = ev.cbutton.button;
                     int vanilla_btn;
 
@@ -879,6 +909,8 @@ int vui_init_sdl(vui_context_t *ctx, int fullscreen)
 	sdl_ctx->last_power_state = VUI_POWERSTATE_UNKNOWN;
 
     ctx->fullscreen_enabled_handler = vui_sdl_fullscreen_enabled_handler;
+
+    ctx->brightness_set_handler = vui_sdl_brightness_set_handler;
 
     if (TTF_Init()) {
         vpilog("Failed to TTF_Init\n");

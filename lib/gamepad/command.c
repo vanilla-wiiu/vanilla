@@ -60,7 +60,7 @@ void send_generic_response(int skt, CmdHeader *response)
 void handle_generic_packet(gamepad_context_t *info, int skt, GenericPacket *request)
 {
     GenericCmdHeader *gen_cmd = &request->generic_cmd_header;
-    vanilla_log("magic: %x, flags: %x, service ID: %u, method ID: %u", gen_cmd->magic_0x7E, gen_cmd->flags, gen_cmd->service_id, gen_cmd->method_id);
+    // vanilla_log("magic: %x, flags: %x, service ID: %u, method ID: %u", gen_cmd->magic_0x7E, gen_cmd->flags, gen_cmd->service_id, gen_cmd->method_id);
 
     // Prepare response
     GenericPacket response;
@@ -170,13 +170,39 @@ void handle_generic_packet(gamepad_context_t *info, int skt, GenericPacket *requ
         }
         case METHOD_ID_PERIPHERAL_UPDATE_EEPROM:
         {
-            vanilla_log("5,12 - index: %u, length: %u", response.payload[0], response.payload[1]);
-            response.generic_cmd_header.error_code = 0;
+            uint8_t index = request->payload[0];
+            uint8_t length = request->payload[1];
+
+            vanilla_log("5,12 - index: %u, length: %u", index, length);
+
+            uint16_t our_crc = crc16(request->payload + 2, length - 2);
+            uint16_t their_crc = le16toh(*(uint16_t *)(request->payload + 2 + length - 2));
+
+            if (our_crc != their_crc) {
+                // TODO: Report some kind of error to the console?
+            } else {
+                // Update our EEPROM
+                switch (index) {
+                case 0x10:
+                {
+                    // Console wants to change our brightness
+                    // vanilla_log("Change brightness to %x", request->payload[2]);
+                    uint8_t b = request->payload[2];
+                    push_event(info->event_loop, VANILLA_EVENT_BRIGHTNESS, &b, sizeof(b));
+                    break;
+                }
+                default:
+                    vanilla_log("Console attempted write to unknown EEPROM offset: 0x%x", index);
+                }
+
+                // Report success
+                response.generic_cmd_header.error_code = 0;
+            }
             break;
         }
         case METHOD_ID_PERIPHERAL_SET_REMOCON:
         {
-            vanilla_log("5,24 - str1: %s, str2: %s", response.payload, response.payload + 5);
+            vanilla_log("5,24 - str1: %s, str2: %s", request->payload, request->payload + 5);
             response.generic_cmd_header.error_code = 0;
             break;
         }
@@ -227,7 +253,7 @@ void handle_time_packet(int skt, TimePacket *request)
 
 void handle_command_packet(gamepad_context_t *info, int skt, CmdHeader *request)
 {
-	vanilla_log("packet_type: %u, query_type: %u, payload_size: 0x%X", request->packet_type, request->query_type, request->payload_size);
+	// vanilla_log("packet_type: %u, query_type: %u, payload_size: 0x%X", request->packet_type, request->query_type, request->payload_size);
     switch (request->packet_type)
     {
     case PACKET_TYPE_REQUEST:

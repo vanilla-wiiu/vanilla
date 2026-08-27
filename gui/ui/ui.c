@@ -1041,3 +1041,10 @@ void vui_mic_callback_set(vui_context_t *ctx, vui_mic_callback_t callback, void 
 	ctx->mic_callback = callback;
 	ctx->mic_callback_data = userdata;
 }
+
+void vui_brightness_set(vui_context_t *ctx, float brightness)
+{
+    if (ctx->brightness_set_handler) {
+        ctx->brightness_set_handler(ctx, brightness, ctx->brightness_set_handler_data);
+    }
+}

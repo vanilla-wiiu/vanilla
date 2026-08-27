@@ -13,6 +13,20 @@
 #include "menu_main.h"
 #include "platform.h"
 
+#if defined(__linux__) && !defined(ANDROID) && !defined(__ANDROID__)
+#include <pthread.h>
+#include <string.h>
+
+// Calling system() is synchronous and causes a noticeable pause during
+// gameplay. This allows us to thunk from a separate detached thread so it
+// doesn't interrupt the main thread.
+static void *run_volume_helper(void *command)
+{
+    (void) system((const char *) command);
+    return NULL;
+}
+#endif
+
 void vpi_mic_callback(void *userdata, const uint8_t *data, size_t len)
 {
 	vanilla_send_audio(data, len);
@@ -80,6 +94,31 @@ void vpi_menu_action(vui_context_t *vui, vpi_extra_action_t action)
         vpi_config.fullscreen = !vpi_config.fullscreen;
         vpi_config_save();
         vui_set_fullscreen(vui, vpi_config.fullscreen);
+        break;
+    }
+    case VPI_ACTION_VOLUME_UP:
+    case VPI_ACTION_VOLUME_DOWN:
+    {
+#if defined(__linux__) && !defined(ANDROID) && !defined(__ANDROID__)
+        // On some platforms (specifically our Buildroot platforms like the
+        // Raspberry Pi and Nintendo Switch), there's no built-in handler for
+        // the volume keys. So here we handle them ourselves.
+        const char *helper = "/usr/libexec/vanilla-volume";
+        if (access(helper, X_OK) == 0) {
+            const char *command = action == VPI_ACTION_VOLUME_UP
+                ? "/usr/libexec/vanilla-volume up"
+                : "/usr/libexec/vanilla-volume down";
+            pthread_t thread;
+            int error = pthread_create(&thread, NULL, run_volume_helper, (void *) command);
+            if (error == 0) {
+                error = pthread_detach(thread);
+            }
+            if (error != 0) {
+                vpilog("Failed to start volume helper thread: %s\n", strerror(error));
+            }
+        }
+#endif
+        break;
     }
     }
 }

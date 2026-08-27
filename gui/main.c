@@ -97,6 +97,14 @@ int SDL_main(int argc, const char **argv)
         goto exit;
     }
 
+#ifndef ANDROID
+    // On Linux/Buildroot platforms like Raspberry Pi and Nintendo Switch, it
+    // is desirable for the brightness to be restored from config. On Android
+    // though, the brightness will be set externally so changing it here is
+    // probably not desirable.
+    vui_brightness_set(vui, vpi_config.screen_brightness);
+#endif
+
     vpi_menu_init(vui);
 
     while (vui_update_sdl(vui)) {

@@ -12,6 +12,7 @@ static jobject video_surface;
 static jmethodID create_surface_method;
 static jmethodID update_texture_method;
 static jmethodID destroy_surface_method;
+static jmethodID set_brightness_method;
 
 static int handle_jni_exception(JNIEnv *env, const char *operation)
 {
@@ -53,7 +54,8 @@ static int init_jni(JNIEnv *env)
     create_surface_method = (*env)->GetStaticMethodID(env, video_class, "createVideoSurface", "(III)Landroid/view/Surface;");
     update_texture_method = (*env)->GetStaticMethodID(env, video_class, "updateVideoSurfaceTexture", "()[F");
     destroy_surface_method = (*env)->GetStaticMethodID(env, video_class, "destroyVideoSurface", "()V");
-    if (!create_surface_method || !update_texture_method || !destroy_surface_method ||
+    set_brightness_method = (*env)->GetStaticMethodID(env, video_class, "setScreenBrightness", "(F)Z");
+    if (!create_surface_method || !update_texture_method || !destroy_surface_method || !set_brightness_method ||
         handle_jni_exception(env, "looking up video surface methods") < 0) {
         (*env)->DeleteGlobalRef(env, video_class);
         video_class = NULL;
@@ -69,6 +71,7 @@ static int init_jni(JNIEnv *env)
         create_surface_method = NULL;
         update_texture_method = NULL;
         destroy_surface_method = NULL;
+        set_brightness_method = NULL;
         return -1;
     }
 
@@ -144,6 +147,21 @@ void *vui_sdl_android_get_video_surface(void)
     return video_surface;
 }
 
+int vui_sdl_android_set_brightness(float brightness)
+{
+    JNIEnv *env = (JNIEnv *) SDL_AndroidGetJNIEnv();
+    if (!env || init_jni(env) < 0) {
+        return -1;
+    }
+
+    jboolean dispatched = (*env)->CallStaticBooleanMethod(env, video_class, set_brightness_method,
+                                                          (jfloat) brightness);
+    if (handle_jni_exception(env, "setting screen brightness") < 0) {
+        return -1;
+    }
+    return dispatched ? 0 : -1;
+}
+
 int vui_sdl_android_update_video_texture(float transform[16])
 {
     JNIEnv *env = (JNIEnv *) SDL_AndroidGetJNIEnv();
@@ -192,4 +210,5 @@ void vui_sdl_android_destroy_video_texture(void)
     create_surface_method = NULL;
     update_texture_method = NULL;
     destroy_surface_method = NULL;
+    set_brightness_method = NULL;
 }

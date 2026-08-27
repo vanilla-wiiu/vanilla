@@ -5,19 +5,6 @@ export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:/usr/lib/aarch64-linux-gnu/tegra:/usr/l
 export DISPLAY=:0
 export SDL_VIDEODRIVER=x11
 
-# Listen for power button presses
-/usr/bin/vanilla-nx-power-btn &
-POWER_BTN_WATCHER_PID=$!
-/usr/bin/vanilla-nx-volume-btn &
-VOLUME_BTN_WATCHER_PID=$!
-
-# Ensure watcher is closed
-cleanup() {
-    kill "$POWER_BTN_WATCHER_PID" 2>/dev/null
-    kill "$VOLUME_BTN_WATCHER_PID" 2>/dev/null
-}
-trap cleanup EXIT
-
 # Start X
 X "$DISPLAY" -nolisten tcp vt1 &
 X_PID=$!

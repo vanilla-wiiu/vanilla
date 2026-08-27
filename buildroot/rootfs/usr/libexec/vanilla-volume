@@ -1,0 +1,13 @@
+#!/bin/sh
+
+case "$1" in
+    up)
+        exec amixer -q sset 'x Speaker' 5%+ unmute
+        ;;
+    down)
+        exec amixer -q sset 'x Speaker' 5%-
+        ;;
+    *)
+        exit 2
+        ;;
+esac

@@ -2,6 +2,7 @@ package com.mattkc.vanilla;
 
 import android.graphics.SurfaceTexture;
 import android.view.Surface;
+import android.view.WindowManager;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -55,5 +56,19 @@ public class VanillaActivity extends SDLActivity {
 			videoSurfaceTexture.release();
 			videoSurfaceTexture = null;
 		}
+	}
+
+	public static boolean setScreenBrightness(float brightness) {
+		final VanillaActivity activity = (VanillaActivity) mSingleton;
+		if (activity == null) {
+			return false;
+		}
+
+		activity.runOnUiThread(() -> {
+			WindowManager.LayoutParams attributes = activity.getWindow().getAttributes();
+			attributes.screenBrightness = Math.max(0.0f, Math.min(1.0f, brightness));
+			activity.getWindow().setAttributes(attributes);
+		});
+		return true;
 	}
 }
