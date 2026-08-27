@@ -31,6 +31,7 @@ An Arch User Repository (AUR) package called `vanilla-wiiu-git` is available for
 - [Windows](https://github.com/vanilla-wiiu/vanilla/wiki/Windows-Setup-Guide) (currently frontend only)
 - [Raspberry Pi](https://github.com/vanilla-wiiu/vanilla/wiki/Single%E2%80%90Board-Computers) (requires [external Wi-Fi adapter](https://github.com/vanilla-wiiu/vanilla/wiki/Linux-Setup-Guide#raspberry-pi))
 - [Orange Pi](https://github.com/vanilla-wiiu/vanilla/wiki/Single%E2%80%90Board-Computers) (requires [external Wi-Fi adapter](https://github.com/vanilla-wiiu/vanilla/wiki/Linux-Setup-Guide#raspberry-pi))
+- macOS (currently frontend only)
 - *iOS* - Coming soon
 
 ## What Wi-Fi adapter should I use?
