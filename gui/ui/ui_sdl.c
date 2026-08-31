@@ -2203,7 +2203,6 @@ int vui_update_sdl(vui_context_t *vui)
                     SDL_DestroyTexture(sdl_ctx->game_tex);
                 }
                 sdl_ctx->game_tex = sdl_ctx->android_video_tex;
-                sdl_ctx->android_video_ready = 0;
                 if (av_mediacodec_release_buffer(buffer, 1) < 0) {
                     vpilog("Failed to render MediaCodec output buffer\n");
                     break;

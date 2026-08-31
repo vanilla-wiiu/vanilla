@@ -182,7 +182,7 @@ void vpi_menu_settings(vui_context_t *vui, void *v)
     sc++;
 #endif
 
-#if defined(VANILLA_CUDA_AVAILABLE) || defined(VANILLA_DRM_AVAILABLE) || defined(VANILLA_VAAPI_AVAILABLE)
+#if defined(VANILLA_CUDA_AVAILABLE) || defined(VANILLA_DRM_AVAILABLE) || defined(VANILLA_VAAPI_AVAILABLE) || defined(ANDROID)
 #define VANILLA_HAS_HWDEC
 #endif
 
