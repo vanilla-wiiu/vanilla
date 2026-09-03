@@ -2087,6 +2087,10 @@ int vui_update_sdl(vui_context_t *vui)
         if (cuda_ctx) {
             if (cuda_ctx->resY) cudaGraphicsUnregisterResource(cuda_ctx->resY);
             if (cuda_ctx->resUV) cudaGraphicsUnregisterResource(cuda_ctx->resUV);
+            if (sdl_ctx->game_tex) {
+                SDL_DestroyTexture(sdl_ctx->game_tex);
+                sdl_ctx->game_tex = NULL;
+            }
             free(cuda_ctx);
             cuda_ctx = NULL;
         }
