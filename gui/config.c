@@ -66,6 +66,8 @@ void vpi_config_save()
         xmlTextWriterWriteElement(writer, BAD_CAST "bssid", BAD_CAST buf);
         hex_to_string(buf, entry->psk.psk, sizeof(vanilla_psk_t));
         xmlTextWriterWriteElement(writer, BAD_CAST "psk", BAD_CAST buf);
+        sprintf(buf, "%i", entry->region);
+        xmlTextWriterWriteElement(writer, BAD_CAST "region", BAD_CAST buf);
         xmlTextWriterEndElement(writer); // console
     }
     xmlTextWriterEndElement(writer); // consoles
@@ -77,9 +79,6 @@ void vpi_config_save()
 
     sprintf(buf, "%i", vpi_config.connection_setup);
     xmlTextWriterWriteElement(writer, BAD_CAST "connectionsetup", BAD_CAST buf);
-
-    sprintf(buf, "%i", vpi_config.region);
-    xmlTextWriterWriteElement(writer, BAD_CAST "region", BAD_CAST buf);
 
     sprintf(buf, "%i", vpi_config.swap_abxy);
     xmlTextWriterWriteElement(writer, BAD_CAST "swapabxy", BAD_CAST buf);
@@ -182,7 +181,6 @@ void vpi_config_init()
     memset(&vpi_config, 0, sizeof(vpi_config));
 
     vpi_config.server_address = VANILLA_ADDRESS_LOCAL;
-    vpi_config.region = VANILLA_REGION_AMERICA;
     vpi_config.fullscreen = 1;
     vpi_config_reset_default_controls_internal();
     vpi_config.cursor_in_fullscreen = 0;
@@ -214,6 +212,7 @@ void vpi_config_init()
                         vpi_config.connected_console_entries = malloc(vpi_config.connected_console_count * sizeof(vpi_console_entry_t));
 
                         vpi_console_entry_t *entry = vpi_config.connected_console_entries;
+                        entry->region = VANILLA_REGION_AMERICA; // Set default region
                         console = child->children;
                         while (console) {
                             if (console->type == XML_ELEMENT_NODE && !strcmp((const char *) console->name, "console")) {
@@ -225,6 +224,8 @@ void vpi_config_init()
                                         string_to_hex(entry->bssid.bssid, sizeof(entry->bssid), (const char *) console_info->children->content);
                                     } else if (!strcmp((const char *) console_info->name, "psk")) {
                                         string_to_hex(entry->psk.psk, sizeof(entry->psk), (const char *) console_info->children->content);
+                                    } else if (!strcmp((const char *) console_info->name, "region")) {
+                                        entry->region = atoi((const char *) console_info->children->content);
                                     }
                                     console_info = console_info->next;
                                 }
@@ -244,8 +245,6 @@ void vpi_config_init()
                         }
                     } else if (!strcmp((const char *) child->name, "connectionsetup")) {
                         vpi_config.connection_setup = atoi((const char *) child->children->content);
-                    } else if (!strcmp((const char *) child->name, "region")) {
-                        vpi_config.region = atoi((const char *) child->children->content);
                     } else if (!strcmp((const char *) child->name, "swapabxy")) {
                         vpi_config.swap_abxy = atoi((const char *) child->children->content);
                     } else if (!strcmp((const char *) child->name, "fastdrm")) {
