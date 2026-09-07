@@ -11,47 +11,47 @@ permissions:
   packages: write
 jobs:
   build-ios:
-    runs-on: macos-latest
+    name: Build ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: iOS
+            runner: macos-latest
+            xcode: latest-stable
+            configure_preset: ios-device-modern
+            build_preset: ios-device-modern-release
+            ipa: Vanilla-unsigned.ipa
+          - name: iOS-legacy
+            runner: macos-15
+            xcode: '16.4'
+            configure_preset: ios-device-legacy
+            build_preset: ios-device-legacy-release
+            ipa: Vanilla-legacy-unsigned.ipa
+    runs-on: ${{ matrix.runner }}
     steps:
     - uses: actions/checkout@v4
       with:
         submodules: recursive
     - uses: maxim-lobanov/setup-xcode@v1
       with:
-        xcode-version: latest-stable
+        xcode-version: ${{ matrix.xcode }}
+    - name: Configure iOS
+      run: cmake --preset ${{ matrix.configure_preset }}
     - name: Build iOS
-      run: ./ios/build.sh
-    - name: Create IPA
+      run: cmake --build --preset ${{ matrix.build_preset }} --parallel
+    - name: Create unsigned IPA
       run: |
+        app_path=build/${{ matrix.configure_preset }}/bin/Release/Vanilla.app
+        test -d "$app_path"
         mkdir -p Payload
-        cp -r ./build/ios-device/bin/Vanilla.app Payload/
-        zip -9rX Vanilla.ipa Payload
+        cp -R "$app_path" Payload/
+        zip -9rX "${{ matrix.ipa }}" Payload
     - name: Upload iOS Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: iOS
-        path: Vanilla.ipa
-  build-ios-legacy:
-    runs-on: macos-15
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        submodules: recursive
-    - uses: maxim-lobanov/setup-xcode@v1
-      with:
-        xcode-version: '16.4'
-    - name: Build iOS (legacy)
-      run: ./ios/build.sh --legacy
-    - name: Create IPA
-      run: |
-        mkdir -p Payload
-        cp -r ./build/ios-device-legacy/bin/Vanilla.app Payload/
-        zip -9rX Vanilla-legacy.ipa Payload
-    - name: Upload iOS Legacy Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: iOS-legacy
-        path: Vanilla-legacy.ipa
+        name: ${{ matrix.name }}
+        path: ${{ matrix.ipa }}
   build:
     strategy:
       fail-fast: false
@@ -172,4 +172,3 @@ jobs:
       run: |
         curl -fLOSs --retry 2 --retry-delay 60 https://github.com/probonopd/uploadtool/raw/master/upload.sh
         bash upload.sh ${{ matrix.platform.artifact }}
-

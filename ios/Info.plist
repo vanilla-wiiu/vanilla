@@ -49,9 +49,5 @@
     <string>Vanilla needs local network access to connect to your Wii U pipe.</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>Vanilla needs microphone access to stream audio to your Wii U console.</string>
-    <key>NSBonjourServices</key>
-    <array>
-        <string>_vanilla._tcp</string>
-    </array>
 </dict>
 </plist>

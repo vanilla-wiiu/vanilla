@@ -1,91 +1,134 @@
-# iOS Build Instructions
+# iOS build instructions
 
-This script builds the Vanilla library for iOS using CMake. It supports building for both device and simulator architectures.
+Vanilla uses CMake to generate an Xcode project for each supported iOS SDK and
+architecture. The checked-in presets keep device, legacy, and simulator builds in
+separate directories because the vendored FFmpeg build targets one architecture at
+a time.
+
+## Requirements
+
+- CMake 3.21 or newer
+- Xcode 26 for the modern iOS 15+ build
+- Xcode 15 or 16 for the legacy iOS 12+ build
+
+Select the required Xcode installation with `xcode-select` before configuring if
+you have more than one version installed.
 
 ## Build variants
 
-There are two device build variants (both `arm64`):
+| Preset | Minimum iOS | Architecture | App icon |
+| --- | --- | --- | --- |
+| `ios-device-modern` | 15.0 | arm64 | Icon Composer `AppIcon.icon` |
+| `ios-device-legacy` | 12.0 | arm64 | Classic `Assets.xcassets` catalog |
+| `ios-simulator-arm64` | 15.0 | arm64 | Icon Composer `AppIcon.icon` |
+| `ios-simulator-x86_64` | 15.0 | x86_64 | Icon Composer `AppIcon.icon` |
 
-| | Modern (default) | Legacy (`--legacy`) |
-| --- | --- | --- |
-| Minimum iOS | 15.0 | 12.0 |
-| App icon | `AppIcon.icon` (Icon Composer) | `Assets.xcassets` (classic `.appiconset`) |
-| Toolchain | Xcode 26 (iOS 26 SDK) | Xcode 15 / 16 |
-| Distribution | App Store or sideload | Sideload |
+The legacy device build covers every 64-bit iPhone and iPad. It requires Xcode 15
+or 16 because Xcode 26 cannot target iOS versions below 15 and older Xcode versions
+cannot compile the Icon Composer bundle used by the modern build.
 
-The **modern** build is the one to submit to the App Store — Apple requires building
-with the current SDK, and it uses the Liquid Glass `AppIcon.icon`.
+## Configure and build
 
-The **legacy** build lowers the deployment target to iOS 12.0, which covers every
-64-bit iPhone/iPad ever shipped (iPhone 5s and newer). It's `arm64`-only: the only
-devices that can't reach iOS 12 are all 32-bit (`armv7`), and no currently-available
-Xcode (or GitHub-hosted runner) can build a 32-bit slice, so iOS 12 is the practical
-floor. Note that Xcode 26 cannot target below iOS 15, so the legacy build must be made
-with Xcode 15 or 16 — and because those can't read the Icon Composer `AppIcon.icon`
-bundle, the legacy build compiles `ios/Assets.xcassets` (a traditional
-`AppIcon.appiconset`) instead. CI builds it on the `macos-15` runner.
+Configure a modern device build and compile it in Release mode:
 
-## Usage
-
-Build the project by running the following command in the terminal:
 ```bash
-./ios/build.sh [options]
+cmake --preset ios-device-modern
+cmake --build --preset ios-device-modern-release
 ```
 
-The options are:
-```
-Usage: ./ios/build.sh [OPTIONS]
+Use the corresponding `-debug` build preset for a Debug build. For example:
 
-Options:
-  --debug         Build in Debug mode (default: Release)
-  --simulator     Build for iOS Simulator instead of device
-  --legacy        Build the legacy iOS 12.0 back-compat variant (arm64)
-                  instead of the modern App Store build (iOS 15). Requires
-                  Xcode 15/16 (Xcode 26 cannot target below iOS 15).
-  --clean         Clean build directory before building
-  --no-ninja      Do not use Ninja generator even if available
-  --no-signing    Skip ad-hoc code signing for simulator builds
-  --help          Show this help message
+```bash
+cmake --build --preset ios-device-modern-debug
 ```
 
-The legacy build output lands in `build/ios-device-legacy/bin/Vanilla.app` so it does
-not clobber the modern `build/ios-device` tree.
+Legacy device builds use their own configure and build presets:
 
-## Installing
+```bash
+cmake --preset ios-device-legacy
+cmake --build --preset ios-device-legacy-release
+```
 
-### In the simulator
+For the simulator, select the preset matching the Mac host architecture:
 
-Launch the Simulator app.
+```bash
+uname -m
+cmake --preset ios-simulator-arm64
+cmake --build --preset ios-simulator-arm64-release
+```
+
+On an Intel Mac, replace `arm64` with `x86_64`. To clean before rebuilding, pass
+`--clean-first` to the build command.
+
+Each build directory contains a generated `Vanilla.xcodeproj`. It can be opened in
+Xcode for running and debugging:
+
+```bash
+open build/ios-device-modern/Vanilla.xcodeproj
+```
+
+## Simulator installation
+
+Start Simulator and find the desired device UUID:
+
 ```bash
 open -a Simulator
-```
-
-Look at the list of available devices and note down the UUID.
-```bash
 xcrun simctl list devices
 ```
 
-Install the built app on the simulator using the UUID.
+Install and launch the Release build, adjusting the architecture in the path when
+needed:
+
 ```bash
-xcrun simctl install <UUID> build/ios-simulator/bin/Vanilla.app
+xcrun simctl install <UUID> build/ios-simulator-arm64/bin/Release/Vanilla.app
+xcrun simctl launch <UUID> com.mattkc.vanilla
 ```
 
-Launch the app on the simulator.
+## Code signing
+
+The checked-in device presets disable code signing so pull-request CI can compile
+the app without Apple credentials. Simulator builds use an ad-hoc identity. To let
+Xcode sign a local device or distribution build, reconfigure with your Apple
+development team:
+
 ```bash
-xcrun simctl launch <UUID> com.mattkc.Vanilla
+cmake --preset ios-device-modern \
+  -DVANILLA_IOS_CODE_SIGNING=ON \
+  -DVANILLA_IOS_DEVELOPMENT_TEAM=<TEAM_ID>
+cmake --build --preset ios-device-modern-release
 ```
 
-### On a physical device (Sideloaddy)
+The bundle identifier is `com.mattkc.vanilla`; it must be registered to the selected
+team before automatic signing can succeed.
 
-Download and install [Sideloaddy](https://sideloadly.io/).
+## Sideloading
 
-Make an IPA file from the built app.
+The unsigned CI artifacts are intended for tools such as
+[Sideloadly](https://sideloadly.io/), which sign the app during installation. To
+create the same kind of IPA locally:
+
 ```bash
-cd build/ios-device/bin
 mkdir -p Payload
-cp -r Vanilla.app Payload/
-zip -r Vanilla.ipa Payload
-cd ../../..
+cp -R build/ios-device-modern/bin/Release/Vanilla.app Payload/
+zip -9rX Vanilla-unsigned.ipa Payload
 ```
 
-Open Sideloaddy, select the IPA file, and follow the instructions to install it on your device.
+## App Store archive
+
+An App Store build must be signed, archived, validated, and exported or uploaded;
+renaming an unsigned ZIP to `.ipa` is not sufficient. After configuring with code
+signing enabled, create an archive from the generated scheme:
+
+```bash
+xcodebuild \
+  -project build/ios-device-modern/Vanilla.xcodeproj \
+  -scheme vanilla \
+  -configuration Release \
+  -destination 'generic/platform=iOS' \
+  -archivePath "$PWD/build/Vanilla.xcarchive" \
+  archive
+```
+
+Open the archive in Xcode Organizer to validate and distribute it, or export it from
+CI with `xcodebuild -exportArchive` and an appropriate `ExportOptions.plist` stored
+outside the repository.

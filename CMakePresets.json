@@ -1,0 +1,127 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 21,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "ios-base",
+      "hidden": true,
+      "generator": "Xcode",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Darwin"
+      },
+      "cacheVariables": {
+        "CMAKE_SYSTEM_NAME": "iOS",
+        "CMAKE_POLICY_VERSION_MINIMUM": "3.5",
+        "CMAKE_XCODE_GENERATE_SCHEME": "ON",
+        "VANILLA_BUILD_PIPE": "OFF",
+        "VANILLA_BUILD_VENDORED": "ON",
+        "VANILLA_IOS_CODE_SIGNING": "OFF"
+      }
+    },
+    {
+      "name": "ios-device-modern",
+      "displayName": "iOS device (modern)",
+      "description": "App Store-capable arm64 build for iOS 15 or newer",
+      "inherits": "ios-base",
+      "cacheVariables": {
+        "CMAKE_OSX_SYSROOT": "iphoneos",
+        "CMAKE_OSX_ARCHITECTURES": "arm64",
+        "CMAKE_OSX_DEPLOYMENT_TARGET": "15.0",
+        "VANILLA_IOS_LEGACY": "OFF"
+      }
+    },
+    {
+      "name": "ios-device-legacy",
+      "displayName": "iOS device (legacy)",
+      "description": "Sideloadable arm64 build for iOS 12 or newer using Xcode 15 or 16",
+      "inherits": "ios-base",
+      "cacheVariables": {
+        "CMAKE_OSX_SYSROOT": "iphoneos",
+        "CMAKE_OSX_ARCHITECTURES": "arm64",
+        "CMAKE_OSX_DEPLOYMENT_TARGET": "12.0",
+        "VANILLA_IOS_LEGACY": "ON"
+      }
+    },
+    {
+      "name": "ios-simulator-arm64",
+      "displayName": "iOS simulator (Apple silicon)",
+      "description": "iOS 15 or newer simulator build for an arm64 Mac",
+      "inherits": "ios-base",
+      "cacheVariables": {
+        "CMAKE_OSX_SYSROOT": "iphonesimulator",
+        "CMAKE_OSX_ARCHITECTURES": "arm64",
+        "CMAKE_OSX_DEPLOYMENT_TARGET": "15.0",
+        "VANILLA_IOS_LEGACY": "OFF"
+      }
+    },
+    {
+      "name": "ios-simulator-x86_64",
+      "displayName": "iOS simulator (Intel)",
+      "description": "iOS 15 or newer simulator build for an Intel Mac",
+      "inherits": "ios-base",
+      "cacheVariables": {
+        "CMAKE_OSX_SYSROOT": "iphonesimulator",
+        "CMAKE_OSX_ARCHITECTURES": "x86_64",
+        "CMAKE_OSX_DEPLOYMENT_TARGET": "15.0",
+        "VANILLA_IOS_LEGACY": "OFF"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "ios-device-modern-release",
+      "configurePreset": "ios-device-modern",
+      "configuration": "Release",
+      "targets": ["vanilla"]
+    },
+    {
+      "name": "ios-device-modern-debug",
+      "configurePreset": "ios-device-modern",
+      "configuration": "Debug",
+      "targets": ["vanilla"]
+    },
+    {
+      "name": "ios-device-legacy-release",
+      "configurePreset": "ios-device-legacy",
+      "configuration": "Release",
+      "targets": ["vanilla"]
+    },
+    {
+      "name": "ios-device-legacy-debug",
+      "configurePreset": "ios-device-legacy",
+      "configuration": "Debug",
+      "targets": ["vanilla"]
+    },
+    {
+      "name": "ios-simulator-arm64-release",
+      "configurePreset": "ios-simulator-arm64",
+      "configuration": "Release",
+      "targets": ["vanilla"]
+    },
+    {
+      "name": "ios-simulator-arm64-debug",
+      "configurePreset": "ios-simulator-arm64",
+      "configuration": "Debug",
+      "targets": ["vanilla"]
+    },
+    {
+      "name": "ios-simulator-x86_64-release",
+      "configurePreset": "ios-simulator-x86_64",
+      "configuration": "Release",
+      "targets": ["vanilla"]
+    },
+    {
+      "name": "ios-simulator-x86_64-debug",
+      "configurePreset": "ios-simulator-x86_64",
+      "configuration": "Debug",
+      "targets": ["vanilla"]
+    }
+  ]
+}
