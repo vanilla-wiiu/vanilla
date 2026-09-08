@@ -4,9 +4,9 @@ if(NOT CMAKE_GENERATOR STREQUAL "Xcode")
     message(FATAL_ERROR "iOS build requires Xcode generator")
 endif()
 
-set(CMAKE_OSX_SYSROOT iphoneos CACHE STRING)
-set(CMAKE_OSX_ARCHITECTURES arm64 CACHE STRING)
-set(CMAKE_XCODE_GENERATE_SCHEME ON CACHE BOOL)
+set(CMAKE_OSX_SYSROOT iphoneos CACHE STRING "iOS SDK")
+set(CMAKE_OSX_ARCHITECTURES arm64 CACHE STRING "iOS architectures")
+set(CMAKE_XCODE_GENERATE_SCHEME ON CACHE BOOL "Generate an Xcode scheme")
 
 # Determine Xcode version to determine iOS deployment target
 if(NOT DEFINED CMAKE_OSX_DEPLOYMENT_TARGET)
@@ -31,7 +31,7 @@ if(NOT DEFINED CMAKE_OSX_DEPLOYMENT_TARGET)
     else()
         set(_vanilla_ios_deployment_target 12.0)
     endif()
-    set(CMAKE_OSX_DEPLOYMENT_TARGET "${_vanilla_ios_deployment_target}" CACHE STRING)
+    set(CMAKE_OSX_DEPLOYMENT_TARGET "${_vanilla_ios_deployment_target}" CACHE STRING "Minimum iOS deployment version")
 endif()
 
 if(IS_DIRECTORY "${CMAKE_OSX_SYSROOT}")
