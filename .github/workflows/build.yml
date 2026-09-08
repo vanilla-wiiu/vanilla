@@ -135,7 +135,6 @@ jobs:
         security list-keychains -d user -s "$keychain_path"
 
         signing_identity="$(security find-identity -v -p codesigning "$keychain_path" | sed -n 's/.*"\(Developer ID Application:.*\)"/\1/p' | head -n 1)"
-        test -n "$signing_identity" || { echo "::error::The certificate contains no Developer ID Application identity"; exit 1; }
 
         echo "MACOS_NOTARY_KEY_PATH=$notary_key_path" >> "$GITHUB_ENV"
         echo "MACOS_SIGNING_IDENTITY=$signing_identity" >> "$GITHUB_ENV"

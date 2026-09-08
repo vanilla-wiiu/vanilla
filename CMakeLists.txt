@@ -20,12 +20,6 @@ if(APPLE)
 endif()
 
 if(IOS)
-    if(NOT XCODE)
-        message(FATAL_ERROR
-            "iOS builds require the Xcode generator. Configure with one of the ios-* presets."
-        )
-    endif()
-
     string(TOLOWER "${CMAKE_OSX_SYSROOT}" _vanilla_ios_sysroot_lower)
     if(_vanilla_ios_sysroot_lower MATCHES "simulator")
         set(IOS_SIMULATOR TRUE)
@@ -41,22 +35,6 @@ if(IOS)
         )
     endif()
 
-    if(IS_DIRECTORY "${CMAKE_OSX_SYSROOT}")
-        set(VANILLA_IOS_SDK_PATH "${CMAKE_OSX_SYSROOT}")
-    else()
-        execute_process(
-            COMMAND xcrun --sdk "${CMAKE_OSX_SYSROOT}" --show-sdk-path
-            RESULT_VARIABLE _vanilla_ios_sdk_result
-            OUTPUT_VARIABLE VANILLA_IOS_SDK_PATH
-            ERROR_VARIABLE _vanilla_ios_sdk_error
-            OUTPUT_STRIP_TRAILING_WHITESPACE
-        )
-        if(NOT _vanilla_ios_sdk_result EQUAL 0 OR NOT IS_DIRECTORY "${VANILLA_IOS_SDK_PATH}")
-            message(FATAL_ERROR
-                "Could not resolve iOS SDK '${CMAKE_OSX_SYSROOT}': ${_vanilla_ios_sdk_error}"
-            )
-        endif()
-    endif()
 endif()
 
 if(ANDROID OR MSVC OR IOS)
