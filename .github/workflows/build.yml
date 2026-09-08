@@ -11,24 +11,8 @@ permissions:
   packages: write
 jobs:
   build-ios:
-    name: Build ${{ matrix.name }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: iOS
-            runner: macos-latest
-            xcode: latest-stable
-            configure_preset: ios-device-modern
-            build_preset: ios-device-modern-release
-            ipa: Vanilla-unsigned.ipa
-          - name: iOS-legacy
-            runner: macos-15
-            xcode: '16.4'
-            configure_preset: ios-device-legacy
-            build_preset: ios-device-legacy-release
-            ipa: Vanilla-legacy-unsigned.ipa
-    runs-on: ${{ matrix.runner }}
+    name: Build iOS
+    runs-on: macos-15
     steps:
     - uses: actions/checkout@v4
       with:
@@ -36,27 +20,27 @@ jobs:
 
     - uses: maxim-lobanov/setup-xcode@v1
       with:
-        xcode-version: ${{ matrix.xcode }}
+        xcode-version: '16.4'
 
     - name: Configure iOS
-      run: cmake --preset ${{ matrix.configure_preset }}
+      run: cmake --preset ios-device
 
     - name: Build iOS
-      run: cmake --build --preset ${{ matrix.build_preset }} --parallel
+      run: cmake --build --preset ios-device-release --parallel
 
     - name: Create unsigned IPA
       run: |
-        APP=build/${{ matrix.configure_preset }}/bin/Release/Vanilla.app
+        APP=build/ios-device/bin/Release/Vanilla.app
         test -d "$APP"
         mkdir -p Payload
         cp -R "$APP" Payload/
-        zip -9rX "${{ matrix.ipa }}" Payload
+        zip -9rX vanilla-ios.ipa Payload
 
     - name: Upload iOS Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: ${{ matrix.name }}
-        path: ${{ matrix.ipa }}
+        name: iOS
+        path: vanilla-ios.ipa
 
   build-macos:
     name: Build macOS

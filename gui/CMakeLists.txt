@@ -412,16 +412,7 @@ elseif(IOS)
         XCODE_ATTRIBUTE_IPHONEOS_DEPLOYMENT_TARGET "${CMAKE_OSX_DEPLOYMENT_TARGET}"
     )
 
-    if(VANILLA_IOS_CODE_SIGNING)
-        set_target_properties(vanilla PROPERTIES
-            XCODE_ATTRIBUTE_CODE_SIGN_STYLE "Automatic"
-        )
-        if(VANILLA_IOS_DEVELOPMENT_TEAM)
-            set_target_properties(vanilla PROPERTIES
-                XCODE_ATTRIBUTE_DEVELOPMENT_TEAM "${VANILLA_IOS_DEVELOPMENT_TEAM}"
-            )
-        endif()
-    elseif(IOS_SIMULATOR)
+    if(IOS_SIMULATOR)
         set_target_properties(vanilla PROPERTIES
             XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY "-"
             XCODE_ATTRIBUTE_CODE_SIGN_STYLE "Manual"
@@ -429,7 +420,6 @@ elseif(IOS)
     else()
         set_target_properties(vanilla PROPERTIES
             XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED "NO"
-            XCODE_ATTRIBUTE_CODE_SIGNING_REQUIRED "NO"
         )
     endif()
 
@@ -452,14 +442,15 @@ elseif(IOS)
         set(ACTOOL_PLATFORM "iphoneos")
     endif()
 
-    if(VANILLA_IOS_LEGACY)
-        set(_vanilla_icon_input "${CMAKE_SOURCE_DIR}/ios/Assets.xcassets")
-        set(_vanilla_icon_extra_args)
-        set(_vanilla_icon_comment "Compiling Assets.xcassets")
-    else()
+    if(XCODE_VERSION VERSION_GREATER_EQUAL 26.0
+        AND CMAKE_OSX_DEPLOYMENT_TARGET VERSION_GREATER_EQUAL 15.0)
         set(_vanilla_icon_input "${CMAKE_SOURCE_DIR}/ios/AppIcon.icon")
         set(_vanilla_icon_extra_args --include-all-app-icons)
         set(_vanilla_icon_comment "Compiling AppIcon.icon")
+    else()
+        set(_vanilla_icon_input "${CMAKE_SOURCE_DIR}/ios/Assets.xcassets")
+        set(_vanilla_icon_extra_args)
+        set(_vanilla_icon_comment "Compiling Assets.xcassets")
     endif()
 
     add_custom_command(

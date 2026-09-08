@@ -19,10 +19,6 @@ if(APPLE)
     enable_language(CXX)
 endif()
 
-option(VANILLA_IOS_LEGACY "Build for iOS 12.0" OFF)
-option(VANILLA_IOS_CODE_SIGNING "Enable automatic signing for iOS device builds" OFF)
-set(VANILLA_IOS_DEVELOPMENT_TEAM "" CACHE STRING "Apple development team used to sign the iOS app")
-
 if(IOS)
     if(NOT XCODE)
         message(FATAL_ERROR
