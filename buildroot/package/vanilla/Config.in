@@ -7,12 +7,36 @@ config BR2_PACKAGE_VANILLA
 
 if BR2_PACKAGE_VANILLA
 
+config BR2_PACKAGE_VANILLA_BUILD_GUI
+    bool "Enable GUI"
+    default y
+    select BR2_PACKAGE_SDL2
+    select BR2_PACKAGE_SDL2_TTF
+    select BR2_PACKAGE_SDL2_IMAGE
+    select BR2_PACKAGE_LIBXML2
+    help
+        Build the frontend. Enable if you're building a fully embedded
+        device for Vanilla, disable if the device is only handling
+        the connection to the Wii U.
+
+config BR2_PACKAGE_VANILLA_BUILD_PIPE
+    bool "Enable pipe"
+    default y
+    select BR2_PACKAGE_LIBNL
+    select BR2_PACKAGE_OPENSSL
+    help
+        Build the pipe. Enable if this device can connect to the Wii U
+        on its own. Disable if it will need to go through a separate
+        device (called a "pipe") to make the connection.
+
 config BR2_PACKAGE_VANILLA_USE_VAAPI
     bool "Enable VAAPI"
 
 config BR2_PACKAGE_VANILLA_USE_DRM
     bool "Enable DRM"
     default y
+    select BR2_PACKAGE_SDL2_OPENGLES
+    select BR2_PACKAGE_SDL2_KMSDRM
 
 config BR2_PACKAGE_VANILLA_USE_NX_IMU
     bool "Use Nintendo Switch motion sensors"

@@ -1,8 +1,9 @@
-FROM docker.io/ubuntu:24.04
+FROM docker.io/ubuntu:24.04@sha256:33ceb71981b602c1a7443a53469e4dba065f7503eab3078a2d7a57a2ab987517
 
 # Install build dependencies
 RUN apt update && \
-    apt -y install wget unzip git openjdk-17-jdk make && \
+    apt -y install wget unzip git openjdk-17-jdk make autoconf automake libtool \
+    pkg-config bison flex && \
     apt-get clean && \
     apt-get autoremove --yes && \
     rm -rf /var/lib/{apt,dpkg,cache,log}/

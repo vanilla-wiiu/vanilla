@@ -30,10 +30,10 @@ chmod +x /build/host/bin/mkdtimg
 rm -rf utils.tar.gz src
 
 /build/host/bin/mkdtimg create /install/switchroot/vanilla/nx-plat.dtimg --page_size=1000 \
-        /build/build/linux-linux-theofficialgman-5-2-2026/arch/arm64/boot/dts/tegra210-odin.dtb	 --id=0x4F44494E \
-		/build/build/linux-linux-theofficialgman-5-2-2026/arch/arm64/boot/dts/tegra210b01-odin.dtb --id=0x4F44494E --rev=0xb01 \
-		/build/build/linux-linux-theofficialgman-5-2-2026/arch/arm64/boot/dts/tegra210b01-vali.dtb --id=0x56414C49 \
-		/build/build/linux-linux-theofficialgman-5-2-2026/arch/arm64/boot/dts/tegra210b01-fric.dtb --id=0x46524947
+        /build/build/linux-linux-theofficialgman-8-15-2026/arch/arm64/boot/dts/tegra210-odin.dtb	 --id=0x4F44494E \
+		/build/build/linux-linux-theofficialgman-8-15-2026/arch/arm64/boot/dts/tegra210b01-odin.dtb --id=0x4F44494E --rev=0xb01 \
+		/build/build/linux-linux-theofficialgman-8-15-2026/arch/arm64/boot/dts/tegra210b01-vali.dtb --id=0x56414C49 \
+		/build/build/linux-linux-theofficialgman-8-15-2026/arch/arm64/boot/dts/tegra210b01-fric.dtb --id=0x46524947
 
 # Copy pre-made config
 cp /vanilla/gui/res/switch/config.xml /install/switchroot/vanilla/data/

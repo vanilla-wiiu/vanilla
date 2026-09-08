@@ -227,15 +227,15 @@ void vpi_menu_key_bindings(vui_context_t *vui, void *v)
         // RSTICK
         create_key_bind_button(vui, VANILLA_AXIS_R_UP, abxy_x_ref, l_stick_y_ref - btn_height * 1.5, btn_width, btn_height, layer);
         create_key_bind_button(vui, VANILLA_AXIS_R_DOWN, abxy_x_ref, l_stick_y_ref + btn_height / 2, btn_width, btn_height, layer);
-        create_key_bind_button(vui, VANILLA_AXIS_R_DOWN, abxy_x_ref - btn_width, l_stick_y_ref - btn_height / 2, btn_width, btn_height, layer);
+        create_key_bind_button(vui, VANILLA_AXIS_R_LEFT, abxy_x_ref - btn_width, l_stick_y_ref - btn_height / 2, btn_width, btn_height, layer);
         create_key_bind_button(vui, VANILLA_AXIS_R_RIGHT, abxy_x_ref + btn_width, l_stick_y_ref - btn_height / 2, btn_width, btn_height, layer);
         create_key_bind_button(vui, VANILLA_BTN_R3, abxy_x_ref, l_stick_y_ref - btn_height / 2, btn_width, btn_height, layer);
 
         // ABXY
-        create_key_bind_button(vui, VANILLA_BTN_UP, abxy_x_ref, abxy_y_ref - btn_height * 1.5, btn_width, btn_height, layer);
-        create_key_bind_button(vui, VANILLA_BTN_DOWN, abxy_x_ref, abxy_y_ref + btn_height / 2, btn_width, btn_height, layer);
-        create_key_bind_button(vui, VANILLA_BTN_LEFT, abxy_x_ref - btn_width, abxy_y_ref - btn_height / 2, btn_width, btn_height, layer);
-        create_key_bind_button(vui, VANILLA_BTN_RIGHT, abxy_x_ref + btn_width, abxy_y_ref - btn_height / 2, btn_width, btn_height, layer);
+        create_key_bind_button(vui, VANILLA_BTN_X, abxy_x_ref, abxy_y_ref - btn_height * 1.5, btn_width, btn_height, layer);
+        create_key_bind_button(vui, VANILLA_BTN_B, abxy_x_ref, abxy_y_ref + btn_height / 2, btn_width, btn_height, layer);
+        create_key_bind_button(vui, VANILLA_BTN_Y, abxy_x_ref - btn_width, abxy_y_ref - btn_height / 2, btn_width, btn_height, layer);
+        create_key_bind_button(vui, VANILLA_BTN_A, abxy_x_ref + btn_width, abxy_y_ref - btn_height / 2, btn_width, btn_height, layer);
 
         const int plus_minus_x_ref = img_w + btn_width * 3.5;
 

@@ -13,7 +13,7 @@ android {
     }
     compileSdkVersion 34
     defaultConfig {
-        minSdkVersion 19
+        minSdkVersion 21
         targetSdkVersion 34
         versionCode 1
         versionName "1.0"
@@ -23,7 +23,7 @@ android {
             //     abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86', 'x86_64'
             // }
             cmake {
-                arguments "-DANDROID_APP_PLATFORM=android-19", "-DANDROID_STL=c++_static"
+                arguments "-DANDROID_APP_PLATFORM=android-21", "-DANDROID_STL=c++_static"
                 abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86', 'x86_64'
                 version "3.31"
             }
@@ -35,6 +35,13 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }
+    packagingOptions {
+        jniLibs {
+            // Ensure libvanilla_pipe.so is accessible alongside main executable
+            useLegacyPackaging true
+        }
+    }
+    sourceSets.main.assets.setSrcDirs(['../../gui/assets'])
     applicationVariants.all { variant ->
         tasks["merge${variant.name.capitalize()}Assets"]
             .dependsOn("externalNativeBuild${variant.name.capitalize()}")

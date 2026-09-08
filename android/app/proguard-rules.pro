@@ -96,3 +96,9 @@
     void hapticRun(int, float, int);
     void hapticStop(int);
 }
+
+-keepclassmembers class com.mattkc.vanilla.VanillaActivity {
+    public static android.view.Surface createVideoSurface(int, int, int);
+    public static float[] updateVideoSurfaceTexture();
+    public static void destroyVideoSurface();
+}

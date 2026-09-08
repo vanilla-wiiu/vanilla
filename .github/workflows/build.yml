@@ -6,49 +6,199 @@ on:
   pull_request:
     paths-ignore:
     - 'README.md'
+permissions:
+  contents: write
+  packages: write
 jobs:
   build-ios:
-    runs-on: macos-latest
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        submodules: recursive
-    - uses: maxim-lobanov/setup-xcode@v1
-      with:
-        xcode-version: latest-stable
-    - name: Build iOS
-      run: ./ios/build.sh
-    - name: Create IPA
-      run: |
-        mkdir -p Payload
-        cp -r ./build/ios-device/bin/Vanilla.app Payload/
-        zip -9rX Vanilla.ipa Payload
-    - name: Upload iOS Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: iOS
-        path: Vanilla.ipa
-  build-ios-legacy:
+    name: Build iOS
     runs-on: macos-15
     steps:
     - uses: actions/checkout@v4
       with:
         submodules: recursive
+
     - uses: maxim-lobanov/setup-xcode@v1
       with:
         xcode-version: '16.4'
-    - name: Build iOS (legacy)
-      run: ./ios/build.sh --legacy
-    - name: Create IPA
+
+    - name: Configure iOS
       run: |
+        cmake -S . -B build -G Xcode --toolchain cmake/ios-toolchain.cmake -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+
+    - name: Build iOS
+      run: cmake --build build --config Release --target vanilla --parallel
+
+    - name: Create unsigned IPA
+      run: |
+        APP=build/bin/Release/Vanilla.app
+        test -d "$APP"
         mkdir -p Payload
-        cp -r ./build/ios-device-legacy/bin/Vanilla.app Payload/
-        zip -9rX Vanilla-legacy.ipa Payload
-    - name: Upload iOS Legacy Artifact
+        cp -R "$APP" Payload/
+        zip -9rX vanilla-ios.ipa Payload
+
+    - name: Upload iOS Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: iOS-legacy
-        path: Vanilla-legacy.ipa
+        name: ios
+        path: vanilla-ios.ipa
+
+    - name: Upload Continuous Release
+      if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' && github.repository == 'vanilla-wiiu/vanilla' }}
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        curl -fLOSs --retry 2 --retry-delay 60 https://github.com/probonopd/uploadtool/raw/master/upload.sh
+        bash upload.sh vanilla-ios.ipa
+
+  build-macos:
+    name: Build macOS
+    runs-on: macos-15
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - uses: maxim-lobanov/setup-xcode@v1
+      with:
+        xcode-version: '16.4'
+
+    - name: Configure
+      run: |
+        cmake -S . -B build \
+          -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+          -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" \
+          -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 \
+          -DCMAKE_OSX_SYSROOT="$(xcrun --sdk macosx --show-sdk-path)" \
+          -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+          -DVANILLA_BUILD_PIPE=OFF \
+          -DVANILLA_BUILD_VENDORED=ON
+
+    - name: Build
+      run: cmake --build build --target vanilla --parallel
+
+    - name: Package
+      run: |
+        ditto -c -k --keepParent "$GITHUB_WORKSPACE/build/bin/Vanilla.app" vanilla-macos-universal-unsigned.zip
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: macos universal unsigned
+        path: vanilla-macos-universal-unsigned.zip
+        if-no-files-found: error
+
+  sign-macos:
+    name: Sign and notarize macOS
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' && github.repository == 'vanilla-wiiu/vanilla' }}
+    needs: build-macos
+    runs-on: macos-15
+    environment: macos-release
+    steps:
+    - uses: actions/checkout@v4
+
+    - uses: maxim-lobanov/setup-xcode@v1
+      with:
+        xcode-version: '16.4'
+
+    - name: Download unsigned macOS artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: macos universal unsigned
+        path: incoming
+
+    - name: Unpack
+      run: |
+        mkdir -p signing
+        ditto -x -k incoming/vanilla-macos-universal-unsigned.zip signing
+
+    - name: Import signing certificate
+      env:
+        MACOS_CERTIFICATE_BASE64: ${{ secrets.MACOS_CERTIFICATE_BASE64 }}
+        MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+        MACOS_KEYCHAIN_PASSWORD: ${{ secrets.MACOS_KEYCHAIN_PASSWORD }}
+        MACOS_NOTARY_KEY_BASE64: ${{ secrets.MACOS_NOTARY_KEY_BASE64 }}
+        MACOS_NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
+      run: |
+        certificate_path="$RUNNER_TEMP/developer-id.p12"
+        keychain_path="$RUNNER_TEMP/vanilla-signing.keychain-db"
+        notary_key_path="$RUNNER_TEMP/AuthKey_${MACOS_NOTARY_KEY_ID}.p8"
+
+        printf '%s' "$MACOS_CERTIFICATE_BASE64" | base64 --decode -o "$certificate_path"
+        printf '%s' "$MACOS_NOTARY_KEY_BASE64" | base64 --decode -o "$notary_key_path"
+
+        security create-keychain -p "$MACOS_KEYCHAIN_PASSWORD" "$keychain_path"
+        security set-keychain-settings -lut 21600 "$keychain_path"
+        security unlock-keychain -p "$MACOS_KEYCHAIN_PASSWORD" "$keychain_path"
+        security import "$certificate_path" -P "$MACOS_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$keychain_path"
+        security set-key-partition-list -S apple-tool:,apple: -k "$MACOS_KEYCHAIN_PASSWORD" "$keychain_path"
+        security list-keychains -d user -s "$keychain_path"
+
+        signing_identity="$(security find-identity -v -p codesigning "$keychain_path" | sed -n 's/.*"\(Developer ID Application:.*\)"/\1/p' | head -n 1)"
+
+        echo "MACOS_NOTARY_KEY_PATH=$notary_key_path" >> "$GITHUB_ENV"
+        echo "MACOS_SIGNING_IDENTITY=$signing_identity" >> "$GITHUB_ENV"
+
+    - name: Sign
+      run: |
+        codesign \
+          --force \
+          --timestamp \
+          --options runtime \
+          --entitlements "$GITHUB_WORKSPACE/gui/res/Vanilla.entitlements" \
+          --sign "$MACOS_SIGNING_IDENTITY" \
+          "$GITHUB_WORKSPACE/signing/Vanilla.app"
+        codesign --verify --deep --strict --verbose=2 "$GITHUB_WORKSPACE/signing/Vanilla.app"
+
+    - name: Notarize and staple app
+      env:
+        MACOS_NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
+        MACOS_NOTARY_ISSUER_ID: ${{ secrets.MACOS_NOTARY_ISSUER_ID }}
+      run: |
+        APP="$GITHUB_WORKSPACE/signing/Vanilla.app"
+        ARCHIVE="$RUNNER_TEMP/Vanilla-notary.zip"
+
+        ditto -c -k --keepParent "$APP" "$ARCHIVE"
+        xcrun notarytool submit "$ARCHIVE" \
+          --key "$MACOS_NOTARY_KEY_PATH" \
+          --key-id "$MACOS_NOTARY_KEY_ID" \
+          --issuer "$MACOS_NOTARY_ISSUER_ID" \
+          --wait
+
+        xcrun stapler staple "$APP"
+        xcrun stapler validate "$APP"
+        spctl --assess --type execute --verbose=4 "$APP"
+
+    - name: Package
+      run: ditto -c -k --keepParent signing/Vanilla.app vanilla-macos-universal.zip
+
+    - name: Remove signing credentials
+      if: ${{ always() }}
+      env:
+        MACOS_NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
+      run: |
+        security delete-keychain "$RUNNER_TEMP/vanilla-signing.keychain-db" || true
+        rm -f "$RUNNER_TEMP/developer-id.p12"
+        if [ -n "$MACOS_NOTARY_KEY_ID" ]; then
+          rm -f "$RUNNER_TEMP/AuthKey_${MACOS_NOTARY_KEY_ID}.p8"
+        fi
+
+    - name: Upload signed macOS artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: macOS signed and notarized
+        path: vanilla-macos-universal.zip
+        if-no-files-found: error
+
+    - name: Upload signed continuous release
+      if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' && github.repository == 'vanilla-wiiu/vanilla' }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        curl -fLOSs --retry 2 --retry-delay 60 https://github.com/probonopd/uploadtool/raw/master/upload.sh
+        bash upload.sh vanilla-macos-universal.zip
+
   build:
     strategy:
       fail-fast: false
@@ -66,15 +216,18 @@ jobs:
           - os: android
             arch: universal
             artifact: vanilla-android-universal.apk
-          - os: macos
-            arch: universal
-            artifact: vanilla-macos-universal.zip
           - os: raspberrypi0w
             arch: armv6l
             artifact: vanilla-raspberrypi0w-image.zip
-          - os: raspberrypizero2w
+          - os: raspberrypi64
             arch: aarch64
-            artifact: vanilla-raspberrypizero2w-image.zip
+            artifact: vanilla-raspberrypi64-image.zip
+          - os: orangepi_zero2w
+            arch: aarch64
+            artifact: vanilla-orangepi_zero2w-image.zip
+          - os: orangepi_zero3
+            arch: aarch64
+            artifact: vanilla-orangepi_zero3-image.zip
           - os: nintendoswitch
             arch: aarch64
             artifact: vanilla-nintendoswitch-image.zip
@@ -90,6 +243,20 @@ jobs:
 
     - uses: docker/setup-buildx-action@v3
 
+    - name: Log in to GHCR
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Registry cache reference
+      id: cache
+      shell: bash
+      run: |
+        owner=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+        echo "ref=ghcr.io/$owner/vanilla-${{ matrix.platform.os }}-${{ matrix.platform.arch }}:buildcache" >> "$GITHUB_OUTPUT"
+
     - name: Build Docker image
       uses: docker/build-push-action@v6
       with:
@@ -99,8 +266,8 @@ jobs:
             ARCH=${{ matrix.platform.arch }}
         tags: vanilla-${{ matrix.platform.os }}-${{ matrix.platform.arch }}
         load: true
-        cache-from: type=gha,scope=vanilla-${{ matrix.platform.os }}-${{ matrix.platform.arch }}
-        cache-to: type=gha,scope=vanilla-${{ matrix.platform.os }}-${{ matrix.platform.arch }},mode=max
+        cache-from: type=registry,ref=${{ steps.cache.outputs.ref }}
+        cache-to: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/master' && github.repository == 'vanilla-wiiu/vanilla') && format('type=registry,ref={0},mode=max', steps.cache.outputs.ref) || '' }}
 
     - name: Run Docker container
       run: |
@@ -114,8 +281,8 @@ jobs:
       run: |
         tar czf ${{ matrix.platform.artifact }} -C "${{ github.workspace }}/build" .
 
-    - name: Archive (Windows/macOS/Raspberry Pi/Nintendo Switch)
-      if: ${{ matrix.platform.os == 'windows' || matrix.platform.os == 'macos' || matrix.platform.os == 'raspberrypi0w' || matrix.platform.os == 'raspberrypizero2w' || matrix.platform.os == 'nintendoswitch' }}
+    - name: Archive (Windows/Raspberry Pi/Nintendo Switch)
+      if: ${{ matrix.platform.os == 'windows' || matrix.platform.os == 'raspberrypi0w' || matrix.platform.os == 'raspberrypi64' || matrix.platform.os == 'nintendoswitch' || matrix.platform.os == 'orangepi_zero3' || matrix.platform.os == 'orangepi_zero2w' }}
       run: |
         cd build
         zip -r ../${{ matrix.platform.artifact }} .
@@ -149,4 +316,3 @@ jobs:
       run: |
         curl -fLOSs --retry 2 --retry-delay 60 https://github.com/probonopd/uploadtool/raw/master/upload.sh
         bash upload.sh ${{ matrix.platform.artifact }}
-

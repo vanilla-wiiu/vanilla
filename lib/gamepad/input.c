@@ -200,7 +200,7 @@ void set_battery_status(int status)
     pthread_mutex_unlock(&button_mtx);
 }
 
-void send_input(int socket_hid, const sockaddr_u *addr, size_t addr_size)
+void send_input(int socket_hid, const struct sockaddr_in *addr, size_t addr_size)
 {
     InputPacket ip;
     memset(&ip, 0, sizeof(ip));
@@ -298,9 +298,9 @@ void *listen_input(void *x)
 
     pthread_mutex_init(&button_mtx, NULL);
 
-    sockaddr_u addr;
+    struct sockaddr_in addr;
     size_t addr_size;
-    create_server_sockaddr(&addr, &addr_size, PORT_HID - 100, 0);
+    create_server_sockaddr(&addr, &addr_size, PORT_HID - 100);
 
     do {
         send_input(info->socket_hid, &addr, addr_size);

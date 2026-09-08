@@ -1,0 +1,10 @@
+comment "rtw89-morrownr needs a Linux kernel to be built"
+	depends on !BR2_LINUX_KERNEL
+
+config BR2_PACKAGE_RTW89_MORROWNR
+	bool "rtw89-morrownr"
+	depends on BR2_LINUX_KERNEL
+	help
+	  Realtek rtw89 drivers
+
+	  https://github.com/morrownr/rtw89

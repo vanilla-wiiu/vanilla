@@ -1,0 +1,38 @@
+diff --git a/drivers/staging/media/sunxi/cedrus/cedrus_hw.c b/drivers/staging/media/sunxi/cedrus/cedrus_hw.c
+index a6470a898..aeecc2e17 100644
+--- a/drivers/staging/media/sunxi/cedrus/cedrus_hw.c
++++ b/drivers/staging/media/sunxi/cedrus/cedrus_hw.c
+@@ -86,7 +86,7 @@ void cedrus_dst_format_set(struct cedrus_dev *dev,
+ 
+ 	switch (fmt->pixelformat) {
+ 	case V4L2_PIX_FMT_NV12:
+-		chroma_size = ALIGN(width, 16) * ALIGN(height, 16) / 2;
++		chroma_size = ALIGN(width, 64) * ALIGN(height, 16) / 2;
+ 
+ 		reg = VE_PRIMARY_OUT_FMT_NV12;
+ 		cedrus_write(dev, VE_PRIMARY_OUT_FMT, reg);
+@@ -94,8 +94,8 @@ void cedrus_dst_format_set(struct cedrus_dev *dev,
+ 		reg = chroma_size / 2;
+ 		cedrus_write(dev, VE_PRIMARY_CHROMA_BUF_LEN, reg);
+ 
+-		reg = VE_PRIMARY_FB_LINE_STRIDE_LUMA(ALIGN(width, 16)) |
+-		      VE_PRIMARY_FB_LINE_STRIDE_CHROMA(ALIGN(width, 16) / 2);
++		reg = VE_PRIMARY_FB_LINE_STRIDE_LUMA(ALIGN(width, 64)) |
++		      VE_PRIMARY_FB_LINE_STRIDE_CHROMA(ALIGN(width, 64) / 2);
+ 		cedrus_write(dev, VE_PRIMARY_FB_LINE_STRIDE, reg);
+ 
+ 		break;
+diff --git a/drivers/staging/media/sunxi/cedrus/cedrus_video.c b/drivers/staging/media/sunxi/cedrus/cedrus_video.c
+index 66714609b..e083e1a16 100644
+--- a/drivers/staging/media/sunxi/cedrus/cedrus_video.c
++++ b/drivers/staging/media/sunxi/cedrus/cedrus_video.c
+@@ -140,8 +140,7 @@ void cedrus_prepare_format(struct v4l2_pix_format *pix_fmt)
+ 		break;
+ 
+ 	case V4L2_PIX_FMT_NV12:
+-		/* 16-aligned stride. */
+-		bytesperline = ALIGN(width, 16);
++		bytesperline = ALIGN(width, 64);
+ 
+ 		/* 16-aligned height. */
+ 		height = ALIGN(height, 16);

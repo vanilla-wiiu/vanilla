@@ -1,0 +1,26 @@
+diff --git a/libavutil/hwcontext_v4l2request.c b/libavutil/hwcontext_v4l2request.c
+index b6633d9..1b3950c 100644
+--- a/libavutil/hwcontext_v4l2request.c
++++ b/libavutil/hwcontext_v4l2request.c
+@@ -250,6 +250,10 @@ static int v4l2request_set_format(AVHWFramesContext *hwfc,
+     return 0;
+ }
+
++static int v4l2request_try_format(AVHWFramesContext *hwfc,
++                                  enum v4l2_buf_type type,
++                                  uint32_t pixelformat);
++
+ static int v4l2request_select_capture_format(AVHWFramesContext *hwfc)
+ {
+     AVV4L2RequestFramesContext *fctx = hwfc->hwctx;
+@@ -264,6 +268,10 @@ static int v4l2request_select_capture_format(AVHWFramesContext *hwfc)
+         .type = type,
+     };
+
++    if ((!fctx->bit_depth || fctx->bit_depth == 8) &&
++        v4l2request_try_format(hwfc, type, V4L2_PIX_FMT_NV12) >= 0)
++        return v4l2request_set_format(hwfc, type, V4L2_PIX_FMT_NV12, 0);
++
+     // Get the driver preferred (or default) format
+     if (ioctl(fctxi->video_fd, VIDIOC_G_FMT, &format) < 0)
+         return AVERROR(errno);

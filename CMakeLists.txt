@@ -13,12 +13,11 @@ if(UNIX AND NOT APPLE AND NOT ANDROID)
     set(LINUX TRUE)
 endif()
 
-# Detect iOS (set by toolchain file or CMake)
-if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
-    set(IOS TRUE)
+if(APPLE)
+    # FFmpeg's configure step expects both compiler drivers even though Vanilla
+    # itself is written in C.
+    enable_language(CXX)
 endif()
-
-option(VANILLA_IOS_LEGACY "Build for iOS 12.0" OFF)
 
 if(ANDROID OR MSVC OR IOS)
     set(vendored_default TRUE)
@@ -26,9 +25,14 @@ else()
     set(vendored_default FALSE)
 endif()
 
+set(vanilla_pipe_default OFF)
+if(LINUX OR ANDROID)
+    set(vanilla_pipe_default ON)
+endif()
+
 OPTION(VANILLA_BUILD_GUI "Build SDL2 GUI app" ON)
 OPTION(VANILLA_BUILD_TESTS "Build unit tests for Vanilla" OFF)
-OPTION(VANILLA_BUILD_PIPE "Build vanilla-pipe for connecting to Wii U (Linux only)" ${LINUX})
+OPTION(VANILLA_BUILD_PIPE "Build vanilla-pipe for connecting to Wii U" ${vanilla_pipe_default})
 OPTION(VANILLA_BUILD_VENDORED "Build Vanilla with \"vendored\" third-party libraries" ${vendored_default})
 
 add_subdirectory(lib)
