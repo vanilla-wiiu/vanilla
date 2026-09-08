@@ -255,10 +255,10 @@ if (VANILLA_BUILD_VENDORED)
     endif()
 
 	if (IOS)
-		# iOS: compile FFmpeg for arm64
+		# Compile FFmpeg for arm64
 		compile_ffmpeg("FFmpeg" "${CMAKE_SYSTEM_NAME}" "${CMAKE_OSX_ARCHITECTURES}")
 	elseif (APPLE)
-		# macOS: Compile FFmpeg for both x86_64 and arm64
+		# Compile FFmpeg for both x86_64 and arm64
 		foreach (_arch ${CMAKE_OSX_ARCHITECTURES})
 			compile_ffmpeg("FFmpeg_${_arch}" "${CMAKE_SYSTEM_NAME}" "${_arch}")
 		endforeach()
