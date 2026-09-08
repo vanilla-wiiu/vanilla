@@ -7,8 +7,9 @@
   },
   "configurePresets": [
     {
-      "name": "ios-base",
-      "hidden": true,
+      "name": "ios-device",
+      "displayName": "iOS device",
+      "description": "arm64 device build with an Xcode-compatible deployment target",
       "generator": "Xcode",
       "toolchainFile": "${sourceDir}/cmake/ios-toolchain.cmake",
       "binaryDir": "${sourceDir}/build/${presetName}",
@@ -18,20 +19,7 @@
         "rhs": "Darwin"
       },
       "cacheVariables": {
-        "CMAKE_POLICY_VERSION_MINIMUM": "3.5",
-        "CMAKE_XCODE_GENERATE_SCHEME": "ON",
-        "VANILLA_BUILD_PIPE": "OFF",
-        "VANILLA_BUILD_VENDORED": "ON"
-      }
-    },
-    {
-      "name": "ios-device",
-      "displayName": "iOS device",
-      "description": "arm64 device build with an Xcode-compatible deployment target",
-      "inherits": "ios-base",
-      "cacheVariables": {
-        "CMAKE_OSX_SYSROOT": "iphoneos",
-        "CMAKE_OSX_ARCHITECTURES": "arm64"
+        "CMAKE_POLICY_VERSION_MINIMUM": "3.5"
       }
     }
   ],

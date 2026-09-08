@@ -4,6 +4,10 @@ if(NOT CMAKE_GENERATOR STREQUAL "Xcode")
     message(FATAL_ERROR "Vanilla's iOS toolchain requires the Xcode generator")
 endif()
 
+set(CMAKE_OSX_SYSROOT iphoneos CACHE STRING)
+set(CMAKE_OSX_ARCHITECTURES arm64 CACHE STRING)
+set(CMAKE_XCODE_GENERATE_SCHEME ON CACHE BOOL)
+
 if(NOT DEFINED CMAKE_OSX_DEPLOYMENT_TARGET)
     execute_process(
         COMMAND xcodebuild -version
