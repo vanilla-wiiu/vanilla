@@ -23,14 +23,15 @@ jobs:
         xcode-version: '16.4'
 
     - name: Configure iOS
-      run: cmake --preset ios-device
+      run: |
+        cmake -S . -B build -G Xcode --toolchain cmake/ios-toolchain.cmake -DCMAKE_POLICY_VERSION_MINIMUM=3.5
 
     - name: Build iOS
-      run: cmake --build --preset ios-device-release --parallel
+      run: cmake --build build --config Release --target vanilla --parallel
 
     - name: Create unsigned IPA
       run: |
-        APP=build/ios-device/bin/Release/Vanilla.app
+        APP=build/bin/Release/Vanilla.app
         test -d "$APP"
         mkdir -p Payload
         cp -R "$APP" Payload/

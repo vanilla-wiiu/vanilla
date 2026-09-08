@@ -15,13 +15,17 @@ When no deployment target is supplied, CMake selects iOS 12 for Xcode 15 or 16 a
 iOS 15 for Xcode 26 or newer. Xcode 26 and newer compile the Icon Composer bundle;
 older Xcode versions use the classic asset catalog. The CI build remains pinned to
 Xcode 16.4, so its artifact covers every 64-bit iPhone and iPad. These defaults are
-defined by `cmake/ios-toolchain.cmake`, which the shared iOS preset loads before
-CMake initializes its compilers.
+defined by `cmake/ios-toolchain.cmake`, which CMake loads before initializing its
+compilers.
 
 Override the automatic deployment target when configuring if needed:
 
 ```bash
-cmake --preset ios-device -DCMAKE_OSX_DEPLOYMENT_TARGET=15.0
+cmake -S . -B build/ios-device \
+  -G Xcode \
+  --toolchain cmake/ios-toolchain.cmake \
+  -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+  -DCMAKE_OSX_DEPLOYMENT_TARGET=15.0
 ```
 
 ## Configure and build
@@ -29,20 +33,23 @@ cmake --preset ios-device -DCMAKE_OSX_DEPLOYMENT_TARGET=15.0
 Configure a device build and compile it in Release mode:
 
 ```bash
-cmake --preset ios-device
-cmake --build --preset ios-device-release
+cmake -S . -B build/ios-device \
+  -G Xcode \
+  --toolchain cmake/ios-toolchain.cmake \
+  -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+cmake --build build/ios-device --config Release --target vanilla --parallel
 ```
 
-Use the corresponding `-debug` build preset for a Debug build. For example:
+Use the same generated project for a Debug build:
 
 ```bash
-cmake --build --preset ios-device-debug
+cmake --build build/ios-device --config Debug --target vanilla --parallel
 ```
 
 To clean before rebuilding, pass `--clean-first` to the build command.
 
-Each build directory contains a generated `Vanilla.xcodeproj`. It can be opened in
-Xcode for running and debugging:
+The build directory contains a generated `Vanilla.xcodeproj`. Open it in Xcode for
+running and debugging:
 
 ```bash
 open build/ios-device/Vanilla.xcodeproj
@@ -53,10 +60,9 @@ open build/ios-device/Vanilla.xcodeproj
 The generated device project disables code signing so CI and command-line builds
 produce an unsigned app without Apple credentials.
 
-To sign a device or distribution build, first generate and open the project:
+To sign a device or distribution build, configure it as above and open the project:
 
 ```bash
-cmake --preset ios-device
 open build/ios-device/Vanilla.xcodeproj
 ```
 
@@ -67,9 +73,9 @@ to that team before automatic signing can succeed. Because the Xcode project is
 generated, repeat this configuration after deleting or regenerating its build
 directory.
 
-Configuring the same preset with Xcode 26 or newer automatically selects the iOS 15
-deployment target and the Liquid Glass icon, making it suitable as the starting
-point for a manually signed App Store archive.
+Configuring with Xcode 26 or newer automatically selects the iOS 15 deployment
+target and the Liquid Glass icon, making it suitable as the starting point for a
+manually signed App Store archive.
 
 ## Sideloading
 
@@ -86,11 +92,5 @@ zip -9rX Vanilla-unsigned.ipa Payload
 ## App Store archive
 
 Use Xcode 26 or newer so the build uses the current SDK and Liquid Glass icon.
-Generate the project and configure signing through Xcode as described above:
-
-```bash
-cmake --preset ios-device
-open build/ios-device/Vanilla.xcodeproj
-```
-
-Choose Product > Archive, then use Xcode Organizer to validate and distribute it.
+Generate the project and configure signing through Xcode as described above, then
+choose Product > Archive and use Xcode Organizer to validate and distribute it.
