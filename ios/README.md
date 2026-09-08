@@ -1,8 +1,6 @@
 # iOS build instructions
 
-Vanilla uses CMake to generate Xcode projects for iOS devices and simulators. The
-checked-in presets keep each architecture in a separate directory because the
-vendored FFmpeg build targets one architecture at a time.
+Vanilla uses CMake to generate an Xcode project for arm64 iOS devices.
 
 ## Requirements
 
@@ -12,14 +10,6 @@ vendored FFmpeg build targets one architecture at a time.
 
 Select the required Xcode installation with `xcode-select` before configuring if
 you have more than one version installed.
-
-## Build variants
-
-| Preset | Minimum iOS | Architecture | App icon |
-| --- | --- | --- | --- |
-| `ios-device` | 12.0 with Xcode 15/16; 15.0 with Xcode 26+ | arm64 | Selected for Xcode version |
-| `ios-simulator-arm64` | 15.0 | arm64 | Selected for Xcode version |
-| `ios-simulator-x86_64` | 15.0 | x86_64 | Selected for Xcode version |
 
 When no deployment target is supplied, CMake selects iOS 12 for Xcode 15 or 16 and
 iOS 15 for Xcode 26 or newer. Xcode 26 and newer compile the Icon Composer bundle;
@@ -49,16 +39,7 @@ Use the corresponding `-debug` build preset for a Debug build. For example:
 cmake --build --preset ios-device-debug
 ```
 
-For the simulator, select the preset matching the Mac host architecture:
-
-```bash
-uname -m
-cmake --preset ios-simulator-arm64
-cmake --build --preset ios-simulator-arm64-release
-```
-
-On an Intel Mac, replace `arm64` with `x86_64`. To clean before rebuilding, pass
-`--clean-first` to the build command.
+To clean before rebuilding, pass `--clean-first` to the build command.
 
 Each build directory contains a generated `Vanilla.xcodeproj`. It can be opened in
 Xcode for running and debugging:
@@ -67,28 +48,10 @@ Xcode for running and debugging:
 open build/ios-device/Vanilla.xcodeproj
 ```
 
-## Simulator installation
-
-Start Simulator and find the desired device UUID:
-
-```bash
-open -a Simulator
-xcrun simctl list devices
-```
-
-Install and launch the Release build, adjusting the architecture in the path when
-needed:
-
-```bash
-xcrun simctl install <UUID> build/ios-simulator-arm64/bin/Release/Vanilla.app
-xcrun simctl launch <UUID> com.mattkc.vanilla
-```
-
 ## Code signing
 
 The generated device project disables code signing so CI and command-line builds
-produce an unsigned app without Apple credentials. Simulator builds use an ad-hoc
-identity.
+produce an unsigned app without Apple credentials.
 
 To sign a device or distribution build, first generate and open the project:
 

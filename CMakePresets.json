@@ -33,28 +33,6 @@
         "CMAKE_OSX_SYSROOT": "iphoneos",
         "CMAKE_OSX_ARCHITECTURES": "arm64"
       }
-    },
-    {
-      "name": "ios-simulator-arm64",
-      "displayName": "iOS simulator (Apple silicon)",
-      "description": "iOS 15 or newer simulator build for an arm64 Mac",
-      "inherits": "ios-base",
-      "cacheVariables": {
-        "CMAKE_OSX_SYSROOT": "iphonesimulator",
-        "CMAKE_OSX_ARCHITECTURES": "arm64",
-        "CMAKE_OSX_DEPLOYMENT_TARGET": "15.0"
-      }
-    },
-    {
-      "name": "ios-simulator-x86_64",
-      "displayName": "iOS simulator (Intel)",
-      "description": "iOS 15 or newer simulator build for an Intel Mac",
-      "inherits": "ios-base",
-      "cacheVariables": {
-        "CMAKE_OSX_SYSROOT": "iphonesimulator",
-        "CMAKE_OSX_ARCHITECTURES": "x86_64",
-        "CMAKE_OSX_DEPLOYMENT_TARGET": "15.0"
-      }
     }
   ],
   "buildPresets": [
@@ -67,30 +45,6 @@
     {
       "name": "ios-device-debug",
       "configurePreset": "ios-device",
-      "configuration": "Debug",
-      "targets": ["vanilla"]
-    },
-    {
-      "name": "ios-simulator-arm64-release",
-      "configurePreset": "ios-simulator-arm64",
-      "configuration": "Release",
-      "targets": ["vanilla"]
-    },
-    {
-      "name": "ios-simulator-arm64-debug",
-      "configurePreset": "ios-simulator-arm64",
-      "configuration": "Debug",
-      "targets": ["vanilla"]
-    },
-    {
-      "name": "ios-simulator-x86_64-release",
-      "configurePreset": "ios-simulator-x86_64",
-      "configuration": "Release",
-      "targets": ["vanilla"]
-    },
-    {
-      "name": "ios-simulator-x86_64-debug",
-      "configurePreset": "ios-simulator-x86_64",
       "configuration": "Debug",
       "targets": ["vanilla"]
     }

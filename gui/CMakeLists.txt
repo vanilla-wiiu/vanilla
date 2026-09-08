@@ -71,11 +71,7 @@ function(compile_ffmpeg _target_name _system_name _system_processor)
             set(FFMPEG_TARGET_OS "win32")
         elseif(IOS)
             set(FFMPEG_TARGET_OS "darwin")
-            if(IOS_SIMULATOR)
-                set(_ios_version_flag "-mios-simulator-version-min=${CMAKE_OSX_DEPLOYMENT_TARGET}")
-            else()
-                set(_ios_version_flag "-mios-version-min=${CMAKE_OSX_DEPLOYMENT_TARGET}")
-            endif()
+            set(_ios_version_flag "-mios-version-min=${CMAKE_OSX_DEPLOYMENT_TARGET}")
             set(FFMPEG_LDFLAGS "${CMAKE_C_FLAGS} -arch ${_system_processor} ${_ios_version_flag} -isysroot ${VANILLA_IOS_SDK_PATH}")
             set(FFMPEG_CFLAGS "${CMAKE_C_FLAGS} -arch ${_system_processor} ${_ios_version_flag} -isysroot ${VANILLA_IOS_SDK_PATH} -w")
             list(APPEND FFMPEG_CONFIGURE_ARGS
@@ -92,14 +88,8 @@ function(compile_ffmpeg _target_name _system_name _system_processor)
                 --strip=${CMAKE_STRIP}
                 --host-cc=clang
                 --host-ld=clang
+                --enable-videotoolbox
             )
-
-            # VideoToolbox has compile issues on simulator with newer SDKs
-            if(IOS_SIMULATOR)
-                list(APPEND FFMPEG_CONFIGURE_ARGS --disable-videotoolbox)
-            else()
-                list(APPEND FFMPEG_CONFIGURE_ARGS --enable-videotoolbox)
-            endif()
         elseif(APPLE)
             set(FFMPEG_TARGET_OS "darwin")
 			set(FFMPEG_LDFLAGS "${FFMPEG_LDFLAGS} -arch ${_system_processor} -mmacosx-version-min=${CMAKE_OSX_DEPLOYMENT_TARGET} -L${CMAKE_OSX_SYSROOT}/usr/lib -lSystem")
@@ -412,16 +402,9 @@ elseif(IOS)
         XCODE_ATTRIBUTE_IPHONEOS_DEPLOYMENT_TARGET "${CMAKE_OSX_DEPLOYMENT_TARGET}"
     )
 
-    if(IOS_SIMULATOR)
-        set_target_properties(vanilla PROPERTIES
-            XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY "-"
-            XCODE_ATTRIBUTE_CODE_SIGN_STYLE "Manual"
-        )
-    else()
-        set_target_properties(vanilla PROPERTIES
-            XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED "NO"
-        )
-    endif()
+    set_target_properties(vanilla PROPERTIES
+        XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED "NO"
+    )
 
     # Compile storyboard
     add_custom_command(
@@ -436,12 +419,6 @@ elseif(IOS)
     )
 
     # Compile app icon with actool
-    if(IOS_SIMULATOR)
-        set(ACTOOL_PLATFORM "iphonesimulator")
-    else()
-        set(ACTOOL_PLATFORM "iphoneos")
-    endif()
-
     if(XCODE_VERSION VERSION_GREATER_EQUAL 26.0
         AND CMAKE_OSX_DEPLOYMENT_TARGET VERSION_GREATER_EQUAL 15.0)
         set(_vanilla_icon_input "${CMAKE_SOURCE_DIR}/ios/AppIcon.icon")
@@ -459,7 +436,7 @@ elseif(IOS)
                 --compile "$<TARGET_FILE_DIR:vanilla>"
                 --enable-on-demand-resources NO
                 --app-icon AppIcon
-                --platform ${ACTOOL_PLATFORM}
+                --platform iphoneos
                 ${_vanilla_icon_extra_args}
                 --minimum-deployment-target "${CMAKE_OSX_DEPLOYMENT_TARGET}"
                 --target-device iphone --target-device ipad

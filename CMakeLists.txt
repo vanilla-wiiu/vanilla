@@ -19,24 +19,6 @@ if(APPLE)
     enable_language(CXX)
 endif()
 
-if(IOS)
-    string(TOLOWER "${CMAKE_OSX_SYSROOT}" _vanilla_ios_sysroot_lower)
-    if(_vanilla_ios_sysroot_lower MATCHES "simulator")
-        set(IOS_SIMULATOR TRUE)
-    else()
-        set(IOS_SIMULATOR FALSE)
-    endif()
-
-    list(LENGTH CMAKE_OSX_ARCHITECTURES _vanilla_ios_arch_count)
-    if(NOT _vanilla_ios_arch_count EQUAL 1)
-        message(FATAL_ERROR
-            "iOS builds require exactly one CMAKE_OSX_ARCHITECTURES entry because "
-            "the vendored FFmpeg build is configured for one architecture at a time."
-        )
-    endif()
-
-endif()
-
 if(ANDROID OR MSVC OR IOS)
     set(vendored_default TRUE)
 else()
