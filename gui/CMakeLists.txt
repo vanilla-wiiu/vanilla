@@ -457,7 +457,6 @@ elseif(IOS)
                 --target-device iphone --target-device ipad
                 --minimum-deployment-target "${CMAKE_OSX_DEPLOYMENT_TARGET}"
         VERBATIM
-        COMMENT "Compiling LaunchScreen.storyboard"
     )
 
     # Compile app icon with actool
@@ -465,11 +464,9 @@ elseif(IOS)
         AND CMAKE_OSX_DEPLOYMENT_TARGET VERSION_GREATER_EQUAL 15.0)
         set(_vanilla_icon_input "${CMAKE_CURRENT_SOURCE_DIR}/res/ios/AppIcon.icon")
         set(_vanilla_icon_extra_args --include-all-app-icons)
-        set(_vanilla_icon_comment "Compiling AppIcon.icon")
     else()
         set(_vanilla_icon_input "${CMAKE_CURRENT_SOURCE_DIR}/res/ios/Assets.xcassets")
         set(_vanilla_icon_extra_args)
-        set(_vanilla_icon_comment "Compiling Assets.xcassets")
     endif()
 
     add_custom_command(
@@ -488,7 +485,6 @@ elseif(IOS)
                 -c "Merge ${CMAKE_CURRENT_BINARY_DIR}/AssetCatalog-Info.plist"
                 "$<TARGET_FILE_DIR:vanilla>/Info.plist"
         VERBATIM
-        COMMENT "${_vanilla_icon_comment}"
     )
 else()
     add_executable(vanilla MACOSX_BUNDLE main.c)
@@ -536,26 +532,6 @@ if (ANDROID)
         GLESv2
         log
         mediandk
-    )
-endif()
-
-if (IOS)
-    # These are random and im not sure which are actually needed
-    target_link_libraries(vanilla PRIVATE
-        "-framework Foundation"
-        "-framework UIKit"
-        "-framework CoreGraphics"
-        "-framework OpenGLES"
-        "-framework QuartzCore"
-        "-framework CoreAudio"
-        "-framework AudioToolbox"
-        "-framework AVFoundation"
-        "-framework GameController"
-        "-framework ImageIO"
-        "-framework MobileCoreServices"
-        "-framework CoreServices"
-        "-framework Metal"
-        "-framework CoreMotion"
     )
 endif()
 
