@@ -13,6 +13,12 @@ if(UNIX AND NOT APPLE AND NOT ANDROID)
     set(LINUX TRUE)
 endif()
 
+if(APPLE)
+    # FFmpeg's configure step expects both compiler drivers even though Vanilla
+    # itself is written in C.
+    enable_language(CXX)
+endif()
+
 option(VANILLA_IOS_LEGACY "Build for iOS 12.0" OFF)
 option(VANILLA_IOS_CODE_SIGNING "Enable automatic signing for iOS device builds" OFF)
 set(VANILLA_IOS_DEVELOPMENT_TEAM "" CACHE STRING "Apple development team used to sign the iOS app")
@@ -23,10 +29,6 @@ if(IOS)
             "iOS builds require the Xcode generator. Configure with one of the ios-* presets."
         )
     endif()
-
-    # FFmpeg's configure step expects both compiler drivers even though Vanilla
-    # itself is written in C.
-    enable_language(CXX)
 
     string(TOLOWER "${CMAKE_OSX_SYSROOT}" _vanilla_ios_sysroot_lower)
     if(_vanilla_ios_sysroot_lower MATCHES "simulator")

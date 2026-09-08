@@ -495,6 +495,15 @@ if (APPLE)
 	set_target_properties(vanilla PROPERTIES
 		OUTPUT_NAME Vanilla
 	)
+	if(NOT IOS)
+		set_target_properties(vanilla PROPERTIES
+			MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/res/Info.plist.in"
+			MACOSX_BUNDLE_GUI_IDENTIFIER "com.mattkc.vanilla"
+			MACOSX_BUNDLE_BUNDLE_NAME "Vanilla"
+			MACOSX_BUNDLE_SHORT_VERSION_STRING "1.0"
+			MACOSX_BUNDLE_BUNDLE_VERSION "1"
+		)
+	endif()
 else()
 	# Ensure executable is installed
 	install(TARGETS vanilla)
