@@ -396,7 +396,7 @@ elseif(IOS)
         main.c
     )
     set_target_properties(vanilla PROPERTIES
-        MACOSX_BUNDLE_INFO_PLIST "${CMAKE_SOURCE_DIR}/ios/Info.plist"
+        MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/res/ios/Info.plist"
         XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "com.mattkc.vanilla"
         XCODE_ATTRIBUTE_TARGETED_DEVICE_FAMILY "1,2"
         XCODE_ATTRIBUTE_IPHONEOS_DEPLOYMENT_TARGET "${CMAKE_OSX_DEPLOYMENT_TARGET}"
@@ -411,7 +411,7 @@ elseif(IOS)
         TARGET vanilla POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:vanilla>/LaunchScreen.storyboardc"
         COMMAND xcrun ibtool --compile "$<TARGET_FILE_DIR:vanilla>/LaunchScreen.storyboardc"
-                "${CMAKE_SOURCE_DIR}/ios/LaunchScreen.storyboard"
+                "${CMAKE_CURRENT_SOURCE_DIR}/res/ios/LaunchScreen.storyboard"
                 --target-device iphone --target-device ipad
                 --minimum-deployment-target "${CMAKE_OSX_DEPLOYMENT_TARGET}"
         VERBATIM
@@ -421,11 +421,11 @@ elseif(IOS)
     # Compile app icon with actool
     if(XCODE_VERSION VERSION_GREATER_EQUAL 26.0
         AND CMAKE_OSX_DEPLOYMENT_TARGET VERSION_GREATER_EQUAL 15.0)
-        set(_vanilla_icon_input "${CMAKE_SOURCE_DIR}/ios/AppIcon.icon")
+        set(_vanilla_icon_input "${CMAKE_CURRENT_SOURCE_DIR}/res/ios/AppIcon.icon")
         set(_vanilla_icon_extra_args --include-all-app-icons)
         set(_vanilla_icon_comment "Compiling AppIcon.icon")
     else()
-        set(_vanilla_icon_input "${CMAKE_SOURCE_DIR}/ios/Assets.xcassets")
+        set(_vanilla_icon_input "${CMAKE_CURRENT_SOURCE_DIR}/res/ios/Assets.xcassets")
         set(_vanilla_icon_extra_args)
         set(_vanilla_icon_comment "Compiling Assets.xcassets")
     endif()
