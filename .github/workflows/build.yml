@@ -39,8 +39,17 @@ jobs:
     - name: Upload iOS Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: iOS
+        name: ios
         path: vanilla-ios.ipa
+
+    - name: Upload Continuous Release
+      if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' && github.repository == 'vanilla-wiiu/vanilla' }}
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        curl -fLOSs --retry 2 --retry-delay 60 https://github.com/probonopd/uploadtool/raw/master/upload.sh
+        bash upload.sh vanilla-ios.ipa
 
   build-macos:
     name: Build macOS
