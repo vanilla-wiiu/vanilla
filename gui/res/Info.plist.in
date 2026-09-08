@@ -20,13 +20,10 @@
     <string>${MACOSX_BUNDLE_SHORT_VERSION_STRING}</string>
     <key>CFBundleVersion</key>
     <string>${MACOSX_BUNDLE_BUNDLE_VERSION}</string>
-    <key>LSMinimumSystemVersion</key>
-    <string>${CMAKE_OSX_DEPLOYMENT_TARGET}</string>
-    <key>NSHighResolutionCapable</key>
-    <true/>
+@VANILLA_PLATFORM_INFO_PLIST_ENTRIES@
     <key>NSLocalNetworkUsageDescription</key>
-    <string>Vanilla needs local network access to connect to your Wii U pipe.</string>
+    <string>Vanilla needs local network access to connect to your Wii U.</string>
     <key>NSMicrophoneUsageDescription</key>
-    <string>Vanilla needs microphone access to stream audio to your Wii U console.</string>
+    <string>Vanilla needs microphone access to stream audio to your Wii U.</string>
 </dict>
 </plist>

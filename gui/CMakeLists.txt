@@ -387,6 +387,49 @@ if (VANILLA_BUILD_USE_POLKIT)
 	)
 endif()
 
+if(APPLE)
+    if(IOS)
+        set(VANILLA_PLATFORM_INFO_PLIST_ENTRIES [=[
+    <key>LSRequiresIPhoneOS</key>
+    <true/>
+    <key>UILaunchStoryboardName</key>
+    <string>LaunchScreen</string>
+    <key>UIRequiredDeviceCapabilities</key>
+    <array>
+        <string>arm64</string>
+        <string>wifi</string>
+    </array>
+    <key>UISupportedInterfaceOrientations</key>
+    <array>
+        <string>UIInterfaceOrientationLandscapeLeft</string>
+        <string>UIInterfaceOrientationLandscapeRight</string>
+    </array>
+    <key>UISupportedInterfaceOrientations~ipad</key>
+    <array>
+        <string>UIInterfaceOrientationLandscapeLeft</string>
+        <string>UIInterfaceOrientationLandscapeRight</string>
+    </array>
+    <key>UIStatusBarHidden</key>
+    <true/>
+    <key>UIViewControllerBasedStatusBarAppearance</key>
+    <false/>
+    <key>UIRequiresFullScreen</key>
+    <true/>]=])
+    else()
+        set(VANILLA_PLATFORM_INFO_PLIST_ENTRIES [=[
+    <key>LSMinimumSystemVersion</key>
+    <string>${CMAKE_OSX_DEPLOYMENT_TARGET}</string>
+    <key>NSHighResolutionCapable</key>
+    <true/>]=])
+    endif()
+
+    configure_file(
+        "${CMAKE_CURRENT_SOURCE_DIR}/res/Info.plist.in"
+        "${CMAKE_CURRENT_BINARY_DIR}/Vanilla.Info.plist.in"
+        @ONLY
+    )
+endif()
+
 # Declare executable
 add_library(vanillagui STATIC ${VANILLA_GUI_SRC})
 if (ANDROID)
@@ -396,7 +439,6 @@ elseif(IOS)
         main.c
     )
     set_target_properties(vanilla PROPERTIES
-        MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/res/ios/Info.plist"
         XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "com.mattkc.vanilla"
         XCODE_ATTRIBUTE_TARGETED_DEVICE_FAMILY "1,2"
         XCODE_ATTRIBUTE_IPHONEOS_DEPLOYMENT_TARGET "${CMAKE_OSX_DEPLOYMENT_TARGET}"
@@ -462,16 +504,12 @@ if (APPLE)
 	# Set bundle name to be more user-friendly
 	set_target_properties(vanilla PROPERTIES
 		OUTPUT_NAME Vanilla
+		MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_BINARY_DIR}/Vanilla.Info.plist.in"
+		MACOSX_BUNDLE_GUI_IDENTIFIER "com.mattkc.vanilla"
+		MACOSX_BUNDLE_BUNDLE_NAME "Vanilla"
+		MACOSX_BUNDLE_SHORT_VERSION_STRING "1.0"
+		MACOSX_BUNDLE_BUNDLE_VERSION "1"
 	)
-	if(NOT IOS)
-		set_target_properties(vanilla PROPERTIES
-			MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/res/Info.plist.in"
-			MACOSX_BUNDLE_GUI_IDENTIFIER "com.mattkc.vanilla"
-			MACOSX_BUNDLE_BUNDLE_NAME "Vanilla"
-			MACOSX_BUNDLE_SHORT_VERSION_STRING "1.0"
-			MACOSX_BUNDLE_BUNDLE_VERSION "1"
-		)
-	endif()
 else()
 	# Ensure executable is installed
 	install(TARGETS vanilla)
