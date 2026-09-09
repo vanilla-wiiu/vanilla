@@ -541,10 +541,9 @@ if (NOT VANILLA_BUILD_VENDORED)
     find_package(SDL2 REQUIRED)
     find_package(SDL2_ttf REQUIRED)
     find_package(SDL2_image REQUIRED)
-    set(_sdl_extension_libs SDL2_ttf::SDL2_ttf SDL2_image::SDL2_image)
-else()
-    set(_sdl_extension_libs SDL2_ttf SDL2_image)
 endif()
+
+set(_sdl_extension_libs SDL2_ttf SDL2_image)
 
 target_link_libraries(vanillagui PRIVATE
     ${_sdl_lib}
