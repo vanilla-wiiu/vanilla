@@ -566,7 +566,9 @@ if (APPLE)
         "-framework CoreMedia"
         "-framework CoreVideo"
         "-framework Foundation"
+        "-framework ImageIO"
         "-framework Metal"
+        "-framework MobileCoreServices"
         "-framework QuartzCore"
         "-framework VideoToolbox"
         iconv
