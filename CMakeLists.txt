@@ -14,9 +14,9 @@ if(UNIX AND NOT APPLE AND NOT ANDROID)
 endif()
 
 if(APPLE)
-    # FFmpeg's configure step expects both compiler drivers even though Vanilla
-    # itself is written in C.
-    enable_language(CXX)
+    # FFmpeg's configure step expects both compiler drivers. Objective-C is
+    # used by the VideoToolbox-to-Metal renderer.
+    enable_language(CXX OBJC)
 endif()
 
 if(ANDROID OR MSVC OR IOS)

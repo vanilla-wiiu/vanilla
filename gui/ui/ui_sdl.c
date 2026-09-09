@@ -19,6 +19,10 @@
 #include "ui_sdl_android.h"
 #endif
 
+#ifdef VANILLA_VIDEOTOOLBOX_AVAILABLE
+#include "ui_sdl_videotoolbox.h"
+#endif
+
 #ifdef VANILLA_HAS_EGL
 #include <SDL2/SDL_egl.h>
 #include <SDL2/SDL_opengl.h>
@@ -104,6 +108,9 @@ typedef struct {
     struct timeval toast_expiry;
     AVFrame *frame;
     AVFrame *held_frame; // keeps the displayed dmabuf alive until the next frame replaces it
+#ifdef VANILLA_VIDEOTOOLBOX_AVAILABLE
+    vui_sdl_videotoolbox_context_t *videotoolbox;
+#endif
     uint64_t present_frame_sequence;
     Uint64 update_tick_origin;
     Uint64 update_tick_frequency;
@@ -842,6 +849,13 @@ int vui_init_sdl(vui_context_t *ctx, int fullscreen)
         vpilog("EGL unavailable, VAAPI will be disabled\n");
     }
 
+#ifdef VANILLA_VIDEOTOOLBOX_AVAILABLE
+    sdl_ctx->videotoolbox = vui_sdl_videotoolbox_create(sdl_ctx->renderer);
+    if (!sdl_ctx->videotoolbox) {
+        vpilog("VideoToolbox zero-copy rendering unavailable; using software decoding\n");
+    }
+#endif
+
     // Open audio output device
     SDL_AudioSpec desired = {0}, obtained;
     desired.freq = 48000;
@@ -1051,6 +1065,10 @@ void vui_close_sdl(vui_context_t *ctx)
 
 	SDL_CloseAudioDevice(sdl_ctx->audio);
 
+#ifdef VANILLA_VIDEOTOOLBOX_AVAILABLE
+    vui_sdl_videotoolbox_destroy(&sdl_ctx->videotoolbox);
+#endif
+
     SDL_DestroyRenderer(sdl_ctx->renderer);
 
     SDL_DestroyWindow(sdl_ctx->window);
@@ -1058,6 +1076,17 @@ void vui_close_sdl(vui_context_t *ctx)
     free(sdl_ctx);
 
     SDL_Quit();
+}
+
+int vui_sdl_videotoolbox_available(vui_context_t *ctx)
+{
+#ifdef VANILLA_VIDEOTOOLBOX_AVAILABLE
+    if (ctx && ctx->platform_data) {
+        vui_sdl_context_t *sdl_ctx = (vui_sdl_context_t *) ctx->platform_data;
+        return sdl_ctx->videotoolbox != NULL;
+    }
+#endif
+    return 0;
 }
 
 float lerp(float a, float b, float f)
@@ -2217,6 +2246,10 @@ int vui_update_sdl(vui_context_t *vui)
             case AV_PIX_FMT_YUV420P:
 				get_texture_from_cpu_frame(sdl_ctx, sdl_ctx->frame);
                 break;
+
+            // AV_PIX_FMT_VIDEOTOOLBOX does not need to be handled here because
+            // it is handled further down by vui_sdl_videotoolbox_render
+
             }
 
 			av_frame_unref(sdl_ctx->held_frame);
@@ -2245,6 +2278,11 @@ int vui_update_sdl(vui_context_t *vui)
                 SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
                 SDL_RenderClear(renderer);
 
+#ifdef VANILLA_VIDEOTOOLBOX_AVAILABLE
+                if (sdl_ctx->held_frame->format == AV_PIX_FMT_VIDEOTOOLBOX) {
+                    vui_sdl_videotoolbox_render(sdl_ctx->videotoolbox, renderer, sdl_ctx->held_frame);
+                } else
+#endif
                 if (sdl_ctx->game_tex) {
 #ifdef ANDROID
                     if (sdl_ctx->game_tex == sdl_ctx->android_video_tex) {

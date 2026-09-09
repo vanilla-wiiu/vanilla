@@ -58,6 +58,13 @@ function(compile_ffmpeg _target_name _system_name _system_processor)
         )
     endif()
 
+    if(APPLE)
+        list(APPEND FFMPEG_CONFIGURE_ARGS
+            --enable-videotoolbox
+            --enable-hwaccel=h264_videotoolbox
+        )
+    endif()
+
     if (NOT "${CMAKE_HOST_SYSTEM_PROCESSOR}" STREQUAL "${_system_processor}"
 		OR NOT "${CMAKE_HOST_SYSTEM_NAME}" STREQUAL "${_system_name}")
         set(FFMPEG_TARGET_OS ${_system_name})
@@ -88,7 +95,6 @@ function(compile_ffmpeg _target_name _system_name _system_processor)
                 --strip=${CMAKE_STRIP}
                 --host-cc=clang
                 --host-ld=clang
-                --enable-videotoolbox
             )
         elseif(APPLE)
             set(FFMPEG_TARGET_OS "darwin")
@@ -336,6 +342,15 @@ if (ANDROID)
     )
 endif()
 
+if (APPLE)
+    list(APPEND VANILLA_GUI_SRC
+        ui/ui_sdl_videotoolbox.m
+    )
+    set_source_files_properties(ui/ui_sdl_videotoolbox.m PROPERTIES
+        COMPILE_OPTIONS "-fobjc-arc"
+    )
+endif()
+
 if (LINUX)
     list(APPEND VANILLA_GUI_SRC
         ui/ui_sdl_linux.c
@@ -446,10 +461,6 @@ elseif(IOS)
         XCODE_ATTRIBUTE_IPHONEOS_DEPLOYMENT_TARGET "${CMAKE_OSX_DEPLOYMENT_TARGET}"
     )
 
-    set_target_properties(vanilla PROPERTIES
-        XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED "NO"
-    )
-
     # Compile storyboard
     add_custom_command(
         TARGET vanilla POST_BUILD
@@ -530,12 +541,14 @@ if (NOT VANILLA_BUILD_VENDORED)
     find_package(SDL2 REQUIRED)
     find_package(SDL2_ttf REQUIRED)
     find_package(SDL2_image REQUIRED)
+    set(_sdl_extension_libs SDL2_ttf::SDL2_ttf SDL2_image::SDL2_image)
+else()
+    set(_sdl_extension_libs SDL2_ttf SDL2_image)
 endif()
 
 target_link_libraries(vanillagui PRIVATE
     ${_sdl_lib}
-    SDL2_ttf
-    SDL2_image
+    ${_sdl_extension_libs}
     libvanilla
     m
 )

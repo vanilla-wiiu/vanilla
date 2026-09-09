@@ -21,6 +21,7 @@
 #include "menu_common.h"
 #include "menu_main.h"
 #include "ui/ui_anim.h"
+#include "ui/ui_sdl.h"
 #include "ui/ui_util.h"
 
 #ifdef ANDROID
@@ -248,6 +249,20 @@ static enum AVPixelFormat drm_get_format(struct AVCodecContext *s, const enum AV
     return AV_PIX_FMT_NONE;
 }
 
+#ifdef VANILLA_VIDEOTOOLBOX_AVAILABLE
+static enum AVPixelFormat videotoolbox_get_format(struct AVCodecContext *s, const enum AVPixelFormat *fmt)
+{
+    while (*fmt != AV_PIX_FMT_NONE) {
+        if (*fmt == AV_PIX_FMT_VIDEOTOOLBOX) {
+            return *fmt;
+        }
+        fmt++;
+    }
+
+    return AV_PIX_FMT_NONE;
+}
+#endif
+
 #ifdef ANDROID
 static enum AVPixelFormat mediacodec_get_format(struct AVCodecContext *s,
                                                  const enum AVPixelFormat *fmt)
@@ -272,6 +287,9 @@ typedef struct {
 enum HwDecoderType {
 #ifdef ANDROID
     HWDEC_TYPE_MEDIACODEC,
+#endif
+#ifdef VANILLA_VIDEOTOOLBOX_AVAILABLE
+    HWDEC_TYPE_VIDEOTOOLBOX,
 #endif
     HWDEC_TYPE_NVDEC,
     HWDEC_TYPE_VAAPI,
@@ -421,6 +439,12 @@ int vpi_decode_init(vpi_decode_state_t *s)
     decoders[HWDEC_TYPE_MEDIACODEC].get_format = mediacodec_get_format;
 #endif
 
+#ifdef VANILLA_VIDEOTOOLBOX_AVAILABLE
+    decoders[HWDEC_TYPE_VIDEOTOOLBOX].name = "VideoToolbox";
+    decoders[HWDEC_TYPE_VIDEOTOOLBOX].codec = avcodec_find_decoder(AV_CODEC_ID_H264);
+    decoders[HWDEC_TYPE_VIDEOTOOLBOX].get_format = videotoolbox_get_format;
+#endif
+
     decoders[HWDEC_TYPE_NVDEC].name = "NVDEC";
     decoders[HWDEC_TYPE_NVDEC].codec = avcodec_find_decoder_by_name("h264_cuvid");
     decoders[HWDEC_TYPE_NVDEC].get_format = nvdec_get_format;
@@ -445,6 +469,17 @@ int vpi_decode_init(vpi_decode_state_t *s)
     int r = VANILLA_ERR_GENERIC;
 
     if (!vpi_config.force_software_decode) {
+#ifdef VANILLA_VIDEOTOOLBOX_AVAILABLE
+        if (r != VANILLA_SUCCESS && vui_sdl_videotoolbox_available(s->vui)) {
+            vpi_decode_exit(s);
+            ffmpeg_err = av_hwdevice_ctx_create(&s->hw_device_ctx, AV_HWDEVICE_TYPE_VIDEOTOOLBOX, NULL, NULL, 0);
+            if (ffmpeg_err >= 0) {
+                r = open_decoder(s, &decoders[HWDEC_TYPE_VIDEOTOOLBOX]);
+            } else {
+                vpilog("Failed to create VideoToolbox device: %s\n", av_err2str(ffmpeg_err));
+            }
+        }
+#endif
 #ifdef ANDROID
         // MediaCodec renders decoded buffers directly into the SurfaceTexture
         // owned by SDL's external OES texture.
@@ -1017,9 +1052,9 @@ void *vpi_event_loop(void *arg)
         case VANILLA_EVENT_VIDEO:
             // If decoder context/thread is not set up, set up now
             if (!vpi_decode_alloc) {
+                s.vui = vui;
                 int ret = vpi_decode_init(&s);
                 if (ret >= 0) {
-                    s.vui = vui;
                     s.thread_running = 1;
 
                     if (pthread_create(&decode_thread, NULL, vpi_decode_loop, &s) == 0) {

@@ -180,7 +180,11 @@ void handle_video_packet(gamepad_context_t *ctx, VideoPacket *vp)
 
         memset(video_segments, 0, sizeof(video_segments));
 
-		frame_decode_num++;
+        if (is_idr) {
+            frame_decode_num = 0;
+        } else {
+            frame_decode_num++;
+        }
 
         if (!video_complete_frame && !is_idr) {
             send_idr_request_to_console(ctx->socket_msg);

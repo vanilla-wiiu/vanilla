@@ -9,6 +9,9 @@
 int vui_init_sdl(vui_context_t *ctx, int fullscreen);
 void vui_close_sdl(vui_context_t *ctx);
 
+// Return whether direct VideoToolbox to display path is available (i.e. if Metal is being used)
+int vui_sdl_videotoolbox_available(vui_context_t *ctx);
+
 /**
  * Main loop
  * 
