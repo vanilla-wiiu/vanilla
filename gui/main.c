@@ -1,4 +1,5 @@
 #include <errno.h>
+#include <SDL.h>
 #include <stdio.h>
 #include <string.h>
 #include <vanilla.h>
@@ -9,18 +10,22 @@
 #include "ui/ui.h"
 #include "ui/ui_sdl.h"
 
+#if defined(__APPLE__)
+#include <TargetConditionals.h>
+#if TARGET_OS_IOS
+// SDL_main will be linked incorrectly on iOS unless we include this
+#include <SDL.h>
+#endif
+#endif
+
 #define SCREEN_WIDTH    854
 #define SCREEN_HEIGHT   480
 
-#if !defined(ANDROID) && !defined(_WIN32)
-#define SDL_main main
-#endif
-
 #include "pipemgmt.h"
 
-void display_cli_help(const char **argv);
+void display_cli_help(char **argv);
 
-int SDL_main(int argc, const char **argv)
+int main(int argc, char **argv)
 {
     int ret = 1;
 
@@ -126,7 +131,7 @@ exit_config:
     return ret;
 }
 
-void display_cli_help(const char **argv) {
+void display_cli_help(char **argv) {
 	vpilog("Usage: %s [options]\n\n", argv[0]);
 	vpilog("Options:\n");
 	vpilog("    -w, --window        Run Vanilla in a window (overrides config)\n");

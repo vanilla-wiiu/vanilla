@@ -13,7 +13,13 @@ if(UNIX AND NOT APPLE AND NOT ANDROID)
     set(LINUX TRUE)
 endif()
 
-if(ANDROID OR MSVC)
+if(APPLE)
+    # FFmpeg's configure step expects both compiler drivers even though Vanilla
+    # itself is written in C.
+    enable_language(CXX)
+endif()
+
+if(ANDROID OR MSVC OR IOS)
     set(vendored_default TRUE)
 else()
     set(vendored_default FALSE)

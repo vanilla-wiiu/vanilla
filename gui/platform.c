@@ -1,12 +1,7 @@
 #include "platform.h"
 
-#if defined(ANDROID)
-#include <android/log.h>
-#elif defined(_WIN32)
-#include <windows.h>
-#endif
-
 #include <SDL_filesystem.h>
+#include <SDL_log.h>
 #include <stdio.h>
 
 #include "ui/ui_util.h"
@@ -34,15 +29,7 @@ void vpi_get_data_filename(char *out, size_t out_size, const char *filename, con
 
 void vpilog_va(const char *fmt, va_list va)
 {
-#if defined(ANDROID)
-    __android_log_vprint(ANDROID_LOG_ERROR, "VPI", fmt, va);
-// #elif defined(_WIN32)
-//     char buf[4096];
-//     vsnprintf(buf, sizeof(buf), fmt, va);
-//     MessageBoxA(0, buf, 0, 0);
-#else
-    vfprintf(stderr, fmt, va);
-#endif
+    SDL_LogMessageV(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_INFO, fmt, va);
 }
 
 void vpilog(const char *fmt, ...)

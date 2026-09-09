@@ -69,6 +69,27 @@ function(compile_ffmpeg _target_name _system_name _system_processor)
             )
         elseif(MSVC)
             set(FFMPEG_TARGET_OS "win32")
+        elseif(IOS)
+            set(FFMPEG_TARGET_OS "darwin")
+            set(_ios_version_flag "-mios-version-min=${CMAKE_OSX_DEPLOYMENT_TARGET}")
+            set(FFMPEG_LDFLAGS "${CMAKE_C_FLAGS} -arch ${_system_processor} ${_ios_version_flag} -isysroot ${VANILLA_IOS_SDK_PATH}")
+            set(FFMPEG_CFLAGS "${CMAKE_C_FLAGS} -arch ${_system_processor} ${_ios_version_flag} -isysroot ${VANILLA_IOS_SDK_PATH} -w")
+            list(APPEND FFMPEG_CONFIGURE_ARGS
+                --disable-asm
+                --disable-avdevice
+                --disable-indevs
+                --disable-outdevs
+                --nm=${CMAKE_NM}
+                --ar=${CMAKE_AR}
+                --ranlib=${CMAKE_RANLIB}
+                --cc=${CMAKE_C_COMPILER}
+                --cxx=${CMAKE_CXX_COMPILER}
+                --ld=${CMAKE_C_COMPILER}
+                --strip=${CMAKE_STRIP}
+                --host-cc=clang
+                --host-ld=clang
+                --enable-videotoolbox
+            )
         elseif(APPLE)
             set(FFMPEG_TARGET_OS "darwin")
 			set(FFMPEG_LDFLAGS "${FFMPEG_LDFLAGS} -arch ${_system_processor} -mmacosx-version-min=${CMAKE_OSX_DEPLOYMENT_TARGET} -L${CMAKE_OSX_SYSROOT}/usr/lib -lSystem")
@@ -220,16 +241,23 @@ if (VANILLA_BUILD_VENDORED)
     set(LIBXML2_WITH_ICONV OFF)
     set(LIBXML2_WITH_PROGRAMS OFF)
     set(LIBXML2_WITH_TESTS OFF)
-    FetchContent_Declare(
-        libxml2
-        GIT_REPOSITORY https://gitlab.gnome.org/GNOME/libxml2.git
-        GIT_TAG v2.13.5
-        EXCLUDE_FROM_ALL
-    )
 
-    FetchContent_MakeAvailable(SDL2 SDL2_ttf SDL2_image libxml2)
+    if (NOT IOS)
+        FetchContent_Declare(
+            libxml2
+            GIT_REPOSITORY https://gitlab.gnome.org/GNOME/libxml2.git
+            GIT_TAG v2.13.5
+            EXCLUDE_FROM_ALL
+        )
+        FetchContent_MakeAvailable(SDL2 SDL2_ttf SDL2_image libxml2)
+    else()
+        FetchContent_MakeAvailable(SDL2 SDL2_ttf SDL2_image)
+    endif()
 
-	if (APPLE)
+	if (IOS)
+		# Compile FFmpeg for arm64
+		compile_ffmpeg("FFmpeg" "${CMAKE_SYSTEM_NAME}" "${CMAKE_OSX_ARCHITECTURES}")
+	elseif (APPLE)
 		# Compile FFmpeg for both x86_64 and arm64
 		foreach (_arch ${CMAKE_OSX_ARCHITECTURES})
 			compile_ffmpeg("FFmpeg_${_arch}" "${CMAKE_SYSTEM_NAME}" "${_arch}")
@@ -359,10 +387,105 @@ if (VANILLA_BUILD_USE_POLKIT)
 	)
 endif()
 
+if(APPLE)
+    if(IOS)
+        set(VANILLA_PLATFORM_INFO_PLIST_ENTRIES [=[
+    <key>LSRequiresIPhoneOS</key>
+    <true/>
+    <key>UILaunchStoryboardName</key>
+    <string>LaunchScreen</string>
+    <key>UIRequiredDeviceCapabilities</key>
+    <array>
+        <string>arm64</string>
+        <string>wifi</string>
+    </array>
+    <key>UISupportedInterfaceOrientations</key>
+    <array>
+        <string>UIInterfaceOrientationLandscapeLeft</string>
+        <string>UIInterfaceOrientationLandscapeRight</string>
+    </array>
+    <key>UISupportedInterfaceOrientations~ipad</key>
+    <array>
+        <string>UIInterfaceOrientationLandscapeLeft</string>
+        <string>UIInterfaceOrientationLandscapeRight</string>
+    </array>
+    <key>UIStatusBarHidden</key>
+    <true/>
+    <key>UIViewControllerBasedStatusBarAppearance</key>
+    <false/>
+    <key>UIRequiresFullScreen</key>
+    <true/>]=])
+    else()
+        set(VANILLA_PLATFORM_INFO_PLIST_ENTRIES [=[
+    <key>LSMinimumSystemVersion</key>
+    <string>${CMAKE_OSX_DEPLOYMENT_TARGET}</string>
+    <key>NSHighResolutionCapable</key>
+    <true/>]=])
+    endif()
+
+    configure_file(
+        "${CMAKE_CURRENT_SOURCE_DIR}/res/Info.plist.in"
+        "${CMAKE_CURRENT_BINARY_DIR}/Vanilla.Info.plist.in"
+        @ONLY
+    )
+endif()
+
 # Declare executable
 add_library(vanillagui STATIC ${VANILLA_GUI_SRC})
 if (ANDROID)
     add_library(vanilla SHARED main.c)
+elseif(IOS)
+    add_executable(vanilla MACOSX_BUNDLE
+        main.c
+    )
+    set_target_properties(vanilla PROPERTIES
+        XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "com.mattkc.vanilla"
+        XCODE_ATTRIBUTE_TARGETED_DEVICE_FAMILY "1,2"
+        XCODE_ATTRIBUTE_IPHONEOS_DEPLOYMENT_TARGET "${CMAKE_OSX_DEPLOYMENT_TARGET}"
+    )
+
+    set_target_properties(vanilla PROPERTIES
+        XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED "NO"
+    )
+
+    # Compile storyboard
+    add_custom_command(
+        TARGET vanilla POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:vanilla>/LaunchScreen.storyboardc"
+        COMMAND xcrun ibtool --compile "$<TARGET_FILE_DIR:vanilla>/LaunchScreen.storyboardc"
+                "${CMAKE_CURRENT_SOURCE_DIR}/res/ios/LaunchScreen.storyboard"
+                --target-device iphone --target-device ipad
+                --minimum-deployment-target "${CMAKE_OSX_DEPLOYMENT_TARGET}"
+        VERBATIM
+    )
+
+    # Compile app icon with actool
+    if(XCODE_VERSION VERSION_GREATER_EQUAL 26.0
+        AND CMAKE_OSX_DEPLOYMENT_TARGET VERSION_GREATER_EQUAL 15.0)
+        set(_vanilla_icon_input "${CMAKE_CURRENT_SOURCE_DIR}/res/ios/AppIcon.icon")
+        set(_vanilla_icon_extra_args --include-all-app-icons)
+    else()
+        set(_vanilla_icon_input "${CMAKE_CURRENT_SOURCE_DIR}/res/ios/Assets.xcassets")
+        set(_vanilla_icon_extra_args)
+    endif()
+
+    add_custom_command(
+        TARGET vanilla POST_BUILD
+        COMMAND xcrun actool
+                --compile "$<TARGET_FILE_DIR:vanilla>"
+                --enable-on-demand-resources NO
+                --app-icon AppIcon
+                --platform iphoneos
+                ${_vanilla_icon_extra_args}
+                --minimum-deployment-target "${CMAKE_OSX_DEPLOYMENT_TARGET}"
+                --target-device iphone --target-device ipad
+                --output-partial-info-plist "${CMAKE_CURRENT_BINARY_DIR}/AssetCatalog-Info.plist"
+                "${_vanilla_icon_input}"
+        COMMAND /usr/libexec/PlistBuddy -x
+                -c "Merge ${CMAKE_CURRENT_BINARY_DIR}/AssetCatalog-Info.plist"
+                "$<TARGET_FILE_DIR:vanilla>/Info.plist"
+        VERBATIM
+    )
 else()
     add_executable(vanilla MACOSX_BUNDLE main.c)
 endif()
@@ -377,6 +500,11 @@ if (APPLE)
 	# Set bundle name to be more user-friendly
 	set_target_properties(vanilla PROPERTIES
 		OUTPUT_NAME Vanilla
+		MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_BINARY_DIR}/Vanilla.Info.plist.in"
+		MACOSX_BUNDLE_GUI_IDENTIFIER "com.mattkc.vanilla"
+		MACOSX_BUNDLE_BUNDLE_NAME "Vanilla"
+		MACOSX_BUNDLE_SHORT_VERSION_STRING "1.0"
+		MACOSX_BUNDLE_BUNDLE_VERSION "1"
 	)
 else()
 	# Ensure executable is installed
@@ -391,7 +519,6 @@ if (NOT VANILLA_BUILD_VENDORED)
 endif()
 
 target_link_libraries(vanillagui PRIVATE
-    SDL2::SDL2main
     ${_sdl_lib}
     SDL2_ttf
     SDL2_image
@@ -401,13 +528,15 @@ target_link_libraries(vanillagui PRIVATE
 
 if (ANDROID)
     target_link_libraries(vanillagui PRIVATE
-        SDL2main
         android
         GLESv2
         log
         mediandk
     )
 endif()
+
+# SDL owns the platform entry-point shim used by main.c.
+target_link_libraries(vanilla PRIVATE SDL2::SDL2main ${_sdl_lib})
 
 # Find FFmpeg
 if (NOT VANILLA_BUILD_VENDORED)
@@ -431,7 +560,24 @@ if (LINUX)
 endif()
 
 if (APPLE)
-	target_link_libraries(vanillagui PRIVATE "-framework VideoToolbox" "-framework CoreMedia" iconv)
+    target_compile_definitions(vanillagui PRIVATE VANILLA_VIDEOTOOLBOX_AVAILABLE)
+    target_link_libraries(vanillagui PRIVATE
+        "-framework CoreFoundation"
+        "-framework CoreMedia"
+        "-framework CoreVideo"
+        "-framework Foundation"
+        "-framework Metal"
+        "-framework QuartzCore"
+        "-framework VideoToolbox"
+        iconv
+    )
+endif()
+
+if (IOS)
+    target_link_libraries(vanillagui PRIVATE
+        "-framework ImageIO"
+        "-framework MobileCoreServices"
+    )
 endif()
 
 if (VANILLA_BUILD_PIPE)
@@ -484,7 +630,12 @@ endif()
 
 # Find libxml2 (used for storing/parsing user config)
 if (VANILLA_BUILD_VENDORED)
-    target_link_libraries(vanillagui PRIVATE LibXml2::LibXml2)
+    if (IOS)
+        target_link_libraries(vanillagui PRIVATE "-lxml2")
+        target_include_directories(vanillagui PRIVATE "${VANILLA_IOS_SDK_PATH}/usr/include/libxml2")
+    else()
+        target_link_libraries(vanillagui PRIVATE LibXml2::LibXml2)
+    endif()
 else()
     find_package(LibXML2 REQUIRED)
     target_link_libraries(vanillagui PRIVATE ${LibXML2_LIBRARIES})
@@ -506,8 +657,20 @@ target_include_directories(vanillagui PRIVATE
 )
 
 # Install assets
-if(APPLE)
-	# Put assets in correct place relative to build
+if(ANDROID)
+    # Put assets in correct place relative to build
+    add_custom_command(
+        TARGET vanilla POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/assets" "${CMAKE_CURRENT_SOURCE_DIR}/../android/app/src/main/assets"
+    )
+elseif(IOS)
+    # Put assets inside the iOS app bundle
+    add_custom_command(
+        TARGET vanilla POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/assets" "$<TARGET_FILE_DIR:vanilla>/assets"
+    )
+elseif(APPLE)
+    # Put assets in correct place relative to build
     add_custom_command(
         TARGET vanilla POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_directory_if_different "${CMAKE_CURRENT_SOURCE_DIR}/assets" "$<TARGET_FILE_DIR:vanilla>/../Resources/assets"
