@@ -566,12 +566,17 @@ if (APPLE)
         "-framework CoreMedia"
         "-framework CoreVideo"
         "-framework Foundation"
-        "-framework ImageIO"
         "-framework Metal"
-        "-framework MobileCoreServices"
         "-framework QuartzCore"
         "-framework VideoToolbox"
         iconv
+    )
+endif()
+
+if (IOS)
+    target_link_libraries(vanillagui PRIVATE
+        "-framework ImageIO"
+        "-framework MobileCoreServices"
     )
 endif()
 
