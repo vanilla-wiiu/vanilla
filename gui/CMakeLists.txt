@@ -420,7 +420,9 @@ if(APPLE)
     <key>LSMinimumSystemVersion</key>
     <string>${CMAKE_OSX_DEPLOYMENT_TARGET}</string>
     <key>NSHighResolutionCapable</key>
-    <true/>]=])
+    <true/>
+    <key>CFBundleIconFile</key>
+    <string>${MACOSX_BUNDLE_ICON_FILE}</string>]=])
     endif()
 
     configure_file(
@@ -488,6 +490,13 @@ elseif(IOS)
     )
 else()
     add_executable(vanilla MACOSX_BUNDLE main.c)
+    if(APPLE)
+        set(_vanilla_macos_icon "${CMAKE_CURRENT_SOURCE_DIR}/res/macos/Vanilla.icns")
+        target_sources(vanilla PRIVATE "${_vanilla_macos_icon}")
+        set_source_files_properties("${_vanilla_macos_icon}" PROPERTIES
+            MACOSX_PACKAGE_LOCATION "Resources"
+        )
+    endif()
 endif()
 target_link_libraries(vanilla PRIVATE vanillagui)
 target_include_directories(vanilla PRIVATE
@@ -506,6 +515,11 @@ if (APPLE)
 		MACOSX_BUNDLE_SHORT_VERSION_STRING "1.0"
 		MACOSX_BUNDLE_BUNDLE_VERSION "1"
 	)
+	if(NOT IOS)
+		set_target_properties(vanilla PROPERTIES
+			MACOSX_BUNDLE_ICON_FILE "Vanilla.icns"
+		)
+	endif()
 else()
 	# Ensure executable is installed
 	install(TARGETS vanilla)

@@ -146,7 +146,7 @@ jobs:
           --force \
           --timestamp \
           --options runtime \
-          --entitlements "$GITHUB_WORKSPACE/gui/res/Vanilla.entitlements" \
+          --entitlements "$GITHUB_WORKSPACE/gui/res/macos/Vanilla.entitlements" \
           --sign "$MACOS_SIGNING_IDENTITY" \
           "$GITHUB_WORKSPACE/signing/Vanilla.app"
         codesign --verify --deep --strict --verbose=2 "$GITHUB_WORKSPACE/signing/Vanilla.app"
