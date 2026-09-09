@@ -560,7 +560,17 @@ if (LINUX)
 endif()
 
 if (APPLE)
-	target_link_libraries(vanillagui PRIVATE "-framework VideoToolbox" "-framework CoreMedia" iconv)
+    target_compile_definitions(vanillagui PRIVATE VANILLA_VIDEOTOOLBOX_AVAILABLE)
+    target_link_libraries(vanillagui PRIVATE
+        "-framework CoreFoundation"
+        "-framework CoreMedia"
+        "-framework CoreVideo"
+        "-framework Foundation"
+        "-framework Metal"
+        "-framework QuartzCore"
+        "-framework VideoToolbox"
+        iconv
+    )
 endif()
 
 if (VANILLA_BUILD_PIPE)

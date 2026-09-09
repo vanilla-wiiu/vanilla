@@ -27,7 +27,7 @@ jobs:
         cmake -S . -B build -G Xcode --toolchain cmake/ios-toolchain.cmake -DCMAKE_POLICY_VERSION_MINIMUM=3.5
 
     - name: Build iOS
-      run: cmake --build build --config Release --target vanilla --parallel
+      run: cmake --build build --config Release --target vanilla
 
     - name: Create unsigned IPA
       run: |
@@ -76,7 +76,7 @@ jobs:
           -DVANILLA_BUILD_VENDORED=ON
 
     - name: Build
-      run: cmake --build build --target vanilla --parallel
+      run: cmake --build build --target vanilla
 
     - name: Package
       run: |
