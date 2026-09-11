@@ -12,6 +12,7 @@
 #include "menu_common.h"
 #include "menu_game.h"
 #include "menu_main.h"
+#include "menu_region.h"
 #include "ui/ui_anim.h"
 #include "ui/ui_util.h"
 
@@ -112,10 +113,12 @@ void sync_animation_step(vui_context_t *ctx, int64_t time, void *userdata)
                 }
                 console.bssid = sync->data.bssid;
                 console.psk = sync->data.psk;
+                console.region = -1;
                 found = vpi_config_add_console(&console);
+                vui_transition_fade_layer_out(ctx, sync_fglayer, vpi_menu_region, (void *) (intptr_t) -1);
+            } else {
+                vui_transition_fade_layer_out(ctx, sync_fglayer, vpi_menu_game, (void *) (intptr_t) found);
             }
-
-            vui_transition_fade_layer_out(ctx, sync_fglayer, vpi_menu_game, (void *) (intptr_t) found);
 
             vanilla_free_event(&event);
             vanilla_stop();
