@@ -30,11 +30,14 @@
 #endif // #ifdef VANILLA_HAS_EGL
 
 
-#ifdef VANILLA_DRM_AVAILABLE
+#ifdef VANILLA_DRM_PRIME_IMPORT_AVAILABLE
 #include <libavutil/hwcontext_drm.h>
 #include <drm_fourcc.h>
+#endif // VANILLA_DRM_PRIME_IMPORT_AVAILABLE
+
+#ifdef VANILLA_DRM_KMS_AVAILABLE
 #include "ui_sdl_drm.h"
-#endif // VANILLA_DRM_AVAILABLE
+#endif // VANILLA_DRM_KMS_AVAILABLE
 
 #ifdef VANILLA_CUDA_AVAILABLE
 #include <libavutil/hwcontext_cuda.h>
@@ -111,11 +114,15 @@ typedef struct {
 #ifdef VANILLA_VIDEOTOOLBOX_AVAILABLE
     vui_sdl_videotoolbox_context_t *videotoolbox;
 #endif
+#ifdef VANILLA_NVV4L2_AVAILABLE
+    EGLDisplay nvv4l2_egl_display;
+    EGLImageKHR nvv4l2_egl_image;
+#endif
     uint64_t present_frame_sequence;
     Uint64 update_tick_origin;
     Uint64 update_tick_frequency;
     uint64_t update_tick;
-#ifdef VANILLA_DRM_AVAILABLE
+#ifdef VANILLA_DRM_KMS_AVAILABLE
     int fast_drm_active;
 #endif
 #ifdef ANDROID
@@ -133,6 +140,57 @@ typedef struct {
 
 	uint16_t last_vibration_state;
 } vui_sdl_context_t;
+
+#ifdef VANILLA_NVV4L2_AVAILABLE
+typedef EGLImageKHR (*vui_nv_egl_image_from_fd_fn)(EGLDisplay display, int dmabuf_fd);
+typedef int (*vui_nv_destroy_egl_image_fn)(EGLDisplay display, EGLImageKHR image);
+
+static void *nvbuf_utils_handle;
+static vui_nv_egl_image_from_fd_fn nv_egl_image_from_fd;
+static vui_nv_destroy_egl_image_fn nv_destroy_egl_image;
+
+static int load_nvbuf_egl_functions(void)
+{
+    if (nv_egl_image_from_fd && nv_destroy_egl_image) {
+        return 1;
+    }
+
+    nvbuf_utils_handle = SDL_LoadObject("libnvbuf_utils.so.1.0.0");
+    if (!nvbuf_utils_handle) {
+        vpilog("Failed to load libnvbuf_utils for EGL import: %s\n", SDL_GetError());
+        return 0;
+    }
+
+    nv_egl_image_from_fd = (vui_nv_egl_image_from_fd_fn)SDL_LoadFunction(nvbuf_utils_handle, "NvEGLImageFromFd");
+    if (!nv_egl_image_from_fd) {
+        goto die;
+    }
+
+    nv_destroy_egl_image = (vui_nv_destroy_egl_image_fn)SDL_LoadFunction(nvbuf_utils_handle, "NvDestroyEGLImage");
+    if (!nv_destroy_egl_image) {
+        goto die;
+    }
+
+    return 1;
+
+die:
+    vpilog("Failed to resolve NvBuffer EGL functions: %s\n", SDL_GetError());
+    SDL_UnloadObject(nvbuf_utils_handle);
+    nvbuf_utils_handle = NULL;
+    nv_egl_image_from_fd = NULL;
+    nv_destroy_egl_image = NULL;
+    return 0;
+}
+
+static void release_nvv4l2_egl_image(vui_sdl_context_t *sdl_ctx)
+{
+    if (sdl_ctx->nvv4l2_egl_image != EGL_NO_IMAGE_KHR && nv_destroy_egl_image) {
+        nv_destroy_egl_image(sdl_ctx->nvv4l2_egl_display, sdl_ctx->nvv4l2_egl_image);
+        sdl_ctx->nvv4l2_egl_image = EGL_NO_IMAGE_KHR;
+        sdl_ctx->nvv4l2_egl_display = EGL_NO_DISPLAY;
+    }
+}
+#endif
 
 #ifdef VANILLA_CUDA_AVAILABLE
 typedef struct {
@@ -778,8 +836,10 @@ int vui_init_sdl(vui_context_t *ctx, int fullscreen)
 #ifdef ANDROID
     // Force SDL to use landscape orientations only
     SDL_SetHint(SDL_HINT_ORIENTATIONS, "LandscapeLeft LandscapeRight");
+#endif
 
-    // Force opengles2 for hardware decode interoperability
+#if defined(ANDROID) || defined(VANILLA_NVV4L2_AVAILABLE)
+    // External EGLImage video textures require opengles2
     SDL_SetHint(SDL_HINT_RENDER_DRIVER, "opengles2");
 #endif
 
@@ -999,9 +1059,6 @@ void vui_close_sdl(vui_context_t *ctx)
         return;
     }
 
-    av_frame_free(&sdl_ctx->frame);
-    av_frame_free(&sdl_ctx->held_frame);
-
 #ifdef VANILLA_NX_IMU
     vpi_nx_imu_quit();
 #endif
@@ -1036,7 +1093,22 @@ void vui_close_sdl(vui_context_t *ctx)
     }
     SDL_DestroyTexture(sdl_ctx->android_video_tex);
 #endif
+#ifdef VANILLA_NVV4L2_AVAILABLE
+    // Complete queued draws before releasing the EGLImage backing game_tex
+    SDL_RenderFlush(sdl_ctx->renderer);
+#endif
     if (sdl_ctx->game_tex) SDL_DestroyTexture(sdl_ctx->game_tex);
+#ifdef VANILLA_NVV4L2_AVAILABLE
+    release_nvv4l2_egl_image(sdl_ctx);
+    if (nvbuf_utils_handle) {
+        SDL_UnloadObject(nvbuf_utils_handle);
+        nvbuf_utils_handle = NULL;
+        nv_egl_image_from_fd = NULL;
+        nv_destroy_egl_image = NULL;
+    }
+#endif
+    av_frame_free(&sdl_ctx->frame);
+    av_frame_free(&sdl_ctx->held_frame);
     SDL_DestroyTexture(sdl_ctx->background);
 
     for (int i = 0; i < MAX_BUTTON_COUNT; i++) {
@@ -1890,10 +1962,89 @@ int get_texture_from_cuda_frame(vui_cuda_context_t *cuda_ctx, vui_sdl_context_t 
 }
 #endif // VANILLA_CUDA_AVAILABLE
 
+#ifdef VANILLA_NVV4L2_AVAILABLE
+static int get_texture_from_nvv4l2_frame(vui_sdl_context_t *sdl_ctx, AVFrame *f, const AVDRMFrameDescriptor *desc)
+{
+    if (desc->nb_objects != 1 || desc->nb_layers != 1 || desc->layers[0].format != DRM_FORMAT_ABGR8888) {
+        vpilog("Unsupported NVV4L2 DRM PRIME layout (%d objects, %d layers, format 0x%x)\n", desc->nb_objects, desc->nb_layers, desc->nb_layers ? desc->layers[0].format : 0);
+        return 0;
+    }
+    if (!load_nvbuf_egl_functions()) {
+        return 0;
+    }
+
+    Uint32 texture_format = 0;
+    int texture_width = 0;
+    int texture_height = 0;
+    if (sdl_ctx->game_tex
+        && (SDL_QueryTexture(sdl_ctx->game_tex, &texture_format, NULL, &texture_width, &texture_height) < 0
+            || texture_format != SDL_PIXELFORMAT_EXTERNAL_OES
+            || texture_width != f->width
+            || texture_height != f->height)) {
+        SDL_RenderFlush(sdl_ctx->renderer);
+        SDL_DestroyTexture(sdl_ctx->game_tex);
+        sdl_ctx->game_tex = NULL;
+        release_nvv4l2_egl_image(sdl_ctx);
+    }
+
+    if (!sdl_ctx->game_tex) {
+        sdl_ctx->game_tex = SDL_CreateTexture(sdl_ctx->renderer, SDL_PIXELFORMAT_EXTERNAL_OES,  SDL_TEXTUREACCESS_STATIC, f->width, f->height);
+        if (!sdl_ctx->game_tex) {
+            vpilog("Failed to create NVV4L2 external texture: %s\n", SDL_GetError());
+            return 0;
+        }
+    }
+
+    static PFNGLEGLIMAGETARGETTEXTURE2DOESPROC image_target;
+    if (!image_target) {
+        image_target = (PFNGLEGLIMAGETARGETTEXTURE2DOESPROC) eglGetProcAddress("glEGLImageTargetTexture2DOES");
+        if (!image_target) {
+            vpilog("GL_OES_EGL_image is unavailable\n");
+            return 0;
+        }
+    }
+
+    EGLDisplay display = eglGetCurrentDisplay();
+    if (display == EGL_NO_DISPLAY) {
+        vpilog("No current EGL display for NVV4L2 frame import\n");
+        return 0;
+    }
+
+    if (SDL_RenderFlush(sdl_ctx->renderer) < 0) {
+        vpilog("Failed to flush SDL before NVV4L2 frame import: %s\n", SDL_GetError());
+        return 0;
+    }
+    release_nvv4l2_egl_image(sdl_ctx);
+
+    EGLImageKHR image = nv_egl_image_from_fd(display, desc->objects[0].fd);
+    if (image == EGL_NO_IMAGE_KHR) {
+        vpilog("NvEGLImageFromFd failed for dma-buf fd %d\n", desc->objects[0].fd);
+        return 0;
+    }
+
+    if (SDL_GL_BindTexture(sdl_ctx->game_tex, NULL, NULL) < 0) {
+        vpilog("Failed to bind NVV4L2 external texture: %s\n", SDL_GetError());
+        nv_destroy_egl_image(display, image);
+        return 0;
+    }
+    image_target(GL_TEXTURE_EXTERNAL_OES, image);
+    SDL_GL_UnbindTexture(sdl_ctx->game_tex);
+
+    sdl_ctx->nvv4l2_egl_display = display;
+    sdl_ctx->nvv4l2_egl_image = image;
+    return 1;
+}
+#endif
+
 int get_texture_from_drm_prime_frame(vui_sdl_context_t *sdl_ctx, AVFrame *f)
 {
-#ifdef VANILLA_HAS_EGL
+#ifdef VANILLA_DRM_PRIME_IMPORT_AVAILABLE
 	const AVDRMFrameDescriptor *desc = (const AVDRMFrameDescriptor *)f->data[0];
+
+#ifdef VANILLA_NVV4L2_AVAILABLE
+    /* NvEGLImageFromFd consumes the Tegra NvBuffer as one external image. */
+    return get_texture_from_nvv4l2_frame(sdl_ctx, f, desc);
+#endif
 
 	static PFNGLACTIVETEXTUREARBPROC glActiveTextureARB = NULL;
 	if (!glActiveTextureARB) {
@@ -1988,8 +2139,8 @@ int get_texture_from_drm_prime_frame(vui_sdl_context_t *sdl_ctx, AVFrame *f)
 
 	return 1;
 #else
-	vpilog("No EGL support to display VAAPI texture\n");
-	return 0;
+    vpilog("No EGL/DRM PRIME support to display hardware frame\n");
+    return 0;
 #endif
 }
 
@@ -2096,9 +2247,9 @@ int vui_update_sdl(vui_context_t *vui)
 
     SDL_Texture *main_tex = NULL;
 
-#ifdef VANILLA_DRM_AVAILABLE
+#ifdef VANILLA_DRM_KMS_AVAILABLE
     static vanilla_drm_ctx_t *drm_ctx = NULL;
-#endif // VANILLA_DRM_AVAILABLE
+#endif // VANILLA_DRM_KMS_AVAILABLE
 #ifdef VANILLA_CUDA_AVAILABLE
     static vui_cuda_context_t *cuda_ctx = NULL;
 #endif // VANILLA_CUDA_AVAILABLE
@@ -2106,12 +2257,12 @@ int vui_update_sdl(vui_context_t *vui)
     int sdl_frame_ready = 0;
     if (!vui->game_mode) {
 
-#ifdef VANILLA_DRM_AVAILABLE
+#ifdef VANILLA_DRM_KMS_AVAILABLE
         if (drm_ctx) {
             vui_sdl_drm_free(&drm_ctx); // will set to null
         }
         sdl_ctx->fast_drm_active = 0;
-#endif // VANILLA_DRM_AVAILABLE
+#endif // VANILLA_DRM_KMS_AVAILABLE
 #ifdef VANILLA_CUDA_AVAILABLE
         if (cuda_ctx) {
             if (cuda_ctx->resY) cudaGraphicsUnregisterResource(cuda_ctx->resY);
@@ -2166,7 +2317,7 @@ int vui_update_sdl(vui_context_t *vui)
             switch (sdl_ctx->frame->format) {
             case AV_PIX_FMT_DRM_PRIME:
             {
-#ifdef VANILLA_DRM_AVAILABLE
+#ifdef VANILLA_DRM_KMS_AVAILABLE
                 // For very low powered systems, we can save a little time by
                 // skipping SDL2 entirely and rendering straight to DRM. However,
                 // we lose features like "toast" notifications and upscaling, so
@@ -2193,7 +2344,9 @@ int vui_update_sdl(vui_context_t *vui)
                     sdl_ctx->fast_drm_active = 0;
                     get_texture_from_drm_prime_frame(sdl_ctx, sdl_ctx->frame);
                 }
-#endif // VANILLA_DRM_AVAILABLE
+#else
+                get_texture_from_drm_prime_frame(sdl_ctx, sdl_ctx->frame);
+#endif // VANILLA_DRM_KMS_AVAILABLE
                 break;
             }
             case AV_PIX_FMT_CUDA:
@@ -2268,7 +2421,7 @@ int vui_update_sdl(vui_context_t *vui)
 #endif
 
         int sdl_handles_final_blit = 1;
-#ifdef VANILLA_DRM_AVAILABLE
+#ifdef VANILLA_DRM_KMS_AVAILABLE
         sdl_handles_final_blit = !sdl_ctx->fast_drm_active;
 #endif
         if (render_tick && sdl_handles_final_blit) {

@@ -23,7 +23,6 @@ config BR2_PACKAGE_VANILLA_BUILD_PIPE
     bool "Enable pipe"
     default y
     select BR2_PACKAGE_LIBNL
-    select BR2_PACKAGE_OPENSSL
     help
         Build the pipe. Enable if this device can connect to the Wii U
         on its own. Disable if it will need to go through a separate
@@ -32,11 +31,19 @@ config BR2_PACKAGE_VANILLA_BUILD_PIPE
 config BR2_PACKAGE_VANILLA_USE_VAAPI
     bool "Enable VAAPI"
 
-config BR2_PACKAGE_VANILLA_USE_DRM
-    bool "Enable DRM"
+config BR2_PACKAGE_VANILLA_USE_DRM_KMS
+    bool "Enable direct DRM/KMS video output"
     default y
     select BR2_PACKAGE_SDL2_OPENGLES
     select BR2_PACKAGE_SDL2_KMSDRM
+
+config BR2_PACKAGE_VANILLA_USE_NVV4L2
+    bool "Enable Tegra NVV4L2 hardware decoding"
+    select BR2_PACKAGE_LIBDRM
+    select BR2_PACKAGE_LIBV4L
+    select BR2_PACKAGE_SDL2_OPENGLES
+    help
+        Enable h264_nvv4l2 via FFmpeg (FFmpeg must provide h264_nvv4l2)
 
 config BR2_PACKAGE_VANILLA_USE_NX_IMU
     bool "Use Nintendo Switch motion sensors"

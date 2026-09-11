@@ -356,16 +356,16 @@ if (LINUX)
         ui/ui_sdl_linux.c
     )
 
-    # Link with DRM if available
-    option(VANILLA_BUILD_USE_DRM "Enable DRM video output" ON)
-    if (VANILLA_BUILD_USE_DRM)
+    option(VANILLA_BUILD_USE_DRM_KMS "Enable direct DRM/KMS video output" ON)
+    option(VANILLA_BUILD_USE_NVV4L2 "Enable Tegra NVV4L2 hardware decoding" OFF)
+    if (VANILLA_BUILD_USE_DRM_KMS OR VANILLA_BUILD_USE_NVV4L2)
         find_package(DRM)
-        if (DRM_FOUND)
-            list(APPEND VANILLA_GUI_SRC
-                ui/ui_sdl_drm.c
-            )
-        endif()
-	endif()
+    endif()
+    if (VANILLA_BUILD_USE_DRM_KMS AND DRM_FOUND)
+        list(APPEND VANILLA_GUI_SRC
+            ui/ui_sdl_drm.c
+        )
+    endif()
 
     # Read IMU directly via libiio (Nintendo Switch / L4T).
     # joycond's virtual Pro Controller doesn't forward sensor data, so SDL
@@ -583,6 +583,13 @@ if (LINUX)
         target_compile_definitions(vanillagui PRIVATE VANILLA_V4L2REQUEST_AVAILABLE)
         target_link_libraries(vanillagui PRIVATE udev drm)
     endif()
+
+    if (VANILLA_BUILD_USE_NVV4L2)
+        if (NOT DRM_FOUND)
+            message(FATAL_ERROR "NVV4L2 output requires libdrm")
+        endif()
+        target_compile_definitions(vanillagui PRIVATE VANILLA_NVV4L2_AVAILABLE)
+    endif()
 endif()
 
 if (APPLE)
@@ -636,8 +643,12 @@ endif()
 
 if (DRM_FOUND)
     target_link_libraries(vanillagui PRIVATE ${DRM_LIBRARIES})
-    target_compile_definitions(vanillagui PRIVATE VANILLA_DRM_AVAILABLE)
+    target_compile_definitions(vanillagui PRIVATE VANILLA_DRM_PRIME_IMPORT_AVAILABLE)
     target_include_directories(vanillagui PRIVATE ${DRM_INCLUDE_DIRS})
+endif()
+
+if (VANILLA_BUILD_USE_DRM_KMS AND DRM_FOUND)
+    target_compile_definitions(vanillagui PRIVATE VANILLA_DRM_KMS_AVAILABLE)
 endif()
 
 if (CUDAToolkit_FOUND)

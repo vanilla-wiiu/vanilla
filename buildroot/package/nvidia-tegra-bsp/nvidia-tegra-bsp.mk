@@ -36,8 +36,13 @@ define NVIDIA_TEGRA_BSP_INSTALL_TARGET_CMDS
 	$(call NVIDIA_TEGRA_BSP_EXTRACT_DEB,$(wildcard $(NVIDIA_TEGRA_BSP_DEBS)/nvidia-l4t-3d-core_*.deb))
 	$(call NVIDIA_TEGRA_BSP_EXTRACT_DEB,$(wildcard $(NVIDIA_TEGRA_BSP_DEBS)/nvidia-l4t-x11_*.deb))
 	$(call NVIDIA_TEGRA_BSP_EXTRACT_DEB,$(wildcard $(NVIDIA_TEGRA_BSP_DEBS)/nvidia-l4t-multimedia_*.deb))
+	$(call NVIDIA_TEGRA_BSP_EXTRACT_DEB,$(wildcard $(NVIDIA_TEGRA_BSP_DEBS)/nvidia-l4t-multimedia-utils_*.deb))
 	$(call NVIDIA_TEGRA_BSP_EXTRACT_DEB,$(wildcard $(NVIDIA_TEGRA_BSP_DEBS)/nvidia-l4t-xusb-firmware_*.deb))
 	$(call NVIDIA_TEGRA_BSP_EXTRACT_DEB,$(wildcard $(NVIDIA_TEGRA_BSP_DEBS)/nvidia-l4t-firmware_*.deb))
+
+	# Symlink v4l2 libs
+	ln -sf libnvv4l2.so $(TARGET_DIR)$(TEGRA_TEGRA_DIR)/libv4l2.so.0
+	ln -sf libnvv4lconvert.so $(TARGET_DIR)$(TEGRA_TEGRA_DIR)/libv4lconvert.so.0
 
 	# Symlink tegra libs into standard lib path
 	for lib in $(TARGET_DIR)$(TEGRA_TEGRA_DIR)/*.so*; do \

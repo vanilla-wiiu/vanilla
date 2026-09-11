@@ -1,0 +1,14 @@
+diff --git a/configure b/configure
+index 001866df02..37fa52eda9 100755
+--- a/configure
++++ b/configure
+@@ -7430,8 +7430,7 @@ if enabled_any nvdec cuvid; then
+     check_type "ffnvcodec/dynlink_cuda.h ffnvcodec/dynlink_cuviddec.h" "CUVIDAV1PICPARAMS"
+ fi
+ 
+-enabled nvv4l2 && add_ldflags '-L/usr/lib/aarch64-linux-gnu/tegra' \
+-               && check_headers linux/videodev2.h \
++enabled nvv4l2 && check_headers linux/videodev2.h \
+                && require_pkg_config libv4l2 libv4l2 libv4l2.h v4l2_ioctl
+ 
+ enabled amf &&

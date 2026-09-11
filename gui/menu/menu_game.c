@@ -291,6 +291,9 @@ enum HwDecoderType {
 #ifdef VANILLA_VIDEOTOOLBOX_AVAILABLE
     HWDEC_TYPE_VIDEOTOOLBOX,
 #endif
+#ifdef VANILLA_NVV4L2_AVAILABLE
+    HWDEC_TYPE_NVV4L2,
+#endif
     HWDEC_TYPE_NVDEC,
     HWDEC_TYPE_VAAPI,
     HWDEC_TYPE_V4L2REQUEST,
@@ -445,6 +448,12 @@ int vpi_decode_init(vpi_decode_state_t *s)
     decoders[HWDEC_TYPE_VIDEOTOOLBOX].get_format = videotoolbox_get_format;
 #endif
 
+#ifdef VANILLA_NVV4L2_AVAILABLE
+    decoders[HWDEC_TYPE_NVV4L2].name = "NVV4L2";
+    decoders[HWDEC_TYPE_NVV4L2].codec = avcodec_find_decoder_by_name("h264_nvv4l2");
+    decoders[HWDEC_TYPE_NVV4L2].get_format = drm_get_format;
+#endif
+
     decoders[HWDEC_TYPE_NVDEC].name = "NVDEC";
     decoders[HWDEC_TYPE_NVDEC].codec = avcodec_find_decoder_by_name("h264_cuvid");
     decoders[HWDEC_TYPE_NVDEC].get_format = nvdec_get_format;
@@ -462,7 +471,7 @@ int vpi_decode_init(vpi_decode_state_t *s)
     decoders[HWDEC_TYPE_DRM].get_format = drm_get_format;
 
     decoders[HWDEC_TYPE_SOFTWARE].name = "Software";
-    decoders[HWDEC_TYPE_SOFTWARE].codec = avcodec_find_decoder(AV_CODEC_ID_H264);
+    decoders[HWDEC_TYPE_SOFTWARE].codec = avcodec_find_decoder_by_name("h264");
     decoders[HWDEC_TYPE_SOFTWARE].get_format = 0;
 
     // Discover the most ideal hardware decoder
@@ -500,6 +509,12 @@ int vpi_decode_init(vpi_decode_state_t *s)
             }
         }
 #endif
+#ifdef VANILLA_NVV4L2_AVAILABLE
+        if (r != VANILLA_SUCCESS && vpi_egl_available) {
+            vpi_decode_exit(s);
+            r = open_decoder(s, &decoders[HWDEC_TYPE_NVV4L2]);
+        }
+#endif // VANILLA_NVV4L2_AVAILABLE
 #ifdef VANILLA_CUDA_AVAILABLE
         // See if we can create an NVDEC context (most NVIDIA GPUs)
         if (r != VANILLA_SUCCESS) {

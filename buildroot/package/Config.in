@@ -1,4 +1,5 @@
 source "$BR2_EXTERNAL_VANILLA_PATH/package/nexmon/Config.in"
+source "$BR2_EXTERNAL_VANILLA_PATH/package/nx-ffmpeg/Config.in"
 source "$BR2_EXTERNAL_VANILLA_PATH/package/opi-ffmpeg/Config.in"
 source "$BR2_EXTERNAL_VANILLA_PATH/package/rpi-ffmpeg/Config.in"
 source "$BR2_EXTERNAL_VANILLA_PATH/package/rtw88-lwfinger/Config.in"
