@@ -59,6 +59,7 @@ RUN make -C /buildroot O=/build BR2_EXTERNAL=/vanilla/buildroot vanilla_nintendo
     /buildroot/utils/config --file /build/.config -e BR2_PACKAGE_VANILLA && \
     /buildroot/utils/config --file /build/.config -d BR2_PACKAGE_VANILLA_USE_VAAPI && \
     /buildroot/utils/config --file /build/.config -d BR2_PACKAGE_VANILLA_USE_DRM_KMS && \
+    /buildroot/utils/config --file /build/.config -e BR2_PACKAGE_VANILLA_USE_NVV4L2 && \
     /buildroot/utils/config --file /build/.config -e BR2_PACKAGE_VANILLA_USE_NX_IMU && \
     /buildroot/utils/config --file /build/.config -e BR2_PACKAGE_VANILLA_USE_LOCAL && \
     /buildroot/utils/config --file /build/.config --set-str BR2_PACKAGE_VANILLA_LOCAL_PATH /vanilla && \
