@@ -9,7 +9,6 @@
 #include "menu_connection.h"
 #include "menu_gamepad.h"
 #include "menu_main.h"
-#include "menu_region.h"
 #include "menu_sudo_warning.h"
 #include "pipe/def.h"
 #include "ui/ui_anim.h"
@@ -30,12 +29,6 @@ static void transition_to_connection(vui_context_t *vui, int button, void *v)
 {
     int layer = (intptr_t) v;
     vui_transition_fade_layer_out(vui, layer, vpi_menu_connection, 0);
-}
-
-static void transition_to_region(vui_context_t *vui, int button, void *v)
-{
-    int layer = (intptr_t) v;
-    vui_transition_fade_layer_out(vui, layer, vpi_menu_region, 0);
 }
 
 static void thunk_to_quit(vui_context_t *vui, int button, void *v)
@@ -143,11 +136,6 @@ void vpi_menu_settings(vui_context_t *vui, void *v)
     // Controls menu
     SETTINGS_NAMES[sc] = VPI_LANG_CONTROLS;
     SETTINGS_ACTION[sc] = transition_to_gamepad;
-    sc++;
-
-    // Controls menu
-    SETTINGS_NAMES[sc] = VPI_LANG_REGION;
-    SETTINGS_ACTION[sc] = transition_to_region;
     sc++;
 
     // Full screen option (if on a platform that supports windowed mode)
