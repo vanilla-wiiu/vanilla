@@ -11,6 +11,11 @@
 #include <linux/version.h>
 #include <net/if.h>
 #include <linux/nl80211.h>
+#ifdef ANDROID
+#include <linux/sockios.h>
+#include <stdint.h>
+#include <sys/ioctl.h>
+#endif
 #include <netlink/genl/ctrl.h>
 #include <netlink/genl/genl.h>
 #include <netlink/route/addr.h>
@@ -51,6 +56,67 @@ static pthread_mutex_t relay_mutex;
 static int running = 0;
 static int main_loop = 0;
 static int relay_running = 0;
+
+#ifdef ANDROID
+
+#define VANILLA_WLC_SET_PM 86
+#define VANILLA_WLC_IOCTL_MAGIC 0x14e46c77
+
+struct vanilla_bcm_ioctl {
+    uint32_t cmd;
+    void *buf;
+    uint32_t len;
+    uint8_t set;
+    uint8_t padding[3];
+    uint32_t used;
+    uint32_t needed;
+    uint32_t driver;
+};
+
+static int vanilla_bcm_set_pm(const char *interface, int value)
+{
+    int skt;
+    int ret = -1;
+    int saved_errno;
+    int attempt;
+    struct ifreq ifr;
+    struct vanilla_bcm_ioctl ioc;
+
+    memset(&ifr, 0, sizeof(ifr));
+    memset(&ioc, 0, sizeof(ioc));
+
+    strncpy(ifr.ifr_name, interface, IFNAMSIZ - 1);
+
+    ioc.cmd = VANILLA_WLC_SET_PM;
+    ioc.buf = &value;
+    ioc.len = sizeof(value);
+    ioc.set = 1;
+    ioc.driver = VANILLA_WLC_IOCTL_MAGIC;
+
+    ifr.ifr_data = (void *)&ioc;
+
+    skt = socket(AF_INET, SOCK_DGRAM, 0);
+    if (skt < 0)
+        return -errno;
+
+    for (attempt = 0; attempt < 5; attempt++) {
+        ret = ioctl(skt, SIOCDEVPRIVATE, &ifr);
+        if (ret == 0 || errno != EINTR)
+            break;
+
+        usleep(100000);
+    }
+
+    saved_errno = errno;
+    close(skt);
+
+    if (ret < 0)
+        return -saved_errno;
+
+    return 0;
+}
+
+#endif
 
 typedef struct {
     int from_socket;
@@ -1159,6 +1225,16 @@ void *sync_with_console_internal(void *data)
 
                     actual_buf_len = buf_len;
                     wpa_ctrl_recv(args->monitor, buf, &actual_buf_len);
+
+#ifdef ANDROID
+                    if (strstr(buf, "Associated with ")) {
+                        int pm_ret = vanilla_bcm_set_pm(
+                            args->wireless_interface, 0);
+                        nlprint("BCM PM: POST-ASSOC WLC_SET_PM 0 ret=%d",
+                                pm_ret);
+                    }
+#endif
+
                     if (!strstr(buf, "CTRL-EVENT-BSS-ADDED")
                         && !strstr(buf, "CTRL-EVENT-BSS-REMOVED")) {
                         nlprint("CRED RECV: %.*s", actual_buf_len, buf);
