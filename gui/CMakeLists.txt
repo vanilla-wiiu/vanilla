@@ -4,6 +4,10 @@ set(_sdl_lib SDL2::SDL2)
 set(_vanilla_gui_libs "")
 set(_ffmpeg_components avformat avcodec avutil swscale)
 
+if (LINUX)
+    option(VANILLA_BUILD_USE_VAAPI "Enable VAAPI hardware decoding" ON)
+endif()
+
 function(compile_ffmpeg _target_name _system_name _system_processor)
 	set(FFMPEG_PREFIX_DIR "${CMAKE_CURRENT_BINARY_DIR}/FFmpeg-${_system_name}-${_system_processor}")
     set(FFMPEG_INSTALL_DIR "${FFMPEG_PREFIX_DIR}/install")
@@ -45,10 +49,26 @@ function(compile_ffmpeg _target_name _system_name _system_processor)
             BUILD_IN_SOURCE 1
         )
         list(APPEND FFMPEG_DEPS nvcodec_headers)
-        list(APPEND FFMPEG_ENV "PKG_CONFIG_PATH=${FFMPEG_INSTALL_DIR}/lib/pkgconfig")
+        set(FFMPEG_PKG_CONFIG_PATH "${FFMPEG_INSTALL_DIR}/lib/pkgconfig:$ENV{PKG_CONFIG_PATH}")
+        if (VANILLA_BUILD_USE_VAAPI)
+            list(APPEND FFMPEG_DEPS vanilla_libva)
+            set(FFMPEG_PKG_CONFIG_PATH "${VAAPI_INSTALL_DIR}/lib/pkgconfig:${FFMPEG_PKG_CONFIG_PATH}")
+            set(_vaapi_extra_libs "-ldrm")
+            foreach (_dl_lib IN LISTS CMAKE_DL_LIBS)
+                string(APPEND _vaapi_extra_libs " -l${_dl_lib}")
+            endforeach()
+            list(APPEND FFMPEG_CONFIGURE_ARGS
+                --enable-vaapi
+                --enable-hwaccel=h264_vaapi
+                "--extra-libs=${_vaapi_extra_libs}"
+            )
+        else()
+            list(APPEND FFMPEG_CONFIGURE_ARGS --disable-vaapi)
+        endif()
+        list(APPEND FFMPEG_ENV "PKG_CONFIG_PATH=${FFMPEG_PKG_CONFIG_PATH}")
         list(APPEND FFMPEG_CONFIGURE_ARGS
-            # Enable VAAPI
-            --enable-hwaccel=h264_vaapi
+            # Allows us to use VAAPI without hard-linking libva-x11 (see #507)
+            --disable-xlib
 
             # Enable NVDEC
             --enable-decoder=h264_cuvid
@@ -224,6 +244,85 @@ if (VANILLA_BUILD_VENDORED)
     include(FetchContent)
     include(ExternalProject)
 
+    if (LINUX AND VANILLA_BUILD_USE_VAAPI)
+        find_package(DRM REQUIRED)
+        find_program(_libva_make NAMES gmake make REQUIRED)
+        set(VAAPI_INSTALL_DIR "${CMAKE_CURRENT_BINARY_DIR}/libva-${CMAKE_SYSTEM_PROCESSOR}/install")
+
+        # Set drivers path to what will be appropriate for the target system
+        set(_libva_driver_dirs /usr/lib64/dri /usr/lib/dri)
+        if (CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
+            list(PREPEND _libva_driver_dirs /usr/lib/x86_64-linux-gnu/dri)
+        elseif (CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64")
+            list(PREPEND _libva_driver_dirs /usr/lib/aarch64-linux-gnu/dri)
+        endif()
+        list(JOIN _libva_driver_dirs ":" _libva_driver_path)
+
+        set(_libva_configure_args
+            --prefix=${VAAPI_INSTALL_DIR}
+            --libdir=${VAAPI_INSTALL_DIR}/lib
+            --sysconfdir=/etc
+            --with-drivers-path=${_libva_driver_path}
+            --enable-static
+            --disable-shared
+            --enable-drm
+            --disable-x11
+            --disable-glx
+            --disable-wayland
+            --disable-docs
+        )
+        if (CMAKE_CROSSCOMPILING)
+            execute_process(COMMAND ${CMAKE_C_COMPILER} -dumpmachine
+                OUTPUT_VARIABLE _libva_host OUTPUT_STRIP_TRAILING_WHITESPACE
+                COMMAND_ERROR_IS_FATAL ANY)
+            list(APPEND _libva_configure_args --host=${_libva_host})
+        endif()
+        string(TOUPPER "${CMAKE_BUILD_TYPE}" _libva_build_type)
+        set(_libva_cflags "${CMAKE_C_FLAGS} ${CMAKE_C_FLAGS_${_libva_build_type}}")
+        if (CMAKE_SYSROOT)
+            string(APPEND _libva_cflags " --sysroot=${CMAKE_SYSROOT}")
+        endif()
+
+        # Have to use the autotools path because libva's meson build is shared only
+        if (POLICY CMP0135)
+            cmake_policy(SET CMP0135 NEW)
+        endif()
+        ExternalProject_Add(vanilla_libva
+            URL https://github.com/intel/libva/archive/refs/tags/2.24.1.tar.gz
+            URL_HASH SHA256=0b4a3649ee8d683b9cce2ef094df4fb039d276c0cef7e49337c43d3b297b9f42
+            PREFIX "${CMAKE_CURRENT_BINARY_DIR}/libva-${CMAKE_SYSTEM_PROCESSOR}"
+            CONFIGURE_COMMAND ${CMAKE_COMMAND} -E env
+                "CC=${CMAKE_C_COMPILER}" "CFLAGS=${_libva_cflags}"
+                "AR=${CMAKE_AR}" "RANLIB=${CMAKE_RANLIB}"
+                <SOURCE_DIR>/autogen.sh ${_libva_configure_args}
+            BUILD_COMMAND ${_libva_make}
+            INSTALL_COMMAND ${_libva_make} install
+            BUILD_BYPRODUCTS
+                "${VAAPI_INSTALL_DIR}/lib/libva.a"
+                "${VAAPI_INSTALL_DIR}/lib/libva-drm.a"
+        )
+        ExternalProject_Get_Property(vanilla_libva SOURCE_DIR)
+        install(FILES "${SOURCE_DIR}/COPYING" DESTINATION share/licenses/vanilla RENAME libva-COPYING)
+
+        file(MAKE_DIRECTORY "${VAAPI_INSTALL_DIR}/include")
+        add_library(VAAPI::VA STATIC IMPORTED)
+        set_target_properties(VAAPI::VA PROPERTIES
+            IMPORTED_LOCATION "${VAAPI_INSTALL_DIR}/lib/libva.a"
+            INTERFACE_INCLUDE_DIRECTORIES "${VAAPI_INSTALL_DIR}/include"
+            INTERFACE_LINK_LIBRARIES "${CMAKE_DL_LIBS}"
+        )
+        add_dependencies(VAAPI::VA vanilla_libva)
+        add_library(VAAPI::DRM STATIC IMPORTED)
+        set_target_properties(VAAPI::DRM PROPERTIES
+            IMPORTED_LOCATION "${VAAPI_INSTALL_DIR}/lib/libva-drm.a"
+            INTERFACE_LINK_LIBRARIES "VAAPI::VA;${DRM_LIBRARIES}"
+        )
+        add_dependencies(VAAPI::DRM vanilla_libva)
+        add_library(VAAPI::VAAPI INTERFACE IMPORTED)
+        target_link_libraries(VAAPI::VAAPI INTERFACE VAAPI::DRM)
+        set(VAAPI_FOUND TRUE)
+    endif()
+
     FetchContent_Declare(
         SDL2
         GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
@@ -381,8 +480,7 @@ if (LINUX)
         )
     endif()
 
-    option(VANILLA_BUILD_USE_VAAPI "Enable VAAPI hardware decoding" ON)
-    if (VANILLA_BUILD_USE_VAAPI)
+    if (VANILLA_BUILD_USE_VAAPI AND NOT VANILLA_BUILD_VENDORED)
         find_package(VAAPI)
     endif()
 endif()
@@ -638,7 +736,7 @@ if (VANILLA_BUILD_USE_POLKIT)
 endif()
 
 if (VAAPI_FOUND)
-    target_link_libraries(vanillagui PRIVATE VAAPI::VAAPI VAAPI::VA VAAPI::DRM va-x11 X11)
+    target_link_libraries(vanillagui PRIVATE VAAPI::VAAPI VAAPI::VA VAAPI::DRM)
 endif()
 
 if (DRM_FOUND)
