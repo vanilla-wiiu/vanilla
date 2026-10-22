@@ -50,6 +50,9 @@ function(compile_ffmpeg _target_name _system_name _system_processor)
             # Enable VAAPI
             --enable-hwaccel=h264_vaapi
 
+            # Allows us to use VAAPI without hard-linking libva-x11 (see #507)
+            --disable-xlib
+
             # Enable NVDEC
             --enable-decoder=h264_cuvid
 
@@ -638,7 +641,7 @@ if (VANILLA_BUILD_USE_POLKIT)
 endif()
 
 if (VAAPI_FOUND)
-    target_link_libraries(vanillagui PRIVATE VAAPI::VAAPI VAAPI::VA VAAPI::DRM va-x11 X11)
+    target_link_libraries(vanillagui PRIVATE VAAPI::VAAPI VAAPI::VA VAAPI::DRM)
 endif()
 
 if (DRM_FOUND)
