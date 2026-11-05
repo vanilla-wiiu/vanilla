@@ -24,6 +24,11 @@
 #include "ui/ui_sdl.h"
 #include "ui/ui_util.h"
 
+#ifdef VANILLA_VAAPI_AVAILABLE
+#include <glob.h>
+#include <libavutil/hwcontext_vaapi.h>
+#endif
+
 #ifdef ANDROID
 #include <libavutil/hwcontext_mediacodec.h>
 #include "ui/ui_sdl_android.h"
@@ -525,14 +530,39 @@ int vpi_decode_init(vpi_decode_state_t *s)
         }
 #endif // VANILLA_CUDA_AVAILABLE
 
-        // See if we can create a VAAPI context (most Linux systems)
-        if (r != VANILLA_SUCCESS) {
-            vpi_decode_exit(s);
-            if (vpi_egl_available
-                && ((ffmpeg_err = av_hwdevice_ctx_create(&s->hw_device_ctx, AV_HWDEVICE_TYPE_VAAPI, 0, 0, 0)) >= 0)) {
-                r = open_decoder(s, &decoders[HWDEC_TYPE_VAAPI]);
+#ifdef VANILLA_VAAPI_AVAILABLE
+        // Test each available GPU for VAAPI compatibility (with H.264 high profile)
+        if (r != VANILLA_SUCCESS && vpi_egl_available) {
+            glob_t devices = {0};
+            if (glob("/dev/dri/renderD*", 0, NULL, &devices) == 0) {
+                for (size_t i = 0; i < devices.gl_pathc && r != VANILLA_SUCCESS; i++) {
+                    const char *device = devices.gl_pathv[i];
+                    vpi_decode_exit(s);
+                    ffmpeg_err = av_hwdevice_ctx_create(&s->hw_device_ctx, AV_HWDEVICE_TYPE_VAAPI, device, NULL, 0);
+                    if (ffmpeg_err < 0) {
+                        // Failed to create, obviously we'll skip it
+                        continue;
+                    }
+
+                    // Test specifically H.264 high profile
+                    AVHWDeviceContext *device_ctx = (AVHWDeviceContext *) s->hw_device_ctx->data;
+                    AVVAAPIDeviceContext *vaapi_ctx = device_ctx->hwctx;
+                    VAConfigAttrib attrib = {VAConfigAttribRTFormat, VA_RT_FORMAT_YUV420};
+                    VAConfigID config;
+                    VAStatus status = vaCreateConfig(vaapi_ctx->display, VAProfileH264High, VAEntrypointVLD, &attrib, 1, &config);
+                    if (status != VA_STATUS_SUCCESS) {
+                        vpilog("Failed to decode H.264 high profile on VAAPI device %s (%s), falling back to software\n", device, vaErrorStr(status));
+                        continue;
+                    }
+                    vaDestroyConfig(vaapi_ctx->display, config);
+
+                    vpilog("Using VAAPI device: %s\n", device);
+                    r = open_decoder(s, &decoders[HWDEC_TYPE_VAAPI]);
+                }
             }
+            globfree(&devices);
         }
+#endif // VANILLA_VAAPI_AVAILABLE
 
 #ifdef VANILLA_V4L2REQUEST_AVAILABLE
         if (r != VANILLA_SUCCESS && is_v4l2request_available()) {

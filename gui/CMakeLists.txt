@@ -639,6 +639,7 @@ endif()
 
 if (VAAPI_FOUND)
     target_link_libraries(vanillagui PRIVATE VAAPI::VAAPI VAAPI::VA VAAPI::DRM va-x11 X11)
+    target_compile_definitions(vanillagui PRIVATE VANILLA_VAAPI_AVAILABLE)
 endif()
 
 if (DRM_FOUND)
