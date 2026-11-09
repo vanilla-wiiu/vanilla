@@ -34,6 +34,7 @@
 #include "util.h"
 #include "vanilla.h"
 #include "wpa.h"
+#include "bcm.h"
 
 #ifdef USE_LIBNM
 // NOTE: This header must be below others because it defines things that break other headers
@@ -1159,6 +1160,15 @@ void *sync_with_console_internal(void *data)
 
                     actual_buf_len = buf_len;
                     wpa_ctrl_recv(args->monitor, buf, &actual_buf_len);
+
+                    if (strstr(buf, "Associated with ")) {
+                        // BCM chipsets might enable their own power management
+                        // despite our nl80211 request not to. Send a BCM-specific
+                        // request to disable it again.
+                        int pm_ret = vanilla_bcm_set_pm(args->wireless_interface, 0);
+                        nlprint("BCM PM: POST-ASSOC WLC_SET_PM 0 ret=%d", pm_ret);
+                    }
+
                     if (!strstr(buf, "CTRL-EVENT-BSS-ADDED")
                         && !strstr(buf, "CTRL-EVENT-BSS-REMOVED")) {
                         nlprint("CRED RECV: %.*s", actual_buf_len, buf);
