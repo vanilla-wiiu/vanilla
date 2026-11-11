@@ -1,8 +1,12 @@
 #include "bcm.h"
 
+#include <errno.h>
 #include <linux/sockios.h>
+#include <net/if.h>
 #include <stdint.h>
+#include <string.h>
 #include <sys/ioctl.h>
+#include <unistd.h>
 
 #define VANILLA_WLC_SET_PM 86
 #define VANILLA_WLC_IOCTL_MAGIC 0x14e46c77

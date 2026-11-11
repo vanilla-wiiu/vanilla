@@ -2,6 +2,7 @@ include(ExternalProject)
 
 # Add vanilla-pipe executable
 add_executable(vanilla-pipe
+    bcm.c
     dhcp/dhcp.c
     main.c
     wpa.c
