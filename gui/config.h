@@ -14,6 +14,7 @@ typedef struct {
     char name[VPI_CONSOLE_MAX_NAME];
     vanilla_bssid_t bssid;
     vanilla_psk_t psk;
+    int region;
 } vpi_console_entry_t;
 
 typedef struct {
@@ -23,7 +24,6 @@ typedef struct {
     char wireless_interface[VPI_CONSOLE_MAX_NAME];
     char recording_dir[1024];
     int connection_setup;
-    int region;
     int swap_abxy;
     int keymap[VPI_CONFIG_KEYMAP_SIZE];
     int buttonmap[VPI_CONFIG_BUTTONMAP_SIZE];
