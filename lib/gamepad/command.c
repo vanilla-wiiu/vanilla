@@ -224,8 +224,8 @@ void handle_uac_uvc_packet(gamepad_context_t *info, int skt, UvcUacPacket *reque
 	uint8_t mic_enabled = request->uac_uvc.mic_enable;
 	push_event(info->event_loop, VANILLA_EVENT_MIC, &mic_enabled, sizeof(mic_enabled));
 
-	print_hex(&request->uac_uvc, sizeof(request->uac_uvc));
-	vanilla_log_no_newline("\n");
+	// print_hex(&request->uac_uvc, sizeof(request->uac_uvc));
+	// vanilla_log_no_newline("\n");
 
 	// TODO: Create real response instead of using canned data
 	static const size_t uvc_resp_size = 16;
