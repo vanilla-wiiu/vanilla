@@ -22,7 +22,7 @@ RUN if [ "${ARCH}" = "aarch64" ]; then export DEBARCH="arm64"; export DEBGCC="gc
         libgl1-mesa-dev:$DEBARCH \
         libegl-dev:$DEBARCH \
         libopengl-dev:$DEBARCH \
-        libnm-dev:$DEBARCH \
+        libglib2.0-dev:$DEBARCH \
         libdrm-dev:$DEBARCH \
         libxi-dev:$DEBARCH \
         libxcb-xinput-dev:$DEBARCH \

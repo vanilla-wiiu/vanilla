@@ -91,19 +91,19 @@ Vanilla currently requires the following dependencies:
 
 - **Debian/Ubuntu**
   ```sh
-  apt install build-essential cmake libsdl2-dev libsdl2-image-dev libsdl2-ttf-dev libavformat-dev libavcodec-dev libavutil-dev libswscale-dev libnl-genl-3-dev libnl-route-3-dev libxml2-dev libnm-dev libpolkit-agent-1-dev
+  apt install build-essential cmake libsdl2-dev libsdl2-image-dev libsdl2-ttf-dev libavformat-dev libavcodec-dev libavutil-dev libswscale-dev libnl-genl-3-dev libnl-route-3-dev libxml2-dev libglib2.0-dev libpolkit-agent-1-dev
   ```
 - **Fedora**
   ```sh
-  dnf install libavcodec-free-devel libavutil-free-devel libavfilter-free-devel libnl3-devel SDL2-devel SDL2_image-devel SDL2_ttf-devel make automake gcc gcc-c++ kernel-devel cmake libxml2-devel NetworkManager-libnm-devel polkit-devel
+  dnf install libavcodec-free-devel libavutil-free-devel libavfilter-free-devel libnl3-devel SDL2-devel SDL2_image-devel SDL2_ttf-devel make automake gcc gcc-c++ kernel-devel cmake libxml2-devel glib2-devel polkit-devel
   ```
 - **Arch**
   ```sh
-  pacman -S base-devel make cmake ffmpeg libnl sdl2 sdl2_image sdl2_ttf libxml2 libnm polkit
+  pacman -S base-devel make cmake ffmpeg libnl sdl2 sdl2_image sdl2_ttf libxml2 glib2 polkit
   ```
 - **Alpine/postmarketOS**
   ```sh
-  apk add build-base cmake sdl2-dev sdl2_image-dev sdl2_ttf-dev ffmpeg-dev libnl3-dev libxml2-dev networkmanager-dev polkit-dev
+  apk add build-base cmake sdl2-dev sdl2_image-dev sdl2_ttf-dev ffmpeg-dev libnl3-dev libxml2-dev glib-dev polkit-dev
   ```
 
 The build process is otherwise normal for a CMake program:

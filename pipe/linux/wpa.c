@@ -36,9 +36,8 @@
 #include "wpa.h"
 #include "bcm.h"
 
-#ifdef USE_LIBNM
-// NOTE: This header must be below others because it defines things that break other headers
-#include <libnm/NetworkManager.h>
+#ifdef USE_DBUS
+#include "dbus.h"
 #endif
 
 #include <stdbool.h> // Required by wpa_supplicant_i.h and utils/common.h
@@ -1036,6 +1035,19 @@ void *sync_with_console_internal(void *data)
 
     int ret = VANILLA_ERR_GENERIC;
     char bssid[18];
+    unsigned int scan_attempt = 0;
+
+    // List capabilities - useful for debugging scan issues
+    size_t capability_len = buf_len;
+    int capability_status = wpa_ctrl_command(args->ctrl, "GET_CAPABILITY freq", buf, &capability_len);
+    if (capability_status == 0) {
+        nlprint("SCAN DEBUG: available frequencies on %s:\n%.*s",
+                args->wireless_interface, capability_len, buf);
+    } else {
+        nlprint("SCAN DEBUG: failed to read frequencies on %s (status=%i)",
+                args->wireless_interface, capability_status);
+    }
+
     while (1) {
         size_t actual_buf_len;
 
@@ -1098,8 +1110,11 @@ void *sync_with_console_internal(void *data)
         while (line) {
             if (is_interrupted()) goto exit_loop;
 
-            if (strstr(line, "WiiU") && strstr(line, "_STA1")) {
-                nlprint("FOUND WII U, STARTING CONSOLE PAIRING");
+            // "9c:e6:35:" is a reserved Nintendo prefix, so there's a good chance
+            // it's what we're looking for, even if we don't get the SSID which
+            // sometimes happens
+            if (strstr(line, "9c:e6:35:") || (strstr(line, "WiiU") && strstr(line, "_STA1"))) {
+                nlprint("FOUND WII U CANDIDATE, ATTEMPTING SYNC");
 
                 // Make copy of bssid for later
                 strncpy(bssid, line, sizeof(bssid));
@@ -1110,7 +1125,7 @@ void *sync_with_console_internal(void *data)
 
                 size_t actual_buf_len = buf_len;
                 if (wpa_ctrl_command(args->ctrl, wps_buf, buf, &actual_buf_len) < 0) {
-                    nlprint("FAILED TO START CONSOLE PAIRING");
+                    nlprint("FAILED TO START CONSOLE SYNC");
                     break;
                 }
 
@@ -1446,51 +1461,32 @@ void pipe_listen(int local, const char *wireless_interface, const char *log_file
     pthread_mutex_init(&action_mutex, NULL);
     pthread_mutex_init(&main_loop_mutex, NULL);
 
+    main_loop = 1;
 	pthread_t stdin_thread;
 	pthread_create(&stdin_thread, NULL, read_stdin, NULL);
 
 	set_signals();
 
-    main_loop = 1;
+    int handoff_failed = 0;
 
-    pthread_mutex_lock(&main_loop_mutex);
+#ifdef USE_DBUS
+    // Ask NetworkManager to stop managing the interface, which will work on
+    // most systems. But for systems like the Steam Deck that might be using
+    // iwd, we need to ask iwd directly because for some reason it is not
+    // cooperative with the request to NetworkManager.
+    g_autoptr(GError) bus_error = NULL;
+    g_autoptr(GDBusConnection) system_bus = g_bus_get_sync(G_BUS_TYPE_SYSTEM, NULL, &bus_error);
+    vanilla_nm_state_t nm_state = {0};
+    if (system_bus) {
+        if (vanilla_nm_acquire(system_bus, wireless_interface, &nm_state) < 0) {
+            handoff_failed = 1;
+        }
 
-    nlprint("READY");
-
-    // If this is the Steam Deck, we must switch the backend from `iwd` to `wpa_supplicant`
-#ifndef ANDROID
-	int sd_wifi_backend_changed = 0;
-	{
-		char sd_wifi_backend_buf[100] = {0};
-		ssize_t ret = run_process_and_read_stdout((const char *[]) {"steamos-wifi-set-backend", "--check", NULL}, sd_wifi_backend_buf, sizeof(sd_wifi_backend_buf));
-		if (ret > 0 && !strcmp("iwd\n", sd_wifi_backend_buf)) {
-			nlprint("STEAM DECK: SETTING WIFI BACKEND TO WPA_SUPPLICANT");
-			sd_wifi_backend_changed = 1;
-			run_process_and_read_stdout((const char *[]) {"steamos-wifi-set-backend", "wpa_supplicant", NULL}, 0, 0);
-		}
-	}
-#endif
-
-#ifdef USE_LIBNM
-    // Check status of interface with NetworkManager
-    GError *nm_err;
-    NMClient *nmcli = nm_client_new(NULL, &nm_err);
-    NMDevice *nmdev = NULL;
-    gboolean is_managed = 0;
-    if (nmcli) {
-        nmdev = nm_client_get_device_by_iface(nmcli, wireless_interface);
-        if (!nmdev) {
-            nlprint("FAILED TO GET STATUS OF DEVICE %s", wireless_interface);
-        } else {
-			if ((is_managed = nm_device_get_managed(nmdev))) {
-				nm_device_set_managed(nmdev, FALSE);
-				nlprint("TEMPORARILY SET %s TO UNMANAGED", wireless_interface);
-			}
-		}
+        if (!handoff_failed && vanilla_iwd_disconnect(system_bus, wireless_interface) < 0) {
+            handoff_failed = 1;
+        }
     } else {
-        // Failed to get NetworkManager, host may just not have it?
-        g_message("Failed to create NetworkManager client: %s", nm_err->message);
-        g_error_free(nm_err);
+        nlprint("NO SYSTEM BUS FOR HANDOFF: %s", bus_error->message);
     }
 #endif
 
@@ -1498,7 +1494,7 @@ void pipe_listen(int local, const char *wireless_interface, const char *log_file
     struct nl_sock *ps_nl = NULL;
     int ps_prev_state = -1;
     int ps_ifindex = if_nametoindex(wireless_interface);
-    if (ps_ifindex) {
+    if (ps_ifindex && !handoff_failed) {
         ps_nl = nl_socket_alloc();
         if (ps_nl && nl_connect(ps_nl, NETLINK_GENERIC) == 0) {
             int nl80211_id = genl_ctrl_resolve(ps_nl, "nl80211");
@@ -1517,6 +1513,14 @@ void pipe_listen(int local, const char *wireless_interface, const char *log_file
         } else {
             nlprint("FAILED TO CONNECT TO NETLINK FOR POWER SAVE");
         }
+    }
+
+    pthread_mutex_lock(&main_loop_mutex);
+    if (handoff_failed) {
+        nlprint("WIRELESS HANDOFF FAILED");
+        main_loop = 0;
+    } else if (main_loop) {
+        nlprint("READY");
     }
 
     while (main_loop) {
@@ -1599,31 +1603,6 @@ repeat_loop:
 	// Wait for stdin thread
 	pthread_join(stdin_thread, NULL);
 
-    pthread_mutex_destroy(&main_loop_mutex);
-    pthread_mutex_destroy(&action_mutex);
-    pthread_mutex_destroy(&running_mutex);
-
-die_and_reenable_managed:
-#ifdef USE_LIBNM
-    if (is_managed) {
-        nlprint("SETTING %s BACK TO MANAGED", wireless_interface);
-        nm_device_set_managed(nmdev, TRUE);
-    }
-
-die_and_close_nmcli:
-    if (nmcli) {
-        g_object_unref(nmcli);
-    }
-#endif
-
-#ifndef ANDROID
-	if (sd_wifi_backend_changed) {
-		// Restore iwd
-		nlprint("STEAM DECK: SETTING WIFI BACKEND TO IWD");
-		run_process_and_read_stdout((const char *[]) {"steamos-wifi-set-backend", "iwd", NULL}, 0, 0);
-	}
-#endif
-
 	// Restore previous Wi-Fi power saving state
 	if (ps_nl) {
 		if (ps_prev_state != -1 && ps_prev_state != NL80211_PS_DISABLED) {
@@ -1638,9 +1617,18 @@ die_and_close_nmcli:
 		nl_socket_free(ps_nl);
 	}
 
+#ifdef USE_DBUS
+    if (system_bus) {
+        vanilla_nm_release(system_bus, wireless_interface, &nm_state);
+    }
+#endif
+
 #ifdef ANDROID
     vanilla_android_release_wifi();
 #endif
+    pthread_mutex_destroy(&main_loop_mutex);
+    pthread_mutex_destroy(&action_mutex);
+    pthread_mutex_destroy(&running_mutex);
 }
 
 int vanilla_has_config()
