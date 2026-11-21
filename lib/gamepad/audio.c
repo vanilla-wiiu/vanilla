@@ -23,6 +23,32 @@ static size_t queued_audio_end = 0;
 static pthread_mutex_t queued_audio_mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t queued_audio_cond = PTHREAD_COND_INITIALIZER;
 
+int send_mic_blow()
+{
+    pthread_mutex_lock(&queued_audio_mutex);
+
+    // Fill buffer with random noise, which the Wii U perceives as blowing
+    // into the mic. At 16KHz signed 16-bit mono, it's roughly 0.256 seconds,
+    // but this seems to be enough (and having more would make the code more
+    // complicated)
+
+    // Drop any currently queued audio
+    queued_audio_start = queued_audio_end;
+
+    const size_t sample_count = sizeof(queued_audio) / sizeof(int16_t); // 16-bit samples
+
+	for (size_t i = 0; i < sample_count; i++) {
+        *(int16_t *)(&queued_audio[queued_audio_end % sizeof(queued_audio)]) = rand();
+        queued_audio_end += sizeof(int16_t);
+    }
+
+	pthread_cond_broadcast(&queued_audio_cond);
+
+    pthread_mutex_unlock(&queued_audio_mutex);
+
+    return VANILLA_SUCCESS;
+}
+
 int send_audio_packet(const void *data, size_t len)
 {
     pthread_mutex_lock(&queued_audio_mutex);

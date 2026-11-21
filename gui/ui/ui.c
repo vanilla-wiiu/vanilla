@@ -13,6 +13,7 @@
 #include "ui_priv.h"
 #include "ui_util.h"
 #include "menu/menu.h"
+#include "menu/menu_hud.h"
 
 vui_context_t *vui_alloc(int width, int height)
 {
@@ -46,13 +47,12 @@ void vui_free(vui_context_t *vui)
     free(vui);
 }
 
-void vui_reset(vui_context_t *ctx)
+void vui_reset_without_game_mode(vui_context_t *ctx)
 {
     ctx->button_count = 0;
     ctx->label_count = 0;
     ctx->rect_count = 0;
     ctx->textedit_count = 0;
-    ctx->game_mode = 0;
     ctx->passive_animation_count = 0;
     memset(ctx->images, 0, sizeof(ctx->images));
     ctx->animation_enabled = 0;
@@ -63,9 +63,16 @@ void vui_reset(vui_context_t *ctx)
     ctx->selected_button = -1;
     ctx->cancel_button = -1;
     ctx->active_textedit = -1;
-	vui_audio_set_enabled(ctx, 0);
     if (ctx->text_open_handler)
         ctx->text_open_handler(ctx, -1, 0, ctx->text_open_handler_data);
+}
+
+void vui_reset(vui_context_t *ctx)
+{
+    ctx->game_mode = 0;
+    ctx->show_hud = 0;
+    vui_reset_without_game_mode(ctx);
+	vui_audio_set_enabled(ctx, 0);
 }
 
 void vui_get_screen_size(vui_context_t *ctx, int *width, int *height)
@@ -1047,4 +1054,20 @@ void vui_brightness_set(vui_context_t *ctx, float brightness)
     if (ctx->brightness_set_handler) {
         ctx->brightness_set_handler(ctx, brightness, ctx->brightness_set_handler_data);
     }
+}
+
+void vui_hud_enable(vui_context_t *ctx, int enable)
+{
+    // TODO: Then gotta figure out why the HUD isn't drawing!!!
+
+    if (enable) {
+        // The HUD uses vui_reset_without_game_mode to preserve the active game.
+        vpi_menu_hud(ctx, NULL);
+    }
+    ctx->show_hud = enable;
+}
+
+int vui_hud_is_enabled(vui_context_t *ctx)
+{
+    return ctx->show_hud;
 }

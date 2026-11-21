@@ -417,6 +417,7 @@ list(APPEND VANILLA_GUI_SRC
     menu/menu_connection.c
     menu/menu_delete.c
     menu/menu_edit.c
+    menu/menu_hud.c
     menu/menu_game.c
     menu/menu_gamepad.c
     menu/menu_main.c

@@ -29,5 +29,6 @@ typedef struct {
 
 void *listen_audio(void *x);
 int send_audio_packet(const void *data, size_t len);
+int send_mic_blow();
 
 #endif // GAMEPAD_AUDIO_H

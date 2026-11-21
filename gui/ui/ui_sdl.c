@@ -47,6 +47,7 @@
 
 #include "config.h"
 #include "menu/menu.h"
+#include "menu/menu_hud.h"
 #include "menu/menu_game.h"
 #include "platform.h"
 #include "ui_priv.h"
@@ -257,9 +258,9 @@ void init_gamepad(vui_context_t *ctx)
     ctx->default_key_map[SDL_SCANCODE_F5] = VPI_ACTION_TOGGLE_RECORDING;
     ctx->default_key_map[SDL_SCANCODE_F12] = VPI_ACTION_SCREENSHOT;
     ctx->default_key_map[SDL_SCANCODE_F11] = VPI_ACTION_TOGGLE_FULLSCREEN;
-    ctx->default_key_map[SDL_SCANCODE_ESCAPE] = VPI_ACTION_DISCONNECT;
+    ctx->default_key_map[SDL_SCANCODE_ESCAPE] = VPI_ACTION_ESCAPE;
 
-    ctx->default_key_map[SDL_SCANCODE_SLEEP] = VPI_ACTION_DISCONNECT; // Nintendo Switch power button
+    ctx->default_key_map[SDL_SCANCODE_SLEEP] = VPI_ACTION_ESCAPE; // Nintendo Switch power button
     ctx->default_key_map[SDL_SCANCODE_VOLUMEUP] = VPI_ACTION_VOLUME_UP;
     ctx->default_key_map[SDL_SCANCODE_VOLUMEDOWN] = VPI_ACTION_VOLUME_DOWN;
 }
@@ -554,7 +555,7 @@ int vui_sdl_event_thread(void *data)
                     tr_x = (ev.button.x - dst_rect->x) * vui->screen_width / dst_rect->w;
                     tr_y = (ev.button.y - dst_rect->y) * vui->screen_height / dst_rect->h;
 
-                    if (vui->game_mode) {
+                    if (vui->game_mode && !vui->show_hud) {
                         // In game mode, pass clicks directly to Vanilla
                         int x, y;
                         if (ev.button.button == SDL_BUTTON_LEFT && (ev.type == SDL_MOUSEBUTTONDOWN || ev.type == SDL_MOUSEMOTION)) {
@@ -658,7 +659,7 @@ int vui_sdl_event_thread(void *data)
                                 }
                             }
 
-                            if (vui->game_mode) {
+                            if (vui->game_mode && !vui->show_hud) {
                                 vanilla_set_button(vanilla_btn, ev.cbutton.state == SDL_PRESSED ? INT16_MAX : 0);
                             } else if (ev.cbutton.state == SDL_PRESSED) {
                                 vui_process_keydown(vui, vanilla_btn);
@@ -682,7 +683,7 @@ int vui_sdl_event_thread(void *data)
 
                     Sint16 axis_value = ev.caxis.value;
                     if (vanilla_axis != -1) {
-                        if (vui->game_mode) {
+                        if (vui->game_mode && !vui->show_hud) {
                             vanilla_set_button(vanilla_axis, axis_value);
                         } else if (vanilla_axis == SDL_CONTROLLER_AXIS_LEFTX) {
                             if (axis_value < 0)
@@ -740,7 +741,7 @@ int vui_sdl_event_thread(void *data)
                         if (ev.type == SDL_KEYDOWN)
                             vpi_menu_action(vui, (vpi_extra_action_t) vanilla_btn);
                     } else if (vanilla_btn != -1) {
-                        if (vui->game_mode) {
+                        if (vui->game_mode && !vui->show_hud) {
                             vanilla_set_button(vanilla_btn, ev.type == SDL_KEYDOWN ? INT16_MAX : 0);
                         } else if (ev.type == SDL_KEYDOWN) {
                             vui_process_keydown(vui, vanilla_btn);
@@ -1181,7 +1182,9 @@ SDL_Texture *vui_sdl_load_texture(SDL_Renderer *renderer, const char *filename)
 {
     char buf[1024];
     vpi_asset_filename(buf, sizeof(buf), "tex", filename);
-    return IMG_LoadTexture(renderer, buf);
+    SDL_Texture *tex = IMG_LoadTexture(renderer, buf);
+    vpilog("Loaded %s into %p\n", buf, tex);
+    return tex;
 }
 
 float calculate_x_inset(float y, float h, float radius)
@@ -1811,6 +1814,26 @@ void vui_draw_sdl(vui_context_t *ctx, SDL_Renderer *renderer)
 
         SDL_RenderCopy(renderer, img_tex->texture, 0, &dst);
     }
+
+    // Flatten layers
+    int el[MAX_BUTTON_COUNT];
+    int el_count = 0;
+    for (int i = 0; i < ctx->layers; i++) {
+        if (ctx->layer_enabled[i]) {
+            el[el_count] = i;
+            el_count++;
+        }
+    }
+
+    for (int i = el_count - 1; i > 0; i--) {
+        SDL_Texture *bg = sdl_ctx->layer_data[el[i-1]];
+        SDL_Texture *fg = sdl_ctx->layer_data[el[i]];
+
+        SDL_SetRenderTarget(renderer, bg);
+        SDL_SetTextureColorMod(fg, ctx->layer_opacity[i] * 0xFF, ctx->layer_opacity[i] * 0xFF, ctx->layer_opacity[i] * 0xFF);
+        SDL_SetTextureAlphaMod(fg, ctx->layer_opacity[i] * 0xFF);
+        SDL_RenderCopy(renderer, fg, NULL, NULL);
+    }
 }
 
 int get_texture_from_cpu_frame(vui_sdl_context_t *sdl_ctx, AVFrame *f)
@@ -2280,26 +2303,6 @@ int vui_update_sdl(vui_context_t *vui)
             // Draw vui to a custom texture
             vui_draw_sdl(vui, renderer);
 
-            // Flatten layers
-			int el[MAX_BUTTON_COUNT];
-			int el_count = 0;
-			for (int i = 0; i < vui->layers; i++) {
-				if (vui->layer_enabled[i]) {
-					el[el_count] = i;
-					el_count++;
-				}
-			}
-
-            for (int i = el_count - 1; i > 0; i--) {
-                SDL_Texture *bg = sdl_ctx->layer_data[el[i-1]];
-                SDL_Texture *fg = sdl_ctx->layer_data[el[i]];
-
-                SDL_SetRenderTarget(renderer, bg);
-                SDL_SetTextureColorMod(fg, vui->layer_opacity[i] * 0xFF, vui->layer_opacity[i] * 0xFF, vui->layer_opacity[i] * 0xFF);
-                SDL_SetTextureAlphaMod(fg, vui->layer_opacity[i] * 0xFF);
-                SDL_RenderCopy(renderer, fg, NULL, NULL);
-            }
-
             main_tex = sdl_ctx->layer_data[0];
             sdl_frame_ready = main_tex != NULL;
         }
@@ -2425,7 +2428,7 @@ int vui_update_sdl(vui_context_t *vui)
         sdl_handles_final_blit = !sdl_ctx->fast_drm_active;
 #endif
         if (render_tick && sdl_handles_final_blit) {
-            main_tex = vui_sdl_get_layer_texture(vui, renderer, 0);
+            main_tex = vui_sdl_get_layer_texture(vui, renderer, MAX_BUTTON_COUNT - 1); // Get last texture so we can still draw HUD from layer 0
             if (main_tex) {
                 SDL_SetRenderTarget(renderer, main_tex);
                 SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
@@ -2457,6 +2460,15 @@ int vui_update_sdl(vui_context_t *vui)
     }
 
     if (sdl_frame_ready) {
+        if (vui->show_hud) {
+            vui_draw_sdl(vui, renderer);
+
+            // Draw HUD over main texture
+            SDL_SetRenderTarget(renderer, main_tex);
+            SDL_RenderCopy(renderer, sdl_ctx->layer_data[0], NULL, NULL);
+            SDL_SetRenderTarget(renderer, NULL);
+        }
+
         // Draw toast on screen if necessary
         const int TOAST_PADDING = 12;
         int cur_toast;

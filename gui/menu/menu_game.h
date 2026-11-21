@@ -51,4 +51,10 @@ void vpi_decode_send_audio(const void *data, size_t size);
 int vpi_decode_init(vpi_decode_state_t *s);
 void vpi_decode_exit(vpi_decode_state_t *s);
 
+void get_valid_filename(const char *fmt, char *abs_buf, size_t size_abs_buf, const char *preferred_dir);
+void vpi_toggle_recording();
+void vpi_take_screenshot();
+
+void vpi_display_update(vui_context_t *vui, int64_t time, void *v);
+
 #endif // VANILLA_PI_MENU_GAME_H

@@ -62,6 +62,7 @@ typedef enum {
  * Context-related functions
  */
 vui_context_t *vui_alloc(int width, int height);
+void vui_reset_without_game_mode(vui_context_t *ctx);
 void vui_reset(vui_context_t *ctx);
 void vui_free(vui_context_t *ctx);
 void vui_update(vui_context_t *ctx);
@@ -186,5 +187,11 @@ void vui_mic_callback_set(vui_context_t *ctx, vui_mic_callback_t callback, void 
  * Miscellaneous functions
  */
 void vui_brightness_set(vui_context_t *ctx, float brightness); // Expects brightness between 0.0f and 1.0f
+
+/**
+ * HUD functions
+ */
+void vui_hud_enable(vui_context_t *ctx, int enable);
+int vui_hud_is_enabled(vui_context_t *ctx);
 
 #endif // VANILLA_PI_UI_H

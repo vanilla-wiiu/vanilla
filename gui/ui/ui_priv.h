@@ -135,6 +135,7 @@ typedef struct vui_context_t {
     vui_vibrate_handler_t vibrate_handler;
     void *vibrate_handler_data;
     int game_mode;
+    int show_hud;
     vui_key_override_t key_override_handler;
     vui_callback_t key_override_cancel_handler;
     void *key_override_handler_data;
