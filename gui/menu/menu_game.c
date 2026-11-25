@@ -89,27 +89,11 @@ void back_to_main_menu(vui_context_t *vui, int button, void *v)
     vui_transition_fade_layer_out(vui, layer, vpi_menu_game_exit, (void *) (intptr_t) 1);
 }
 
-void show_error(vui_context_t *vui, void *v)
+void show_error(vui_context_t *vui, int err)
 {
-    vui_reset(vui);
+    const int guessed_layer = 1; // BIG HACK! Assuming fglayer is layer 1
 
-    vui_enable_background(vui, 1);
-
-    int scrw, scrh;
-    vui_get_screen_size(vui, &scrw, &scrh);
-
-    int layer = vui_layer_create(vui);
-
-    vui_label_create(vui, 0, scrh * 1 / 6, scrw, scrh, lang(VPI_LANG_ERROR), vui_color_create(0.25f,0.25f,0.25f,1), VUI_FONT_SIZE_NORMAL, layer);
-
-    char buf[10];
-    snprintf(buf, sizeof(buf), "%i", (int) (intptr_t) v);
-    vui_label_create(vui, 0, scrh * 3 / 6, scrw, scrh, buf, vui_color_create(1,0,0,1), VUI_FONT_SIZE_NORMAL, layer);
-
-    const int ok_btn_w = BTN_SZ*2;
-    vui_button_create(vui, scrw/2 - ok_btn_w/2, scrh * 3 / 4, ok_btn_w, BTN_SZ, lang(VPI_LANG_OK_BTN), 0, VUI_BUTTON_STYLE_BUTTON, layer, back_to_main_menu, (void *) (intptr_t) layer);
-
-    vui_transition_fade_black_out(vui, 0, 0);
+    vpi_menu_show_error(vui, err, 0, back_to_main_menu, (void *) (intptr_t) guessed_layer);
 }
 
 void cancel_connect(vui_context_t *vui, int button, void *v)
@@ -389,13 +373,13 @@ int open_decoder(vpi_decode_state_t *s, hwdec_t *dec)
 	// If we couldn't find a hardware or software decoder, fail
 	if (!dec->codec) {
 		vpilog("No decoder was available\n");
-        return VANILLA_ERR_GENERIC;
+        return VANILLA_ERR_VIDEO_DECODER;
 	}
 
     s->codec_ctx = avcodec_alloc_context3(dec->codec);
 	if (!s->codec_ctx) {
 		vpilog("Failed to allocate codec context\n");
-        return VANILLA_ERR_GENERIC;
+        return VANILLA_ERR_VIDEO_DECODER;
 	}
 
     if (s->hw_device_ctx) {
@@ -413,7 +397,7 @@ int open_decoder(vpi_decode_state_t *s, hwdec_t *dec)
         s->codec_ctx->extradata = av_mallocz(header_size + AV_INPUT_BUFFER_PADDING_SIZE);
         if (!s->codec_ctx->extradata) {
             vpilog("Failed to allocate H.264 extradata\n");
-            return VANILLA_ERR_GENERIC;
+            return VANILLA_ERR_VIDEO_DECODER;
         }
         memcpy(s->codec_ctx->extradata, header, header_size);
         s->codec_ctx->extradata_size = (int) header_size;
@@ -424,7 +408,7 @@ int open_decoder(vpi_decode_state_t *s, hwdec_t *dec)
 	ffmpeg_err = avcodec_open2(s->codec_ctx, dec->codec, NULL);
     if (ffmpeg_err < 0) {
 		vpilog("Failed to open decoder %s: %s (%i)\n", dec->name, av_err2str(ffmpeg_err), ffmpeg_err);
-        return VANILLA_ERR_GENERIC;
+        return VANILLA_ERR_VIDEO_DECODER;
 	}
 
     vpilog("Decoding: %s\n", dec->name);
@@ -480,7 +464,7 @@ int vpi_decode_init(vpi_decode_state_t *s)
     decoders[HWDEC_TYPE_SOFTWARE].get_format = 0;
 
     // Discover the most ideal hardware decoder
-    int r = VANILLA_ERR_GENERIC;
+    int r = VANILLA_ERR_VIDEO_DECODER;
 
     if (!vpi_config.force_software_decode) {
 #ifdef VANILLA_VIDEOTOOLBOX_AVAILABLE
@@ -626,7 +610,7 @@ int vpi_decode_init(vpi_decode_state_t *s)
 
 fail:
     vpi_decode_exit(s);
-    return VANILLA_ERR_GENERIC;
+    return VANILLA_ERR_VIDEO_DECODER;
 }
 
 int64_t get_recording_timestamp(AVRational timebase)
@@ -1217,7 +1201,7 @@ void vpi_display_update(vui_context_t *vui, int64_t time, void *v)
         vanilla_stop();
         pthread_join(vpi_event_thread, 0);
         if (vpi_game_queued_error != VANILLA_ERR_SHUTDOWN) {
-            show_error(vui, (void*)(intptr_t) vpi_game_queued_error);
+            show_error(vui, vpi_game_queued_error);
         } else {
             vpi_menu_game_exit(vui, 0);
         }
@@ -1241,7 +1225,7 @@ void vpi_menu_game_start(vui_context_t *vui, void *v)
     vpi_console_entry_t *entry = vpi_config.connected_console_entries + console;
     int r = vanilla_start(vpi_config.server_address, entry->bssid, entry->psk);
     if (r != VANILLA_SUCCESS) {
-        show_error(vui, (void*)(intptr_t) r);
+        show_error(vui, r);
     } else {
         char buf[100];
         snprintf(buf, sizeof(buf), lang(VPI_LANG_CONNECTING_TO), entry->name);

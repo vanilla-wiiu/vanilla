@@ -69,9 +69,27 @@ typedef enum {
     VPI_LANG_NFC,
     VPI_LANG_DISCONNECT,
     VPI_LANG_RESUME,
+    VPI_LANG_SUCCESS,
+    VPI_LANG_UNKNOWN_ERROR,
+    VPI_LANG_UNKNOWN_COMMAND,
+    VPI_LANG_INVALID_ARGUMENT,
+    VPI_LANG_PIPE_UNRESPONSIVE,
+    VPI_LANG_OUT_OF_MEMORY,
+    VPI_LANG_BUSY,
+    VPI_LANG_BAD_SOCKET,
+    VPI_LANG_FILESYSTEM,
+    VPI_LANG_WPA_SUPPLICANT,
+    VPI_LANG_DHCP,
+    VPI_LANG_VIDEO_DECODER,
+    VPI_LANG_FORK,
+    VPI_LANG_ERROR_BODY,
+    VPI_LANG_PKEXEC,
     __VPI_LANG_T_COUNT
 } vpi_lang_t;
 
 const char *lang(vpi_lang_t id);
+
+vpi_lang_t lang_error(int error);
+const char *lang_error_str(int error);
 
 #endif // VANILLA_PI_LANG_H

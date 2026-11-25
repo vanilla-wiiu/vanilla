@@ -393,7 +393,7 @@ void set_signals()
 
 void *wpa_setup_environment(void *data)
 {
-    void *ret = THREADRESULT(VANILLA_ERR_GENERIC);
+    void *ret = THREADRESULT(VANILLA_ERR_WPA_SUPPLICANT_INIT);
 
     struct sync_args *args = (struct sync_args *) data;
 
@@ -519,7 +519,7 @@ static int netmask_to_prefixlen(struct in_addr netmask)
 
 static int call_dhcp(const char *network_interface, struct nl_sock *nl)
 {
-    int ret = VANILLA_ERR_GENERIC;
+    int ret = VANILLA_ERR_DHCP;
 
     if (!nl)
         return ret;
@@ -948,7 +948,7 @@ int create_connect_config(const char *filename, unsigned char *bssid, unsigned c
     FILE *out_file = fopen(filename, "w");
     if (!out_file) {
         nlprint("FAILED TO OPEN OUTPUT CONFIG FILE");
-        return VANILLA_ERR_GENERIC;
+        return VANILLA_ERR_FILESYSTEM;
     }
 
     static const char *template =
@@ -1033,7 +1033,7 @@ void *sync_with_console_internal(void *data)
     char buf[16384];
     const size_t buf_len = sizeof(buf);
 
-    int ret = VANILLA_ERR_GENERIC;
+    int ret = VANILLA_ERR_SYNC;
     char bssid[18];
     unsigned int scan_attempt = 0;
 
@@ -1262,7 +1262,7 @@ void *do_connect(void *data)
                 sleep(2);
                 nlprint("WAITING FOR CONNECTION");
 
-                if (is_interrupted()) return THREADRESULT(VANILLA_ERR_GENERIC);
+                if (is_interrupted()) return THREADRESULT(VANILLA_ERR_INTERRUPTED);
             }
 
             char buf[1024];
@@ -1277,7 +1277,7 @@ void *do_connect(void *data)
                 break;
             }
 
-            if (is_interrupted()) return THREADRESULT(VANILLA_ERR_GENERIC);
+            if (is_interrupted()) return THREADRESULT(VANILLA_ERR_INTERRUPTED);
         }
 
         nlprint("CONNECTED TO CONSOLE");
@@ -1286,14 +1286,14 @@ void *do_connect(void *data)
         struct nl_sock *dhcp_socket = nl_socket_alloc();
         if (!dhcp_socket) {
             nlprint("FAILED TO ALLOC DHCP NL_SOCK");
-            return THREADRESULT(VANILLA_ERR_GENERIC);
+            return THREADRESULT(VANILLA_ERR_DHCP);
         }
 
         int nlr = nl_connect(dhcp_socket, NETLINK_ROUTE);
         if (nlr < 0) {
             nlprint("FAILED TO CONNECT DHCP NL_SOCK: %s", nl_geterror(nlr));
             nl_socket_free(dhcp_socket);
-            return THREADRESULT(VANILLA_ERR_GENERIC);
+            return THREADRESULT(VANILLA_ERR_DHCP);
         }
 
         int r = call_dhcp(args->wireless_interface, dhcp_socket);
@@ -1339,7 +1339,7 @@ void *vanilla_sync_with_console(void *data)
     config = fopen(wireless_conf_file, "w");
     if (!config) {
         nlprint("FAILED TO WRITE TEMP CONFIG: %s", wireless_conf_file);
-        return THREADRESULT(VANILLA_ERR_GENERIC);
+        return THREADRESULT(VANILLA_ERR_FILESYSTEM);
     }
 
     fprintf(config, "ctrl_interface=%s\nupdate_config=1\n",
@@ -1413,7 +1413,7 @@ int install_polkit()
 	// If on the Steam Deck, ensure the system partition is writeable
 	run_process_and_read_stdout((const char *[]) {"steamos-readonly", "disable", NULL}, 0, 0);
 
-	int ret = VANILLA_ERR_GENERIC;
+	int ret = VANILLA_ERR_FILESYSTEM;
 
 	FILE *action = fopen(POLKIT_ACTION_DST, "w");
 	FILE *rule = fopen(POLKIT_RULE_DST, "w");

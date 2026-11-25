@@ -290,14 +290,12 @@ int install_polkit_internal(thread_data_t *data, int install)
 
     SERVER_ADDRESS = data->server_address;
 
-    int ret = VANILLA_ERR_GENERIC;
-
     int pipe_cc_skt = -1;
     vanilla_pipe_command_t cmd;
     cmd.control_code = install ? VANILLA_PIPE_CC_INSTALL_POLKIT : VANILLA_PIPE_CC_UNINSTALL_POLKIT;
 
     // Connect to backend pipe
-    ret = connect_to_backend(&pipe_cc_skt, &cmd, sizeof(cmd.control_code) + sizeof(cmd.connection));
+    int ret = connect_to_backend(&pipe_cc_skt, &cmd, sizeof(cmd.control_code) + sizeof(cmd.connection));
 
     // No interrupt is required here because VANILLA_PIPE_CC_INSTALL_POLKIT
     // does not start a thread in the pipe
@@ -334,8 +332,13 @@ void connect_as_gamepad_internal(thread_data_t *data)
     if (ret == VANILLA_SUCCESS) {
         // Wait for backend to be available
         vanilla_pipe_command_t connected_state;
-        ret = VANILLA_ERR_NO_CONNECTION;
-        while (!is_interrupted()) {
+        ret = VANILLA_ERR_PIPE_UNRESPONSIVE;
+        while (1) {
+            if (is_interrupted()) {
+                ret = VANILLA_ERR_INTERRUPTED;
+                break;
+            }
+
             ssize_t read_size = recv(pipe_cc_skt, (char *) &connected_state, sizeof(connected_state), 0);
             if (read_size < 0) {
                 int r = skterr();

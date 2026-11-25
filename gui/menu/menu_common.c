@@ -111,11 +111,11 @@ int vpi_menu_show_error(vui_context_t *vui, int status, int fade_fglayer, vui_bu
 
     int fglayer = vui_layer_create(vui);
 
-    vui_label_create(vui, bkg_rect.x, bkg_rect.y + bkg_rect.h/4, bkg_rect.w, bkg_rect.h, lang(VPI_LANG_SYNC_FAILED), vui_color_create(1,1,1,1), VUI_FONT_SIZE_NORMAL, fglayer);
+    vui_label_create(vui, bkg_rect.x, bkg_rect.y + bkg_rect.h/8, bkg_rect.w, bkg_rect.h, lang(VPI_LANG_ERROR), vui_color_create(1,1,1,1), VUI_FONT_SIZE_NORMAL, fglayer);
 
-    char buf[20];
-    snprintf(buf, sizeof(buf), "%i", status);
-    vui_label_create(vui, bkg_rect.x, bkg_rect.y + bkg_rect.h/2, bkg_rect.w, bkg_rect.h, buf, vui_color_create(1,0,0,1), VUI_FONT_SIZE_SMALL, fglayer);
+    char buf[512];
+    snprintf(buf, sizeof(buf), lang(VPI_LANG_ERROR_BODY), lang_error_str(status), status);
+    vui_label_create(vui, bkg_rect.x, bkg_rect.y + bkg_rect.h/3, bkg_rect.w, bkg_rect.h, buf, vui_color_create(1,0.5,0.5,1), VUI_FONT_SIZE_SMALL, fglayer);
 
     vui_button_create(vui, bkg_rect.x + bkg_rect.w/2 - BTN_SZ, bkg_rect.y + bkg_rect.h * 3 / 4, BTN_SZ*2, BTN_SZ, lang(VPI_LANG_OK_BTN), 0, VUI_BUTTON_STYLE_BUTTON, fglayer, ok_action, ok_data);
 

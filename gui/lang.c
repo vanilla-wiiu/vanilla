@@ -1,6 +1,8 @@
 #include "lang.h"
 
-static const char *lang_str[__VPI_LANG_T_COUNT] = {
+#include "vanilla.h"
+
+static const char *lang_str[] = {
     "Sync",
     "Connect",
     "Edit",
@@ -67,10 +69,74 @@ static const char *lang_str[__VPI_LANG_T_COUNT] = {
     "Blow Microphone",
     "NFC",
     "Disconnect",
-    "Close"
+    "Close",
+    "Success",
+    "Unknown Error",
+    "Backend reported that we sent an unknown command. This is not expected to happen, file a bug report.",
+    "Backend reported that we sent an invalid argument. This is not expected to happen, file a bug report.",
+    "Failed to communicate with pipe. If this is a \"via server\" connection, that probably means it is inaccessible on this network. If this is a \"local\" connection, you may need to restart Vanilla or restart your computer.",
+    "Out of memory",
+    "Pipe reported that it was busy, try again later (or check the status of the pipe)",
+    "Unable to create sockets to communicate with Wii U. This probably means another program on your computer is using the ports Vanilla needs. If it's a previous instance of Vanilla that you are unable to close, try force quitting it or restarting your computer.",
+    "Failed to read or write necessary configuration to the disk. This may be a permissions issue or you may be running out of disk space.",
+    "Failed to initialize wpa_supplicant",
+    "Failed to perform DHCP handshake",
+    "Failed to initialize video decoder",
+    "Failed to fork process",
+    "%s (%i)\n\nCheck logs for more information",
+    "Failed to launch pipe with required permissions",
 };
+
+static_assert(sizeof(lang_str)/sizeof(const char *) == __VPI_LANG_T_COUNT, "Missing language entries");
 
 const char *lang(vpi_lang_t id)
 {
     return lang_str[id];
+}
+
+vpi_lang_t lang_error(int error)
+{
+    switch (error) {
+    case VANILLA_SUCCESS:
+        return VPI_LANG_SUCCESS;
+    case VANILLA_ERR_UNKNOWN_COMMAND:
+        return VPI_LANG_UNKNOWN_COMMAND;
+    case VANILLA_ERR_INVALID_ARGUMENT:
+        return VPI_LANG_INVALID_ARGUMENT;
+    case VANILLA_ERR_PIPE_UNRESPONSIVE:
+        return VPI_LANG_PIPE_UNRESPONSIVE;
+    case VANILLA_ERR_OUT_OF_MEMORY:
+        return VPI_LANG_OUT_OF_MEMORY;
+    case VANILLA_ERR_BUSY:
+        return VPI_LANG_BUSY;
+    case VANILLA_ERR_BAD_SOCKET:
+        return VPI_LANG_BAD_SOCKET;
+    case VANILLA_ERR_FILESYSTEM:
+        return VPI_LANG_FILESYSTEM;
+    case VANILLA_ERR_WPA_SUPPLICANT_INIT:
+        return VPI_LANG_WPA_SUPPLICANT;
+    case VANILLA_ERR_DHCP:
+        return VPI_LANG_DHCP;
+    case VANILLA_ERR_VIDEO_DECODER:
+        return VPI_LANG_VIDEO_DECODER;
+    case VANILLA_ERR_FORK:
+        return VPI_LANG_FORK;
+    case VANILLA_ERR_PKEXEC:
+        return VPI_LANG_PKEXEC;
+
+    // These errors are not expected to show so we don't have a string for them
+    case VANILLA_ERR_SYNC:
+    case VANILLA_ERR_SHUTDOWN:
+    case VANILLA_ERR_CONNECTED:
+    case VANILLA_ERR_DISCONNECTED:
+    case VANILLA_ERR_INTERRUPTED:
+    case VANILLA_ERR_CLEANUP:
+    default:
+        return VPI_LANG_UNKNOWN_ERROR;
+    }
+}
+
+const char *lang_error_str(int error)
+{
+    return lang(lang_error(error));
 }

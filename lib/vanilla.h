@@ -10,17 +10,30 @@ extern "C" {
 #include <stdint.h>
 
 #define VANILLA_SUCCESS                  0
-#define VANILLA_ERR_GENERIC             -1
+// #define VANILLA_ERR_GENERIC             -1
 #define VANILLA_ERR_UNKNOWN_COMMAND     -2
 #define VANILLA_ERR_INVALID_ARGUMENT    -3
 #define VANILLA_ERR_PIPE_UNRESPONSIVE   -4
 #define VANILLA_ERR_OUT_OF_MEMORY       -5
 #define VANILLA_ERR_BUSY                -6
 #define VANILLA_ERR_BAD_SOCKET          -7
-#define VANILLA_ERR_NO_CONNECTION       -8
+// #define VANILLA_ERR_NO_CONNECTION       -8
 #define VANILLA_ERR_SHUTDOWN            -9
 #define VANILLA_ERR_CONNECTED           -10
 #define VANILLA_ERR_DISCONNECTED        -11
+#define VANILLA_ERR_FILESYSTEM          -12
+#define VANILLA_ERR_INTERRUPTED         -13
+
+// Pipe-specific errors
+#define VANILLA_ERR_WPA_SUPPLICANT_INIT -200
+#define VANILLA_ERR_DHCP                -201
+#define VANILLA_ERR_SYNC                -202
+
+// GUI-specific errors
+#define VANILLA_ERR_VIDEO_DECODER       -300
+#define VANILLA_ERR_CLEANUP             -301
+#define VANILLA_ERR_FORK                -302
+#define VANILLA_ERR_PKEXEC              -303
 
 static const uint32_t VANILLA_ADDRESS_LOCAL = 0xFFFFFFFF;
 

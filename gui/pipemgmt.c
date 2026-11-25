@@ -291,7 +291,7 @@ void vpi_submit_pw(const char *s, vpi_pw_callback callback, void *userdata)
 
 int vpi_start_epilog()
 {
-	int ret = VANILLA_ERR_GENERIC;
+	int ret = VANILLA_ERR_CLEANUP;
 
     char ready_buf[500];
 
@@ -330,6 +330,9 @@ int vpi_start_epilog()
 
         if (read_count) {
             vpilog("%s\n", ready_buf);
+            if (!strcmp(ready_buf, "pkexec must be setuid root")) {
+                ret = VANILLA_ERR_PKEXEC;
+            }
         }
 
         if (reached_eof) {
@@ -507,10 +510,10 @@ int vpi_start_pipe()
         close(in_pipes[1]);
         close(err_pipes[0]);
         close(err_pipes[1]);
-        return VANILLA_ERR_GENERIC;
+        return VANILLA_ERR_FORK;
     } else {
         // Continuation of parent
-        int ret = VANILLA_ERR_GENERIC;
+        int ret;
 
         // Only the child writes stderr and reads stdin. Closing the parent's
         // copies here lets startup detect a child that exits before READY.
