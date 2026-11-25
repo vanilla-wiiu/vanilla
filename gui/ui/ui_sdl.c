@@ -1183,7 +1183,7 @@ SDL_Texture *vui_sdl_load_texture(SDL_Renderer *renderer, const char *filename)
     char buf[1024];
     vpi_asset_filename(buf, sizeof(buf), "tex", filename);
     SDL_Texture *tex = IMG_LoadTexture(renderer, buf);
-    vpilog("Loaded %s into %p\n", buf, tex);
+    // vpilog("Loaded %s into %p\n", buf, tex);
     return tex;
 }
 
