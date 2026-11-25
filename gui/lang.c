@@ -96,6 +96,8 @@ static const char *lang_str[] = {
     "Vanilla connected to the Wii U but received no data after 5 seconds. This most likely means your computer has a firewall blocking incoming UDP packets. "
         "Configure your firewall to allow incoming data on the following UDP ports:\n\n50110 50120 50121 50122 50123",
     "Selected Wi-Fi device is no longer present on this system. Please choose another one in Vanilla's settings.",
+    "Volume: Down",
+    "Volume: Up",
 };
 
 static_assert(sizeof(lang_str)/sizeof(const char *) == __VPI_LANG_T_COUNT, "Missing language entries");

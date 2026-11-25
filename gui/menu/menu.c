@@ -8,6 +8,7 @@
 #include <vanilla.h>
 
 #include "config.h"
+#include "lang.h"
 #include "menu_common.h"
 #include "menu_game.h"
 #include "menu_hud.h"
@@ -95,6 +96,7 @@ void vpi_menu_action(vui_context_t *vui, vpi_extra_action_t action)
             pthread_t thread;
             int error = pthread_create(&thread, NULL, run_volume_helper, (void *) command);
             if (error == 0) {
+                vpi_show_toast(lang(action == VPI_ACTION_VOLUME_UP ? VPI_LANG_VOLUME_UP : VPI_LANG_VOLUME_DOWN));
                 error = pthread_detach(thread);
             }
             if (error != 0) {

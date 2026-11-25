@@ -91,6 +91,8 @@ typedef enum {
     VPI_LANG_NO_ENABLED_5GHZ,
     VPI_LANG_FIREWALL,
     VPI_LANG_BAD_INTERFACE,
+    VPI_LANG_VOLUME_DOWN,
+    VPI_LANG_VOLUME_UP,
 
     __VPI_LANG_T_COUNT
 } vpi_lang_t;
