@@ -355,6 +355,10 @@ void connect_as_gamepad_internal(thread_data_t *data)
                 ret = VANILLA_SUCCESS;
                 sleep(1);
                 break;
+            } else if (connected_state.control_code == VANILLA_PIPE_CC_STATUS) {
+                // This can't be good...
+                ret = (int32_t) ntohl(connected_state.status.status);
+                break;
             }
 
             vanilla_log("STILL WAITING FOR CONNECTED STATE");
@@ -400,6 +404,10 @@ void connect_as_gamepad_internal(thread_data_t *data)
                     break;
                 case VANILLA_PIPE_CC_CONNECTED:
                     cnn = VANILLA_ERR_CONNECTED;
+                    push_event(data->event_loop, VANILLA_EVENT_ERROR, &cnn, sizeof(cnn));
+                    break;
+                case VANILLA_PIPE_CC_STATUS:
+                    cnn = (int32_t) ntohl(pipe_state.status.status);
                     push_event(data->event_loop, VANILLA_EVENT_ERROR, &cnn, sizeof(cnn));
                     break;
                 }

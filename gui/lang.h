@@ -84,6 +84,8 @@ typedef enum {
     VPI_LANG_FORK,
     VPI_LANG_ERROR_BODY,
     VPI_LANG_PKEXEC,
+    VPI_LANG_ASSOC_REJECT,
+    VPI_LANG_AUTH_REJECT,
     __VPI_LANG_T_COUNT
 } vpi_lang_t;
 

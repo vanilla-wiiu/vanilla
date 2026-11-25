@@ -1273,6 +1273,14 @@ void *do_connect(void *data)
                 nlprint("CONN RECV: %.*s", actual_buf_len, buf);
             }
 
+            if (memcmp(buf, "<3>CTRL-EVENT-ASSOC-REJECT", 26) == 0) {
+                return THREADRESULT(VANILLA_ERR_ASSOC_REJECT);
+            }
+
+            if (memcmp(buf, "<3>CTRL-EVENT-AUTH-REJECT", 25) == 0) {
+                return THREADRESULT(VANILLA_ERR_AUTH_REJECT);
+            }
+
             if (memcmp(buf, "<3>CTRL-EVENT-CONNECTED", 23) == 0) {
                 break;
             }

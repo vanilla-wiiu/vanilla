@@ -28,6 +28,8 @@ extern "C" {
 #define VANILLA_ERR_WPA_SUPPLICANT_INIT -200
 #define VANILLA_ERR_DHCP                -201
 #define VANILLA_ERR_SYNC                -202
+#define VANILLA_ERR_ASSOC_REJECT        -203
+#define VANILLA_ERR_AUTH_REJECT         -204
 
 // GUI-specific errors
 #define VANILLA_ERR_VIDEO_DECODER       -300

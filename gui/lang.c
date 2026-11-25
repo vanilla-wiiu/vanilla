@@ -85,6 +85,8 @@ static const char *lang_str[] = {
     "Failed to fork process",
     "%s (%i)\n\nCheck logs for more information",
     "Failed to launch pipe with required permissions",
+    "Your Wi-Fi adapter found a Wii U but refused to connect to it. This most likely means your Wi-Fi adapter is incompatible or needs a modified firmware to work.",
+    "The Wii U rejected Vanilla. You may need to re-sync with it."
 };
 
 static_assert(sizeof(lang_str)/sizeof(const char *) == __VPI_LANG_T_COUNT, "Missing language entries");
@@ -123,6 +125,10 @@ vpi_lang_t lang_error(int error)
         return VPI_LANG_FORK;
     case VANILLA_ERR_PKEXEC:
         return VPI_LANG_PKEXEC;
+    case VANILLA_ERR_ASSOC_REJECT:
+        return VPI_LANG_ASSOC_REJECT;
+    case VANILLA_ERR_AUTH_REJECT:
+        return VPI_LANG_AUTH_REJECT;
 
     // These errors are not expected to show so we don't have a string for them
     case VANILLA_ERR_SYNC:
