@@ -93,6 +93,7 @@ static const char *lang_str[] = {
     "Your Wi-Fi adapter's 5GHz frequencies, which are required for connecting to the Wii U, are disabled. This may be due to your system's Wi-Fi regulatory region settings. Please try changing these settings or try another Wi-Fi adapter.",
     "Vanilla connected to the Wii U but received no data after 5 seconds. This most likely means your computer has a firewall blocking incoming UDP packets. "
         "Configure your firewall to allow incoming data on the following UDP ports:\n\n50110 50120 50121 50122 50123",
+    "Selected Wi-Fi device is no longer present on this system. Please choose another one in Vanilla's settings.",
 };
 
 static_assert(sizeof(lang_str)/sizeof(const char *) == __VPI_LANG_T_COUNT, "Missing language entries");
@@ -141,6 +142,8 @@ vpi_lang_t lang_error(int error)
         return VPI_LANG_NO_ENABLED_5GHZ;
     case VANILLA_ERR_FIREWALL:
         return VPI_LANG_FIREWALL;
+    case VANILLA_ERR_BAD_INTERFACE:
+        return VPI_LANG_BAD_INTERFACE;
 
     // These errors are not expected to show so we don't have a string for them
     case VANILLA_ERR_SYNC:

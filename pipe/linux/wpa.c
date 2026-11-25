@@ -393,9 +393,16 @@ void set_signals()
 
 void *wpa_setup_environment(void *data)
 {
-    void *ret = THREADRESULT(VANILLA_ERR_WPA_SUPPLICANT_INIT);
-
     struct sync_args *args = (struct sync_args *) data;
+
+    // Detect invalid interface
+    if (if_nametoindex(args->wireless_interface) == 0) {
+        int err = errno;
+        nlprint("FAILED TO FIND INTERFACE %s: %s", args->wireless_interface, strerror(err));
+        return THREADRESULT(err == ENODEV ? VANILLA_ERR_BAD_INTERFACE : VANILLA_ERR_WPA_SUPPLICANT_INIT);
+    }
+
+    void *ret = THREADRESULT(VANILLA_ERR_WPA_SUPPLICANT_INIT);
 
     // Start modified WPA supplicant
     struct wpa_params params = {0};

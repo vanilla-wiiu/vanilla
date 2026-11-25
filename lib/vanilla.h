@@ -33,6 +33,7 @@ extern "C" {
 #define VANILLA_ERR_AUTH_REJECT         -204
 #define VANILLA_ERR_NO_5GHZ             -205
 #define VANILLA_ERR_NO_ENABLED_5GHZ     -206
+#define VANILLA_ERR_BAD_INTERFACE       -207
 
 // GUI-specific errors
 #define VANILLA_ERR_VIDEO_DECODER       -300
