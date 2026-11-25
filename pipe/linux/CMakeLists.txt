@@ -8,6 +8,11 @@ add_executable(vanilla-pipe
     wpa.c
 )
 
+# Keep parity with internal drc-hostap structs and ours
+set_property(SOURCE wpa.c APPEND PROPERTY
+    COMPILE_DEFINITIONS CONFIG_SME
+)
+
 if(ANDROID)
     target_sources(vanilla-pipe PRIVATE android.c)
 endif()

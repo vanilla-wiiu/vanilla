@@ -89,6 +89,8 @@ static const char *lang_str[] = {
     "The Wii U rejected Vanilla. You may need to re-sync with it.",
     "You are currently running the Windows version of Vanilla in Wine. This is most likely a mistake; the Windows version of Vanilla is far more limited than the native Linux version.\n\n"
         "It is highly recommended you switch to the native Linux version instead. If you understand what you are doing and wish to continue, click OK.",
+    "Your Wi-Fi adapter is not capable of 5GHz, which is required for connecting to the Wii U. Please try another one.",
+    "Your Wi-Fi adapter's 5GHz frequencies, which are required for connecting to the Wii U, are disabled. This may be due to your system's Wi-Fi regulatory region settings. Please try changing these settings or try another Wi-Fi adapter.",
 };
 
 static_assert(sizeof(lang_str)/sizeof(const char *) == __VPI_LANG_T_COUNT, "Missing language entries");
@@ -131,6 +133,10 @@ vpi_lang_t lang_error(int error)
         return VPI_LANG_ASSOC_REJECT;
     case VANILLA_ERR_AUTH_REJECT:
         return VPI_LANG_AUTH_REJECT;
+    case VANILLA_ERR_NO_5GHZ:
+        return VPI_LANG_NO_5GHZ;
+    case VANILLA_ERR_NO_ENABLED_5GHZ:
+        return VPI_LANG_NO_ENABLED_5GHZ;
 
     // These errors are not expected to show so we don't have a string for them
     case VANILLA_ERR_SYNC:

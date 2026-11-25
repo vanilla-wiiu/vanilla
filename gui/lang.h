@@ -87,6 +87,9 @@ typedef enum {
     VPI_LANG_ASSOC_REJECT,
     VPI_LANG_AUTH_REJECT,
     VPI_LANG_VANILLA_ON_WINE,
+    VPI_LANG_NO_5GHZ,
+    VPI_LANG_NO_ENABLED_5GHZ,
+
     __VPI_LANG_T_COUNT
 } vpi_lang_t;
 

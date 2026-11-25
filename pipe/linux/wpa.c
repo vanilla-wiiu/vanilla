@@ -421,6 +421,36 @@ void *wpa_setup_environment(void *data)
         goto die_and_kill;
     }
 
+    // Detect if this Wi-Fi adapter support 5GHz or not
+    int has_5ghz = 0;
+    int has_enabled_5ghz = 0;
+    if (wpa_s->hw.modes && wpa_s->hw.num_modes) {
+        for (int i = 0; i < wpa_s->hw.num_modes; i++) {
+            const struct hostapd_hw_modes *mode = &wpa_s->hw.modes[i];
+
+            for (int j = 0; j < mode->num_channels; j++) {
+                const struct hostapd_channel_data *ch = &mode->channels[j];
+
+                if (ch->freq >= 4900 && ch->freq < 5925) {
+                    has_5ghz = 1;
+                    if (!(ch->flag & HOSTAPD_CHAN_DISABLED)) {
+                        has_enabled_5ghz = 1;
+                    }
+                }
+            }
+        }
+
+        if (!has_5ghz) {
+            ret = THREADRESULT(VANILLA_ERR_NO_5GHZ);
+            goto die_and_kill;
+        }
+
+        if (!has_enabled_5ghz) {
+            ret = THREADRESULT(VANILLA_ERR_NO_ENABLED_5GHZ);
+            goto die_and_kill;
+        }
+    } // If no capability data, do nothing; might be benign
+
     if (pthread_create(&wpa_thread, NULL, start_wpa, wpa) != 0) {
         nlprint("FAILED TO START WPA SUPPLICANT THREAD");
         goto die_and_kill;
