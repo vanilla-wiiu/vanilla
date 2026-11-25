@@ -74,6 +74,9 @@ static struct {
 
 static _Atomic int vpi_game_queued_error = VANILLA_SUCCESS;
 
+static struct timeval connected_time;
+static int waiting_for_first_packet = 0;
+
 void vpi_menu_game_exit(vui_context_t *vui, void *v)
 {
     if (vpi_config.autoconnect == -1) {
@@ -1077,6 +1080,8 @@ void *vpi_event_loop(void *arg)
     while (vpi_game_queued_error != VANILLA_ERR_SHUTDOWN && vanilla_wait_event(&event)) {
         int stop = 0;
 
+        waiting_for_first_packet = 0;
+
         switch (event.type) {
         case VANILLA_EVENT_VIDEO:
             // If decoder context/thread is not set up, set up now
@@ -1139,14 +1144,16 @@ void *vpi_event_loop(void *arg)
         {
             int backend_err = *(int *)event.data;
 
-            switch (backend_err) {
-            case VANILLA_SUCCESS:
-            case VANILLA_ERR_CONNECTED:
-                vpi_game_queued_error = VANILLA_SUCCESS;
-                break;
-            default:
-                vpi_game_queued_error = backend_err;
-            };
+            if (backend_err == VANILLA_ERR_CONNECTED) {
+                // Record connection time and that we're waiting for the first
+                // packet in case we need to warn the user of a firewall
+                // preventing incoming data
+                waiting_for_first_packet = 1;
+                gettimeofday(&connected_time, 0);
+                backend_err = VANILLA_SUCCESS;
+            }
+
+            vpi_game_queued_error = backend_err;
             break;
         }
 		case VANILLA_EVENT_MIC:
@@ -1186,18 +1193,28 @@ void vpi_display_update(vui_context_t *vui, int64_t time, void *v)
 {
     update_battery_information(vui, time);
 
+    if (waiting_for_first_packet && vpi_game_queued_error == VANILLA_SUCCESS) {
+        struct timeval now;
+        gettimeofday(&now, 0);
+        if (now.tv_sec - connected_time.tv_sec > 5 && vpi_game_queued_error == VANILLA_SUCCESS) {
+            vpi_game_queued_error = VANILLA_ERR_FIREWALL;
+        }
+    }
+
     switch ((int)vpi_game_queued_error) {
     case VANILLA_SUCCESS:
         // All good, do nothing
         break;
     case VANILLA_ERR_DISCONNECTED:
         // Tell user connection has terminated and try to re-establish
+        waiting_for_first_packet = 0;
         vui_label_update_text(vui, status_lbl, lang(VPI_LANG_DISCONNECTED));
         vui_audio_set_enabled(vui, 0);
         vui_game_mode_set(vui, 0);
         break;
     default:
         // Something went wrong, assume we must fail and report to user
+        waiting_for_first_packet = 0;
         vanilla_stop();
         pthread_join(vpi_event_thread, 0);
         if (vpi_game_queued_error != VANILLA_ERR_SHUTDOWN) {
@@ -1245,6 +1262,7 @@ void vpi_menu_game_start(vui_context_t *vui, void *v)
         vpi_game_queued_error = VANILLA_SUCCESS;
         pthread_create(&vpi_event_thread, 0, vpi_event_loop, vui);
 
+        waiting_for_first_packet = 0;
         vui_start_passive_animation(vui, vpi_display_update, 0);
     }
 }

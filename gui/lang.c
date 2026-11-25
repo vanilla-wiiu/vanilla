@@ -83,7 +83,7 @@ static const char *lang_str[] = {
     "Failed to perform DHCP handshake",
     "Failed to initialize video decoder",
     "Failed to fork process",
-    "%s (%i)\n\nCheck logs for more information",
+    "%s\n\nError code: %i. Check logs for more information",
     "Failed to launch pipe with required permissions",
     "Your Wi-Fi adapter found a Wii U but refused to connect to it. This most likely means your Wi-Fi adapter is incompatible or needs a modified firmware to work.",
     "The Wii U rejected Vanilla. You may need to re-sync with it.",
@@ -91,6 +91,8 @@ static const char *lang_str[] = {
         "It is highly recommended you switch to the native Linux version instead. If you understand what you are doing and wish to continue, click OK.",
     "Your Wi-Fi adapter is not capable of 5GHz, which is required for connecting to the Wii U. Please try another one.",
     "Your Wi-Fi adapter's 5GHz frequencies, which are required for connecting to the Wii U, are disabled. This may be due to your system's Wi-Fi regulatory region settings. Please try changing these settings or try another Wi-Fi adapter.",
+    "Vanilla connected to the Wii U but received no data after 5 seconds. This most likely means your computer has a firewall blocking incoming UDP packets. "
+        "Configure your firewall to allow incoming data on the following UDP ports:\n\n50110 50120 50121 50122 50123",
 };
 
 static_assert(sizeof(lang_str)/sizeof(const char *) == __VPI_LANG_T_COUNT, "Missing language entries");
@@ -137,6 +139,8 @@ vpi_lang_t lang_error(int error)
         return VPI_LANG_NO_5GHZ;
     case VANILLA_ERR_NO_ENABLED_5GHZ:
         return VPI_LANG_NO_ENABLED_5GHZ;
+    case VANILLA_ERR_FIREWALL:
+        return VPI_LANG_FIREWALL;
 
     // These errors are not expected to show so we don't have a string for them
     case VANILLA_ERR_SYNC:

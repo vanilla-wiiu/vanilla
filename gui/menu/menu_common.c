@@ -1,6 +1,7 @@
 #include "menu_common.h"
 
 #include <stdio.h>
+#include <string.h>
 
 #include "config.h"
 #include "lang.h"
@@ -115,7 +116,17 @@ int vpi_menu_show_error(vui_context_t *vui, int status, int fade_fglayer, vui_bu
 
     char buf[512];
     snprintf(buf, sizeof(buf), lang(VPI_LANG_ERROR_BODY), lang_error_str(status), status);
-    vui_label_create(vui, bkg_rect.x, bkg_rect.y + bkg_rect.h/3, bkg_rect.w, bkg_rect.h, buf, vui_color_create(1,0.5,0.5,1), VUI_FONT_SIZE_SMALL, fglayer);
+    vui_label_create(
+        vui,
+        bkg_rect.x,
+        bkg_rect.y + bkg_rect.h/8*2,
+        bkg_rect.w,
+        bkg_rect.h,
+        buf,
+        vui_color_create(1, 0.5, 0.5, 1),
+        VUI_FONT_SIZE_SMALL, // strlen(buf) < 180 ? VUI_FONT_SIZE_SMALL : VUI_FONT_SIZE_TINY,
+        fglayer
+    );
 
     vui_button_create(vui, bkg_rect.x + bkg_rect.w/2 - BTN_SZ, bkg_rect.y + bkg_rect.h * 3 / 4, BTN_SZ*2, BTN_SZ, lang(VPI_LANG_OK_BTN), 0, VUI_BUTTON_STYLE_BUTTON, fglayer, ok_action, ok_data);
 

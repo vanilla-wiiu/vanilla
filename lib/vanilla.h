@@ -23,6 +23,7 @@ extern "C" {
 #define VANILLA_ERR_DISCONNECTED        -11
 #define VANILLA_ERR_FILESYSTEM          -12
 #define VANILLA_ERR_INTERRUPTED         -13
+#define VANILLA_ERR_FIREWALL            -14
 
 // Pipe-specific errors
 #define VANILLA_ERR_WPA_SUPPLICANT_INIT -200
