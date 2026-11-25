@@ -18,6 +18,10 @@
 #endif
 #endif
 
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
 #define SCREEN_WIDTH    854
 #define SCREEN_HEIGHT   480
 
@@ -72,6 +76,17 @@ int main(int argc, char **argv)
 	}
 
     vanilla_install_logger(vpilog_va);
+
+#ifdef _WIN32
+    // Detect if user is running Vanilla under Wine on Linux, which is most
+    // likely a mistake
+    HMODULE ntdll = GetModuleHandleA("ntdll.dll");
+    if (ntdll && GetProcAddress(ntdll, "wine_get_version")) {
+        if (MessageBoxA(NULL, lang(VPI_LANG_VANILLA_ON_WINE), "Vanilla", MB_OKCANCEL | MB_ICONWARNING) == IDCANCEL) {
+            return 0;
+        }
+    }
+#endif // _WIN32
 
     // Load config
     vpi_config_init();

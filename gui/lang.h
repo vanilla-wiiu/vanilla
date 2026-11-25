@@ -86,6 +86,7 @@ typedef enum {
     VPI_LANG_PKEXEC,
     VPI_LANG_ASSOC_REJECT,
     VPI_LANG_AUTH_REJECT,
+    VPI_LANG_VANILLA_ON_WINE,
     __VPI_LANG_T_COUNT
 } vpi_lang_t;
 

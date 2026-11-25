@@ -86,7 +86,9 @@ static const char *lang_str[] = {
     "%s (%i)\n\nCheck logs for more information",
     "Failed to launch pipe with required permissions",
     "Your Wi-Fi adapter found a Wii U but refused to connect to it. This most likely means your Wi-Fi adapter is incompatible or needs a modified firmware to work.",
-    "The Wii U rejected Vanilla. You may need to re-sync with it."
+    "The Wii U rejected Vanilla. You may need to re-sync with it.",
+    "You are currently running the Windows version of Vanilla in Wine. This is most likely a mistake; the Windows version of Vanilla is far more limited than the native Linux version.\n\n"
+        "It is highly recommended you switch to the native Linux version instead. If you understand what you are doing and wish to continue, click OK.",
 };
 
 static_assert(sizeof(lang_str)/sizeof(const char *) == __VPI_LANG_T_COUNT, "Missing language entries");
