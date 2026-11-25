@@ -5,6 +5,9 @@ set -e
 # Main build
 make -C /buildroot O=/build
 
+LINUX_BUILD_DIR="$(make -s -C /buildroot O=/build printvars VARS=LINUX_DIR |
+    sed -n 's/^LINUX_DIR=//p')"
+
 # Copy initramfs
 mkdir -p /install/bootloader/ini
 mkdir -p /install/switchroot/vanilla/data
@@ -12,7 +15,7 @@ mv /build/images/rootfs.cpio.uboot /install/switchroot/vanilla/initramfs
 
 # Copy icons
 cp /vanilla/gui/res/switch/bootlogo_vanilla.bmp /install/switchroot/vanilla/
-cp /vanilla/gui/res/switch/icon_vanilla.bmp /install/switchroot/vanilla/
+cp /vanilla/gui/res/switch/icon_vanilla_hue.bmp /install/switchroot/vanilla/
 
 # Copy bootloader ini
 cp /vanilla/gui/res/switch/vanilla.ini /install/bootloader/ini/
@@ -30,10 +33,10 @@ chmod +x /build/host/bin/mkdtimg
 rm -rf utils.tar.gz src
 
 /build/host/bin/mkdtimg create /install/switchroot/vanilla/nx-plat.dtimg --page_size=1000 \
-        /build/build/linux-linux-theofficialgman-8-15-2026/arch/arm64/boot/dts/tegra210-odin.dtb	 --id=0x4F44494E \
-		/build/build/linux-linux-theofficialgman-8-15-2026/arch/arm64/boot/dts/tegra210b01-odin.dtb --id=0x4F44494E --rev=0xb01 \
-		/build/build/linux-linux-theofficialgman-8-15-2026/arch/arm64/boot/dts/tegra210b01-vali.dtb --id=0x56414C49 \
-		/build/build/linux-linux-theofficialgman-8-15-2026/arch/arm64/boot/dts/tegra210b01-fric.dtb --id=0x46524947
+        "$LINUX_BUILD_DIR/arch/arm64/boot/dts/tegra210-odin.dtb" --id=0x4F44494E \
+		"$LINUX_BUILD_DIR/arch/arm64/boot/dts/tegra210b01-odin.dtb" --id=0x4F44494E --rev=0xb01 \
+		"$LINUX_BUILD_DIR/arch/arm64/boot/dts/tegra210b01-vali.dtb" --id=0x56414C49 \
+		"$LINUX_BUILD_DIR/arch/arm64/boot/dts/tegra210b01-fric.dtb" --id=0x46524947
 
 # Copy pre-made config
 cp /vanilla/gui/res/switch/config.xml /install/switchroot/vanilla/data/
