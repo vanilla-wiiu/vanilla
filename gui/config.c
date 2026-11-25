@@ -93,6 +93,9 @@ void vpi_config_save()
     sprintf(buf, "%i", vpi_config.force_software_decode);
     xmlTextWriterWriteElement(writer, BAD_CAST "swdec", BAD_CAST buf);
 
+    sprintf(buf, "%i", vpi_config.vsync);
+    xmlTextWriterWriteElement(writer, BAD_CAST "vsync", BAD_CAST buf);
+
     sprintf(buf, "%f", vpi_config.screen_brightness);
     xmlTextWriterWriteElement(writer, BAD_CAST "brightness", BAD_CAST buf);
 
@@ -254,6 +257,8 @@ void vpi_config_init()
                         vpi_config.fullscreen = atoi((const char *) child->children->content);
                     } else if (!strcmp((const char *) child->name, "swdec")) {
                         vpi_config.force_software_decode = atoi((const char *) child->children->content);
+                    } else if (!strcmp((const char *) child->name, "vsync")) {
+                        vpi_config.vsync = atoi((const char *) child->children->content);
                     } else if (!strcmp((const char *) child->name, "brightness")) {
                         vpi_config.screen_brightness = atof((const char *) child->children->content);
                     } else if (!strcmp((const char *) child->name, "controls")) {

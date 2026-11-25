@@ -34,6 +34,7 @@ typedef struct {
     int force_software_decode;
     int autoconnect;
     float screen_brightness;
+    int vsync;
 } vpi_config_t;
 
 extern vpi_config_t vpi_config;

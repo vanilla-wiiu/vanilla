@@ -819,7 +819,11 @@ int vui_init_window(vui_context_t *ctx, vui_sdl_context_t *sdl_ctx, Uint32 windo
         return -1;
     }
 
-    sdl_ctx->renderer = SDL_CreateRenderer(sdl_ctx->window, -1, SDL_RENDERER_ACCELERATED);
+    Uint32 renderer_flags = SDL_RENDERER_ACCELERATED;
+    if (vpi_config.vsync) {
+        renderer_flags |= SDL_RENDERER_PRESENTVSYNC;
+    }
+    sdl_ctx->renderer = SDL_CreateRenderer(sdl_ctx->window, -1, renderer_flags);
     if (!sdl_ctx->renderer) {
         vpilog("Failed to CreateRenderer: %s\n", SDL_GetError());
         return -1;

@@ -15,4 +15,5 @@
 	</controls>
 	<cursorinfullscreen>0</cursorinfullscreen>
 	<recordingdir></recordingdir>
+	<vsync>1</vsync>
 </vanilla>
