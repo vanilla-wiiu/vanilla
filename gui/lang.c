@@ -1,5 +1,7 @@
 #include "lang.h"
 
+#include <assert.h>
+
 #include "vanilla.h"
 
 static const char *lang_str[] = {
