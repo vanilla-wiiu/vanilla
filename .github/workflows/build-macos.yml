@@ -1,0 +1,149 @@
+name: Build macOS
+on:
+  workflow_call:
+jobs:
+  build-macos:
+    name: Build macOS
+    runs-on: macos-15
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - uses: maxim-lobanov/setup-xcode@v1
+      with:
+        xcode-version: '16.4'
+
+    - name: Configure
+      run: |
+        cmake -S . -B build \
+          -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+          -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" \
+          -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 \
+          -DCMAKE_OSX_SYSROOT="$(xcrun --sdk macosx --show-sdk-path)" \
+          -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+          -DVANILLA_BUILD_PIPE=OFF \
+          -DVANILLA_BUILD_VENDORED=ON
+
+    - name: Build
+      run: cmake --build build --target vanilla
+
+    - name: Package
+      run: |
+        ditto -c -k --keepParent "$GITHUB_WORKSPACE/build/bin/Vanilla.app" vanilla-macos-universal-unsigned.zip
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: macos universal unsigned
+        path: vanilla-macos-universal-unsigned.zip
+        if-no-files-found: error
+
+  sign-macos:
+    name: Sign and notarize macOS
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' && github.repository == 'vanilla-wiiu/vanilla' }}
+    needs: build-macos
+    runs-on: macos-15
+    environment: macos-release
+    steps:
+    - uses: actions/checkout@v4
+
+    - uses: maxim-lobanov/setup-xcode@v1
+      with:
+        xcode-version: '16.4'
+
+    - name: Download unsigned macOS artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: macos universal unsigned
+        path: incoming
+
+    - name: Unpack
+      run: |
+        mkdir -p signing
+        ditto -x -k incoming/vanilla-macos-universal-unsigned.zip signing
+
+    - name: Import signing certificate
+      env:
+        MACOS_CERTIFICATE_BASE64: ${{ secrets.MACOS_CERTIFICATE_BASE64 }}
+        MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+        MACOS_KEYCHAIN_PASSWORD: ${{ secrets.MACOS_KEYCHAIN_PASSWORD }}
+        MACOS_NOTARY_KEY_BASE64: ${{ secrets.MACOS_NOTARY_KEY_BASE64 }}
+        MACOS_NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
+      run: |
+        certificate_path="$RUNNER_TEMP/developer-id.p12"
+        keychain_path="$RUNNER_TEMP/vanilla-signing.keychain-db"
+        notary_key_path="$RUNNER_TEMP/AuthKey_${MACOS_NOTARY_KEY_ID}.p8"
+
+        printf '%s' "$MACOS_CERTIFICATE_BASE64" | base64 --decode -o "$certificate_path"
+        printf '%s' "$MACOS_NOTARY_KEY_BASE64" | base64 --decode -o "$notary_key_path"
+
+        security create-keychain -p "$MACOS_KEYCHAIN_PASSWORD" "$keychain_path"
+        security set-keychain-settings -lut 21600 "$keychain_path"
+        security unlock-keychain -p "$MACOS_KEYCHAIN_PASSWORD" "$keychain_path"
+        security import "$certificate_path" -P "$MACOS_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$keychain_path"
+        security set-key-partition-list -S apple-tool:,apple: -k "$MACOS_KEYCHAIN_PASSWORD" "$keychain_path"
+        security list-keychains -d user -s "$keychain_path"
+
+        signing_identity="$(security find-identity -v -p codesigning "$keychain_path" | sed -n 's/.*"\(Developer ID Application:.*\)"/\1/p' | head -n 1)"
+
+        echo "MACOS_NOTARY_KEY_PATH=$notary_key_path" >> "$GITHUB_ENV"
+        echo "MACOS_SIGNING_IDENTITY=$signing_identity" >> "$GITHUB_ENV"
+
+    - name: Sign
+      run: |
+        codesign \
+          --force \
+          --timestamp \
+          --options runtime \
+          --entitlements "$GITHUB_WORKSPACE/gui/res/macos/Vanilla.entitlements" \
+          --sign "$MACOS_SIGNING_IDENTITY" \
+          "$GITHUB_WORKSPACE/signing/Vanilla.app"
+        codesign --verify --deep --strict --verbose=2 "$GITHUB_WORKSPACE/signing/Vanilla.app"
+
+    - name: Notarize and staple app
+      env:
+        MACOS_NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
+        MACOS_NOTARY_ISSUER_ID: ${{ secrets.MACOS_NOTARY_ISSUER_ID }}
+      run: |
+        APP="$GITHUB_WORKSPACE/signing/Vanilla.app"
+        ARCHIVE="$RUNNER_TEMP/Vanilla-notary.zip"
+
+        ditto -c -k --keepParent "$APP" "$ARCHIVE"
+        xcrun notarytool submit "$ARCHIVE" \
+          --key "$MACOS_NOTARY_KEY_PATH" \
+          --key-id "$MACOS_NOTARY_KEY_ID" \
+          --issuer "$MACOS_NOTARY_ISSUER_ID" \
+          --wait
+
+        xcrun stapler staple "$APP"
+        xcrun stapler validate "$APP"
+        spctl --assess --type execute --verbose=4 "$APP"
+
+    - name: Package
+      run: ditto -c -k --keepParent signing/Vanilla.app vanilla-macos-universal.zip
+
+    - name: Remove signing credentials
+      if: ${{ always() }}
+      env:
+        MACOS_NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
+      run: |
+        security delete-keychain "$RUNNER_TEMP/vanilla-signing.keychain-db" || true
+        rm -f "$RUNNER_TEMP/developer-id.p12"
+        if [ -n "$MACOS_NOTARY_KEY_ID" ]; then
+          rm -f "$RUNNER_TEMP/AuthKey_${MACOS_NOTARY_KEY_ID}.p8"
+        fi
+
+    - name: Upload signed macOS artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: macOS signed and notarized
+        path: vanilla-macos-universal.zip
+        if-no-files-found: error
+
+  publish-macos:
+    needs: sign-macos
+    uses: ./.github/workflows/publish-continuous.yml
+    with:
+      artifact-name: macOS signed and notarized
+      artifact-path: vanilla-macos-universal.zip

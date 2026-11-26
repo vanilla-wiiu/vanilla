@@ -1,0 +1,43 @@
+name: Publish continuous release
+on:
+  workflow_call:
+    inputs:
+      artifact-name:
+        required: true
+        type: string
+      artifact-path:
+        required: true
+        type: string
+permissions:
+  contents: write
+jobs:
+  publish:
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' && github.repository == 'vanilla-wiiu/vanilla' }}
+    runs-on: ubuntu-24.04
+    concurrency:
+      group: continuous-release
+      cancel-in-progress: false
+      queue: max
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Download build artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: ${{ inputs.artifact-name }}
+        path: incoming
+
+    - name: Upload continuous release
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        ARTIFACT_PATH: ${{ inputs.artifact-path }}
+      run: |
+        test -f "incoming/$ARTIFACT_PATH"
+        curl -fLOSs --retry 2 --retry-delay 60 https://github.com/probonopd/uploadtool/raw/master/upload.sh
+        latest_master_sha="$(git ls-remote --exit-code origin refs/heads/master | cut -f1)"
+        if [[ "$GITHUB_SHA" != "$latest_master_sha" ]]; then
+          echo "Skipping continuous release - $GITHUB_SHA is no longer the latest master commit ($latest_master_sha)."
+          exit 0
+        fi
+        bash upload.sh "incoming/$ARTIFACT_PATH"

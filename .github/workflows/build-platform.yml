@@ -1,0 +1,99 @@
+name: Build platform
+on:
+  workflow_call:
+    inputs:
+      platform-os:
+        required: true
+        type: string
+      platform-arch:
+        required: true
+        type: string
+      artifact-path:
+        required: true
+        type: string
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+    - uses: actions/checkout@v7
+      with:
+        submodules: recursive
+
+    - name: Install dependencies for cross-compiling
+      if: ${{ inputs.platform-arch != 'x86_64' && inputs.platform-os == 'linux' }}
+      run: sudo apt -y update && sudo apt -y install qemu-user-static binfmt-support
+
+    - uses: docker/setup-buildx-action@v4
+
+    - name: Log in to GHCR
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Registry cache reference
+      id: cache
+      shell: bash
+      run: |
+        owner=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+        echo "ref=ghcr.io/$owner/vanilla-${{ inputs.platform-os }}-${{ inputs.platform-arch }}:buildcache" >> "$GITHUB_OUTPUT"
+
+    - name: Build Docker image
+      uses: docker/build-push-action@v7
+      with:
+        context: .
+        file: docker/${{ inputs.platform-os }}/Dockerfile
+        build-args: |
+            ARCH=${{ inputs.platform-arch }}
+        tags: vanilla-${{ inputs.platform-os }}-${{ inputs.platform-arch }}
+        load: true
+        cache-from: type=registry,ref=${{ steps.cache.outputs.ref }}
+        cache-to: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/master' && github.repository == 'vanilla-wiiu/vanilla') && format('type=registry,ref={0},mode=max', steps.cache.outputs.ref) || '' }}
+
+    - name: Run Docker container
+      run: |
+        docker run \
+            -v "${{ github.workspace }}:/vanilla" \
+            -v "${{ github.workspace }}/build:/install" \
+            vanilla-${{ inputs.platform-os }}-${{ inputs.platform-arch }}
+
+    - name: Archive (Linux)
+      if: ${{ inputs.platform-os == 'linux' }}
+      run: |
+        tar czf ${{ inputs.artifact-path }} -C "${{ github.workspace }}/build" .
+
+    - name: Archive (Windows/Raspberry Pi/Nintendo Switch)
+      if: ${{ inputs.platform-os == 'windows' || inputs.platform-os == 'raspberrypi0w' || inputs.platform-os == 'raspberrypi64' || inputs.platform-os == 'nintendoswitch' || inputs.platform-os == 'orangepi_zero3' || inputs.platform-os == 'orangepi_zero2w' }}
+      run: |
+        cd build
+        zip -r ../${{ inputs.artifact-path }} .
+
+    - name: Archive (Android)
+      if: ${{ inputs.platform-os == 'android' }}
+      run: |
+        if [ -n "${{ secrets.ANDROID_SIGNING_KEY }}" ]; then
+            docker run \
+                -v "${{ github.workspace }}:/vanilla" \
+                -v "${{ github.workspace }}/build:/install" \
+                --entrypoint apksigner \
+                vanilla-${{ inputs.platform-os }}-${{ inputs.platform-arch }} \
+                sign --ks /vanilla/docker/android/vanilla.jks --out /install/app-release-signed.apk --ks-pass pass:${{ secrets.ANDROID_SIGNING_KEY }} /install/app-release.apk
+            cp build/app-release-signed.apk ${{ inputs.artifact-path }}
+        else
+            cp build/app-release.apk ${{ inputs.artifact-path }}
+        fi
+
+    - name: Upload a Build Artifact
+      uses: actions/upload-artifact@v7
+      with:
+        name: ${{ inputs.platform-os }} ${{ inputs.platform-arch }}
+        path: ${{ inputs.artifact-path }}
+        if-no-files-found: error
+
+  publish:
+    needs: build
+    uses: ./.github/workflows/publish-continuous.yml
+    with:
+      artifact-name: ${{ inputs.platform-os }} ${{ inputs.platform-arch }}
+      artifact-path: ${{ inputs.artifact-path }}
