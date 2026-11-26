@@ -370,7 +370,7 @@ void connect_as_gamepad_internal(thread_data_t *data)
         ret = create_socket(&info.socket_vid, PORT_VID, 0);
         if (ret != VANILLA_SUCCESS) goto exit_pipe;
 
-        ret = create_socket(&info.socket_msg, PORT_MSG, 0)
+        ret = create_socket(&info.socket_msg, PORT_MSG, 0);
         if (ret != VANILLA_SUCCESS) goto exit_vid;
 
         ret = create_socket(&info.socket_hid, PORT_HID, 0);
