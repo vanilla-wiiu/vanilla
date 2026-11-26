@@ -367,11 +367,20 @@ void connect_as_gamepad_internal(thread_data_t *data)
 
     if (ret == VANILLA_SUCCESS) {
         // Open all required sockets
-        if (create_socket(&info.socket_vid, PORT_VID, 0) != VANILLA_SUCCESS) goto exit_pipe;
-        if (create_socket(&info.socket_msg, PORT_MSG, 0) != VANILLA_SUCCESS) goto exit_vid;
-        if (create_socket(&info.socket_hid, PORT_HID, 0) != VANILLA_SUCCESS) goto exit_msg;
-        if (create_socket(&info.socket_aud, PORT_AUD, 0) != VANILLA_SUCCESS) goto exit_hid;
-        if (create_socket(&info.socket_cmd, PORT_CMD, 0) != VANILLA_SUCCESS) goto exit_aud;
+        ret = create_socket(&info.socket_vid, PORT_VID, 0);
+        if (ret != VANILLA_SUCCESS) goto exit_pipe;
+
+        ret = create_socket(&info.socket_msg, PORT_MSG, 0)
+        if (ret != VANILLA_SUCCESS) goto exit_vid;
+
+        ret = create_socket(&info.socket_hid, PORT_HID, 0);
+        if (ret != VANILLA_SUCCESS) goto exit_msg;
+
+        ret = create_socket(&info.socket_aud, PORT_AUD, 0);
+        if (ret != VANILLA_SUCCESS) goto exit_hid;
+
+        ret = create_socket(&info.socket_cmd, PORT_CMD, 0);
+        if (ret != VANILLA_SUCCESS) goto exit_aud;
 
         pthread_t video_thread, audio_thread, input_thread, msg_thread, cmd_thread;
 
