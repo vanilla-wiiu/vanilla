@@ -5,6 +5,7 @@
 #include <vanilla.h>
 
 #include "config.h"
+#include "lang.h"
 #include "menu/menu.h"
 #include "platform.h"
 #include "ui/ui.h"
