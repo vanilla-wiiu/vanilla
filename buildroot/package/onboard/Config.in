@@ -34,8 +34,8 @@ config BR2_PACKAGE_ONBOARD
 	help
 	  Onboard touchscreen keyboard for X11.
 
-      This package omits spell checking, sound feedback, and legacy dconf
-      migration, and uses GSettings' keyfile backend for simplicity.
+	  This package omits spell checking, sound feedback, and legacy dconf
+	  migration, and uses GSettings' keyfile backend for simplicity.
 
 	  This package enables PyGObject's optional Cairo integration
 	  and stages PyCairo's development files through a build override.
