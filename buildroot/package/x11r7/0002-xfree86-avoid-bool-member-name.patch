@@ -1,0 +1,58 @@
+--- a/hw/xfree86/common/xf86Opt.h
++++ b/hw/xfree86/common/xf86Opt.h
+@@ -41,7 +41,7 @@
+     unsigned long num;
+     const char *str;
+     double realnum;
+-    Bool bool;
++    Bool boolean;
+     OptFrequency freq;
+ } ValueUnion;
+
+--- a/hw/xfree86/common/xf86Option.c
++++ b/hw/xfree86/common/xf86Option.c
+@@ -213,7 +213,7 @@
+     o.name = name;
+     o.type = OPTV_BOOLEAN;
+     if (ParseOptionValue(-1, optlist, &o, markUsed))
+-        deflt = o.value.bool;
++        deflt = o.value.boolean;
+     return deflt;
+ }
+
+@@ -474,7 +474,7 @@
+ static Bool
+ GetBoolValue(OptionInfoPtr p, const char *s)
+ {
+-    return xf86getBoolValue(&p->value.bool, s);
++    return xf86getBoolValue(&p->value.boolean, s);
+ }
+
+ static Bool
+@@ -678,7 +678,7 @@
+             if (markUsed)
+                 xf86MarkOptionUsedByName(options, newn);
+             if (GetBoolValue(&opt, s)) {
+-                p->value.bool = !opt.value.bool;
++                p->value.boolean = !opt.value.boolean;
+                 p->found = TRUE;
+             }
+             else {
+@@ -869,7 +869,7 @@
+
+     p = xf86TokenToOptinfo(table, token);
+     if (p && p->found) {
+-        *value = p->value.bool;
++        *value = p->value.boolean;
+         return TRUE;
+     }
+     else
+@@ -883,7 +883,7 @@
+
+     p = xf86TokenToOptinfo(table, token);
+     if (p && p->found) {
+-        return p->value.bool;
++        return p->value.boolean;
+     }
+     else
+         return def;
