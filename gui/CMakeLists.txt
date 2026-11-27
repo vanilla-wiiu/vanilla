@@ -467,11 +467,7 @@ if (LINUX)
         )
     endif()
 
-    # Read IMU directly via libiio (Nintendo Switch / L4T).
-    # joycond's virtual Pro Controller doesn't forward sensor data, so SDL
-    # has no path to the IMU on this platform. libiio handles the IIO
-    # interface correctly, avoiding torn reads and power management issues.
-    option(VANILLA_NX_IMU "Read IMU via libiio (Nintendo Switch / L4T)" OFF)
+    option(VANILLA_NX_IMU "Read Nintendo Switch motion sensors via libiio" OFF)
     if (VANILLA_NX_IMU)
         find_package(PkgConfig REQUIRED)
         pkg_check_modules(LIBIIO REQUIRED IMPORTED_TARGET libiio)
@@ -707,6 +703,14 @@ if (LINUX)
             message(FATAL_ERROR "NVV4L2 output requires libdrm")
         endif()
         target_compile_definitions(vanillagui PRIVATE VANILLA_NVV4L2_AVAILABLE)
+    endif()
+
+    option(VANILLA_BUILD_USE_ONBOARD "Enable Onboard on-screen keyboard support" OFF)
+    if (VANILLA_BUILD_USE_ONBOARD)
+        find_package(PkgConfig REQUIRED)
+        pkg_check_modules(ONBOARD_GIO REQUIRED IMPORTED_TARGET gio-2.0)
+        target_compile_definitions(vanillagui PRIVATE VANILLA_ONBOARD_AVAILABLE)
+        target_link_libraries(vanillagui PRIVATE PkgConfig::ONBOARD_GIO)
     endif()
 endif()
 

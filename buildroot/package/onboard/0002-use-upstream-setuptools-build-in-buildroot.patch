@@ -1,0 +1,225 @@
+--- a/setup.py
++++ b/setup.py
+@@ -32,12 +32,12 @@
+ import re
+ import glob
+ import subprocess
++import shlex
+ import shutil
+ from pathlib import Path
+ import site
+ from os.path import dirname, abspath, join, split
+-from setuptools import Extension, Command
+-from packaging import version
++from setuptools import Extension, Command, setup
+ import sysconfig
+ from setuptools.command.build_ext import build_ext
+ from setuptools.command.install import install
+@@ -55,11 +55,6 @@
+     import locale
+     locale.getpreferredencoding = lambda *x: 'UTF-8'
+
+-try:
+-    import DistUtilsExtra.auto
+-except ImportError:
+-    print('To build Onboard you need https://launchpad.net/python-distutils-extra', file=sys.stderr)
+-    sys.exit(1)
+
+
+ def get_gnome_shell_version():
+@@ -81,11 +76,6 @@
+     except FileNotFoundError:
+         return "current"  # gnome-shell not found fall back to current
+
+-gnome_shell_version = get_gnome_shell_version()
+-
+-current_ver = version.Version(DistUtilsExtra.auto.__version__)
+-required_ver = version.Version('2.12')
+-assert current_ver >= required_ver , 'needs DistUtilsExtra.auto >= 2.12'
+
+ project_root = dirname(abspath(__file__))
+ build_root = join(project_root, 'build', 'lib*{}.*' \
+@@ -109,8 +99,11 @@
+             if os.path.isfile(fn)]
+
+ def pkgconfig(*packages, **kw):
+-    command = "pkg-config --libs --cflags %s" % ' '.join(packages)
+-    status, output = getstatusoutput(command)
++    command = shlex.split(os.environ.get("PKG_CONFIG", "pkg-config"))
++    result = subprocess.run(command + ["--libs", "--cflags", *packages],
++                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
++                            text=True)
++    status, output = result.returncode, result.stdout
+
+     # print command and ouput to console to aid in debugging
+     if "sdist" in sys.argv or \
+@@ -121,14 +114,16 @@
+
+     if status != 0:
+         print('setup.py: pkg-config returned exit code %d' % status, file=sys.stderr)
+-        print('setup.py: sdist needs libgtk-3-dev, libxtst-dev, libxkbfile-dev, libdconf-dev, libcanberra-dev, libhunspell-dev and libudev-dev')
+         sys.exit(1)
+
+     flag_map = {'-I': 'include_dirs', '-L': 'library_dirs', '-l': 'libraries'}
+-    for token in output.split():
++    for token in shlex.split(output):
+         if token[:2] in flag_map:
+             kw.setdefault(flag_map.get(token[:2]), []).append(token[2:])
++        elif token.startswith(("-D", "-U")):
++            kw.setdefault('extra_compile_args', []).append(token)
+         else:
++            kw.setdefault('extra_compile_args', []).append(token)
+             kw.setdefault('extra_link_args', []).append(token)
+     for k, v in kw.items():
+         # keep sorted for reproducible builds in Debian (LP: #1530519)
+@@ -217,7 +212,6 @@
+         print("Running '{}'".format(" ".join(args)))
+         subprocess.check_call(args)
+
+-clean_before_build(setup_command)
+
+
+ ##### private extension 'osk' #####
+@@ -231,10 +225,7 @@
+                'osk_virtkey_wayland.c',
+                'osk_devices.c',
+                'osk_util.c',
+-               'osk_dconf.c',
+                'osk_struts.c',
+-               'osk_audio.c',
+-               'osk_hunspell.c',
+                'osk_click_mapper.c',
+                'osk_uinput.c',
+                'osk_udev.c',
+@@ -254,11 +245,13 @@
+         depends = [join(path, x) for x in self.depends]
+         defines = self.defines
+
+-        # dconf had an API change between 0.12 and 0.13, tell osk
+-        major, minor, revision = get_pkg_version("dconf")
+-        if major == 0 and minor <= 12:
+-            defines.append(("DCONF_API_0", 0))
+-        print("found dconf version {}.{}.{}".format(major, minor, revision))
++        packages = ['gdk-3.0', 'x11', 'xext', 'xi', 'xtst', 'xkbfile',
++                    'libudev']
++        command = shlex.split(os.environ.get("PKG_CONFIG", "pkg-config"))
++        targets = subprocess.check_output(
++            command + ['--variable=targets', 'gdk-3.0'], text=True).split()
++        if 'wayland' in targets:
++            packages += ['wayland-client', 'xkbcommon']
+
+
+         Extension.__init__(self,
+@@ -267,15 +260,10 @@
+                            sources = sources,
+                            depends = depends,
+                            define_macros = defines,
+-                           extra_compile_args=[
++                           **pkgconfig(*packages, extra_compile_args=[
+                                "-Wsign-compare",
+                                "-Wdeclaration-after-statement",
+-                               "-Werror=declaration-after-statement",
+-                               ] + (["-Wlogical-op"] if platform.system() == "Linux" else []),
+-
+-                           **pkgconfig('gdk-3.0', 'x11', 'xi', 'xtst', 'xkbfile',
+-                                       'dconf', 'libcanberra', 'hunspell',
+-                                       'libudev')
++                               ] + (["-Wlogical-op"] if platform.system() == "Linux" else []))
+                            )
+
+ extension_osk = Extension_osk()
+@@ -389,33 +377,6 @@
+                 return False
+
+         return True
+-
+-
+-# Custom build_i18n command that overrides the hard-coded
+-# auto-start path "share/autostart" in auto.build_i18n_auto
+-# for "onboard-autostart.desktop.in"
+-class build_i18n_custom(DistUtilsExtra.auto.build_i18n_auto):
+-    def run(self):
+-        super(build_i18n_custom, self).run()
+-
+-
+-        # Determine the autostart destination
+-        if "--user" in sys.argv:
+-            # Get the user's config directory
+-            config_path = os.path.expanduser("~/.config")
+-
+-            # Get the autostart directory
+-            autostart_destination = os.path.join(config_path, "autostart")
+-        else:
+-            autostart_destination = '/etc/xdg/autostart'
+-
+-
+-        for i, file_set in enumerate(self.distribution.data_files):
+-            target, files = file_set
+-            if target == 'share/autostart':
+-                file_set = (autostart_destination, files)
+-                self.distribution.data_files[i] = file_set
+-
+
+
+ # Custom build_ext command that removes the invalid "-Wstrict-prototypes"
+@@ -617,7 +578,7 @@
+
+ ##### setup #####
+
+-DistUtilsExtra.auto.setup(
++setup(
+     name = 'onboard',
+     version = '1.4.4-6', # here the package version is set
+     author = 'U. Niethammer',
+@@ -628,6 +589,7 @@
+
+     packages = ['Onboard', 'Onboard.pypredict'],
+     data_files = [('share/glib-2.0/schemas', glob.glob('data/*.gschema.xml')),
++                  ('share/onboard', glob_files('settings*.ui')),
+                   ('share/dbus-1/services', glob.glob('data/org.onboard.Onboard.service')),
+                   ('share/doc/onboard', glob.glob('AUTHORS')),
+                   ('share/doc/onboard', glob.glob('CHANGELOG')),
+@@ -648,21 +610,12 @@
+                   ('share/icons/ubuntu-mono-dark/status/22', glob.glob('icons/ubuntu-mono-dark/22/*')),
+                   ('share/icons/ubuntu-mono-light/status/22', glob.glob('icons/ubuntu-mono-light/22/*')),
+                   ('share/man/man1', glob.glob('man/*')),
+-                  ('share/sounds/freedesktop/stereo', glob.glob('sounds/*')),
+                   ('share/onboard/layouts', glob.glob('layouts/*.*')),
+                   ('share/onboard/layouts/images', glob.glob('layouts/images/*')),
+                   ('share/onboard/themes', glob.glob('themes/*')),
+                   ('share/onboard/scripts', glob.glob('scripts/*')),
+-                  ('share/onboard/models', glob.glob('models/*.lm')),
+                   ('share/onboard/tools', glob.glob('Onboard/pypredict/tools/checkmodels')),
+                   ('share/onboard/emojione/svg', glob.glob('emojione/svg/*.svg')),
+-                  ('share/gnome-shell/extensions/Onboard_Indicator@onboard.org',
+-                      glob_files('gnome/{}/Onboard_Indicator@onboard.org/*'.format(gnome_shell_version))),
+-                  ('share/gnome-shell/extensions/Onboard_Indicator@onboard.org/schemas',
+-                      glob_files('gnome/{}/Onboard_Indicator@onboard.org/schemas/*'.format(gnome_shell_version))),
+-                  # Bundled keyboard-window helper extension for GNOME
+-                  ('share/onboard/gnome-extension/onboard@onboard.local',
+-                      glob.glob('data/gnome-extension/onboard@onboard.local/*')),
+                  ],
+
+     scripts = ['onboard', 'onboard-settings'],
+@@ -673,20 +626,14 @@
+         }
+     },
+
+-    # don't let distutils-extra import our files
+-    requires = [MODULE_NAME_OSK, MODULE_NAME_LM],
+-
+     ext_modules = [extension_osk, extension_lm],
+
+     cmdclass = {
+-                'install': CustomInstallCommand,
+                 'test': TestCommand,
+-                'build_i18n': build_i18n_custom,
+                 'build_ext': build_ext_custom,
+                 'uninstall': UninstallCommand,
+                 }
+ )
+
+
+-symlink_extension_libraries(setup_command)
+-
++

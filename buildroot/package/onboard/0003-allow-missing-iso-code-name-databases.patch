@@ -1,0 +1,26 @@
+--- a/Onboard/LanguageSupport.py
++++ b/Onboard/LanguageSupport.py
+@@ -216,7 +216,8 @@
+         return self._countries.get(country_code, "")
+
+     def get_translated_language_name(self, lang_code):
+-        return gettext.dgettext("iso_639", self.get_language_name(lang_code))
++        return gettext.dgettext("iso_639",
++                                self.get_language_name(lang_code) or lang_code)
+
+     def get_translated_country_name(self, country_code):
+         country_name = self.get_country_name(country_code)
+@@ -225,8 +226,11 @@
+         return gettext.dgettext("iso_3166", country_name)
+
+     def _read_all(self):
+-        self._read_languages()
+-        self._read_countries()
++        for read in (self._read_languages, self._read_countries):
++            try:
++                read()
++            except FileNotFoundError as error:
++                _logger.warning("ISO code names unavailable: %s", error.filename)
+
+
+     def _read_languages(self):

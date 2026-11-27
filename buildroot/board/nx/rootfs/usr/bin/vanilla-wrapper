@@ -1,24 +1,87 @@
 #!/bin/sh
 
+# Run everything in a dbus session (specifically for the Onboard on-screen keyboard)
+if [ "${1:-}" != "--dbus-session" ]; then
+    exec dbus-run-session -- "$0" --dbus-session "$@"
+fi
+shift
+
 # Buildroot doesn't allow us to have a ld.conf.so.d so force the LD_LIBRARY_PATH here
 export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:/usr/lib/aarch64-linux-gnu/tegra:/usr/lib/aarch64-linux-gnu/tegra-egl"
 export DISPLAY=:0
 export SDL_VIDEODRIVER=x11
 export SDL_GAMECONTROLLERCONFIG_FILE=/usr/share/vanilla/gamecontrollerdb.txt
 
+# Uncomment one of these to force a specific gyro source. Vanilla should default to autodetecting.
+# export VANILLA_NX_IMU_SOURCE=rail
+# export VANILLA_NX_IMU_SOURCE=iio
+
+# Dump kernel messages for improved debugging with users
+cat /dev/kmsg > /.local/share/Vanilla/dmesg.log 2>&1 &
+DMESG_PID=$!
+
 # Start X
-X "$DISPLAY" -nolisten tcp vt1 &
+X "$DISPLAY" -nolisten tcp -nocursor vt1 &
 X_PID=$!
 
 # Wait until X is responsive
-for i in 1 2 3 4 5 6 7 8 9 10; do
+for _attempt in 1 2 3 4 5 6 7 8 9 10; do
     xset q >/dev/null 2>&1 && break
     sleep 1
 done
 
+# Start Onboard on-screen keyboard service
+(
+    export GSETTINGS_BACKEND=keyfile
+    export XDG_CONFIG_HOME=/run/onboard
+    mkdir -p "$XDG_CONFIG_HOME" || exit 1
+    gsettings set org.onboard start-minimized true || exit 1
+    gsettings set org.onboard key-label-font 'DejaVu Sans' || exit 1
+    gsettings set org.onboard.auto-show enabled false || exit 1
+    gsettings set org.onboard.icon-palette in-use false || exit 1
+    gsettings set org.onboard.window force-to-top true || exit 1
+    for setting in disable-click-buttons disable-hover-click disable-preferences disable-quit disable-touch-handles; do
+        gsettings set org.onboard.lockdown "$setting" true || exit 1
+    done
+
+    exec onboard --theme Blackboard --layout Vanilla --size 1280x300 -x 0 -y 420
+) > /.local/share/Vanilla/onboard.log 2>&1 &
+KEYBOARD_PID=$!
+
+# Wait for the actual keyboard interface, not just the session bus (checking
+# ownership first avoids D-Bus auto-starting a second Onboard)
+KEYBOARD_READY=0
+for _attempt in 1 2 3 4 5 6 7 8 9 10; do
+    kill -0 "$KEYBOARD_PID" 2>/dev/null || break
+    if dbus-send --session --print-reply --reply-timeout=1000 \
+        --dest=org.freedesktop.DBus /org/freedesktop/DBus \
+        org.freedesktop.DBus.NameHasOwner string:org.onboard.Onboard \
+        2>/dev/null | grep -q 'boolean true'; then
+        if dbus-send --session --print-reply --reply-timeout=1000 \
+            --dest=org.onboard.Onboard /org/onboard/Onboard/Keyboard \
+            org.onboard.Onboard.Keyboard.Hide \
+            >> /.local/share/Vanilla/onboard.log 2>&1; then
+            KEYBOARD_READY=1
+            break
+        fi
+    fi
+    sleep 1
+done
+if [ "$KEYBOARD_READY" != 1 ]; then
+    echo "Onboard failed to init" >> /.local/share/Vanilla/onboard.log
+fi
+
 # Run Vanilla in foreground
 /usr/bin/vanilla > /.local/share/Vanilla/vanilla.log 2>&1
 APP_RC=$?
+
+# Clean up keyboard
+kill "$KEYBOARD_PID" 2>/dev/null
+wait "$KEYBOARD_PID" 2>/dev/null
+
+# Stop kernel logging
+kill "$DMESG_PID" 2>/dev/null
+wait "$DMESG_PID" 2>/dev/null
 
 # Clean up X
 kill "$X_PID" 2>/dev/null

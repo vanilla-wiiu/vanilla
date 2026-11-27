@@ -99,7 +99,7 @@ endif
 
 ifeq ($(BR2_PACKAGE_HAS_LIBGL),y)
 XSERVER_XORG_SERVER_CONF_OPTS += --enable-dri --enable-glx
-XSERVER_XORG_SERVER_DEPENDENCIES += libgl
+XSERVER_XORG_SERVER_DEPENDENCIES += libgl mesa3d-headers
 else
 XSERVER_XORG_SERVER_CONF_OPTS += --disable-dri --disable-glx
 endif

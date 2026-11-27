@@ -1,0 +1,38 @@
+--- a/Onboard/osk/osk_module.c
++++ b/Onboard/osk/osk_module.c
+@@ -69,10 +69,7 @@
+     __osk_device_event_register_type (module);
+     __osk_util_register_type (module);
+     __osk_click_mapper_register_type (module);
+-    __osk_dconf_register_type (module);
+     __osk_struts_register_type (module);
+-    __osk_audio_register_type (module);
+-    __osk_hunspell_register_type (module);
+     __osk_uinput_register_type (module);
+     __osk_udev_register_type (module);
+
+--- a/Onboard/ConfigUtils.py
++++ b/Onboard/ConfigUtils.py
+@@ -334,6 +334,9 @@
+
+     def migrate_dconf_value(self, dconf_key, gskey):
+         """ Copy the value of dconf_key to the given gskey """
++        # Don't bother with legacy dconf migration
++        if not hasattr(osk, "DConf"):
++            return
+         if not self._osk_dconf:
+             self._osk_dconf = osk.DConf()
+         try:
+--- a/onboard
++++ b/onboard
+@@ -27,6 +27,10 @@
+
+ import sys
+ import os
++
++# Ensure X11 and gsettings backends are the defaults
++os.environ.setdefault("GDK_BACKEND", "x11")
++os.environ.setdefault("GSETTINGS_BACKEND", "keyfile")
+
+
+ def is_wayland_environment():

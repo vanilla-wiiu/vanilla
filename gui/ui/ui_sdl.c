@@ -4,7 +4,6 @@
 #include <math.h>
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_hints.h>
-#include <SDL2/SDL_syswm.h>
 #include <SDL_image.h>
 #include <SDL_power.h>
 #include <SDL_ttf.h>
@@ -13,6 +12,16 @@
 #include <vanilla.h>
 #include <libavutil/hwcontext.h>
 #include <unistd.h>
+
+#ifdef VANILLA_ONBOARD_AVAILABLE
+#include <gio/gio.h>
+
+// gio defines these too. We still want our own so gio.h doesn't become a hard
+// dependency, and don't want any unexpected behavior by switching implementations
+// so the easiest thing is to just undef them here
+#undef MIN
+#undef CLAMP
+#endif
 
 #ifdef ANDROID
 #include <libavcodec/mediacodec.h>
@@ -28,7 +37,6 @@
 #include <SDL2/SDL_opengl.h>
 #include <SDL2/SDL_opengles2.h>
 #endif // #ifdef VANILLA_HAS_EGL
-
 
 #ifdef VANILLA_DRM_PRIME_IMPORT_AVAILABLE
 #include <libavutil/hwcontext_drm.h>
@@ -86,6 +94,9 @@ typedef struct {
 
 typedef struct {
     SDL_Window *window;
+#ifdef VANILLA_ONBOARD_AVAILABLE
+    GDBusConnection *onboard_bus;
+#endif
     SDL_Renderer *renderer;
     SDL_Rect dst_rect;
     SDL_Texture *background;
@@ -386,8 +397,32 @@ int vui_sdl_font_height_handler(vui_font_size_t size, void *userdata)
     return h;
 }
 
+static void vui_sdl_keyboard_set_visible(vui_sdl_context_t *sdl_ctx, int visible)
+{
+#ifdef VANILLA_ONBOARD_AVAILABLE
+    if (sdl_ctx->onboard_bus) {
+        g_dbus_connection_call(
+            sdl_ctx->onboard_bus,
+            "org.onboard.Onboard",
+            "/org/onboard/Onboard/Keyboard",
+            "org.onboard.Onboard.Keyboard",
+            visible ? "Show" : "Hide",
+            NULL,
+            NULL,
+            G_DBUS_CALL_FLAGS_NO_AUTO_START,
+            -1,
+            NULL,
+            NULL,
+            NULL
+        );
+    }
+#endif
+}
+
 void vui_sdl_text_open_handler(vui_context_t *ctx, int textedit, int open, void *userdata)
 {
+    vui_sdl_context_t *sdl_ctx = (vui_sdl_context_t *) userdata;
+
     if (open) {
         vui_textedit_t *edit = &ctx->textedits[textedit];
         SDL_Rect r;
@@ -397,7 +432,9 @@ void vui_sdl_text_open_handler(vui_context_t *ctx, int textedit, int open, void 
         r.h = edit->h;
         SDL_SetTextInputRect(&r);
         SDL_StartTextInput();
+        vui_sdl_keyboard_set_visible(sdl_ctx, 1);
     } else {
+        vui_sdl_keyboard_set_visible(sdl_ctx, 0);
         SDL_StopTextInput();
     }
 }
@@ -982,6 +1019,7 @@ int vui_init_sdl(vui_context_t *ctx, int fullscreen)
     ctx->font_height_handler_data = sdl_ctx;
 
     ctx->text_open_handler = vui_sdl_text_open_handler;
+    ctx->text_open_handler_data = sdl_ctx;
 
     ctx->power_state_handler = vui_sdl_power_state_handler;
 	sdl_ctx->last_power_state_check = 0;
@@ -1054,6 +1092,15 @@ int vui_init_sdl(vui_context_t *ctx, int fullscreen)
 	// Initialize gamepad lookup tables
 	init_gamepad(ctx);
 
+#ifdef VANILLA_ONBOARD_AVAILABLE
+    sdl_ctx->onboard_bus = g_bus_get_sync(G_BUS_TYPE_SESSION, NULL, NULL);
+    if (sdl_ctx->onboard_bus) {
+        g_dbus_connection_set_exit_on_close(sdl_ctx->onboard_bus, FALSE);
+    } else {
+        vpilog("Failed to connect to Onboard session bus\n");
+    }
+#endif
+
     return 0;
 }
 
@@ -1063,6 +1110,11 @@ void vui_close_sdl(vui_context_t *ctx)
     if (!sdl_ctx) {
         return;
     }
+
+    // vui_free resets the UI, calling these functions, even after SDL teardown.
+    // Unset them to prevent anything nefarious.
+    ctx->text_open_handler = NULL;
+    ctx->audio_enabled_handler = NULL;
 
 #ifdef VANILLA_NX_IMU
     vpi_nx_imu_quit();
@@ -1150,7 +1202,12 @@ void vui_close_sdl(vui_context_t *ctx)
 
     SDL_DestroyWindow(sdl_ctx->window);
 
+#ifdef VANILLA_ONBOARD_AVAILABLE
+    g_clear_object(&sdl_ctx->onboard_bus);
+#endif
+
     free(sdl_ctx);
+    ctx->platform_data = NULL;
 
     SDL_Quit();
 }

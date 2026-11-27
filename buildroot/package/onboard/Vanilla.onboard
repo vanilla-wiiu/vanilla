@@ -1,0 +1,154 @@
+<?xml version="1.0" ?>
+
+<!--
+Copyright © 2013 Francesco Fumanti <francesco.fumanti@gmx.net>
+Copyright © 2011-2014 marmuta <marmvta@gmail.com>
+
+This file is part of Onboard.
+
+Onboard is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 3 of the License, or
+(at your option) any later version.
+
+Onboard is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program. If not, see <http://www.gnu.org/licenses/>.
+-->
+
+<!-- Reduced version of Onboard's "compact" layout for Vanilla -->
+<keyboard id="Vanilla" format="3.2" section="system"
+          summary="Vanilla touch keyboard">
+    <include file="key_defs.xml"/>
+
+    <box border="0.5" spacing="1.5">
+        <panel>
+            <panel layer="alpha" filename="Compact-Alpha.svg">
+                <key group="alphanumeric" id="AB01"/>
+                <key group="alphanumeric" id="AE02"/>
+                <key group="alphanumeric" id="AE03"/>
+                <key group="alphanumeric" id="AD09"/>
+                <key group="alphanumeric" id="AE01"/>
+                <key group="alphanumeric" id="AE06"/>
+                <key group="alphanumeric" id="AE07"/>
+                <key group="alphanumeric" id="AE04"/>
+                <key group="alphanumeric" id="AE05"/>
+                <key group="alphanumeric" id="AD03"/>
+                <key group="alphanumeric" id="AD02"/>
+                <key group="alphanumeric" id="AD01"/>
+                <key group="alphanumeric" id="AE09"/>
+                <key group="alphanumeric" id="AD07"/>
+                <key group="alphanumeric" id="AD06"/>
+                <key group="alphanumeric" id="AD05"/>
+                <key group="alphanumeric" id="AD04"/>
+                <key group="alphanumeric" id="AB10"/>
+                <key group="alphanumeric" id="AC11"/>
+                <key group="alphanumeric" id="AC10"/>
+                <key group="alphanumeric" id="TLDE"/>
+                <key group="alphanumeric" id="LSGT"/>
+                <key group="alphanumeric" id="BKSL"/>
+                <key group="alphanumeric" id="AD10"/>
+                <key group="alphanumeric" id="AD11"/>
+                <key group="alphanumeric" id="AD12"/>
+                <key group="alphanumeric" id="AB08"/>
+                <key group="alphanumeric" id="AE11"/>
+                <key group="alphanumeric" id="AE10"/>
+                <key group="alphanumeric" id="AE12"/>
+                <key group="alphanumeric" id="AC04"/>
+                <key group="alphanumeric" id="AC05"/>
+                <key group="alphanumeric" id="AC06"/>
+                <key group="alphanumeric" id="AC07"/>
+                <key group="alphanumeric" id="AB09"/>
+                <key group="alphanumeric" id="AC01"/>
+                <key group="alphanumeric" id="AC02"/>
+                <key group="alphanumeric" id="AC03"/>
+                <key group="alphanumeric" id="AB05"/>
+                <key group="alphanumeric" id="AB04"/>
+                <key group="alphanumeric" id="AE08"/>
+                <key group="alphanumeric" id="AB06"/>
+                <key group="alphanumeric" id="AC08"/>
+                <key group="alphanumeric" id="AC09"/>
+                <key group="alphanumeric" id="AB03"/>
+                <key group="alphanumeric" id="AB02"/>
+                <key group="alphanumeric" id="AD08"/>
+                <key group="alphanumeric" id="AB07"/>
+
+                <key group='misc'      id='CAPS'/>
+                <key group='shifts'    id='LFSH'/>
+                <key group='shifts'    id='RTSH'/>
+                <key group='bottomrow' id='LCTL'/>
+                <key group="bottomrow" id="LWIN"/>
+                <key group='bottomrow' id='LALT'/>
+                <key group='bottomrow' id='RALT'/>
+
+                <key group="bottomrow" id="SPCE"/>
+                <key group="bottomrow" id="DELE.next-to-backspace"/>
+                <key group="bottomrow" id="BKSP"/>
+                <key group="misc" id="TAB"/>
+                <key group="misc" id="RTRN" label_x_align='0.65'/>
+                <key group="directions_alpha" id="LEFT"/>
+                <key group="directions_alpha" id="RGHT"/>
+                <key group="directions_alpha" id="UP"/>
+                <key group="directions_alpha" id="DOWN"/>
+            </panel>
+            <panel layer="numbers" filename="Compact-Numbers.svg" border="2">
+                <key group='keypadmisc' id='NMLK' scan_priority='2'/>
+                <key group="keypadmisc" id="KPDL" scan_priority="2"/>
+                <key group="keypadmisc" id="KPEN" scan_priority="2"/>
+                <key group="keypadnumber" id="KP0" scan_priority="2"/>
+                <key group="keypadnumber" id="KP1" scan_priority="2"/>
+                <key group="keypadnumber" id="KP2" scan_priority="2"/>
+                <key group="keypadnumber" id="KP3" scan_priority="2"/>
+                <key group="keypadnumber" id="KP4" scan_priority="2"/>
+                <key group="keypadnumber" id="KP5" scan_priority="2"/>
+                <key group="keypadnumber" id="KP6" scan_priority="2"/>
+                <key group="keypadnumber" id="KP7" scan_priority="2"/>
+                <key group="keypadnumber" id="KP8" scan_priority="2"/>
+                <key group="keypadnumber" id="KP9" scan_priority="2"/>
+                <key group="keypadoperators" id="KPSU" scan_priority="2"/>
+                <key group="keypadoperators" id="KPDV" scan_priority="2"/>
+                <key group="keypadoperators" id="KPAD" scan_priority="2"/>
+                <key group="keypadoperators" id="KPMU" scan_priority="2"/>
+                <key group="directions" id="LEFT" scan_priority="1"/>
+                <key group="directions" id="RGHT" scan_priority="1"/>
+                <key group="directions" id="UP" scan_priority="1"/>
+                <key group="directions" id="DOWN" scan_priority="1"/>
+                <key group="editing" id="INS"/>
+                <key group="editing" id="DELE"  label='Del' image=''/>
+                <key group="editing" id="HOME"/>
+                <key group="editing" id="END"/>
+                <key group="editing" id="PGUP"/>
+                <key group="editing" id="PGDN"/>
+
+                <key group="bottomrow" id="ESC"/>
+                <key group="fkeys" id="F1.rows_of_six"/>
+                <key group="fkeys" id="F2.rows_of_six"/>
+                <key group="fkeys" id="F3.rows_of_six"/>
+                <key group="fkeys" id="F4.rows_of_six"/>
+                <key group="fkeys" id="F5.rows_of_six"/>
+                <key group="fkeys" id="F6.rows_of_six"/>
+                <key group="fkeys" id="F7.rows_of_six"/>
+                <key group="fkeys" id="F8.rows_of_six"/>
+                <key group="fkeys" id="F9.rows_of_six"/>
+                <key group="fkeys" id="F12.rows_of_six"/>
+                <key group="fkeys" id="F10.rows_of_six"/>
+                <key group="fkeys" id="F11.rows_of_six"/>
+                <key group="editing" id="Prnt" scan_priority="1"/>
+                <key group="editing" id="Pause" scan_priority="1"/>
+                <key group="editing" id="Scroll" scan_priority="1"/>
+            </panel>
+        </panel>
+        <panel filename="Compact-Alpha.svg">
+            <box orientation="vertical">
+                <key group="bottomrow" id="layer0" show_active="false"
+                     target_layer="alpha"/>
+                <key group="bottomrow" id="layer1" target_layer="numbers"
+                     tooltip="Number keypad"/>
+            </box>
+        </panel>
+    </box>
+</keyboard>
