@@ -147,7 +147,10 @@ XSERVER_XORG_SERVER_CONF_OPTS += --enable-dri2
 ifeq ($(BR2_PACKAGE_XLIB_LIBXSHMFENCE),y)
 XSERVER_XORG_SERVER_DEPENDENCIES += xlib_libxshmfence
 XSERVER_XORG_SERVER_CONF_OPTS += --enable-dri3
-ifeq ($(BR2_PACKAGE_HAS_LIBEGL)$(BR2_PACKAGE_HAS_LIBGL)$(BR2_PACKAGE_LIBEPOXY),yyy)
+# The proprietary Tegra X11 driver does not need Glamor, and enabling it requires GBM which we don't provide
+ifeq ($(BR2_PACKAGE_NVIDIA_TEGRA_BSP),y)
+XSERVER_XORG_SERVER_CONF_OPTS += --disable-glamor
+else ifeq ($(BR2_PACKAGE_HAS_LIBEGL)$(BR2_PACKAGE_HAS_LIBGL)$(BR2_PACKAGE_LIBEPOXY),yyy)
 XSERVER_XORG_SERVER_DEPENDENCIES += libepoxy
 XSERVER_XORG_SERVER_CONF_OPTS += --enable-glamor
 else
