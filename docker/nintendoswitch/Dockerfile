@@ -43,7 +43,7 @@ RUN dpkg --add-architecture i386 && \
     apt-get autoremove --yes && \
     rm -rf /var/lib/{apt,dpkg,cache,log}/
 
-RUN git clone --branch 2025.11-rc2 https://github.com/buildroot/buildroot.git /buildroot
+RUN git clone --depth 1 --branch 2026.08.2 https://github.com/buildroot/buildroot.git /buildroot
 
 ENV FORCE_UNSAFE_CONFIGURE=1
 

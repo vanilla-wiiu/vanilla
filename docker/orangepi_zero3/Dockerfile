@@ -34,7 +34,7 @@ RUN apt -y update && \
     apt-get autoremove --yes && \
     rm -rf /var/lib/{apt,dpkg,cache,log}/
 
-RUN git clone --depth 1 --branch 2025.11-rc2 https://github.com/buildroot/buildroot.git /buildroot
+RUN git clone --depth 1 --branch 2026.08.2 https://github.com/buildroot/buildroot.git /buildroot
 
 ENV FORCE_UNSAFE_CONFIGURE=1
 
@@ -47,6 +47,7 @@ RUN make -C /buildroot O=/build BR2_EXTERNAL=/vanilla/buildroot vanilla_orangepi
     /buildroot/utils/config --file /build/.config -e BR2_PACKAGE_VANILLA && \
     /buildroot/utils/config --file /build/.config -e BR2_PACKAGE_VANILLA_USE_LOCAL && \
     /buildroot/utils/config --file /build/.config --set-str BR2_PACKAGE_VANILLA_LOCAL_PATH /vanilla && \
-    make -C /buildroot O=/build olddefconfig
+    make -C /buildroot O=/build olddefconfig && \
+    rm -rf /buildroot/dl /build/images/sdcard.img /build/images/rootfs.* /build/images/*.vfat
 
 ENTRYPOINT [ "/vanilla/docker/orangepi_zero3/build.sh" ]
