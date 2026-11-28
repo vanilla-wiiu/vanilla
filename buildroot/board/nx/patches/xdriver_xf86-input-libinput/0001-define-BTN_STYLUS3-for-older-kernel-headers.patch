@@ -1,0 +1,13 @@
+--- a/src/xf86libinput.c
++++ b/src/xf86libinput.c
+@@ -40,6 +40,10 @@
+ #include <libinput.h>
+ #include <linux/input.h>
+
++#ifndef BTN_STYLUS3
++#define BTN_STYLUS3 0x149
++#endif
++
+ #include <X11/Xatom.h>
+
+ #include "bezier.h"
