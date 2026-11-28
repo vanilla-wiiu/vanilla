@@ -30,7 +30,7 @@
 @@ -81,11 +76,6 @@
      except FileNotFoundError:
          return "current"  # gnome-shell not found fall back to current
-
+     
 -gnome_shell_version = get_gnome_shell_version()
 -
 -current_ver = version.Version(DistUtilsExtra.auto.__version__)
@@ -128,12 +128,10 @@
                             )
 
  extension_osk = Extension_osk()
-@@ -389,33 +377,6 @@
-                 return False
-
+@@ -391,33 +379,6 @@
          return True
--
--
+
+
 -# Custom build_i18n command that overrides the hard-coded
 -# auto-start path "share/autostart" in auto.build_i18n_auto
 -# for "onboard-autostart.desktop.in"
@@ -148,10 +146,10 @@
 -            config_path = os.path.expanduser("~/.config")
 -
 -            # Get the autostart directory
--            autostart_destination = os.path.join(config_path, "autostart")
+-            autostart_destination = os.path.join(config_path, "autostart") 
 -        else:
 -            autostart_destination = '/etc/xdg/autostart'
--
+-  
 -
 -        for i, file_set in enumerate(self.distribution.data_files):
 -            target, files = file_set
@@ -159,11 +157,13 @@
 -                file_set = (autostart_destination, files)
 -                self.distribution.data_files[i] = file_set
 -
-
-
+-
+-
  # Custom build_ext command that removes the invalid "-Wstrict-prototypes"
+ # warning when compiling C++ (lm extension).
+ class build_ext_custom(build_ext):
 @@ -617,7 +578,7 @@
-
+             
  ##### setup #####
 
 -DistUtilsExtra.auto.setup(
@@ -204,7 +204,7 @@
 @@ -673,20 +626,14 @@
          }
      },
-
+     
 -    # don't let distutils-extra import our files
 -    requires = [MODULE_NAME_OSK, MODULE_NAME_LM],
 -
@@ -221,5 +221,4 @@
 
 
 -symlink_extension_libraries(setup_command)
--
-+
+

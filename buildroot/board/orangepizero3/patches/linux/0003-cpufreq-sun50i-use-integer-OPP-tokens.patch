@@ -1,0 +1,81 @@
+--- a/drivers/cpufreq/sun50i-cpufreq-nvmem.c
++++ b/drivers/cpufreq/sun50i-cpufreq-nvmem.c
+@@ -111,7 +111,7 @@
+ static int sun50i_cpufreq_nvmem_probe(struct platform_device *pdev)
+ {
+ 	const struct of_device_id *match;
+-	struct opp_table **opp_tables;
++	int *opp_tokens;
+ 	char name[MAX_NAME_LEN];
+ 	unsigned int cpu;
+ 	u32 speed = 0;
+@@ -122,14 +122,14 @@
+ 		return -EINVAL;
+ 	}
+
+-	opp_tables = kcalloc(num_possible_cpus(), sizeof(*opp_tables),
++	opp_tokens = kcalloc(num_possible_cpus(), sizeof(*opp_tokens),
+ 			     GFP_KERNEL);
+-	if (!opp_tables)
++	if (!opp_tokens)
+ 		return -ENOMEM;
+
+ 	ret = sun50i_cpufreq_get_efuse(match->data, &speed);
+ 	if (ret) {
+-		kfree(opp_tables);
++		kfree(opp_tokens);
+ 		return ret;
+ 	}
+
+@@ -145,18 +145,18 @@
+ 			goto free_opp;
+ 		}
+
+-		opp_tables[cpu] = dev_pm_opp_set_prop_name(cpu_dev, name);
+-		if (opp_tables[cpu] < 0) {
+-			ret = opp_tables[cpu];
++		ret = dev_pm_opp_set_prop_name(cpu_dev, name);
++		if (ret < 0) {
+ 			pr_err("Failed to set prop name\n");
+ 			goto free_opp;
+ 		}
++		opp_tokens[cpu] = ret;
+ 	}
+
+ 	cpufreq_dt_pdev = platform_device_register_simple("cpufreq-dt", -1,
+ 							  NULL, 0);
+ 	if (!IS_ERR(cpufreq_dt_pdev)) {
+-		platform_set_drvdata(pdev, opp_tables);
++		platform_set_drvdata(pdev, opp_tokens);
+ 		return 0;
+ 	}
+
+@@ -165,23 +165,23 @@
+
+ free_opp:
+ 	for_each_possible_cpu(cpu)
+-		dev_pm_opp_put_prop_name(opp_tables[cpu]);
+-	kfree(opp_tables);
++		dev_pm_opp_put_prop_name(opp_tokens[cpu]);
++	kfree(opp_tokens);
+
+ 	return ret;
+ }
+
+ static int sun50i_cpufreq_nvmem_remove(struct platform_device *pdev)
+ {
+-	int *opp_tables = platform_get_drvdata(pdev);
++	int *opp_tokens = platform_get_drvdata(pdev);
+ 	unsigned int cpu;
+
+ 	platform_device_unregister(cpufreq_dt_pdev);
+
+ 	for_each_possible_cpu(cpu)
+-		dev_pm_opp_put_prop_name(opp_tables[cpu]);
++		dev_pm_opp_put_prop_name(opp_tokens[cpu]);
+
+-	kfree(opp_tables);
++	kfree(opp_tokens);
+
+ 	return 0;
+ }
